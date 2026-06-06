@@ -1,0 +1,161 @@
+import re
+from typing import Optional, List, Dict, Any
+import pandas as pd
+from openai import OpenAI
+from .config import Config
+from .database import db_manager
+
+SCHEMA = """
+You have access to a DuckDB financial database with these tables:
+
+IBKR live data:
+- stock_quotes(ticker, ts, bid, ask, last, close, open, high, low, volume, vwap, created_at)
+- option_quotes(ticker, expiry, strike, right, ts, bid, ask, last, volume, open_interest, implied_vol, delta, gamma, theta, vega, und_price, pv_dividend)
+- option_chains(ticker, expiry, strike, right, exchange, fetched_at)
+- etl_runs(id, run_type, status, rows_written, started_at, finished_at, message)
+
+Polygon historical data:
+- polygon_bars(ticker, ts, timespan, open, high, low, close, volume, vwap, transactions)
+- polygon_snapshots(ticker, ts, bid, ask, last, prev_close, day_volume)
+- polygon_option_snapshots(underlying, expiry, strike, right, ts, day_open, day_close, day_volume, open_interest, implied_vol, delta, gamma, theta, vega)
+- polygon_tickers(ticker, name, market, primary_exchange, type, active, currency, description)
+
+SEC EDGAR financials:
+- edgar_filings(ticker, cik, form_type, filed_date, accession_number, primary_doc)
+- edgar_facts(ticker, cik, taxonomy, concept, label, unit, value, period_start, period_end, form_type, filed_date)
+
+Notes:
+- Use DuckDB SQL syntax.
+- Dates are stored as TEXT in ISO-8601 format. Cast with ::TIMESTAMP or ::DATE as needed.
+- Always LIMIT results to 100 rows unless the user asks for more.
+- For latest queries use QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY ts DESC) = 1.
+"""
+
+SYSTEM_PROMPT = f"""You are a financial data analyst assistant. The user will ask questions about their market data.
+
+{SCHEMA}
+
+Rules:
+1. If the question requires data, respond with ONLY a valid DuckDB SQL query. No markdown, no explanation.
+2. If the question is conversational or cannot be answered with SQL, respond with a plain English answer starting with "ANSWER:".
+3. Never make up data. Only query what exists in the schema above.
+4. Keep SQL readable and add brief inline comments for complex logic.
+5. Only generate read-only SELECT or WITH queries.
+"""
+
+def get_sql_client():
+    cfg = Config.get_provider_config()
+    if Config.CHAT_PROVIDER == "anthropic":
+        # Anthropic doesn't support OpenAI client directly for SQL generation here 
+        # as per original implementation logic (which preferred deepseek/openai/ollama for SQL)
+        raise ValueError("Anthropic provider not supported for SQL mode in current implementation.")
+    
+    return OpenAI(api_key=cfg["api_key"] or "local", base_url=cfg["base_url"])
+
+def clean_sql(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        text = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
+    return text.strip()
+
+def strip_sql_comments(sql: str) -> str:
+    sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)
+    sql = re.sub(r"--[^\n\r]*", " ", sql)
+    return sql.strip()
+
+def validate_read_only_sql(sql: str) -> Optional[str]:
+    compact = strip_sql_comments(sql)
+    if not compact:
+        return "The model did not return a SQL query."
+    if ";" in compact:
+        return "Rejected SQL with semicolons or multiple statements."
+
+    first = compact.lstrip().split(None, 1)[0].lower()
+    if first not in {"select", "with"}:
+        return "Rejected SQL because only SELECT and WITH queries are allowed."
+
+    # Using a slightly improved list based on feedback but keeping safety
+    blocked = {
+        "attach", "call", "copy", "create", "delete", "detach", "drop",
+        "export", "import", "insert", "install", "load", "pragma", 
+        "set", "update",
+    }
+    tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", compact.lower()))
+    found = sorted(tokens & blocked)
+    if found:
+        return f"Rejected SQL containing blocked keyword/function: {', '.join(found)}."
+    return None
+
+def summarise_results(question: str, df: pd.DataFrame) -> str:
+    if df.empty:
+        return "The query returned no results."
+    
+    cfg = Config.get_provider_config()
+    client = OpenAI(api_key=cfg["api_key"] or "local", base_url=cfg["base_url"])
+    
+    # Simple column selection to avoid token limits
+    cols = df.columns[:8] 
+    preview = df[cols].head(5).to_markdown(index=False)
+    
+    try:
+        resp = client.chat.completions.create(
+            model=cfg["model"],
+            messages=[{
+                "role": "user",
+                "content": (
+                    f'The user asked: "{question}"\n\n'
+                    f"Query returned {len(df)} rows. Here are the first 5 rows (subset of columns):\n{preview}\n\n"
+                    "Write a concise 1-2 sentence plain-English answer summarizing the findings. No markdown."
+                ),
+            }],
+            temperature=0.3,
+            max_tokens=200,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        return f"Query returned {len(df)} rows."
+
+def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+    cfg = Config.get_provider_config()
+    client = get_sql_client()
+    
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": question})
+
+    try:
+        response = client.chat.completions.create(
+            model=cfg["model"],
+            messages=messages,
+            temperature=0.1,
+            max_tokens=1024,
+        )
+        reply = response.choices[0].message.content.strip()
+    except Exception as e:
+        return {"type": "error", "answer": f"API error: {str(e)}"}
+
+    if reply.startswith("ANSWER:"):
+        return {
+            "type": "text",
+            "answer": reply[len("ANSWER:"):].strip(),
+        }
+
+    sql = clean_sql(reply)
+    validation_error = validate_read_only_sql(sql)
+    if validation_error:
+        return {"type": "error", "sql": sql, "answer": validation_error}
+
+    try:
+        conn = db_manager.get_connection()
+        df = conn.execute(f"SELECT * FROM ({sql}) AS chat_result LIMIT 100").df()
+        answer = summarise_results(question, df)
+        return {
+            "type": "table",
+            "sql": sql,
+            "data": df.to_dict(orient="records"),
+            "answer": answer
+        }
+    except Exception as e:
+        return {"type": "error", "sql": sql, "answer": f"SQL error: {str(e)}"}
