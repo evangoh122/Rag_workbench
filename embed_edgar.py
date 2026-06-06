@@ -22,7 +22,10 @@ from sec_edgar_downloader import Downloader
 
 from embed_tickers import _get_embeddings as _get_model
 
-DB_PATH = os.getenv("DB_PATH", "./data/ibkr.duckdb")
+from api.config import Config
+from api.database import db_manager
+
+DB_PATH = Config.DB_PATH
 
 # SEC requires a user-agent
 _EMAIL = os.getenv("EDGAR_EMAIL", "research@example.com")
@@ -31,11 +34,11 @@ _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 
 # 10-K sections worth embedding — ordered by semantic value for RAG
 _TARGET_SECTIONS: Dict[str, str] = {
-    "item_1":   r"item\s+1[\.\s]+business",
-    "item_1a":  r"item\s+1a[\.\s]+risk\s+factor",
-    "item_7":   r"item\s+7[\.\s]+management",
-    "item_7a":  r"item\s+7a[\.\s]+quantitative",
-    "item_8":   r"item\s+8[\.\s]+financial\s+statement",
+    "item_1":   r"item\s+1[\s.:—–-]+business",
+    "item_1a":  r"item\s+1a[\s.:—–-]+risk\s+factor",
+    "item_7":   r"item\s+7[\s.:—–-]+management",
+    "item_7a":  r"item\s+7a[\s.:—–-]+quantitative",
+    "item_8":   r"item\s+8[\s.:—–-]+financial\s+statement",
 }
 # Pattern that marks the START of any target or adjacent section (used as end boundary)
 _ANY_ITEM = re.compile(
