@@ -43,13 +43,11 @@ Rules:
 5. Only generate read-only SELECT or WITH queries.
 """
 
-def get_sql_client():
-    cfg = Config.get_provider_config()
+def get_sql_client(cfg: dict = None):
+    if cfg is None:
+        cfg = Config.get_provider_config()
     if Config.CHAT_PROVIDER == "anthropic":
-        # Anthropic doesn't support OpenAI client directly for SQL generation here 
-        # as per original implementation logic (which preferred deepseek/openai/ollama for SQL)
-        raise ValueError("Anthropic provider not supported for SQL mode in current implementation.")
-    
+        raise ValueError("Anthropic provider not supported for SQL mode. Use deepseek, openai, or ollama.")
     return OpenAI(api_key=cfg["api_key"] or "local", base_url=cfg["base_url"])
 
 def clean_sql(text: str) -> str:
@@ -118,7 +116,7 @@ def summarise_results(question: str, df: pd.DataFrame) -> str:
 
 def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     cfg = Config.get_provider_config()
-    client = get_sql_client()
+    client = get_sql_client(cfg)
     
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     if history:
