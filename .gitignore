@@ -8,3 +8,6 @@ __pycache__/
 .venv/
 venv/
 logs/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

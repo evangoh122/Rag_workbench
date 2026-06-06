@@ -12,10 +12,13 @@ import duckdb
 from loguru import logger
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-DB_PATH = os.getenv("DB_PATH", "./data/ibkr.duckdb")
+from api.config import Config
+from api.database import db_manager
+
+DB_PATH = Config.DB_PATH
 
 _embeddings = None   # lazy-loaded Gemini embeddings
-EMBEDDING_DIM = 768  # Gemini text-embedding-004 dimension
+EMBEDDING_DIM = Config.EMBEDDING_DIM
 
 
 def _utcnow() -> str:
@@ -25,13 +28,13 @@ def _utcnow() -> str:
 def _get_embeddings():
     global _embeddings
     if _embeddings is None:
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        api_key = Config.GOOGLE_API_KEY
         if not api_key:
             raise ValueError("GEMINI_API_KEY not set in .env. Needed for Gemini embeddings.")
 
-        logger.info("Initializing Gemini embeddings (models/text-embedding-004)...")
+        logger.info(f"Initializing Gemini embeddings ({Config.EMBEDDING_MODEL})...")
         _embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
+            model=Config.EMBEDDING_MODEL,
             google_api_key=api_key
         )
     return _embeddings
