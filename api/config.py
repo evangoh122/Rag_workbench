@@ -37,7 +37,7 @@ class Config:
             },
             "anthropic": {
                 "base_url": "https://api.anthropic.com/v1",
-                "default_model": "claude-3-5-sonnet-20240620",
+                "default_model": "claude-sonnet-4-6",
                 "api_key": cls.ANTHROPIC_API_KEY,
             },
             "ollama": {
