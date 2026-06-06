@@ -1,14 +1,18 @@
 """
 embed_edgar.py
 Downloads the most recent 10-K for each ticker from SEC EDGAR using sec-edgar-downloader,
-extracts text using BeautifulSoup, splits into chunks via LangChain,
-embeds with Gemini, and stores into DuckDB `edgar_embeddings`.
+extracts text from high-signal sections (Business, Risk Factors, MD&A), splits into chunks
+via LangChain, embeds with Gemini, and stores into DuckDB `edgar_embeddings`.
+
+Section targeting avoids iXBRL boilerplate, repeated table headers, and XBRL metadata that
+degrade RAG quality when the full document is parsed with get_text().
 """
 import os
+import re
 import shutil
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import List
+from typing import Dict, List, Optional
 
 import duckdb
 from bs4 import BeautifulSoup
@@ -25,9 +29,23 @@ _EMAIL = os.getenv("EDGAR_EMAIL", "research@example.com")
 _COMPANY = "RAG-Workbench"
 _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 
+# 10-K sections worth embedding — ordered by semantic value for RAG
+_TARGET_SECTIONS: Dict[str, str] = {
+    "item_1":   r"item\s+1[\.\s]+business",
+    "item_1a":  r"item\s+1a[\.\s]+risk\s+factor",
+    "item_7":   r"item\s+7[\.\s]+management",
+    "item_7a":  r"item\s+7a[\.\s]+quantitative",
+    "item_8":   r"item\s+8[\.\s]+financial\s+statement",
+}
+# Pattern that marks the START of any target or adjacent section (used as end boundary)
+_ANY_ITEM = re.compile(
+    r"(?:^|\n)\s*item\s+\d+[a-z]?[\.\s]",
+    re.IGNORECASE | re.MULTILINE,
+)
+
 
 def fetch_latest_10k_with_downloader(ticker: str) -> str:
-    """Download the latest 10-K using sec-edgar-downloader and return the file path to the primary HTML document."""
+    """Download the latest 10-K and return path to primary HTML document."""
     dl = Downloader(_COMPANY, _EMAIL, _DOWNLOAD_DIR)
 
     try:
@@ -43,26 +61,65 @@ def fetch_latest_10k_with_downloader(ticker: str) -> str:
         if not accession_dirs:
             return ""
 
-        accession_dir = accession_dirs[0]
-        primary_doc_path = accession_dir / "primary-document.html"
-        if primary_doc_path.exists():
-            return str(primary_doc_path)
-
-        return ""
+        primary_doc_path = accession_dirs[0] / "primary-document.html"
+        return str(primary_doc_path) if primary_doc_path.exists() else ""
     except Exception as e:
         logger.warning(f"Failed to download 10-K for {ticker}: {e}")
         return ""
 
 
+def _extract_sections(text: str) -> str:
+    """
+    Extract target 10-K sections from plain text by matching Item headers.
+
+    Finds each target section's start via regex, then reads until the next
+    Item header appears. Falls back to the full text if no sections are found.
+    """
+    extracted: List[str] = []
+
+    for label, pattern in _TARGET_SECTIONS.items():
+        section_re = re.compile(
+            r"(?:^|\n)(\s*" + pattern + r".*?)(?=\n\s*item\s+\d|$)",
+            re.IGNORECASE | re.DOTALL | re.MULTILINE,
+        )
+        match = section_re.search(text)
+        if match:
+            section_text = match.group(1).strip()
+            # Drop sections that are mostly whitespace or very short (table-of-contents refs)
+            if len(section_text) > 200:
+                extracted.append(f"=== {label.upper().replace('_', ' ')} ===\n{section_text}")
+
+    if not extracted:
+        logger.debug("No target sections found — falling back to full text")
+        return text
+
+    combined = "\n\n".join(extracted)
+    logger.debug(f"Extracted {len(extracted)} sections ({len(combined):,} chars)")
+    return combined
+
+
+def _clean_text(text: str) -> str:
+    """Remove excessive whitespace and repeated blank lines left by get_text()."""
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def parse_html_file(file_path: str) -> str:
-    """Read local HTML file and extract text."""
+    """Parse HTML, strip tags, extract target sections, clean whitespace."""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
         soup = BeautifulSoup(content, "lxml")
-        text = soup.get_text(separator="\n", strip=True)
-        return text
+
+        # Remove script/style/XBRL inline elements that pollute get_text()
+        for tag in soup(["script", "style", "ix:nonnumeric", "ix:nonfraction", "ix:header"]):
+            tag.decompose()
+
+        raw = soup.get_text(separator="\n", strip=True)
+        clean = _clean_text(raw)
+        return _extract_sections(clean)
     except Exception as e:
         logger.warning(f"Failed to parse {file_path}: {e}")
         return ""

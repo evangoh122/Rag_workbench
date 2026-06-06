@@ -71,8 +71,34 @@ def q(sql: str, params=()) -> pd.DataFrame:
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
+_HEALTH_TABLES = {
+    "polygon_tickers":   "Ticker universe",
+    "polygon_bars":      "OHLCV bars",
+    "edgar_facts":       "EDGAR facts",
+    "edgar_filings":     "EDGAR filings",
+    "ticker_embeddings": "Ticker embeddings (RAG)",
+    "edgar_embeddings":  "EDGAR embeddings (RAG)",
+}
+
 with st.sidebar:
     st.markdown("## 🔍 RAG Workbench")
+    st.markdown("---")
+
+    # ── Data readiness ─────────────────────────────────────────────────────
+    st.markdown("**Data Readiness**")
+    db_exists = Path(DB_PATH).exists()
+    if not db_exists:
+        st.error(f"DB not found:\n`{DB_PATH}`")
+    else:
+        for table, label in _HEALTH_TABLES.items():
+            row = q(f"SELECT COUNT(*) AS n FROM {table}")
+            if row.empty:
+                st.warning(f"⚠️ {label} — table missing")
+            else:
+                n = int(row.iloc[0]["n"])
+                icon = "🟢" if n > 0 else "⚪"
+                st.caption(f"{icon} {label}: {n:,}")
+
     st.markdown("---")
     st.caption(f"DB: `{DB_PATH}`")
     provider = os.getenv("CHAT_PROVIDER", "deepseek").lower()
