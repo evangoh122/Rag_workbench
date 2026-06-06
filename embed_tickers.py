@@ -13,7 +13,6 @@ from loguru import logger
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from api.config import Config
-from api.database import db_manager
 
 DB_PATH = Config.DB_PATH
 
