@@ -76,8 +76,9 @@ def validate_read_only_sql(sql: str) -> Optional[str]:
     # Using a slightly improved list based on feedback but keeping safety
     blocked = {
         "attach", "call", "copy", "create", "delete", "detach", "drop",
-        "export", "import", "insert", "install", "load", "pragma", 
-        "set", "update",
+        "export", "from_csv", "glob", "httpfs", "import", "insert",
+        "install", "load", "pragma", "read_blob", "read_csv", "read_json",
+        "read_parquet", "read_text", "set", "update",
     }
     tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", compact.lower()))
     found = sorted(tokens & blocked)
