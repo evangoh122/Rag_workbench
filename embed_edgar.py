@@ -42,7 +42,7 @@ _TARGET_SECTIONS: Dict[str, str] = {
 }
 # Pattern that marks the START of any target or adjacent section (used as end boundary)
 _ANY_ITEM = re.compile(
-    r"(?:^|\n)\s*item\s+\d+[a-z]?[\.\s]",
+    r"(?:^|\n)\s*item\s+\d+[a-z]?[\s.:—–-]",
     re.IGNORECASE | re.MULTILINE,
 )
 

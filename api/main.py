@@ -22,7 +22,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def validate_config():
     if Config.CHAT_PROVIDER == "anthropic":
-        logger.error(
+        logger.warning(
             "CHAT_PROVIDER=anthropic: SQL chat mode is unsupported. "
             "RAG mode will work. Switch to deepseek, openai, or ollama for SQL mode."
         )
