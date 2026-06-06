@@ -18,6 +18,7 @@ import duckdb
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
+from loguru import logger
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -62,7 +63,8 @@ def q(sql: str, params=()) -> pd.DataFrame:
         return pd.DataFrame()
     try:
         return conn.execute(sql, list(params)).df()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Query failed: {e}\nSQL: {sql}")
         return pd.DataFrame()
     finally:
         conn.close()

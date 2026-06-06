@@ -46,6 +46,15 @@ def run_embed_tickers_etl(batch_size: int = 100) -> int:
     Returns number of tickers embedded.
     """
     with duckdb.connect(DB_PATH, read_only=True) as conn:
+        tables = {r[0] for r in conn.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
+        ).fetchall()}
+        missing = {"polygon_tickers", "ticker_embeddings"} - tables
+        if missing:
+            raise RuntimeError(
+                f"Required tables not found in {DB_PATH}: {missing}. "
+                "Run init_db() in IBKR_workbench first."
+            )
         rows = conn.execute("""
             SELECT ticker, name, description
             FROM polygon_tickers
