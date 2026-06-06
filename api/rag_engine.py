@@ -9,7 +9,6 @@ from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from concurrent.futures import ThreadPoolExecutor
 from langchain_openai import ChatOpenAI
 
 from .config import Config
@@ -269,16 +268,12 @@ def _format_docs(docs: List[Document]) -> str:
 
 
 def _combined_retriever(query: str) -> List[Document]:
-    """Run all four retrievers in parallel and merge results."""
-    tasks = [
-        lambda: DuckDBVectorRetriever(top_k=5).invoke(query),
-        lambda: EDGARFactsRetriever().invoke(query),
-        lambda: EDGAREmbeddingsRetriever(top_k=5).invoke(query),
-        lambda: PriceContextRetriever().invoke(query),
-    ]
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        results = list(pool.map(lambda fn: fn(), tasks))
-    return results[0] + results[1] + results[2] + results[3]
+    """Run all four retrievers sequentially and merge results."""
+    vector_docs = DuckDBVectorRetriever(top_k=5).invoke(query)
+    edgar_facts = EDGARFactsRetriever().invoke(query)
+    edgar_emb   = EDGAREmbeddingsRetriever(top_k=5).invoke(query)
+    price_docs  = PriceContextRetriever().invoke(query)
+    return vector_docs + edgar_facts + edgar_emb + price_docs
 
 
 _rag_chain = None

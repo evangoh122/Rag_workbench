@@ -23,7 +23,6 @@ from sec_edgar_downloader import Downloader
 from embed_tickers import _get_embeddings as _get_model
 
 from api.config import Config
-from api.database import db_manager
 
 DB_PATH = Config.DB_PATH
 
