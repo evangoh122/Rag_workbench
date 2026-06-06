@@ -11,25 +11,32 @@ class DatabaseManager:
             if cls._instance is None:
                 cls._instance = super(DatabaseManager, cls).__new__(cls)
                 cls._instance._conn = None
+                cls._instance._conn_lock = threading.Lock()
         return cls._instance
 
     def get_connection(self):
-        if self._conn is None:
-            # We open a persistent connection. 
-            # Note: In a production web server, we might use a pool, 
-            # but for DuckDB, a shared connection is often sufficient 
-            # or we can open one per request if needed.
-            # Using read_only=True for general queries as requested by standard practices.
-            self._conn = duckdb.connect(Config.DB_PATH, read_only=True)
-            try:
-                self._conn.execute("LOAD vss")
-            except Exception:
-                pass
-        return self._conn
+        """Get or create the shared DuckDB connection (thread-safe)."""
+        with self._conn_lock:
+            if self._conn is None:
+                self._conn = duckdb.connect(Config.DB_PATH, read_only=True)
+                try:
+                    self._conn.execute("LOAD vss")
+                except Exception:
+                    pass
+            return self._conn
+
+    def execute(self, sql: str, params=None):
+        """Execute SQL with thread-safe access. Returns the cursor."""
+        conn = self.get_connection()
+        with self._conn_lock:
+            if params:
+                return conn.execute(sql, list(params))
+            return conn.execute(sql)
 
     def close(self):
-        if self._conn:
-            self._conn.close()
-            self._conn = None
+        with self._conn_lock:
+            if self._conn:
+                self._conn.close()
+                self._conn = None
 
 db_manager = DatabaseManager()

@@ -23,11 +23,10 @@ Requires:
   pip install ollama rank_bm25 sentence-transformers
 """
 import os
-import math
+import re
 import hashlib
 from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import duckdb
 import numpy as np
@@ -68,6 +67,7 @@ class RetrievedChunk:
     text: str
     source: str          # vector | bm25 | edgar_facts | edgar_embeddings | price
     ticker: str = ""
+    doc_id: str = ""
     metadata: dict = field(default_factory=dict)
     dense_rank: int = 0
     bm25_rank: int = 0
@@ -309,7 +309,6 @@ def _llm_decompose(query: str, client: Any) -> List[str]:
         if not line:
             continue
         # Remove numbering: "1. ", "2. ", etc.
-        import re
         cleaned = re.sub(r"^\d+[\.\)]\s*", "", line)
         if cleaned:
             sub_queries.append(cleaned)
@@ -324,19 +323,19 @@ def _heuristic_decompose(query: str) -> List[str]:
     Heuristic decomposition: split on conjunctions and semicolons.
     Handles cases like "show X and Y" or "compare A, B, and C".
     """
-    import re
-
     # Split on ";", " and ", " also ", " plus "
     parts = re.split(r"[;]|\b(?:and|also|plus|additionally|furthermore)\b", query, flags=re.IGNORECASE)
     sub_queries = [p.strip() for p in parts if p.strip() and len(p.strip()) > 10]
 
-    # If we got meaningful splits, prefix context from the first part
     if len(sub_queries) > 1:
-        # Extract topic prefix from the main query for context preservation
-        context_prefix = ""
-        first = sub_queries[0].lower()
-        if any(kw in first for kw in ["compare", "show", "list", "what", "which"]):
-            context_prefix = sub_queries[0].split()[0] + " "
+        # Prefix each sub-query with the first verb for context
+        # e.g. "compare AAPL revenue" + "MSFT revenue" → "compare MSFT revenue"
+        verb = sub_queries[0].split()[0].lower()
+        if verb in {"compare", "show", "list", "what", "which"}:
+            sub_queries = [
+                sub_queries[0],  # keep first as-is
+                *[f"{verb} {s}" if not s.lower().startswith(verb) else s for s in sub_queries[1:]],
+            ]
         return sub_queries[:MAX_SUB_QUERIES]
 
     return [query]
@@ -814,11 +813,23 @@ class AsymmetricFinancialRAG:
 
     def _synthesize(self, question: str, context: str) -> str:
         """Generate answer from context using the configured LLM."""
+        from openai import OpenAI
+
+        provider = os.getenv("CHAT_PROVIDER", "deepseek").lower()
+        providers = {
+            "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat", "key_env": "DEEPSEEK_API_KEY"},
+            "openai":   {"base_url": "https://api.openai.com/v1", "model": "gpt-4o", "key_env": "OPENAI_API_KEY"},
+            "mimo":     {"base_url": os.getenv("MIMO_BASE_URL", "http://localhost:11434/v1"), "model": os.getenv("MIMO_MODEL", "xiaomi/MiMo-7B-RL"), "key_env": "MIMO_API_KEY"},
+            "ollama":   {"base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"), "model": os.getenv("OLLAMA_MODEL", "llama3.2"), "key_env": None},
+        }
+        cfg = providers.get(provider, providers["deepseek"])
+        api_key = os.getenv(cfg["key_env"], "") if cfg["key_env"] else "local"
+        model = os.getenv("CHAT_MODEL") or cfg["model"]
+
         try:
-            from chat_engine import _get_client, _PROVIDER
-            client = _get_client()
+            client = OpenAI(api_key=api_key or "local", base_url=cfg["base_url"])
         except Exception as e:
-            logger.error(f"Failed to get LLM client: {e}")
+            logger.error(f"Failed to init LLM client: {e}")
             return f"Error initializing LLM: {e}"
 
         prompt = (
@@ -831,9 +842,8 @@ class AsymmetricFinancialRAG:
         )
 
         try:
-            from chat_engine import _MODEL
             resp = client.chat.completions.create(
-                model=_MODEL,
+                model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
                 max_tokens=1024,
