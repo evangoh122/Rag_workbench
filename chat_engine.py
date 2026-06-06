@@ -199,7 +199,7 @@ def _validate_read_only_sql(sql: str) -> Optional[str]:
 def _summarise(client: OpenAI, question: str, df: pd.DataFrame) -> str:
     # Cap to 8 columns and truncate cell values to avoid exceeding token limits
     display = df.head(5).iloc[:, :8]
-    display = display.applymap(lambda v: str(v)[:60] if isinstance(v, str) else v)
+    display = display.map(lambda v: str(v)[:60] if isinstance(v, str) else v)
     preview = display.to_markdown(index=False)
     try:
         resp = client.chat.completions.create(
