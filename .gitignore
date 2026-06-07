@@ -1,5 +1,8 @@
 .env
-data/
+# data/ contents (keep seed files, ignore run outputs)
+data/**/*.duckdb
+data/**/*.db
+data/cache/
 .worktrees/
 .claude/worktrees/
 __pycache__/

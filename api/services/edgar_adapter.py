@@ -6,9 +6,9 @@ downstream components receive ExtractionResult; they never touch raw
 EdgarTools objects. (CONSTRAINT-009: no custom EDGAR/XBRL parser.)
 
 Provenance assignment rules (CONSTRAINT-002):
-  - XBRL financials (filing.financials.*)     → Provenance.XBRL
-  - HTML structured tables (filing.obj())     → Provenance.STRUCTURED_TABLE
-  - LLM-extracted narrative                   → Provenance.NARRATIVE_LLM (Phase 3+)
+  - XBRL financials (filing.obj().financials)   → Provenance.XBRL
+  - HTML structured tables (filing.obj().*_sheet) → Provenance.STRUCTURED_TABLE
+  - LLM-extracted narrative                      → Provenance.NARRATIVE_LLM (future)
 """
 from __future__ import annotations
 
@@ -29,12 +29,7 @@ class EdgarAdapterError(Exception):
 
 
 def _set_edgar_identity() -> None:
-    """Configure the EdgarTools identity header before any SEC API call.
-
-    EdgarTools reads EDGAR_USER_AGENT from the environment. The SEC requires
-    a User-Agent of the form 'Name email@example.com'. Set this env var in
-    your .env file — do not hard-code an address in source code.
-    """
+    """Configure the EdgarTools identity header before any SEC API call."""
     user_agent = os.getenv("EDGAR_USER_AGENT")
     if not user_agent:
         raise EdgarAdapterError(
@@ -42,89 +37,64 @@ def _set_edgar_identity() -> None:
             "Set it to 'Your Name your@email.com' before calling fetch_filing()."
         )
     try:
-        import edgar  # noqa: PLC0415 — deferred to keep top-level import-safe
+        import edgar
         edgar.set_identity(user_agent)
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:
         raise EdgarAdapterError(f"Failed to set EdgarTools identity: {exc}") from exc
 
 
-def _xbrl_dataframe_to_fields(df: pd.DataFrame, concept_col: str = "concept") -> list[ExtractedField]:
-    """Convert a single EdgarTools financials DataFrame into XBRL-tagged ExtractedFields.
+def _statement_to_fields(statement) -> list[ExtractedField]:
+    """Convert an EdgarTools Statement object to XBRL-tagged ExtractedFields.
 
-    EdgarTools financials DataFrames (balance_sheet, income_statement,
-    cash_flow_statement) contain at minimum a concept column and a value
-    column. Column names differ slightly by EdgarTools version; this function
-    handles the two most common layouts.
-
-    Returns an empty list if the DataFrame is None or empty.
+    Statement.to_dataframe() returns columns: concept, label, standard_concept,
+    <date1>, <date2>, ... (one column per reporting period). We take the most
+    recent date column as the primary value and skip abstract/header rows.
     """
+    if statement is None:
+        return []
+    try:
+        df: pd.DataFrame = statement.to_dataframe()
+    except Exception:
+        return []
+
     if df is None or df.empty:
         return []
 
+    # Find the most recent date column (columns that look like YYYY-MM-DD)
+    date_cols = [c for c in df.columns if _is_date_col(c)]
+    if not date_cols:
+        return []
+    value_col = date_cols[0]  # first = most recent (EdgarTools orders desc)
+
     fields: list[ExtractedField] = []
-
-    # EdgarTools >= 2.x typically has columns: concept, label, value, units, decimals
-    # Older versions may use 'name' instead of 'concept'.
-    if concept_col not in df.columns:
-        concept_col = "name" if "name" in df.columns else df.columns[0]
-
-    value_col = "value" if "value" in df.columns else df.columns[-1]
-
     for _, row in df.iterrows():
-        raw_concept = str(row.get(concept_col, ""))
-        raw_value   = row.get(value_col)
+        if row.get("abstract", False):
+            continue  # skip header/subtotal rows
+
+        raw_concept = str(row.get("concept", ""))
+        # Strip "us-gaap_" prefix to get the canonical GAAP concept name
+        concept = raw_concept.replace("us-gaap_", "").replace("dei_", "")
+        label = str(row.get("label", concept))
+        value = row.get(value_col)
+
+        if pd.isna(value) or value is None:
+            continue
 
         fields.append(
             ExtractedField(
-                name=raw_concept,
-                value=raw_value,
+                name=label,
+                value=float(value),
                 provenance=Provenance.XBRL,
-                concept=raw_concept or None,
+                concept=concept or None,
             )
         )
-
     return fields
 
 
-def _html_tables_to_fields(filing) -> list[ExtractedField]:  # type: ignore[type-arg]
-    """Extract structured tables from the filing's primary HTML document.
-
-    Uses EdgarTools' filing.obj() to retrieve the parsed filing object,
-    then walks its data tables. Returns STRUCTURED_TABLE-tagged fields.
-
-    Returns an empty list if no HTML tables are found or if obj() fails.
-    """
-    fields: list[ExtractedField] = []
-    try:
-        doc = filing.obj()
-        if doc is None:
-            return fields
-
-        # EdgarTools TenK/TenQ objects expose .income_statement, .balance_sheet etc.
-        # as properties that may return DataFrames or None.
-        # For form types without a structured obj(), we skip gracefully.
-        for attr in ("income_statement", "balance_sheet", "cash_flow_statement"):
-            tbl: Optional[pd.DataFrame] = getattr(doc, attr, None)
-            if tbl is None or not isinstance(tbl, pd.DataFrame) or tbl.empty:
-                continue
-
-            label_col = tbl.columns[0]
-            value_col = tbl.columns[-1]
-
-            for _, row in tbl.iterrows():
-                label = str(row.get(label_col, ""))
-                value = row.get(value_col)
-                fields.append(
-                    ExtractedField(
-                        name=label,
-                        value=value,
-                        provenance=Provenance.STRUCTURED_TABLE,
-                    )
-                )
-    except Exception:  # noqa: BLE001 — structured table extraction is best-effort
-        pass
-
-    return fields
+def _is_date_col(col: str) -> bool:
+    """Return True if a column name looks like YYYY-MM-DD."""
+    parts = col.split("-")
+    return len(parts) == 3 and len(parts[0]) == 4 and parts[0].isdigit()
 
 
 def fetch_filing(cik: str, accession: str) -> ExtractionResult:
@@ -143,7 +113,7 @@ def fetch_filing(cik: str, accession: str) -> ExtractionResult:
     _set_edgar_identity()
 
     try:
-        from edgar import Company  # noqa: PLC0415 — deferred import
+        from edgar import Company
     except ImportError as exc:
         raise EdgarAdapterError(
             "edgartools is not installed. Run: pip install 'edgartools>=2.26.0'"
@@ -151,43 +121,42 @@ def fetch_filing(cik: str, accession: str) -> ExtractionResult:
 
     try:
         company = Company(cik)
-        filing = company.get_filing(accession_number=accession)
+        # get_filing() was removed in EdgarTools 3.x — use get_filings().filter()
+        results = company.get_filings().filter(accession_number=accession)
+        if len(results) == 0:
+            raise EdgarAdapterError(
+                f"No filing found for CIK={cik}, accession={accession}."
+            )
+        filing = results[0]
+    except EdgarAdapterError:
+        raise
     except Exception as exc:
         raise EdgarAdapterError(
             f"EdgarTools failed to fetch filing (CIK={cik}, accession={accession}): {exc}"
         ) from exc
 
-    if filing is None:
-        raise EdgarAdapterError(
-            f"No filing found for CIK={cik}, accession={accession}."
-        )
+    form_type: str = getattr(filing, "form", "UNKNOWN")
+    period: Optional[str] = getattr(filing, "period_of_report", None)
 
-    # --- Extract XBRL fields ---
     xbrl_fields: list[ExtractedField] = []
     try:
-        financials = filing.financials
-        if financials is not None:
-            for df in (
-                financials.balance_sheet,
-                financials.income_statement,
-                financials.cash_flow_statement,
-            ):
-                xbrl_fields.extend(_xbrl_dataframe_to_fields(df))
-    except Exception:  # noqa: BLE001 — XBRL block may not exist for all form types
+        doc = filing.obj()
+        if doc is not None and hasattr(doc, "financials") and doc.financials is not None:
+            fin = doc.financials
+            for stmt_name in ("balance_sheet", "income_statement", "cash_flow_statement"):
+                stmt_fn = getattr(fin, stmt_name, None)
+                if callable(stmt_fn):
+                    try:
+                        xbrl_fields.extend(_statement_to_fields(stmt_fn()))
+                    except Exception:
+                        pass
+    except Exception:
         pass
-
-    # --- Extract structured HTML table fields ---
-    table_fields = _html_tables_to_fields(filing)
-
-    all_fields = xbrl_fields + table_fields
-
-    # Determine period — EdgarTools exposes period_of_report on most form types
-    period: Optional[str] = getattr(filing, "period_of_report", None)
 
     return ExtractionResult(
         cik=cik,
         accession=accession,
-        form_type=getattr(filing, "form_type", "UNKNOWN"),
+        form_type=form_type,
         period=period,
-        fields=all_fields,
+        fields=xbrl_fields,
     )

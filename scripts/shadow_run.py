@@ -23,11 +23,23 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Ensure repo root is on sys.path so `api` package is importable when the
+# script is invoked directly (python scripts/shadow_run.py)
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent / ".env")
+
+# Use UTF-8 for stdout so the arrow character renders on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
+
 logger = logging.getLogger(__name__)
 
 
