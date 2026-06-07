@@ -29,7 +29,11 @@
       "PowerShell(New-Item *)",
       "Bash(git rm *)",
       "Bash(git restore *)",
-      "Skill(gsd-plan-phase)"
+      "Skill(gsd-plan-phase)",
+      "Bash(git -C \"C:\\\\RAG_workbench\\\\.claude\\\\worktrees\\\\agent-a7b9c8a41fcaec140\" log --oneline -3)",
+      "Bash(git -C \"C:\\\\RAG_workbench\\\\.claude\\\\worktrees\\\\agent-a7b9c8a41fcaec140\" status)",
+      "Bash(git -C \"C:\\\\RAG_workbench\\\\.claude\\\\worktrees\\\\agent-a86213ff1e8b4b927\" add api/models/eval_types.py api/models/__init__.py tests/)",
+      "Bash(git -C \"C:\\\\RAG_workbench\\\\.claude\\\\worktrees\\\\agent-a86213ff1e8b4b927\" commit -m \"feat\\(phase-1\\): define eval_types dataclasses \\(PLAN-01\\)\")"
     ]
   },
   "hooks": {
