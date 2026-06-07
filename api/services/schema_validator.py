@@ -49,7 +49,7 @@ class SchemaValidator:
         # Generate an "Enrichment Manifest" in ValidationResult.details['enrichment_manifest'] 
         # mapping fields with Provenance.XBRL and their concepts.
         enrichment_manifest = {
-            f.name: f.concept for f in result.fields if f.provenance == Provenance.XBRL and f.concept
+            f.name: f.provenance for f in result.fields if f.provenance == Provenance.XBRL
         }
         
         return ValidationResult(
