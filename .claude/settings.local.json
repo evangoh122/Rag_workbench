@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git checkout *)",
+      "Bash(gh repo *)",
+      "PowerShell(gh repo *)",
+      "Bash(git push *)",
+      "Bash(python *)",
+      "Skill(claude-api)",
+      "Bash(git cherry-pick *)",
+      "Bash(git fetch *)",
+      "Bash(git merge *)",
+      "Bash(claude mcp *)",
+      "Bash(npx -y mcp-obsidian --version)",
+      "Bash(echo \"Exit: $?\")",
+      "PowerShell(Get-Process *)",
+      "Bash(node -e \"const fs=require\\('fs'\\); console.log\\(fs.readdirSync\\('.claude'\\)\\)\")",
+      "Bash(node -e \"const {execSync}=require\\('child_process'\\); const start=Date.now\\(\\); execSync\\('git ls-files'\\); console.log\\('git ls-files took:', Date.now\\(\\)-start, 'ms'\\);\")",
+      "Bash(node -e ' *)",
+      "Bash(git ls-tree *)",
+      "Bash(git commit *)",
+      "Bash(git stash *)",
+      "Bash(dir *)",
+      "Bash(node *)",
+      "Bash(git check-ignore *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \".claude/hooks/inject-tasks.js\""
+          }
+        ]
+      }
+    ]
+  }
+}
