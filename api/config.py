@@ -5,6 +5,28 @@ from dotenv import load_dotenv
 # Load .env from the root directory
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+
+def _parse_threshold(env_var: str, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    """Parse a float threshold from an env var with range validation.
+
+    Raises ValueError at import time so misconfiguration fails fast rather than
+    silently corrupting routing decisions (Gemini security review finding 3).
+    """
+    raw = os.getenv(env_var, str(default))
+    try:
+        val = float(raw)
+    except ValueError:
+        raise ValueError(
+            f"Environment variable {env_var}={raw!r} is not a valid float. "
+            f"Expected a number in [{lo}, {hi}]."
+        )
+    if not (lo <= val <= hi):
+        raise ValueError(
+            f"Environment variable {env_var}={val} is outside the valid range [{lo}, {hi}]."
+        )
+    return val
+
+
 class Config:
     DB_PATH = os.getenv("DB_PATH", "./data/ibkr.duckdb")
     
@@ -26,6 +48,13 @@ class Config:
     # Embedding Settings
     EMBEDDING_MODEL = "models/text-embedding-004"
     EMBEDDING_DIM = 768
+
+    # Routing thresholds — MUST NOT be hard-coded (CONSTRAINT-003).
+    # These are placeholder defaults; Phase 6 shadow deployment calibration
+    # will produce the real values, which must be written into the environment
+    # (or a config file) before Phase 6 completes.
+    ROUTING_HIGH_THRESHOLD = _parse_threshold("ROUTING_HIGH_THRESHOLD", 0.85)
+    ROUTING_LOW_THRESHOLD = _parse_threshold("ROUTING_LOW_THRESHOLD", 0.65)
 
     @classmethod
     def get_provider_config(cls):
