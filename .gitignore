@@ -13,3 +13,6 @@ logs/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+data/shadow/run_*.jsonl
+data/shadow/*_errors.jsonl
+.env.calibration
