@@ -1,12 +1,14 @@
-# Orchestrator Task
-Feature: (none)
-Status: none
+# Orchestrator Task — 2026-06-07
+Feature: Add GET /api/health/db route handler
+Status: done
 
 ## Your Tasks
-(no tasks assigned)
+- [ ] Create api/routes/health.py with a GET /api/health/db endpoint that runs a lightweight DuckDB query and returns JSON {status: "ok", row_count: N}
+- [ ] Register the health router in api/routes/__init__.py
 
 ## Files
-(none)
+- api/routes/health.py
+- api/routes/__init__.py
 
 ## Acceptance Criteria
-(none)
+- GET /api/health/db returns JSON with status key equal to "ok" and an integer row_count field
