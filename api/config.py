@@ -8,6 +8,11 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 class Config:
     DB_PATH = os.getenv("DB_PATH", "./data/ibkr.duckdb")
     
+    # SEC/EDGAR Settings
+    SEC_CACHE_DIR = os.getenv("SEC_CACHE_DIR", "./data/cache/sec/")
+    SEC_RATE_LIMIT = int(os.getenv("SEC_RATE_LIMIT", "10"))
+    EDGAR_USER_AGENT = os.getenv("EDGAR_USER_AGENT")
+    
     # Provider Settings
     CHAT_PROVIDER = os.getenv("CHAT_PROVIDER", "deepseek").lower()
     CHAT_MODEL = os.getenv("CHAT_MODEL")
