@@ -1,0 +1,25 @@
+{
+  "source_path": "C:/RAG_workbench/docs/specs/eval-layer-spec.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Autonomous EDGAR Reader — Evaluation Layer Spec",
+  "summary": "Defines the evaluation layer architecture, data structures, validation rules, confidence scoring, routing policy, metrics, and ground-truth strategy for an autonomous EDGAR filing reader.",
+  "scope": [
+    "eval-layer",
+    "EDGAR reader",
+    "ExtractionResult",
+    "ValidationResult",
+    "confidence scoring",
+    "risk-tiered routing",
+    "XBRL cross-validation",
+    "drift detection",
+    "always-escalate triggers",
+    "companyfacts API",
+    "feedback loop"
+  ],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}
