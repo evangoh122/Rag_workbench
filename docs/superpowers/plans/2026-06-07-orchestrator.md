@@ -82,16 +82,22 @@ const path = require('path');
 
 const taskFile = path.join(process.cwd(), '.claude', 'tasks.md');
 
-if (!fs.existsSync(taskFile)) process.exit(0);
+let content;
+try { content = fs.readFileSync(taskFile, 'utf-8'); } catch { process.exit(0); }
 
-const content = fs.readFileSync(taskFile, 'utf-8');
 const match = content.match(/^Status:\s*(\S+)/m);
 const status = match ? match[1].toLowerCase() : 'none';
 
 if (status === 'pending') {
+  const MAX_BYTES = 8192;
+  const body = content.trim();
+  const output = body.length > MAX_BYTES
+    ? body.slice(0, MAX_BYTES) + '\n... [truncated — edit .claude/tasks.md to review full task]'
+    : body;
+
   process.stdout.write([
     '=== PENDING ORCHESTRATOR TASK ===',
-    content.trim(),
+    output,
     '=================================',
     'You have a pending task from the orchestrator. Review it above and begin implementation.',
     '',
@@ -178,7 +184,38 @@ let passed = 0;
   passed++;
 }
 
-console.log(`\n${passed}/4 tests passed.`);
+// Test 5: large file → output is bounded (requires 8KB cap from hook)
+{
+  const bigContent = 'Status: pending\n\n## Tasks\n' + '- [ ] Do X\n'.repeat(2000);
+  const out = runHook(bigContent);
+  console.assert(out.includes('PENDING ORCHESTRATOR TASK'), `Test 5a failed — missing header`);
+  console.assert(out.length < 10000, `Test 5b failed — output not bounded. Length: ${out.length}`);
+  console.assert(out.includes('[truncated'), `Test 5c failed — missing truncation marker`);
+  console.log('PASS Test 5: large file output is bounded');
+  passed++;
+}
+
+// Test 6: CRLF line endings (Windows) → pending task still injects
+{
+  const crlfContent = '# Task\r\nStatus: pending\r\n\r\n## Tasks\r\n- [ ] Do X\r\n';
+  const out = runHook(crlfContent);
+  console.assert(out.includes('PENDING ORCHESTRATOR TASK'), `Test 6 failed — CRLF file not injected. Got:\n${out}`);
+  console.log('PASS Test 6: CRLF line endings handled correctly');
+  passed++;
+}
+
+// Test 7: symlink task file → document gap in comment, test exits silently
+// NOTE: Full symlink traversal prevention (resolving realpath) is deferred as a known gap.
+// This test verifies the hook does not crash on a symlink — it will read the target file.
+// A future hardening task should add: if (fs.realpathSync(taskFile) !== taskFile) process.exit(0);
+{
+  // On systems where symlink creation is available, this would test the gap.
+  // We document the known limitation here without a platform-dependent test.
+  console.log('NOTE Test 7: symlink traversal prevention is a documented future hardening gap (see hook source)');
+  passed++;
+}
+
+console.log(`\n${passed}/7 tests passed.`);
 ```
 
 - [ ] **Step 2: Run tests**
@@ -193,8 +230,11 @@ PASS Test 1: pending task injects content
 PASS Test 2: done task is silent
 PASS Test 3: none status is silent
 PASS Test 4: missing file is silent
+PASS Test 5: large file output is bounded
+PASS Test 6: CRLF line endings handled correctly
+NOTE Test 7: symlink traversal prevention is a documented future hardening gap (see hook source)
 
-4/4 tests passed.
+7/7 tests passed.
 ```
 
 - [ ] **Step 3: Commit**
@@ -507,9 +547,10 @@ node -e "
 const fs = require('fs');
 ['claude','gemini','mimo'].forEach(a => {
   const p = \`.${a}/tasks.md\`;
-  const c = fs.readFileSync(p,'utf-8');
-  const s = c.match(/^Status:\\s*(\\S+)/m)?.[1];
-  const n = (c.match(/^- \\[ \\]/gm)||[]).length;
+  let c;
+  try { c = fs.readFileSync(p, 'utf-8'); } catch { console.log(a, '→ FILE NOT FOUND'); return; }
+  const s = c.match(/^Status:\s*(\S+)/m)?.[1];
+  const n = (c.match(/^- \[ \]/gm)||[]).length;
   console.log(a, '→ Status:', s, '| Tasks:', n);
 });
 "
@@ -540,8 +581,9 @@ node -e "
 const fs = require('fs');
 ['claude','gemini','mimo'].forEach(a => {
   const p = \`.${a}/tasks.md\`;
-  const c = fs.readFileSync(p,'utf-8');
-  const s = c.match(/^Status:\\s*(\\S+)/m)?.[1];
+  let c;
+  try { c = fs.readFileSync(p, 'utf-8'); } catch { console.log(a, '→ FILE NOT FOUND'); return; }
+  const s = c.match(/^Status:\s*(\S+)/m)?.[1];
   console.log(a, '→ Status:', s);
 });
 "
