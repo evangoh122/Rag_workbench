@@ -29,14 +29,16 @@ class XbrlCrossValidator:
             logger.warning(f"No period found for result {result.accession}. Cannot perform XBRL cross-validation.")
             return
 
-        for field_name, concept in manifest.items():
-            # Find the extracted field
+        for field_name in manifest:
             field = next((f for f in result.fields if f.name == field_name), None)
             if not field or field.value is None:
                 continue
 
+            concept = field.concept
+            if not concept:
+                continue
+
             try:
-                # Fetch ground truth fact
                 ground_truth = self.client.get_fact(result.cik, concept, period_end)
                 
                 if ground_truth is not None:
