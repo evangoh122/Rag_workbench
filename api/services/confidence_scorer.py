@@ -15,8 +15,18 @@ PROVENANCE_BASE_SCORES: dict[Provenance, float] = {
 
 
 def score_field(f: ExtractedField) -> float:
-    """Return the base confidence score for a single extracted field."""
-    return PROVENANCE_BASE_SCORES[f.provenance]
+    """Return the base confidence score for a single extracted field.
+
+    Raises ValueError on an unknown Provenance variant so schema evolution
+    fails fast rather than silently crashing with a KeyError.
+    """
+    score = PROVENANCE_BASE_SCORES.get(f.provenance)
+    if score is None:
+        raise ValueError(
+            f"Unknown provenance variant: {f.provenance!r}. "
+            "Add it to PROVENANCE_BASE_SCORES with an appropriate base score."
+        )
+    return score
 
 
 def score_record(result: ExtractionResult) -> float:

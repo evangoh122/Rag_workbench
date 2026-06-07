@@ -16,10 +16,15 @@ The eight mandated triggers (CONSTRAINT-004):
 """
 from typing import Optional
 
-from api.models.eval_types import ExtractionResult, ValidationResult, ReasonCode, Provenance
+from api.models.eval_types import ExtractionResult, ExtractedField, ValidationResult, ReasonCode, Provenance
 
-# 8-K item codes that always escalate
+# 8-K item codes that always escalate (SEC Form 8-K item taxonomy — regulatory constant,
+# not an operational threshold; update only if SEC amends the 8-K item taxonomy)
 _8K_CRITICAL_ITEMS = {"1.03", "4.01", "4.02"}
+
+# Pre-computed search strings for source_span scanning (MIMO perf review — avoids
+# repeated f-string construction inside inner loop)
+_8K_CRITICAL_SPANS = frozenset(f"item {code}" for code in _8K_CRITICAL_ITEMS)
 
 # Phrases that indicate going-concern doubt (case-insensitive substring match)
 _GOING_CONCERN_PHRASES = (
@@ -28,8 +33,20 @@ _GOING_CONCERN_PHRASES = (
     "ability to continue as a going concern",
 )
 
-# source_span prefix that adapter layer sets on fields feeding downstream actions
+# source_span prefix that adapter layer sets on fields feeding downstream actions.
+# SECURITY NOTE: this prefix MUST be set only by adapter code, never copied verbatim
+# from raw filing text (Gemini security review finding 9).
 _DOWNSTREAM_MARKER = "DOWNSTREAM:"
+
+# Maximum narrative field length inspected for keyword checks.
+# Guards against megabyte-scale narrative values causing unbounded allocations
+# across multiple predicates (Gemini security review finding 6).
+_MAX_NARRATIVE_LEN = 10_000
+
+
+def _narrative_text(f: ExtractedField) -> str:
+    """Return a length-capped, lowercased string from a field value."""
+    return str(f.value)[:_MAX_NARRATIVE_LEN].lower()
 
 
 def check_balance_sheet_identity_failure(
@@ -49,7 +66,7 @@ def check_amended_or_restatement(
     # Narrative field containing restatement language
     for f in result.fields:
         if f.provenance == Provenance.NARRATIVE_LLM and f.value is not None:
-            text = str(f.value).lower()
+            text = _narrative_text(f)
             if "restatement" in text or "restated" in text:
                 return "AMENDED_RESTATEMENT"
     return None
@@ -63,11 +80,12 @@ def check_8k_critical_items(
     for f in result.fields:
         if f.name in ("ItemNumber", "item_number") and str(f.value) in _8K_CRITICAL_ITEMS:
             return "8K_CRITICAL_ITEM"
-        # Also catch item numbers embedded in source_span hints
+        # Also catch item numbers embedded in source_span hints.
+        # Hoist .lower() outside the inner loop (MIMO perf review finding 2b/8).
         if f.source_span is not None:
-            for item in _8K_CRITICAL_ITEMS:
-                if f"item {item}" in f.source_span.lower():
-                    return "8K_CRITICAL_ITEM"
+            span_lower = f.source_span.lower()
+            if any(span in span_lower for span in _8K_CRITICAL_SPANS):
+                return "8K_CRITICAL_ITEM"
     return None
 
 
@@ -76,7 +94,7 @@ def check_going_concern(
 ) -> Optional[str]:
     for f in result.fields:
         if f.provenance == Provenance.NARRATIVE_LLM and f.value is not None:
-            text = str(f.value).lower()
+            text = _narrative_text(f)
             if any(phrase in text for phrase in _GOING_CONCERN_PHRASES):
                 return "GOING_CONCERN"
     return None

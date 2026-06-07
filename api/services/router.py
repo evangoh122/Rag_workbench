@@ -29,6 +29,11 @@ class ConfidenceRouter:
     ) -> None:
         self.high_threshold = high_threshold if high_threshold is not None else Config.ROUTING_HIGH_THRESHOLD
         self.low_threshold = low_threshold if low_threshold is not None else Config.ROUTING_LOW_THRESHOLD
+        if self.low_threshold >= self.high_threshold:
+            raise ValueError(
+                f"ROUTING_LOW_THRESHOLD ({self.low_threshold}) must be strictly less than "
+                f"ROUTING_HIGH_THRESHOLD ({self.high_threshold})."
+            )
 
     def route(self, result: ExtractionResult, vs: ValidationResult) -> Decision:
         """Produce a routing Decision for the given extraction result and validation state."""
