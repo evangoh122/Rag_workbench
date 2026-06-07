@@ -27,6 +27,13 @@ class Config:
     EMBEDDING_MODEL = "models/text-embedding-004"
     EMBEDDING_DIM = 768
 
+    # Routing thresholds — MUST NOT be hard-coded (CONSTRAINT-003).
+    # These are placeholder defaults; Phase 6 shadow deployment calibration
+    # will produce the real values, which must be written into the environment
+    # (or a config file) before Phase 6 completes.
+    ROUTING_HIGH_THRESHOLD = float(os.getenv("ROUTING_HIGH_THRESHOLD", "0.85"))
+    ROUTING_LOW_THRESHOLD = float(os.getenv("ROUTING_LOW_THRESHOLD", "0.65"))
+
     @classmethod
     def get_provider_config(cls):
         providers = {
