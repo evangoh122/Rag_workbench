@@ -18,13 +18,13 @@ Last updated: 2026-06-07
 
 ## Current Position
 
-**Current phase**: Not started
-**Current plan**: None
-**Status**: Awaiting Phase 1 kickoff
-**Open questions blocking start**: OQ-1 (reader output mode), OQ-2 (downstream actions), OQ-3 (in-scope form types), OQ-4 (reviewer availability) — see PROJECT.md
+**Current phase**: Phase 1 — Data Structures & Reader Adapter
+**Current plan**: 01-PLAN-01 (Wave 1), 01-PLAN-02 (Wave 2)
+**Status**: Ready to execute
+**Open questions blocking start**: Resolved — planning complete from spec
 
 ```
-Progress: [........] 0/8 phases complete
+Progress: [●.......] 0/8 phases complete (Phase 1 planned, not yet executed)
 ```
 
 ---
@@ -66,12 +66,13 @@ None (no code written yet)
 ## Session Continuity
 
 ### Last Session Summary
-2026-06-07: Initial planning pass. PROJECT.md, REQUIREMENTS.md, ROADMAP.md, STATE.md created from spec ingest. 35 requirements derived from 11 constraints. 8-phase roadmap mirrors mandated build order (CONSTRAINT-011). Four open questions surfaced in PROJECT.md awaiting user resolution before Phase 1 can begin.
+2026-06-07: Phase 1 planned. Two PLAN.md files created in .planning/phases/01-data-structures-reader-adapter/. Verification passed (0 blockers, 0 warnings). Multi-runtime ownership confirmed: Claude owns Phases 1–6 (eval layer), MiMo owns Phase 3 retriever/caching layer, Gemini owns Phases 7–8 UI.
 
 ### Next Session Start Point
-1. Resolve open questions OQ-1 through OQ-4 with user
-2. Run `/gsd-plan-phase 1` to decompose Phase 1 (Data Structures & Reader Adapter) into executable plans
-3. Phase 1 entry point: define the seven dataclasses in a single module, then build the EdgarTools adapter
+1. Execute Phase 1: `/gsd-execute-phase 1`
+   - Wave 1: 01-PLAN-01 — define seven dataclasses in api/models/eval_types.py
+   - Wave 2: 01-PLAN-02 — build EdgarTools adapter in api/services/edgar_adapter.py
+2. After Phase 1 complete: plan Phase 2 (Schema Validator)
 
 ### Handoff Notes
 - CONSTRAINT-003 routing thresholds are intentionally undefined. Do not hard-code them in Phase 5. They will be derived from Phase 6 shadow run output.

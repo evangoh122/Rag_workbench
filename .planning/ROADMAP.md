@@ -122,7 +122,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Data Structures & Reader Adapter | 0/2 | Planned | - |
+| 1. Data Structures & Reader Adapter | 2/2 | Planned | - |
 | 2. Schema Validator | 0/? | Not started | - |
 | 3. XBRL Cross-Validation & companyfacts Client | 0/? | Not started | - |
 | 4. Semantic Validator | 0/? | Not started | - |
