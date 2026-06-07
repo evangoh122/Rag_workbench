@@ -21,6 +21,8 @@
 - SEC section extraction must use hardened regex patterns.
 - Secrets must never be logged or committed.
 - ReactMarkdown must be configured with `disallowedElements={['script','iframe']}` (or equivalent); raw HTML passthrough must be explicitly disabled. The current `frontend/src/App.tsx` uses `<ReactMarkdown>` on API response content — this is a live XSS vector until the prop is set.
+- User input must be sanitised before rendering (no `dangerouslySetInnerHTML` with raw API data).
+- API responses rendered in the UI must handle error states explicitly — never silently swallow errors.
 
 ## Frontend Mandates
 - Use TypeScript strict mode; no `any` types in new code.
