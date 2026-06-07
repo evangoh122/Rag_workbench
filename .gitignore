@@ -1,5 +1,6 @@
 .env
 data/
+.worktrees/
 __pycache__/
 *.pyc
 *.pyo
