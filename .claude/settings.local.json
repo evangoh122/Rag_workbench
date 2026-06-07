@@ -27,7 +27,9 @@
       "Bash(git check-ignore *)",
       "Skill(gsd-ingest-docs)",
       "PowerShell(New-Item *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(git restore *)",
+      "Skill(gsd-plan-phase)"
     ]
   },
   "hooks": {

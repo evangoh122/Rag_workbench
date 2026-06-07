@@ -30,7 +30,11 @@ Generated: 2026-06-07
   2. Given a real SEC filing CIK and accession number, EdgarTools returns data that is successfully wrapped into an `ExtractionResult` without custom parser code
   3. Every `ExtractedField` in the result carries a `provenance` tag (XBRL, STRUCTURED_TABLE, or NARRATIVE_LLM) — no field is untagged
   4. A round-trip test demonstrates that an `ExtractionResult` can be serialised and deserialised without data loss
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 01-PLAN-01.md — Define the seven canonical dataclasses in api/models/eval_types.py and write round-trip + provenance enforcement tests
+- [ ] 01-PLAN-02.md — Build the EdgarTools adapter (api/services/edgar_adapter.py) that wraps filing data into ExtractionResult with provenance tags
 
 ### Phase 2: Schema Validator
 **Goal**: Layer-1 validation catches malformed, missing, and mis-scaled fields before any downstream processing
@@ -118,7 +122,7 @@ Generated: 2026-06-07
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Data Structures & Reader Adapter | 0/? | Not started | - |
+| 1. Data Structures & Reader Adapter | 0/2 | Planned | - |
 | 2. Schema Validator | 0/? | Not started | - |
 | 3. XBRL Cross-Validation & companyfacts Client | 0/? | Not started | - |
 | 4. Semantic Validator | 0/? | Not started | - |
