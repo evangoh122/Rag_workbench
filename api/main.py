@@ -1,16 +1,16 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
 from loguru import logger
 
-from .chat_engine import chat_sql
-from .rag_engine import ask_rag
-from .config import Config
+from api.routes import chat
+from api.config import Config
+from api.middleware.rate_limit import rate_limit_middleware
 
 app = FastAPI(title="RAG Workbench API")
 
+# Ownership: Gemini (Security)
+app.middleware("http")(rate_limit_middleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
@@ -18,6 +18,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Ownership: Claude (Architecture)
+app.include_router(chat.router)
 
 @app.on_event("startup")
 async def validate_config():
@@ -27,29 +30,9 @@ async def validate_config():
             "RAG mode will work. Switch to deepseek, openai, or ollama for SQL mode."
         )
 
-class ChatRequest(BaseModel):
-    message: str
-    history: Optional[List[Dict[str, str]]] = None
-
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "provider": Config.CHAT_PROVIDER}
-
-@app.post("/api/chat/sql")
-async def chat_sql_endpoint(req: ChatRequest):
-    try:
-        result = chat_sql(req.message, req.history)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/chat/rag")
-async def chat_rag_endpoint(req: ChatRequest):
-    try:
-        answer = ask_rag(req.message)
-        return {"type": "text", "answer": answer}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

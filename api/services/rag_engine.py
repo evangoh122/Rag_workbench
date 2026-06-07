@@ -11,9 +11,9 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
 
-from .config import Config
-from .database import db_manager
-from embed_tickers import _get_embeddings as get_embeddings
+from api.config import Config
+from api.db.database import db_manager
+from scripts.embed_tickers import _get_embeddings as get_embeddings
 
 
 # ── Retrievers ────────────────────────────────────────────────────────────────

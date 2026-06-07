@@ -1,6 +1,6 @@
 import duckdb
 import threading
-from .config import Config
+from api.config import Config
 
 class DatabaseManager:
     _instance = None

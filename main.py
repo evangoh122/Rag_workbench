@@ -2,12 +2,7 @@
 main.py
 RAG Workbench — embedding job entry point.
 
-Usage:
-    python main.py --job embed-tickers   # embed polygon ticker descriptions → DuckDB vector store
-    python main.py --job embed-edgar     # embed 10-K filings → DuckDB edgar_embeddings
-
-Set EMBED_TICKERS in .env (comma-separated) to limit which tickers get EDGAR 10-K processing.
-Defaults to a curated list of major US equities.
+Ownership: Claude (Architecture)
 """
 import argparse
 import os
@@ -50,12 +45,12 @@ def main():
     args = parser.parse_args()
 
     if args.job == "embed-tickers":
-        from embed_tickers import run_embed_tickers_etl
+        from scripts.embed_tickers import run_embed_tickers_etl
         n = run_embed_tickers_etl()
         logger.info(f"Done — embedded {n} tickers")
 
     elif args.job == "embed-edgar":
-        from embed_edgar import run_embed_edgar_etl
+        from scripts.embed_edgar import run_embed_edgar_etl
         logger.info(f"Processing {len(TICKER_SYMBOLS)} tickers: {', '.join(TICKER_SYMBOLS[:10])}{'…' if len(TICKER_SYMBOLS) > 10 else ''}")
         n = run_embed_edgar_etl(TICKER_SYMBOLS)
         logger.info(f"Done — stored {n} EDGAR chunks")

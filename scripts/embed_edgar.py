@@ -20,7 +20,7 @@ from loguru import logger
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sec_edgar_downloader import Downloader
 
-from embed_tickers import _get_embeddings as _get_model
+from scripts.embed_tickers import _get_embeddings as _get_model
 
 from api.config import Config
 

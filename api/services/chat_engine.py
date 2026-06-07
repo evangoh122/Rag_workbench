@@ -2,8 +2,8 @@ import re
 from typing import Optional, List, Dict, Any
 import pandas as pd
 from openai import OpenAI
-from .config import Config
-from .database import db_manager
+from api.config import Config
+from api.db.database import db_manager
 
 SCHEMA = """
 You have access to a DuckDB financial database with these tables:
