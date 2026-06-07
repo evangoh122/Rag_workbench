@@ -344,7 +344,7 @@ Run these in parallel:
 - Read `.claude/ROLE.md`
 - Read `.gemini/ROLE.md`
 - Read `.mimo/ROLE.md`
-- Bash: `git ls-files | head -80`
+- Bash: `git ls-files --cached --others --exclude-standard | sort | head -120`
 - Bash: `git log --oneline -10`
 
 ---
@@ -461,6 +461,8 @@ git branch <name> main
 
 ## Step 5: Dispatch parallel subagents
 
+**Before dispatching, verify each task file has actionable work.** For each specialist, check their written task file contains at least one unchecked line (`- [ ]`). If the file has zero unchecked lines (the LLM produced an empty task list despite the manifest saying otherwise), skip that Agent call and mark the specialist as "skipped" in the results.
+
 **Spawn all non-skipped Agent calls in a single message (parallel).** Use `isolation: "worktree"` on each.
 
 Each agent receives this prompt (fill in specialist-specific values from the ROLE.md you read in Step 1):
@@ -507,6 +509,12 @@ After all agents complete, output a results table:
 Then:
 - For any `incomplete` specialist: list which tasks remain unchecked in their task file
 - Suggest next step: "Review each branch's diff with `git diff main..<branch>`, then open PRs or merge."
+
+**Worktree cleanup:** After recording each specialist's commit SHA, remove their worktree:
+```bash
+git worktree remove --force <worktree-path>
+```
+After all removals, run `git worktree prune` to clean up any stale worktree metadata from failed runs. This prevents worktree accumulation across repeated `/orchestrate` invocations.
 ```
 
 - [ ] **Step 2: Verify the skill file is saved correctly**
@@ -567,9 +575,9 @@ mimo   → Status: pending | Tasks: 1
 - [ ] **Step 3: Verify subagents committed on their branches**
 
 ```bash
-git log --oneline claude | head -3
-git log --oneline gemini | head -3
-git log --oneline mimo   | head -3
+git log --oneline main..claude | head -3
+git log --oneline main..gemini | head -3
+git log --oneline main..mimo   | head -3
 ```
 
 Expected: each branch has at least one new commit with a `feat(<specialist>):` message.
