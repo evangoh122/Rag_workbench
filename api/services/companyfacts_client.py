@@ -155,6 +155,41 @@ class CompanyFactsClient:
 
             return found_value
 
+    def get_historical_values(self, cik: str, concept: str) -> List[float]:
+        """Returns all known numeric values for a concept across all periods from DuckDB cache.
+
+        Triggers an API fetch and bulk ingest if the concept is a high-signal concept and
+        no cached data exists yet.
+        """
+        with duckdb.connect(Config.DB_PATH) as conn:
+            rows = conn.execute("""
+                SELECT value FROM edgar_facts
+                WHERE cik = ? AND concept = ? AND value IS NOT NULL
+                ORDER BY period_end
+            """, [cik, concept]).fetchall()
+
+            if not rows and concept in self.HIGH_SIGNAL_CONCEPTS:
+                all_facts = self._get_company_facts_from_api(cik)
+                if all_facts:
+                    try:
+                        company = self._get_company_object(cik)
+                        ticker = company.ticker
+                    except Exception:
+                        ticker = "UNKNOWN"
+                    facts_to_ingest = [
+                        f for f in all_facts
+                        if f.taxonomy == "us-gaap" and f.concept in self.HIGH_SIGNAL_CONCEPTS
+                    ]
+                    if facts_to_ingest:
+                        self._ingest_facts_bulk(conn, ticker, cik, facts_to_ingest)
+                    rows = conn.execute("""
+                        SELECT value FROM edgar_facts
+                        WHERE cik = ? AND concept = ? AND value IS NOT NULL
+                        ORDER BY period_end
+                    """, [cik, concept]).fetchall()
+
+        return [row[0] for row in rows]
+
     def _ingest_facts_bulk(self, conn: duckdb.DuckDBPyConnection, ticker: str, cik: str, facts: List[Any]):
         """Ingests facts into DuckDB using a bulk operation."""
         # Preparation for bulk insert: build a list of tuples
