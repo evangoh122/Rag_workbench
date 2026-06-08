@@ -136,7 +136,11 @@ class CompanyFactsClient:
                             if abs(actual_days - expected_duration) >= 16:
                                 concept_period_match = False
                         except (ValueError, TypeError):
-                            pass  # keep the fact if date math fails
+                            concept_period_match = False
+                            logger.warning(
+                                "Duration filter skipped for %s/%s/%s — malformed period_start=%r period_end=%r; rejecting fact",
+                                cik, concept, period_end, fact.period_start, fact.period_end,
+                            )
 
                 is_target = concept_period_match
                 if is_target:
