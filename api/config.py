@@ -7,6 +7,11 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 class Config:
     DB_PATH = os.getenv("DB_PATH", "./data/ibkr.duckdb")
+    REVIEW_DB_PATH = os.getenv("REVIEW_DB_PATH", "./data/review_queue.duckdb")
+
+    # Phase 8: Drift alert thresholds
+    DRIFT_AGREEMENT_FLOOR: float = float(os.getenv("DRIFT_AGREEMENT_FLOOR", "0.95"))
+    DRIFT_CONCEPT_SPIKE_THRESHOLD: int = int(os.getenv("DRIFT_CONCEPT_SPIKE_THRESHOLD", "50"))
     
     # Provider Settings
     CHAT_PROVIDER = os.getenv("CHAT_PROVIDER", "deepseek").lower()
