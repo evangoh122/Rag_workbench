@@ -91,6 +91,33 @@ def _statement_to_fields(statement) -> list[ExtractedField]:
     return fields
 
 
+def _xbrl_dataframe_to_fields(df: Optional[pd.DataFrame]) -> list[ExtractedField]:
+    """Convert a concept/value DataFrame to XBRL-tagged ExtractedFields.
+
+    Expects columns: 'concept' (str) and 'value' (numeric). Returns [] for
+    None or empty input. Use _statement_to_fields() for EdgarTools Statements.
+    """
+    if df is None or df.empty:
+        return []
+    if "concept" not in df.columns or "value" not in df.columns:
+        return []
+    fields: list[ExtractedField] = []
+    for _, row in df.iterrows():
+        concept = str(row.get("concept", ""))
+        value = row.get("value")
+        if pd.isna(value) or value is None:
+            continue
+        fields.append(
+            ExtractedField(
+                name=concept,
+                value=float(value),
+                provenance=Provenance.XBRL,
+                concept=concept or None,
+            )
+        )
+    return fields
+
+
 def _is_date_col(col: str) -> bool:
     """Return True if a column name looks like YYYY-MM-DD."""
     parts = col.split("-")

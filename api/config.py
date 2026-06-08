@@ -1,8 +1,9 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from api.secrets import get_secret
 
-# Load .env from the root directory
+# Load .env from the root directory before any os.getenv calls
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 
@@ -39,11 +40,11 @@ class Config:
     CHAT_PROVIDER = os.getenv("CHAT_PROVIDER", "deepseek").lower()
     CHAT_MODEL = os.getenv("CHAT_MODEL")
     
-    # API Keys
-    DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    # API Keys — accessed via secrets module so the backend can be swapped later
+    DEEPSEEK_API_KEY = get_secret("DEEPSEEK_API_KEY")
+    OPENAI_API_KEY = get_secret("OPENAI_API_KEY")
+    ANTHROPIC_API_KEY = get_secret("ANTHROPIC_API_KEY")
+    GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY") or get_secret("GEMINI_API_KEY")
     
     # Embedding Settings
     EMBEDDING_MODEL = "models/text-embedding-004"
