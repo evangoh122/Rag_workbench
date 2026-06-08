@@ -1,6 +1,8 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from loguru import logger
 
 from api.routes import chat
@@ -25,6 +27,17 @@ app.include_router(chat.router)
 
 # Ownership: DeepSeek (API Engineering) — Phase 8
 app.include_router(review_router)
+
+# Mount static files for production (Phase 7/8)
+frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
+if os.path.exists(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
+    @app.exception_handler(404)
+    async def not_found_handler(request, exc):
+        if not request.url.path.startswith("/api"):
+            return FileResponse(os.path.join(frontend_path, "index.html"))
+        raise exc
 
 @app.on_event("startup")
 async def validate_config():
