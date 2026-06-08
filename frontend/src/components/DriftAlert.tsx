@@ -3,13 +3,10 @@ import { Activity, AlertTriangle, CheckCircle } from 'lucide-react';
 import { getDriftStatus } from '../api/review';
 import type { DriftStatus } from '../api/review';
 
-const AGREEMENT_FLOOR = parseFloat(
-  import.meta.env.VITE_DRIFT_AGREEMENT_FLOOR ?? '0.95',
-);
-const CONCEPT_SPIKE_THRESHOLD = parseInt(
-  import.meta.env.VITE_DRIFT_CONCEPT_SPIKE_THRESHOLD ?? '50',
-  10,
-);
+const _parsedFloor = parseFloat(import.meta.env.VITE_DRIFT_AGREEMENT_FLOOR ?? '0.95');
+const AGREEMENT_FLOOR = isNaN(_parsedFloor) ? 0.95 : _parsedFloor;
+const _parsedThreshold = parseInt(import.meta.env.VITE_DRIFT_CONCEPT_SPIKE_THRESHOLD ?? '50', 10);
+const CONCEPT_SPIKE_THRESHOLD = isNaN(_parsedThreshold) ? 50 : _parsedThreshold;
 
 export default function DriftAlert() {
   const [status, setStatus] = useState<DriftStatus | null>(null);

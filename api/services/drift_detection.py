@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 # MiMo delivers this
 try:
@@ -50,7 +50,7 @@ def check_drift(
 
     # Signal 2: unrecognized concept spike (REQ-RQ-04)
     # REQ-RQ-05: escalation-rate is intentionally excluded as a trigger signal
-    unrecognized_concept_count: int = count_unrecognized_concepts(conn, window=window)
+    unrecognized_concept_count: int = count_unrecognized_concepts(conn, window_hours=window)
     concept_alert: bool = unrecognized_concept_count > concept_spike_threshold
 
     return DriftStatus(
@@ -61,7 +61,7 @@ def check_drift(
         concept_spike_threshold=concept_spike_threshold,
         concept_alert=concept_alert,
         window_size=window,
-        last_updated=datetime.utcnow(),
+        last_updated=datetime.now(timezone.utc),
     )
 
 

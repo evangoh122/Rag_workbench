@@ -33,7 +33,10 @@ export interface DriftStatus {
 
 export interface CalibrationResult {
   message: string;
-  updated_thresholds?: Record<string, number>;
+  verdicts_used: number;
+  high_threshold?: number;
+  medium_threshold?: number;
+  projected_agreement_rate?: number;
 }
 
 export async function getReviewQueue(): Promise<ReviewDecision[]> {
@@ -42,7 +45,10 @@ export async function getReviewQueue(): Promise<ReviewDecision[]> {
 }
 
 export async function submitVerdict(verdict: Verdict): Promise<void> {
-  await axios.post(`${API_BASE}/review/verdict`, verdict);
+  await axios.post(`${API_BASE}/review/decisions/${verdict.decision_id}/verdict`, {
+    reviewer_agrees: verdict.reviewer_agrees,
+    notes: verdict.notes,
+  });
 }
 
 export async function getDriftStatus(): Promise<DriftStatus> {

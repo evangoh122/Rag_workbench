@@ -201,7 +201,7 @@ function App() {
                   }`}
                 >
                   <ReactMarkdown
-                    disallowedElements={['script', 'iframe']}
+                    allowedElements={['p', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'a', 'br', 'hr']}
                     skipHtml
                   >
                     {msg.content}

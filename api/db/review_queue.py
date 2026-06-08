@@ -201,19 +201,23 @@ def insert_verdict(
     """
     verdict_id = str(uuid.uuid4())
 
-    conn.execute(
-        """
-        INSERT INTO reviewer_verdicts (id, decision_id, reviewer_agrees, notes)
-        VALUES (?, ?, ?, ?)
-        """,
-        [verdict_id, decision_id, reviewer_agrees, notes],
-    )
-
-    # Mark the parent decision as reviewed
-    conn.execute(
-        "UPDATE review_decisions SET status = 'reviewed' WHERE id = ?",
-        [decision_id],
-    )
+    conn.execute("BEGIN")
+    try:
+        conn.execute(
+            """
+            INSERT INTO reviewer_verdicts (id, decision_id, reviewer_agrees, notes)
+            VALUES (?, ?, ?, ?)
+            """,
+            [verdict_id, decision_id, reviewer_agrees, notes],
+        )
+        conn.execute(
+            "UPDATE review_decisions SET status = 'reviewed' WHERE id = ?",
+            [decision_id],
+        )
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
 
     return verdict_id
 
@@ -314,3 +318,30 @@ def get_calibration_data(
     columns = [desc[0] for desc in cursor.description]
     rows = cursor.fetchall()
     return [dict(zip(columns, row)) for row in rows]
+
+
+def persist_calibration_result(
+    conn: duckdb.DuckDBPyConnection,
+    result: dict,
+) -> None:
+    """Persist a calibration run result to calibration_history.
+
+    Args:
+        conn:   Active DuckDB connection.
+        result: Dict returned by recalibrate_thresholds().
+    """
+    conn.execute(
+        """
+        INSERT INTO calibration_history
+            (id, verdicts_used, high_threshold, medium_threshold, agreement_rate, notes)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        [
+            str(uuid.uuid4()),
+            result.get("verdicts_used", 0),
+            result.get("high_threshold"),
+            result.get("medium_threshold"),
+            result.get("projected_agreement_rate"),
+            result.get("error"),
+        ],
+    )

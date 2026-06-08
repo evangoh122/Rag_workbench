@@ -3,6 +3,15 @@ from typing import Literal
 from datetime import datetime
 
 
+class ReviewDecisionIn(BaseModel):
+    cik: str = Field(max_length=10)
+    accession: str = Field(max_length=25)
+    form_type: str = Field(max_length=10)
+    route: Literal['SAMPLED_REVIEW', 'ESCALATE']
+    confidence: float = Field(ge=0.0, le=1.0)
+    triggers_fired: list[str] = Field(default_factory=list)
+
+
 class ReviewDecisionOut(BaseModel):
     id: str
     cik: str

@@ -69,8 +69,11 @@ function DecisionCard({
 
   const handleVerdict = async (agrees: boolean) => {
     setSubmitting(true);
-    await onVerdict(decision.id, agrees);
-    setSubmitting(false);
+    try {
+      await onVerdict(decision.id, agrees);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const isEscalate = decision.route === 'ESCALATE';

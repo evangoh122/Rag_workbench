@@ -104,10 +104,19 @@ def recalibrate_thresholds(
     projected_agreement_rate: float = total_agrees / verdicts_used
 
     # Fallback: if thresholds could not be found, use conservative defaults
+    used_defaults = False
     if high_threshold is None:
         high_threshold = 0.85
+        used_defaults = True
     if medium_threshold is None:
         medium_threshold = 0.65
+        used_defaults = True
+    if used_defaults:
+        import logging
+        logging.getLogger(__name__).warning(
+            "recalibrate_thresholds: insufficient data to derive thresholds from verdicts; "
+            "using conservative defaults (high=0.85, medium=0.65). used_defaults=True"
+        )
 
     # Ensure ordering invariant: high > medium
     if medium_threshold >= high_threshold:
@@ -119,4 +128,5 @@ def recalibrate_thresholds(
         "medium_threshold": round(medium_threshold, 4),
         "projected_agreement_rate": round(projected_agreement_rate, 4),
         "verdicts_used": verdicts_used,
+        "used_defaults": used_defaults,
     }
