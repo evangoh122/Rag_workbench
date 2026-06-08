@@ -3,7 +3,7 @@ FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-ARG VITE_API_BASE=""
+ARG VITE_API_BASE="/api"
 
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -40,6 +40,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Add non-root user (UID 1000 for HF Spaces)
+RUN useradd -m -u 1000 user
+RUN chown -R user:user /app /var/log/nginx /var/lib/nginx /run
+
 # Copy Python packages from builder
 COPY --from=python-builder /install /usr/local
 
@@ -55,8 +59,10 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && chown user:user /app/data
 
 EXPOSE 7860
+
+USER user
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
