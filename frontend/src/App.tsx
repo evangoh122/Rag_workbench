@@ -1,18 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
-import { Send, Database, BookOpen, RefreshCcw, Search, Table as TableIcon } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import './App.css';
+import { sendSqlMessage, sendRagMessage } from './api/chat';
+import type { ChatResponse } from './api/chat';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   type?: 'text' | 'table' | 'error';
   sql?: string;
-  data?: any[];
+  data?: Record<string, unknown>[];
 }
-
-const API_BASE = 'http://localhost:8000/api';
 
 function App() {
   const [input, setInput] = useState('');
@@ -35,123 +33,184 @@ function App() {
 
     const userMsg: Message = { role: 'user', content: input };
     setMessages(prev => [...prev, userMsg]);
+    const currentInput = input;
     setInput('');
     setLoading(true);
 
     try {
-      const endpoint = mode === 'sql' ? '/chat/sql' : '/chat/rag';
       const history = messages.map(m => ({ role: m.role, content: m.content }));
-      
-      const response = await axios.post(`${API_BASE}${endpoint}`, {
-        message: input,
-        history: history
-      });
 
-      const data = response.data;
+      let data: ChatResponse;
+      if (mode === 'sql') {
+        data = await sendSqlMessage(currentInput, history);
+      } else {
+        data = await sendRagMessage(currentInput, history);
+      }
+
       const assistantMsg: Message = {
         role: 'assistant',
-        content: data.answer || data.detail || 'No response',
+        content: data.answer ?? data.detail ?? 'No response',
         type: data.type,
         sql: data.sql,
-        data: data.data
+        data: data.data,
       };
 
       setMessages(prev => [...prev, assistantMsg]);
-    } catch (err: any) {
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: `Error: ${err.response?.data?.detail || err.message}`,
-        type: 'error'
-      }]);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'An unexpected error occurred';
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Error: ${message}`,
+          type: 'error',
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <>
-      <div className="sidebar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '32px' }}>
-          <Search size={24} color="#3b82f6" />
-          <h2 style={{ margin: 0, fontSize: '18px' }}>RAG Workbench</h2>
+    <div className="flex h-screen w-screen overflow-hidden bg-[#0e1117] text-white font-sans">
+      {/* Sidebar */}
+      <aside className="w-64 flex-shrink-0 bg-[#131926] border-r border-[#2a3246] flex flex-col p-5">
+        {/* Logo */}
+        <div className="flex items-center gap-2.5 mb-8">
+          <Search size={24} className="text-blue-500" />
+          <h2 className="m-0 text-lg font-semibold">RAG Workbench</h2>
         </div>
 
-        <div className="mode-toggle">
-          <button 
-            className={`mode-btn ${mode === 'sql' ? 'active' : ''}`}
+        {/* Mode toggle */}
+        <div className="flex bg-[#1c2130] rounded-lg p-1 mb-6">
+          <button
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+              mode === 'sql'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
             onClick={() => setMode('sql')}
           >
-            <Database size={16} style={{ marginBottom: '-3px', marginRight: '6px' }} />
+            <Database size={16} />
             SQL
           </button>
-          <button 
-            className={`mode-btn ${mode === 'rag' ? 'active' : ''}`}
+          <button
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+              mode === 'rag'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
             onClick={() => setMode('rag')}
           >
-            <BookOpen size={16} style={{ marginBottom: '-3px', marginRight: '6px' }} />
+            <BookOpen size={16} />
             RAG
           </button>
         </div>
 
-        <div style={{ marginTop: 'auto' }}>
-          <button 
-            className="mode-btn" 
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        {/* Clear chat button — pushed to bottom */}
+        <div className="mt-auto">
+          <button
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm text-gray-400 hover:text-gray-200 bg-transparent border-0 cursor-pointer transition-all duration-200 hover:bg-[#1c2130]"
             onClick={() => setMessages([])}
           >
             <RefreshCcw size={16} />
             Clear Chat
           </button>
         </div>
-      </div>
+      </aside>
 
-      <div className="main-content">
-        <header className="header">
-          <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-            Mode: <strong>{mode === 'sql' ? 'Database (SQL)' : 'Knowledge Base (RAG)'}</strong>
+      {/* Main content */}
+      <div className="flex-1 flex flex-col h-full min-w-0">
+        {/* Header */}
+        <header className="px-6 py-4 border-b border-[#2a3246] flex items-center justify-between flex-shrink-0">
+          <div className="text-sm text-gray-400">
+            Mode:{' '}
+            <strong className="text-white">
+              {mode === 'sql' ? 'Database (SQL)' : 'Knowledge Base (RAG)'}
+            </strong>
           </div>
         </header>
 
-        <div className="chat-container">
+        {/* Chat area */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
           {messages.length === 0 && (
-            <div style={{ textAlign: 'center', marginTop: '100px', color: 'var(--text-secondary)' }}>
-              <h3>How can I help you with your financial data today?</h3>
-              <p>Try asking: "Show me AAPL closing prices for the last 30 days"</p>
+            <div className="text-center mt-24 text-gray-400">
+              <h3 className="text-lg font-medium mb-2">
+                How can I help you with your financial data today?
+              </h3>
+              <p className="text-sm">
+                Try asking: &quot;Show me AAPL closing prices for the last 30 days&quot;
+              </p>
             </div>
           )}
+
           {messages.map((msg, idx) => (
-            <div key={idx} className={`message ${msg.role}`}>
-              <div className="message-bubble">
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
-                
+            <div
+              key={idx}
+              className={`flex gap-4 max-w-[85%] ${
+                msg.role === 'user' ? 'self-end flex-row-reverse' : 'self-start'
+              }`}
+            >
+              <div
+                className={`px-4 py-3 rounded-2xl leading-relaxed ${
+                  msg.role === 'user'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-[#1e293b] text-gray-100'
+                }`}
+              >
+                <ReactMarkdown
+                  disallowedElements={['script', 'iframe']}
+                  skipHtml
+                >
+                  {msg.content}
+                </ReactMarkdown>
+
                 {msg.sql && (
-                  <div className="sql-block">
+                  <pre className="mt-3 bg-black text-gray-300 rounded p-3 text-sm font-mono whitespace-pre-wrap overflow-x-auto">
                     <code>{msg.sql}</code>
-                  </div>
+                  </pre>
                 )}
 
                 {msg.data && msg.data.length > 0 && (
-                  <div className="table-container">
-                    <table>
+                  <div className="mt-3 bg-[#0a0c10] border border-[#2a3246] rounded-lg overflow-x-auto">
+                    <table className="w-full border-collapse text-sm">
                       <thead>
                         <tr>
                           {Object.keys(msg.data[0]).map(key => (
-                            <th key={key}>{key}</th>
+                            <th
+                              key={key}
+                              className="text-left px-3 py-3 bg-[#161b22] border-b border-[#2a3246] text-gray-400 font-medium"
+                            >
+                              {key}
+                            </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {msg.data.slice(0, 10).map((row, i) => (
-                          <tr key={i}>
-                            {Object.values(row).map((val: any, j) => (
-                              <td key={j}>{typeof val === 'number' ? val.toLocaleString() : String(val)}</td>
+                          <tr
+                            key={i}
+                            className={i % 2 === 0 ? '' : 'bg-[#0d1117]'}
+                          >
+                            {Object.values(row).map((val, j) => (
+                              <td
+                                key={j}
+                                className="px-3 py-3 border-b border-[#2a3246]"
+                              >
+                                {typeof val === 'number'
+                                  ? val.toLocaleString()
+                                  : String(val ?? '')}
+                              </td>
                             ))}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                     {msg.data.length > 10 && (
-                      <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                      <div className="px-3 py-2 text-xs text-gray-400 text-center">
                         Showing 10 of {msg.data.length} rows
                       </div>
                     )}
@@ -160,31 +219,46 @@ function App() {
               </div>
             </div>
           ))}
+
           {loading && (
-            <div className="message assistant">
-              <div className="message-bubble" style={{ fontStyle: 'italic', opacity: 0.7 }}>
+            <div className="flex gap-4 max-w-[85%] self-start">
+              <div className="px-4 py-3 rounded-2xl bg-[#1e293b] text-gray-100 italic opacity-70">
                 Thinking...
               </div>
             </div>
           )}
+
           <div ref={chatEndRef} />
         </div>
 
-        <div className="input-container">
-          <form onSubmit={handleSubmit} className="input-wrapper">
-            <input 
+        {/* Input bar */}
+        <div className="px-6 py-6 bg-[#0e1117] flex-shrink-0">
+          <form
+            onSubmit={handleSubmit}
+            className="max-w-3xl mx-auto flex items-center bg-[#1c2130] border border-[#2a3246] rounded-xl px-4 py-2 transition-colors duration-200 focus-within:border-blue-600"
+          >
+            <input
+              className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 py-3 text-base outline-none"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={mode === 'sql' ? "Ask a SQL question..." : "Ask a Knowledge Base question..."}
+              placeholder={
+                mode === 'sql'
+                  ? 'Ask a SQL question...'
+                  : 'Ask a Knowledge Base question...'
+              }
               disabled={loading}
             />
-            <button type="submit" className="send-btn" disabled={loading || !input.trim()}>
+            <button
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-lg border-0 cursor-pointer transition-opacity duration-200 disabled:opacity-50 disabled:cursor-not-allowed ml-2"
+            >
               <Send size={18} />
             </button>
           </form>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
