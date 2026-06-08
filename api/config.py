@@ -9,6 +9,11 @@ class Config:
     DB_PATH = os.getenv("DB_PATH", "./data/ibkr.duckdb")
     REVIEW_DB_PATH = os.getenv("REVIEW_DB_PATH", "./data/review_queue.duckdb")
 
+    # ── LangSmith (tracing & observability) ──────────────────────────────────
+    LANGSMITH_API_KEY: str | None = os.getenv("LANGSMITH_API_KEY") or None
+    LANGSMITH_PROJECT: str = os.getenv("LANGSMITH_PROJECT", "rag-workbench")
+    LANGSMITH_TRACING: bool = os.getenv("LANGSMITH_TRACING", "false").lower() == "true"
+
     # Phase 8: Drift alert thresholds
     DRIFT_AGREEMENT_FLOOR: float = float(os.getenv("DRIFT_AGREEMENT_FLOOR", "0.95"))
     DRIFT_CONCEPT_SPIKE_THRESHOLD: int = int(os.getenv("DRIFT_CONCEPT_SPIKE_THRESHOLD", "50"))
@@ -57,3 +62,10 @@ class Config:
             "model": cls.CHAT_MODEL or cfg["default_model"],
             "api_key": cfg["api_key"],
         }
+
+
+# ── LangSmith initialisation (runs once at import time) ───────────────────────
+if Config.LANGSMITH_TRACING and Config.LANGSMITH_API_KEY:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = Config.LANGSMITH_API_KEY
+    os.environ["LANGCHAIN_PROJECT"] = Config.LANGSMITH_PROJECT

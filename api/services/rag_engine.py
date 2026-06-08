@@ -2,6 +2,7 @@ import os
 from typing import List, Dict, Any, Optional
 import pandas as pd
 from loguru import logger
+from langsmith import traceable
 
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
@@ -267,6 +268,7 @@ def _format_docs(docs: List[Document]) -> str:
     return "\n\n".join(parts) if parts else "No context found."
 
 
+@traceable(name="rag_combined_retriever")
 def _combined_retriever(query: str) -> List[Document]:
     """Run all four retrievers sequentially and merge results."""
     vector_docs = DuckDBVectorRetriever(top_k=5).invoke(query)
@@ -305,6 +307,7 @@ def get_rag_chain():
     return _rag_chain
 
 
+@traceable(name="rag_engine")
 def ask_rag(question: str) -> str:
     try:
         chain = get_rag_chain()

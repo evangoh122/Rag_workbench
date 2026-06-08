@@ -2,6 +2,7 @@ import re
 from typing import Optional, List, Dict, Any
 import pandas as pd
 from openai import OpenAI
+from langsmith import traceable
 from api.config import Config
 from api.db.database import db_manager
 
@@ -86,6 +87,7 @@ def validate_read_only_sql(sql: str) -> Optional[str]:
         return f"Rejected SQL containing blocked keyword/function: {', '.join(found)}."
     return None
 
+@traceable(name="chat_summarise_results")
 def summarise_results(question: str, df: pd.DataFrame) -> str:
     if df.empty:
         return "The query returned no results."
@@ -115,6 +117,7 @@ def summarise_results(question: str, df: pd.DataFrame) -> str:
     except Exception:
         return f"Query returned {len(df)} rows."
 
+@traceable(name="chat_engine")
 def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     cfg = Config.get_provider_config()
     client = get_sql_client(cfg)
