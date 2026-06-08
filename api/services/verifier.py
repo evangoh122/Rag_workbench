@@ -47,7 +47,9 @@ class Verifier:
 
         # CrossEncoder predicts [contradiction, neutral, entailment]
         # For nli-deberta-v3-small, the scores are usually mapped to these 3 classes.
-        scores = self.model.predict([(source_text, claim)])
+        # predict() returns a 2D array for the batch.
+        prediction = self.model.predict([(source_text, claim)])
+        scores = prediction[0]
         
         # Depending on the model, the order of labels might vary.
         # For deberta-v3-small NLI, labels are: 0: contradiction, 1: neutral, 2: entailment

@@ -38,8 +38,8 @@ def get_latest_10k_facts(ticker: str) -> pl.DataFrame:
         all_facts = []
         for statement in [financials.balance_sheet, financials.income_statement, financials.cash_flow_statement]:
             if statement is not None:
-                # statement is usually a pandas DataFrame from edgartools
-                df_pd = statement
+                # statement is an edgar.financials.Statement object
+                df_pd = statement.to_pandas()
                 # Convert to polars
                 df_pl = pl.from_pandas(df_pd)
                 all_facts.append(df_pl)
