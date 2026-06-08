@@ -13,6 +13,10 @@ REVENUE_CONCEPTS = {
     "SalesRevenueNet",
     "SalesRevenueGoodsNet",
     "SalesRevenueServicesNet",
+    "RevenuesNetOfInterestExpense",
+    "InterestAndDividendIncomeOperating",
+    "BankingRevenue",
+    "NoninterestRevenue",
 }
 NET_INCOME_CONCEPTS = {"NetIncomeLoss", "NetIncome", "ProfitLoss"}
 ASSETS_CONCEPTS = {"Assets"}
