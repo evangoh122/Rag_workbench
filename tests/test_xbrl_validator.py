@@ -29,7 +29,7 @@ class TestXbrlValidator(unittest.TestCase):
         )
         
         # Mock client behavior
-        self.mock_client.get_fact.side_effect = lambda cik, concept, period: 100.0 if concept == "Revenue" else 50.0
+        self.mock_client.get_fact.side_effect = lambda cik, concept, period, form_type="": 100.0 if concept == "Revenue" else 50.0
         
         # Run validation
         self.validator.validate(result, validation_state)
@@ -108,13 +108,39 @@ class TestXbrlValidator(unittest.TestCase):
         fields = [ExtractedField(name="Revenue", value=100.0, provenance=Provenance.XBRL, concept="Revenue")]
         result = ExtractionResult(cik="1", accession="1", form_type="1", period="2023-01-01", fields=fields)
         validation_state = ValidationResult(is_valid=True, details={"enrichment_manifest": {"Revenue": "Revenue"}})
-        
+
         self.mock_client.get_fact.return_value = None
-        
+
         self.validator.validate(result, validation_state)
-        
+
         self.assertTrue(validation_state.is_valid)
         self.assertEqual(validation_state.details['cross_validation_results'], {})
+
+    def test_form_type_passed_to_client(self):
+        """get_fact must be called with form_type as the fourth positional arg."""
+        fields = [
+            ExtractedField(name="Revenue", value=100.0, provenance=Provenance.XBRL, concept="Revenue")
+        ]
+        result = ExtractionResult(
+            cik="0000320193",
+            accession="0000320193-23-000064",
+            form_type="10-Q",
+            period="2023-06-24",
+            fields=fields,
+        )
+        validation_state = ValidationResult(
+            is_valid=True,
+            details={"enrichment_manifest": {"Revenue": "Revenue"}},
+        )
+
+        self.mock_client.get_fact.return_value = 100.0
+
+        self.validator.validate(result, validation_state)
+
+        # Verify get_fact was called with form_type="10-Q" as the fourth positional arg
+        self.mock_client.get_fact.assert_called_once_with(
+            "0000320193", "Revenue", "2023-06-24", "10-Q"
+        )
 
 if __name__ == '__main__':
     unittest.main()

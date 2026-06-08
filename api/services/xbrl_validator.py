@@ -39,7 +39,7 @@ class XbrlCrossValidator:
                 continue
 
             try:
-                ground_truth = self.client.get_fact(result.cik, concept, period_end)
+                ground_truth = self.client.get_fact(result.cik, concept, period_end, result.form_type)
                 
                 if ground_truth is not None:
                     # Compare with 1% tolerance

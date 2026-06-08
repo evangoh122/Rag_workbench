@@ -1,12 +1,22 @@
 import functools
 import logging
 import time
+from datetime import date
 from typing import Optional, List, Any
 import duckdb
 from edgar import Company, set_identity
 from api.config import Config
 
 logger = logging.getLogger(__name__)
+
+
+def _expected_duration_days(form_type: str) -> Optional[int]:
+    """Returns expected reporting duration in days based on form type."""
+    if form_type.startswith("10-K"):
+        return 365
+    if form_type.startswith("10-Q"):
+        return 91
+    return None
 
 class CompanyFactsClient:
     HIGH_SIGNAL_CONCEPTS = {"NetIncomeLoss", "Revenue", "Assets", "Liabilities"}
@@ -66,26 +76,44 @@ class CompanyFactsClient:
             logger.error(f"Error fetching facts for CIK {cik}: {e}")
             return []
 
-    def get_fact(self, cik: str, concept: str, period_end: str) -> Optional[float]:
+    def get_fact(self, cik: str, concept: str, period_end: str, form_type: str = "") -> Optional[float]:
         """
         Gets a specific fact for a company.
         Tries local DuckDB first, then SEC API.
+
+        form_type is used to filter out QTD vs YTD ambiguity: for 10-Q filings
+        (expected ~91 days) we reject facts whose duration differs by >= 16 days
+        from the expected duration.  Instant / balance-sheet facts (period_start
+        NULL or empty) are always accepted.
         """
+        expected_duration = _expected_duration_days(form_type)
+
         with duckdb.connect(Config.DB_PATH) as conn:
-            # 1. Try DuckDB
-            res = conn.execute("""
-                SELECT value FROM edgar_facts 
-                WHERE cik = ? AND concept = ? AND period_end = ?
-                LIMIT 1
-            """, [cik, concept, period_end]).fetchone()
-            
+            # 1. Try DuckDB — apply duration filter when form_type is known
+            if expected_duration is not None:
+                res = conn.execute("""
+                    SELECT value FROM edgar_facts
+                    WHERE cik = ? AND concept = ? AND period_end = ?
+                    AND (
+                        period_start IS NULL OR period_start = ''
+                        OR ABS(datediff('day', CAST(period_start AS DATE), CAST(period_end AS DATE)) - ?) < 16
+                    )
+                    LIMIT 1
+                """, [cik, concept, period_end, expected_duration]).fetchone()
+            else:
+                res = conn.execute("""
+                    SELECT value FROM edgar_facts
+                    WHERE cik = ? AND concept = ? AND period_end = ?
+                    LIMIT 1
+                """, [cik, concept, period_end]).fetchone()
+
             if res:
                 return res[0]
 
             # 2. Try SEC API
             logger.info(f"Fact not found in DB, fetching from SEC API: CIK={cik}, Concept={concept}, PeriodEnd={period_end}")
             all_facts = self._get_company_facts_from_api(cik)
-            
+
             try:
                 company = self._get_company_object(cik)
                 ticker = company.ticker
@@ -94,12 +122,30 @@ class CompanyFactsClient:
 
             found_value = None
             facts_to_ingest = []
-            
+
             for fact in all_facts:
-                is_target = fact.concept == concept and fact.period_end == period_end
+                concept_period_match = fact.concept == concept and fact.period_end == period_end
+                if concept_period_match:
+                    # Apply duration filter for QTD/YTD disambiguation
+                    if expected_duration is not None and fact.period_start:
+                        try:
+                            actual_days = (
+                                date.fromisoformat(fact.period_end)
+                                - date.fromisoformat(fact.period_start)
+                            ).days
+                            if abs(actual_days - expected_duration) >= 16:
+                                concept_period_match = False
+                        except (ValueError, TypeError):
+                            concept_period_match = False
+                            logger.warning(
+                                "Duration filter skipped for %s/%s/%s — malformed period_start=%r period_end=%r; rejecting fact",
+                                cik, concept, period_end, fact.period_start, fact.period_end,
+                            )
+
+                is_target = concept_period_match
                 if is_target:
                     found_value = fact.numeric_value
-                
+
                 # Ingest if it's the requested fact OR a high-signal concept
                 if is_target or (fact.taxonomy == "us-gaap" and fact.concept in self.HIGH_SIGNAL_CONCEPTS):
                     facts_to_ingest.append(fact)
