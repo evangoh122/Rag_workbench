@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, ClipboardList } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage } from './api/chat';
 import type { ChatResponse } from './api/chat';
+import ReviewQueue from './pages/ReviewQueue';
+import DriftAlert from './components/DriftAlert';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -12,11 +14,14 @@ interface Message {
   data?: Record<string, unknown>[];
 }
 
+type AppView = 'chat' | 'review';
+
 function App() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [mode, setMode] = useState<'sql' | 'rag'>('sql');
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<AppView>('chat');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -84,180 +89,215 @@ function App() {
           <h2 className="m-0 text-lg font-semibold">RAG Workbench</h2>
         </div>
 
-        {/* Mode toggle */}
-        <div className="flex bg-[#1c2130] rounded-lg p-1 mb-6">
-          <button
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
-              mode === 'sql'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-            onClick={() => setMode('sql')}
-          >
-            <Database size={16} />
-            SQL
-          </button>
-          <button
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
-              mode === 'rag'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-            onClick={() => setMode('rag')}
-          >
-            <BookOpen size={16} />
-            RAG
-          </button>
-        </div>
+        {/* Mode toggle (only visible in chat view) */}
+        {view === 'chat' && (
+          <div className="flex bg-[#1c2130] rounded-lg p-1 mb-6">
+            <button
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+                mode === 'sql'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+              onClick={() => setMode('sql')}
+            >
+              <Database size={16} />
+              SQL
+            </button>
+            <button
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+                mode === 'rag'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+              onClick={() => setMode('rag')}
+            >
+              <BookOpen size={16} />
+              RAG
+            </button>
+          </div>
+        )}
 
-        {/* Clear chat button — pushed to bottom */}
-        <div className="mt-auto">
+        {/* Review Queue nav link */}
+        <button
+          className={`w-full flex items-center gap-2.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 mb-2 ${
+            view === 'review'
+              ? 'bg-[#1c2130] text-blue-400'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2130] bg-transparent'
+          }`}
+          onClick={() => setView('review')}
+        >
+          <ClipboardList size={16} />
+          Review Queue
+        </button>
+
+        {/* Back to chat button when in review view */}
+        {view === 'review' && (
           <button
-            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm text-gray-400 hover:text-gray-200 bg-transparent border-0 cursor-pointer transition-all duration-200 hover:bg-[#1c2130]"
-            onClick={() => setMessages([])}
+            className="w-full flex items-center gap-2.5 py-2 px-3 rounded-md text-sm font-medium text-gray-400 hover:text-gray-200 bg-transparent hover:bg-[#1c2130] border-0 cursor-pointer transition-all duration-200 mb-2"
+            onClick={() => setView('chat')}
           >
-            <RefreshCcw size={16} />
-            Clear Chat
+            <Search size={16} />
+            Back to Chat
           </button>
-        </div>
+        )}
+
+        {/* Clear chat button — only in chat view */}
+        {view === 'chat' && (
+          <div className="mt-auto">
+            <button
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm text-gray-400 hover:text-gray-200 bg-transparent border-0 cursor-pointer transition-all duration-200 hover:bg-[#1c2130]"
+              onClick={() => setMessages([])}
+            >
+              <RefreshCcw size={16} />
+              Clear Chat
+            </button>
+          </div>
+        )}
+
+        {/* Drift alert at bottom of sidebar */}
+        <DriftAlert />
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col h-full min-w-0">
-        {/* Header */}
-        <header className="px-6 py-4 border-b border-[#2a3246] flex items-center justify-between flex-shrink-0">
-          <div className="text-sm text-gray-400">
-            Mode:{' '}
-            <strong className="text-white">
-              {mode === 'sql' ? 'Database (SQL)' : 'Knowledge Base (RAG)'}
-            </strong>
-          </div>
-        </header>
-
-        {/* Chat area */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
-          {messages.length === 0 && (
-            <div className="text-center mt-24 text-gray-400">
-              <h3 className="text-lg font-medium mb-2">
-                How can I help you with your financial data today?
-              </h3>
-              <p className="text-sm">
-                Try asking: &quot;Show me AAPL closing prices for the last 30 days&quot;
-              </p>
+      {view === 'review' ? (
+        <ReviewQueue />
+      ) : (
+        <div className="flex-1 flex flex-col h-full min-w-0">
+          {/* Header */}
+          <header className="px-6 py-4 border-b border-[#2a3246] flex items-center justify-between flex-shrink-0">
+            <div className="text-sm text-gray-400">
+              Mode:{' '}
+              <strong className="text-white">
+                {mode === 'sql' ? 'Database (SQL)' : 'Knowledge Base (RAG)'}
+              </strong>
             </div>
-          )}
+          </header>
 
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex gap-4 max-w-[85%] ${
-                msg.role === 'user' ? 'self-end flex-row-reverse' : 'self-start'
-              }`}
-            >
+          {/* Chat area */}
+          <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
+            {messages.length === 0 && (
+              <div className="text-center mt-24 text-gray-400">
+                <h3 className="text-lg font-medium mb-2">
+                  How can I help you with your financial data today?
+                </h3>
+                <p className="text-sm">
+                  Try asking: &quot;Show me AAPL closing prices for the last 30 days&quot;
+                </p>
+              </div>
+            )}
+
+            {messages.map((msg, idx) => (
               <div
-                className={`px-4 py-3 rounded-2xl leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-[#1e293b] text-gray-100'
+                key={idx}
+                className={`flex gap-4 max-w-[85%] ${
+                  msg.role === 'user' ? 'self-end flex-row-reverse' : 'self-start'
                 }`}
               >
-                <ReactMarkdown
-                  disallowedElements={['script', 'iframe']}
-                  skipHtml
+                <div
+                  className={`px-4 py-3 rounded-2xl leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-[#1e293b] text-gray-100'
+                  }`}
                 >
-                  {msg.content}
-                </ReactMarkdown>
+                  <ReactMarkdown
+                    disallowedElements={['script', 'iframe']}
+                    skipHtml
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
 
-                {msg.sql && (
-                  <pre className="mt-3 bg-black text-gray-300 rounded p-3 text-sm font-mono whitespace-pre-wrap overflow-x-auto">
-                    <code>{msg.sql}</code>
-                  </pre>
-                )}
+                  {msg.sql && (
+                    <pre className="mt-3 bg-black text-gray-300 rounded p-3 text-sm font-mono whitespace-pre-wrap overflow-x-auto">
+                      <code>{msg.sql}</code>
+                    </pre>
+                  )}
 
-                {msg.data && msg.data.length > 0 && (
-                  <div className="mt-3 bg-[#0a0c10] border border-[#2a3246] rounded-lg overflow-x-auto">
-                    <table className="w-full border-collapse text-sm">
-                      <thead>
-                        <tr>
-                          {Object.keys(msg.data[0]).map(key => (
-                            <th
-                              key={key}
-                              className="text-left px-3 py-3 bg-[#161b22] border-b border-[#2a3246] text-gray-400 font-medium"
-                            >
-                              {key}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {msg.data.slice(0, 10).map((row, i) => (
-                          <tr
-                            key={i}
-                            className={i % 2 === 0 ? '' : 'bg-[#0d1117]'}
-                          >
-                            {Object.values(row).map((val, j) => (
-                              <td
-                                key={j}
-                                className="px-3 py-3 border-b border-[#2a3246]"
+                  {msg.data && msg.data.length > 0 && (
+                    <div className="mt-3 bg-[#0a0c10] border border-[#2a3246] rounded-lg overflow-x-auto">
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr>
+                            {Object.keys(msg.data[0]).map(key => (
+                              <th
+                                key={key}
+                                className="text-left px-3 py-3 bg-[#161b22] border-b border-[#2a3246] text-gray-400 font-medium"
                               >
-                                {typeof val === 'number'
-                                  ? val.toLocaleString()
-                                  : String(val ?? '')}
-                              </td>
+                                {key}
+                              </th>
                             ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {msg.data.length > 10 && (
-                      <div className="px-3 py-2 text-xs text-gray-400 text-center">
-                        Showing 10 of {msg.data.length} rows
-                      </div>
-                    )}
-                  </div>
-                )}
+                        </thead>
+                        <tbody>
+                          {msg.data.slice(0, 10).map((row, i) => (
+                            <tr
+                              key={i}
+                              className={i % 2 === 0 ? '' : 'bg-[#0d1117]'}
+                            >
+                              {Object.values(row).map((val, j) => (
+                                <td
+                                  key={j}
+                                  className="px-3 py-3 border-b border-[#2a3246]"
+                                >
+                                  {typeof val === 'number'
+                                    ? val.toLocaleString()
+                                    : String(val ?? '')}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {msg.data.length > 10 && (
+                        <div className="px-3 py-2 text-xs text-gray-400 text-center">
+                          Showing 10 of {msg.data.length} rows
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {loading && (
-            <div className="flex gap-4 max-w-[85%] self-start">
-              <div className="px-4 py-3 rounded-2xl bg-[#1e293b] text-gray-100 italic opacity-70">
-                Thinking...
+            {loading && (
+              <div className="flex gap-4 max-w-[85%] self-start">
+                <div className="px-4 py-3 rounded-2xl bg-[#1e293b] text-gray-100 italic opacity-70">
+                  Thinking...
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div ref={chatEndRef} />
-        </div>
+            <div ref={chatEndRef} />
+          </div>
 
-        {/* Input bar */}
-        <div className="px-6 py-6 bg-[#0e1117] flex-shrink-0">
-          <form
-            onSubmit={handleSubmit}
-            className="max-w-3xl mx-auto flex items-center bg-[#1c2130] border border-[#2a3246] rounded-xl px-4 py-2 transition-colors duration-200 focus-within:border-blue-600"
-          >
-            <input
-              className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 py-3 text-base outline-none"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                mode === 'sql'
-                  ? 'Ask a SQL question...'
-                  : 'Ask a Knowledge Base question...'
-              }
-              disabled={loading}
-            />
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              className="flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-lg border-0 cursor-pointer transition-opacity duration-200 disabled:opacity-50 disabled:cursor-not-allowed ml-2"
+          {/* Input bar */}
+          <div className="px-6 py-6 bg-[#0e1117] flex-shrink-0">
+            <form
+              onSubmit={handleSubmit}
+              className="max-w-3xl mx-auto flex items-center bg-[#1c2130] border border-[#2a3246] rounded-xl px-4 py-2 transition-colors duration-200 focus-within:border-blue-600"
             >
-              <Send size={18} />
-            </button>
-          </form>
+              <input
+                className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 py-3 text-base outline-none"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={
+                  mode === 'sql'
+                    ? 'Ask a SQL question...'
+                    : 'Ask a Knowledge Base question...'
+                }
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                disabled={loading || !input.trim()}
+                className="flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-lg border-0 cursor-pointer transition-opacity duration-200 disabled:opacity-50 disabled:cursor-not-allowed ml-2"
+              >
+                <Send size={18} />
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
