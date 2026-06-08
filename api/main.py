@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from api.routes import chat
+from api.routes.review import router as review_router
 from api.config import Config
 from api.middleware.rate_limit import rate_limit_middleware
 
@@ -22,6 +23,9 @@ app.add_middleware(
 # Ownership: Claude (Architecture)
 app.include_router(chat.router)
 
+# Ownership: DeepSeek (API Engineering) — Phase 8
+app.include_router(review_router)
+
 @app.on_event("startup")
 async def validate_config():
     if Config.CHAT_PROVIDER == "anthropic":
@@ -29,6 +33,10 @@ async def validate_config():
             "CHAT_PROVIDER=anthropic: SQL chat mode is unsupported. "
             "RAG mode will work. Switch to deepseek, openai, or ollama for SQL mode."
         )
+    if Config.LANGSMITH_TRACING and Config.LANGSMITH_API_KEY:
+        logger.info("LangSmith tracing: enabled (project=%s)", Config.LANGSMITH_PROJECT)
+    else:
+        logger.info("LangSmith tracing: disabled")
 
 @app.get("/api/health")
 async def health():
