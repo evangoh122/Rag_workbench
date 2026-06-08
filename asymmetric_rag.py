@@ -77,7 +77,7 @@ class RetrievedChunk:
 
     def __post_init__(self):
         if not self.content_hash:
-            self.content_hash = hashlib.md5(self.text.encode()).hexdigest()
+            self.content_hash = hash(self.text)
 
 
 # ── Embedding Layer ───────────────────────────────────────────────────────────

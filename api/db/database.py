@@ -1,6 +1,9 @@
 import duckdb
+import logging
 import threading
 from api.config import Config
+
+logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     _instance = None
@@ -32,6 +35,10 @@ class DatabaseManager:
             if params:
                 return conn.execute(sql, list(params))
             return conn.execute(sql)
+
+    def lock(self):
+        """Return the connection lock for external use."""
+        return self._conn_lock
 
     def close(self):
         with self._conn_lock:
