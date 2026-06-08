@@ -83,3 +83,37 @@ def test_enrichment_manifest_generation():
     assert manifest["Revenue"] == Provenance.XBRL
     assert manifest["NetIncomeLoss"] == Provenance.XBRL
     assert "Assets" not in manifest
+
+
+def test_real_edgartools_field_names():
+    """EdgarTools sets f.name = human-readable label and f.concept = GAAP tag.
+    The validator must accept such fields without raising MISSING_FIELD."""
+    result = ExtractionResult(
+        cik="0000320193",
+        accession="0000320193-23-000106",
+        form_type="10-Q",
+        period="2023-06-24",
+        fields=[
+            ExtractedField(
+                name="Net sales",
+                value=81797000000,
+                provenance=Provenance.XBRL,
+                concept="RevenueFromContractWithCustomerExcludingAssessedTax",
+            ),
+            ExtractedField(
+                name="Net income",
+                value=19881000000,
+                provenance=Provenance.XBRL,
+                concept="NetIncomeLoss",
+            ),
+            ExtractedField(
+                name="Total assets",
+                value=335038000000,
+                provenance=Provenance.XBRL,
+                concept="Assets",
+            ),
+        ],
+    )
+    validation = SchemaValidator.validate(result)
+    assert validation.is_valid is True
+    assert ReasonCode.MISSING_FIELD not in validation.reason_codes
