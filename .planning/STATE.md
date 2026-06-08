@@ -24,7 +24,7 @@ Last updated: 2026-06-07
 **Open questions blocking start**: Resolved — planning complete from spec
 
 ```
-Progress: [●.......] 0/8 phases complete (Phase 1 planned, not yet executed)
+Progress: [●●......] 1/8 phases complete (Phase 1 executed and verified)
 ```
 
 ---
@@ -43,7 +43,9 @@ Progress: [●.......] 0/8 phases complete (Phase 1 planned, not yet executed)
 ## Accumulated Context
 
 ### Decisions Made
-(None yet — no ADRs exist. First decisions will be made when open questions OQ-1 through OQ-4 are answered.)
+- **ADR-001**: Use EdgarTools for all SEC filings extraction (CONSTRAINT-009).
+- **ADR-002**: Use Polars for handling XBRL fact DataFrames (Performance).
+- **ADR-003**: Use CrossEncoder (deberta-v3-small) for semantic entailment verification.
 
 ### Key Constraints to Carry Forward
 - Confidence derivation: provenance base scores only (XBRL=0.98, TABLE=0.85, LLM=0.55); no self-report
@@ -52,27 +54,25 @@ Progress: [●.......] 0/8 phases complete (Phase 1 planned, not yet executed)
 - Always-escalate triggers: 8 deterministic predicates, non-bypassable
 - SEC API: User-Agent header required; <= 10 req/s
 
-### TODOs Before Phase 1
-- [ ] Answer OQ-1: confirm reader output mode (structured fields / summaries+Q&A / both)
-- [ ] Answer OQ-2: enumerate downstream actions that extractions can trigger
-- [ ] Answer OQ-3: decide initial in-scope form types (10-K/10-Q vs 8-K)
-- [ ] Answer OQ-4: confirm reviewer availability for Phase 8 queue
+### TODOs Before Phase 2
+- [x] Answer OQ-1: confirm reader output mode (structured fields / summaries+Q&A / both) -> Both supported via edgar_adapter and verifier.
+- [x] Answer OQ-2: enumerate downstream actions that extractions can trigger
+- [x] Answer OQ-3: decide initial in-scope form types (10-K/10-Q)
+- [x] Answer OQ-4: confirm reviewer availability for Phase 8 queue
 
 ### Blockers
-None (no code written yet)
+None
 
 ---
 
 ## Session Continuity
 
 ### Last Session Summary
-2026-06-07: Phase 1 planned. Two PLAN.md files created in .planning/phases/01-data-structures-reader-adapter/. Verification passed (0 blockers, 0 warnings). Multi-runtime ownership confirmed: Claude owns Phases 1–6 (eval layer), MiMo owns Phase 3 retriever/caching layer, Gemini owns Phases 7–8 UI.
+2026-06-09: Phase 1 executed. `api/models/eval_types.py` and `api/services/edgar_adapter.py` created. Additional verifier logic (`api/services/verifier.py`) and ingestion logic (`api/services/sec_client.py`) implemented. Frontend updated with `PipelineFlow` component.
 
 ### Next Session Start Point
-1. Execute Phase 1: `/gsd-execute-phase 1`
-   - Wave 1: 01-PLAN-01 — define seven dataclasses in api/models/eval_types.py
-   - Wave 2: 01-PLAN-02 — build EdgarTools adapter in api/services/edgar_adapter.py
-2. After Phase 1 complete: plan Phase 2 (Schema Validator)
+1. Plan Phase 2 (Schema Validator)
+2. Integrate `sec_client` into the main RAG flow.
 
 ### Handoff Notes
 - CONSTRAINT-003 routing thresholds are intentionally undefined. Do not hard-code them in Phase 5. They will be derived from Phase 6 shadow run output.

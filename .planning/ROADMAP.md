@@ -8,7 +8,7 @@ Generated: 2026-06-07
 
 ## Phases
 
-- [ ] **Phase 1: Data Structures & Reader Adapter** - Define the ExtractionResult contract and wrap EdgarTools output into it
+- [x] **Phase 1: Data Structures & Reader Adapter** - Define the ExtractionResult contract and wrap EdgarTools output into it
 - [ ] **Phase 2: Schema Validator** - Implement layer-1 validation (field presence, types, unit sanity)
 - [ ] **Phase 3: XBRL Cross-Validation & companyfacts Client** - Build the XBRL fact lookup that unlocks semantic validation and honest confidence scoring
 - [ ] **Phase 4: Semantic Validator** - Implement layer-2 validation (accounting identities, referential integrity, plausibility)
@@ -122,7 +122,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Data Structures & Reader Adapter | 2/2 | Planned | - |
+| 1. Data Structures & Reader Adapter | 2/2 | Completed | 2026-06-09 |
 | 2. Schema Validator | 0/? | Not started | - |
 | 3. XBRL Cross-Validation & companyfacts Client | 0/? | Not started | - |
 | 4. Semantic Validator | 0/? | Not started | - |
