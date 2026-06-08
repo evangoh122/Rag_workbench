@@ -184,7 +184,8 @@ def fetch_filing(cik: str, accession: str) -> ExtractionResult:
     all_fields = xbrl_fields + table_fields
 
     # Determine period — EdgarTools exposes period_of_report on most form types
-    period: Optional[str] = getattr(filing, "period_of_report", None)
+    period_val = getattr(filing, "period_of_report", None)
+    period: Optional[str] = str(period_val) if period_val else None
 
     return ExtractionResult(
         cik=cik,
