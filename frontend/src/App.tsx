@@ -347,7 +347,7 @@ function App() {
           </div>
 
           {/* Pipeline Flow Pane */}
-          <div className="w-80 flex-shrink-0 bg-[#0e1117] flex flex-col">
+          <div className="hidden lg:flex w-80 flex-shrink-0 bg-[#0e1117] flex-col">
             <header className="px-6 py-4 border-b border-[#2a3246] flex items-center justify-between">
               <div className="text-sm font-semibold">Pipeline Execution</div>
             </header>
