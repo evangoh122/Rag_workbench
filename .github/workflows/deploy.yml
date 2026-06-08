@@ -1,0 +1,38 @@
+name: Deploy to HF Spaces & Keepalive
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '*/20 * * * *'   # ping every 20 min to prevent sleep
+
+jobs:
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+      - name: Push to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+        run: |
+          git remote add hf https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/rag-workbench
+          git push hf main --force
+
+  keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping HF Space health endpoint
+        env:
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+        run: |
+          STATUS=$(curl -sf --max-time 30 \
+            https://$HF_USERNAME-rag-workbench.hf.space/api/health \
+            -o /dev/null -w "%{http_code}" || echo "000")
+          echo "Health check HTTP status: $STATUS"
+          [ "$STATUS" = "200" ] && echo "Space is alive" || echo "Space may be waking up"

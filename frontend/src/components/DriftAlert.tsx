@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Activity, AlertTriangle, CheckCircle } from 'lucide-react';
 import { getDriftStatus } from '../api/review';
 import type { DriftStatus } from '../api/review';
