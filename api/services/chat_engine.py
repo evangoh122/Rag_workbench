@@ -148,7 +148,8 @@ def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> D
 
     try:
         conn = db_manager.get_connection()
-        df = conn.execute(f"SELECT * FROM ({sql}) AS chat_result LIMIT 100").df()
+        # Use parameterized LIMIT to prevent injection; sql body is validated by validate_read_only_sql()
+        df = conn.execute(f"SELECT * FROM ({sql}) AS chat_result LIMIT ?", [100]).df()
         answer = summarise_results(question, df)
         return {
             "type": "table",

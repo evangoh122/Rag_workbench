@@ -20,7 +20,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Ensure repo root is on sys.path so `api` package is importable when the
@@ -117,7 +117,7 @@ def run(input_path: str, output_dir: str) -> None:
     filings = _load_filings(input_path)
     total = len(filings)
 
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 

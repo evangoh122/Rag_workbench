@@ -4,7 +4,6 @@ import time
 from datetime import date
 from typing import Optional, List, Any
 import duckdb
-from edgar import Company, set_identity
 from api.config import Config
 
 logger = logging.getLogger(__name__)
@@ -25,9 +24,15 @@ class CompanyFactsClient:
         """
         Initializes the EDGAR identity using the configured USER_AGENT.
         """
+        try:
+            from edgar import set_identity
+        except ImportError:
+            logger.warning("edgartools not installed. CompanyFactsClient will not function.")
+            set_identity = None
+        
         if not Config.EDGAR_USER_AGENT:
             logger.warning("EDGAR_USER_AGENT not set. SEC requests may be blocked.")
-        else:
+        elif set_identity:
             set_identity(Config.EDGAR_USER_AGENT)
             logger.info(f"CompanyFactsClient initialized with user agent: {Config.EDGAR_USER_AGENT}")
         
@@ -53,8 +58,9 @@ class CompanyFactsClient:
             """)
 
     @functools.lru_cache(maxsize=128)
-    def _get_company_object(self, cik: str) -> Company:
+    def _get_company_object(self, cik: str):
         """Cached Company object to avoid redundant lookups."""
+        from edgar import Company
         return Company(cik)
 
     @functools.lru_cache(maxsize=128)
