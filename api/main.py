@@ -33,6 +33,10 @@ app.include_router(chat.router)
 
 app.include_router(review_router)
 
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "provider": Config.CHAT_PROVIDER}
+
 frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
@@ -42,10 +46,6 @@ if os.path.exists(frontend_path):
         if not request.url.path.startswith("/api"):
             return FileResponse(os.path.join(frontend_path, "index.html"))
         raise exc
-
-@app.get("/api/health")
-async def health():
-    return {"status": "ok", "provider": Config.CHAT_PROVIDER}
 
 if __name__ == "__main__":
     import uvicorn

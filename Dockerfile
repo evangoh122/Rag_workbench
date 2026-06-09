@@ -12,7 +12,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Install Python dependencies
-FROM python:3.11-slim AS python-builder
+FROM python:3.12-slim AS python-builder
 
 WORKDIR /app
 
@@ -28,7 +28,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # Stage 3: Final runtime image
-FROM python:3.11-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
