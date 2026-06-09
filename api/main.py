@@ -8,6 +8,7 @@ from loguru import logger
 
 from api.routes import chat
 from api.routes.review import router as review_router
+from api.routes.stats import router as stats_router
 from api.config import Config
 from api.middleware.rate_limit import rate_limit_middleware
 from api.middleware.cors_config import configure_cors
@@ -30,8 +31,8 @@ app.middleware("http")(rate_limit_middleware)
 configure_cors(app)
 
 app.include_router(chat.router)
-
 app.include_router(review_router)
+app.include_router(stats_router)
 
 frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
 if os.path.exists(frontend_path):
