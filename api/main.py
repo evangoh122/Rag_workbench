@@ -34,15 +34,6 @@ app.include_router(chat.router)
 app.include_router(review_router)
 app.include_router(stats_router)
 
-frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
-if os.path.exists(frontend_path):
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-
-    @app.exception_handler(404)
-    async def not_found_handler(request, exc):
-        if not request.url.path.startswith("/api"):
-            return FileResponse(os.path.join(frontend_path, "index.html"))
-        raise exc
 
 @app.get("/api/health")
 async def health():
@@ -105,6 +96,16 @@ async def health_full():
             "recent_errors": llm["recent_errors"],
         },
     }
+
+frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
+if os.path.exists(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
+    @app.exception_handler(404)
+    async def not_found_handler(request, exc):
+        if not request.url.path.startswith("/api"):
+            return FileResponse(os.path.join(frontend_path, "index.html"))
+        raise exc
 
 if __name__ == "__main__":
     import uvicorn
