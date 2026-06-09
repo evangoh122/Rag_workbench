@@ -790,13 +790,11 @@ class AsymmetricFinancialRAG:
 
     def _get_structured_context(self, query: str) -> List[RetrievedChunk]:
         """Get context from structured DuckDB sources (EDGAR facts, prices)."""
-        conn = duckdb.connect(DB_PATH, read_only=True)
-        try:
-            facts = query_edgar_facts_structured(conn, query)
-            prices = query_price_context_structured(conn, query)
-            return facts + prices
-        finally:
-            conn.close()
+        from api.db.database import db_manager
+        conn = db_manager.get_connection()
+        facts = query_edgar_facts_structured(conn, query)
+        prices = query_price_context_structured(conn, query)
+        return facts + prices
 
     def _format_context(self, chunks: List[RetrievedChunk]) -> str:
         """Format retrieved chunks into a context string for the LLM."""

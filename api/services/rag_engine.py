@@ -1,5 +1,6 @@
 import hashlib
 import os
+import threading
 from typing import List, Dict, Any, Optional
 import pandas as pd
 from loguru import logger
@@ -280,31 +281,34 @@ def _combined_retriever(query: str) -> List[Document]:
 
 
 _rag_chain = None
+_rag_chain_lock = threading.Lock()
 
 def get_rag_chain():
     global _rag_chain
     if _rag_chain is None:
-        cfg = Config.get_provider_config()
-        
-        if Config.CHAT_PROVIDER == "anthropic":
-            from langchain_anthropic import ChatAnthropic
-            llm = ChatAnthropic(model=cfg["model"], api_key=cfg["api_key"])
-        else:
-            llm = ChatOpenAI(
-                model=cfg["model"], 
-                api_key=cfg["api_key"] or "local", 
-                base_url=cfg["base_url"]
-            )
+        with _rag_chain_lock:
+            if _rag_chain is None:
+                cfg = Config.get_provider_config()
 
-        _rag_chain = (
-            {
-                "context":  lambda q: _format_docs(_combined_retriever(q)),
-                "question": RunnablePassthrough(),
-            }
-            | _RAG_PROMPT
-            | llm
-            | StrOutputParser()
-        )
+                if Config.CHAT_PROVIDER == "anthropic":
+                    from langchain_anthropic import ChatAnthropic
+                    llm = ChatAnthropic(model=cfg["model"], api_key=cfg["api_key"])
+                else:
+                    llm = ChatOpenAI(
+                        model=cfg["model"],
+                        api_key=cfg["api_key"] or "local",
+                        base_url=cfg["base_url"]
+                    )
+
+                _rag_chain = (
+                    {
+                        "context":  lambda q: _format_docs(_combined_retriever(q)),
+                        "question": RunnablePassthrough(),
+                    }
+                    | _RAG_PROMPT
+                    | llm
+                    | StrOutputParser()
+                )
     return _rag_chain
 
 
