@@ -39,10 +39,11 @@ def _get_embeddings():
                 model=OLLAMA_EMBED_MODEL,
                 base_url=OLLAMA_BASE_URL,
             )
-            # Verify connection with a test embed
+            # Verify connection with a test embed (timeout handled by requests)
             _embeddings.embed_query("test")
             logger.info("Ollama embeddings connection verified")
         except Exception as e:
+            _embeddings = None
             logger.error(f"Failed to connect to Ollama at {OLLAMA_BASE_URL}: {e}")
             raise RuntimeError(
                 f"Ollama not available at {OLLAMA_BASE_URL}. "

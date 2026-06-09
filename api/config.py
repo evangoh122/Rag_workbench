@@ -9,6 +9,9 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 def _validate_db_path(path: str) -> str:
     """Validate DB_PATH is within the project directory (prevent path traversal)."""
+    if not path or not path.strip():
+        logger.warning("DB_PATH is empty, falling back to default.")
+        return str(Path(__file__).parent.parent / "data" / "rag.duckdb")
     resolved = Path(path).resolve()
     project_root = Path(__file__).parent.parent.resolve()
     if not str(resolved).startswith(str(project_root)):
