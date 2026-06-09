@@ -270,13 +270,19 @@ def _format_docs(docs: List[Document]) -> str:
     return "\n\n".join(parts) if parts else "No context found."
 
 
+_vector_retriever = DuckDBVectorRetriever(top_k=5)
+_edgar_facts_retriever = EDGARFactsRetriever()
+_edgar_emb_retriever = EDGAREmbeddingsRetriever(top_k=5)
+_price_retriever = PriceContextRetriever()
+
+
 @traceable(name="rag_combined_retriever")
 def _combined_retriever(query: str) -> List[Document]:
     """Run all four retrievers sequentially and merge results."""
-    vector_docs = DuckDBVectorRetriever(top_k=5).invoke(query)
-    edgar_facts = EDGARFactsRetriever().invoke(query)
-    edgar_emb   = EDGAREmbeddingsRetriever(top_k=5).invoke(query)
-    price_docs  = PriceContextRetriever().invoke(query)
+    vector_docs = _vector_retriever.invoke(query)
+    edgar_facts = _edgar_facts_retriever.invoke(query)
+    edgar_emb   = _edgar_emb_retriever.invoke(query)
+    price_docs  = _price_retriever.invoke(query)
     return vector_docs + edgar_facts + edgar_emb + price_docs
 
 
