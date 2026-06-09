@@ -1,0 +1,29 @@
+# Version Control
+.git
+.gitignore
+
+# Planning & Private Context
+.claude
+.deepseek
+.gemini
+.mimo
+.planning
+AGENTS.md
+
+# Build Artifacts & Logs
+__pycache__
+.pytest_cache
+graphify-out
+dist
+node_modules
+*.log
+
+# Data & Config
+.env
+.env.local
+data/*.duckdb
+data/edgar_downloads
+
+# OS Metadata
+.DS_Store
+Thumbs.db
