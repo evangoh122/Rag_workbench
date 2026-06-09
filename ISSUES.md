@@ -33,6 +33,7 @@
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
+| 17 | Two parallel RAG implementations | `asymmetric_rag.py` vs `rag_engine.py` | Deleted `asymmetric_rag.py` (925 lines) — superseded by `langgraph_engine.py` |
 | 18 | Inconsistent logging | `calibration.py` | Standardized on loguru |
 | 19 | `load_dotenv()` called 7 times | `main.py` | Removed redundant call (config.py handles it) |
 | 21 | No retry for SEC API | `edgar_adapter.py` | `tenacity` retry with exponential backoff |
@@ -47,10 +48,13 @@
 | 25 | Missing `requests` in requirements | `requirements.txt` | Added `requests>=2.31.0` |
 | 26 | Missing dev dependencies | `requirements-dev.txt` | Created with pytest, httpx, ruff |
 | 27 | `edgartools` allows breaking v3.x | `requirements.txt` | Pinned `>=2.26.0,<3.0.0` |
+| 29 | BM25 index rebuilt on every restart | `asymmetric_rag.py` | Deleted — moot after asymmetric_rag.py removal |
+| 30 | Embedding one-at-a-time | `asymmetric_rag.py` | Deleted — moot after asymmetric_rag.py removal |
 | 31 | Non-deterministic `hash()` | `rag_engine.py` | `hashlib.sha256()` |
 | 34 | Bare `except Exception` silent | `edgar_adapter.py` | Added `logger.debug()` messages |
 | 37 | Dead code `VectorStoreRetriever` | `vector_store.py` | Removed |
 | 38 | New DuckDB connection per query | `asymmetric_rag.py` | Uses `db_manager.get_connection()` |
+| 39 | Inconsistent provider naming | `asymmetric_rag.py` | Deleted — moot after asymmetric_rag.py removal |
 
 ### Previously Resolved (deepseek branch)
 
@@ -81,33 +85,34 @@
 
 | # | Issue | File | Action |
 |---|-------|------|--------|
-| 17 | Two parallel RAG implementations | `asymmetric_rag.py` vs `rag_engine.py` | Consolidate |
 | 20 | Module-level global state (18+ vars) | Multiple | Encapsulate in config class |
 
 ### P3 - Code Quality
 
 | # | Issue | File | Action |
 |---|-------|------|--------|
-| 29 | BM25 index rebuilt on every restart | `asymmetric_rag.py` | Serialize index to disk |
-| 30 | Embedding one-at-a-time | `asymmetric_rag.py` | Batch embedding API |
 | 32 | `warnings.filterwarnings` too broad | `main.py` | Already targeted; low priority |
 | 35 | `print()` in run.py | `run.py` | Acceptable for CLI output |
-| 39 | Inconsistent provider naming | `asymmetric_rag.py` | Consolidate configs |
 | 40 | DuckDB file possibly tracked | `data/` | Not tracked; verified |
 
 ### Audit Report - Outstanding
 
 | ID | Issue | Action |
 |----|-------|--------|
-| C1 | API keys in `.env` | Rotate keys |
-| H2 | XBRL_MISMATCH false positives | Investigate validator |
-| L1 | Naive BM25 tokenization | Add punctuation removal |
+| C1 | API keys in `.env` | Rotate keys (user action) |
 | L2 | Query instruction prefix | Verify against Qwen3 docs |
-| L3 | No confidence differentiation | Tune provenance scores |
 | L4 | 10-K/A has 0.0 confidence | Add "no data" signal |
-| L8 | Separate EDGAR identities | Consolidate scripts |
 | L9 | RRF passes dummy scores | Pass actual scores |
 | L10 | Regex backtracking risk | Use atomic patterns |
+
+### Audit Report - Resolved by Eval Pipeline
+
+| ID | Issue | Resolution |
+|----|-------|------------|
+| H2 | XBRL_MISMATCH false positives | `xbrl_cross_validator.py` — proper 1% tolerance cross-check |
+| L1 | Naive BM25 tokenization | `asymmetric_rag.py` deleted — moot |
+| L3 | No confidence differentiation | `confidence_scorer.py` — provenance-based (0.98/0.85/0.55) + XBRL cross-check |
+| L8 | Separate EDGAR identities | `_edgar_identity.py` — shared SEC identity helper |
 
 ---
 
@@ -117,7 +122,7 @@
 |----------|----------|-------------|
 | P0 Critical | 1 | 0 |
 | P1 Security | 12 | 3 (user action) |
-| P2 Architecture | 6 | 2 |
-| P3 Code Quality | 7 | 6 |
-| Audit Report | 10 | 9 |
-| **Total** | **36** | **20** |
+| P2 Architecture | 7 | 1 |
+| P3 Code Quality | 10 | 3 |
+| Audit Report | 14 | 5 |
+| **Total** | **44** | **12** |
