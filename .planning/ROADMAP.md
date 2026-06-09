@@ -23,13 +23,13 @@ Updated: 2026-06-09
 - [x] **Phase 9: LangGraph Auditable RAG** - Deterministic DAG for SEC filings (retrieval → extraction → math → verify → output/abstention)
 - [x] **Phase 10: Knowledge Graph RAG Engine** - Entity extraction → DuckDB graph query → LLM synthesis with `graph_triples`
 - [x] **Phase 11: GraphRAG Frontend Integration** - Engine toggle, entity badges, triple visualization in React UI
-- [ ] **Phase 12: Outstanding Integrations & Fixes** - Implement trigger 8, wire vector retrieval, run shadow deployment, calibrate thresholds, and run RAGAS eval
+- [x] **Phase 12: Outstanding Integrations & Fixes** - Implement trigger 8, wire vector retrieval, run shadow deployment, calibrate thresholds, and run RAGAS eval
 
 ## Track C: NeMo Guardrails System
 
-- [ ] **Phase 13: Input & Dialog Rails** - Implement prompt injection detection, jailbreak prevention, and conversational state tracking
-- [ ] **Phase 14: Retrieval & Execution Rails** - Implement relevance checking for retrieved context and safe execution boundaries for math/SQL
-- [ ] **Phase 15: Output Rails** - Implement hallucination detection, formatting checks, and sensitive data masking
+- [x] **Phase 13: Input & Dialog Rails** - Implement prompt injection detection, jailbreak prevention, and conversational state tracking
+- [x] **Phase 14: Retrieval & Execution Rails** - Implement relevance checking for retrieved context and safe execution boundaries for math/SQL
+- [x] **Phase 15: Output Rails** - Implement hallucination detection, formatting checks, and sensitive data masking
 
 ---
 
