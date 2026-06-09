@@ -9,27 +9,36 @@ from api.db.database import db_manager
 SCHEMA = """
 You have access to a DuckDB financial database with these tables:
 
-IBKR live data:
-- stock_quotes(ticker, ts, bid, ask, last, close, open, high, low, volume, vwap, created_at)
-- option_quotes(ticker, expiry, strike, right, ts, bid, ask, last, volume, open_interest, implied_vol, delta, gamma, theta, vega, und_price, pv_dividend)
-- option_chains(ticker, expiry, strike, right, exchange, fetched_at)
-- etl_runs(id, run_type, status, rows_written, started_at, finished_at, message)
-
-Polygon historical data:
-- polygon_bars(ticker, ts, timespan, open, high, low, close, volume, vwap, transactions)
-- polygon_snapshots(ticker, ts, bid, ask, last, prev_close, day_volume)
-- polygon_option_snapshots(underlying, expiry, strike, right, ts, day_open, day_close, day_volume, open_interest, implied_vol, delta, gamma, theta, vega)
-- polygon_tickers(ticker, name, market, primary_exchange, type, active, currency, description)
-
 SEC EDGAR financials:
-- edgar_filings(ticker, cik, form_type, filed_date, accession_number, primary_doc)
-- edgar_facts(ticker, cik, taxonomy, concept, label, unit, value, period_start, period_end, form_type, filed_date)
+- xbrl_facts(id, ticker, cik, concept, value, unit, period_end, period_start, form_type, accession, filed, fiscal_year, fiscal_period)
+  * concept: bare concept name, NO prefix — e.g. 'Revenues', 'NetIncomeLoss', 'Assets'
+  * value: DOUBLE in actual dollars (not thousands or millions)
+  * period_end / period_start: TEXT in ISO-8601 format e.g. '2023-09-30'
+  * fiscal_year: INTEGER e.g. 2023
+  * fiscal_period: 'FY' for annual, 'Q1'/'Q2'/'Q3'/'Q4' for quarterly
+
+Company metadata:
+- ticker_embeddings(ticker, description, sector, industry)
+
+Knowledge graph:
+- graph_triples(id, subject, predicate, object, source_file, confidence)
+
+Filing text:
+- filing_chunks(id, ticker, cik, form_type, accession, chunk_index, chunk_text, filed)
+
+Available tickers: AAPL, TSLA, MSFT
+
+Common concept names (use exactly as shown):
+  Revenues, NetIncomeLoss, Assets, Liabilities, StockholdersEquity,
+  OperatingIncomeLoss, GrossProfit, CostOfGoodsAndServicesSold,
+  ResearchAndDevelopmentExpense, NetCashProvidedByUsedInOperatingActivities,
+  CashAndCashEquivalentsAtCarryingValue
 
 Notes:
 - Use DuckDB SQL syntax.
-- Dates are stored as TEXT in ISO-8601 format. Cast with ::TIMESTAMP or ::DATE as needed.
-- Always LIMIT results to 100 rows unless the user asks for more.
-- For latest queries use QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY ts DESC) = 1.
+- Dates stored as TEXT ISO-8601. Cast with ::DATE as needed.
+- Always LIMIT to 100 rows unless asked for more.
+- For latest annual data: WHERE fiscal_period = 'FY' ORDER BY fiscal_year DESC LIMIT 1.
 """
 
 SYSTEM_PROMPT = f"""You are a financial data analyst assistant. The user will ask questions about their market data.
@@ -56,7 +65,7 @@ def clean_sql(text: str) -> str:
     if text.startswith("```"):
         lines = text.splitlines()
         text = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
-    return text.strip()
+    return text.strip().rstrip(";")
 
 def strip_sql_comments(sql: str) -> str:
     sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)
