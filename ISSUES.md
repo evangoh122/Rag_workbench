@@ -64,10 +64,12 @@
 | C2 | Test import error | Function exists |
 | C3 | SQL injection in vector_store.py | Table whitelist + parameterized LIMIT |
 | H1 | Wrong form_type | Graceful `getattr` fallback |
+| H2 | XBRL_MISMATCH false positives | Cross-validation with tolerance in `xbrl_cross_validator.py` |
 | H3 | Duplicate ChatRequest | Consolidated to schemas.py |
 | H4 | Auth middleware unused | Wired into all routes |
 | H6 | Rate limiter unbounded | TTLCache |
 | L1 | Naive BM25 tokenization | Regex-based punctuation removal |
+| L3 | No confidence differentiation | Provenance-based scoring in `confidence_scorer.py` |
 | L4 | 10-K/A has 0.0 confidence | Documented; needs data-layer fix |
 | L6 | Missing `__all__` | Defined in `__init__.py` |
 | L9 | RRF passes dummy scores | Now passes actual similarity/bm25 scores |
@@ -102,9 +104,7 @@
 | ID | Issue | Action |
 |----|-------|--------|
 | C1 | API keys in `.env` | Rotate keys |
-| H2 | XBRL_MISMATCH false positives | Investigate XbrlCrossValidator |
 | L2 | Query instruction prefix | Verify against Qwen3 docs |
-| L3 | No confidence differentiation | Tune provenance base scores |
 
 ---
 
@@ -116,5 +116,5 @@
 | P1 Security | 13 | 1 (user action) |
 | P2 Architecture | 6 | 2 |
 | P3 Code Quality | 11 | 1 |
-| Audit Report | 13 | 4 |
-| **Total** | **44** | **8** |
+| Audit Report | 15 | 2 |
+| **Total** | **46** | **6** |
