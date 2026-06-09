@@ -2,6 +2,11 @@
 asymmetric_rag.py
 Asymmetric Dual-Model RAG Pipeline for Financial Documents.
 
+.. deprecated::
+    This module is superseded by ``api/services/langgraph_engine.py`` and
+    ``api/services/rag_engine.py``.  It is kept for reference only and will be
+    removed in a future release.  Import from those modules instead.
+
 Architecture:
   - Ingestion:  Qwen3-Embedding-8B   (heavy, offline, captures deep financial nuance)
   - Querying:   Qwen3-Embedding-0.6B (lightweight, runtime, sub-second latency)
@@ -24,6 +29,7 @@ Requires:
 """
 import os
 import re
+import warnings
 import hashlib
 from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
@@ -34,7 +40,20 @@ import duckdb
 import numpy as np
 from loguru import logger
 
+warnings.warn(
+    "asymmetric_rag.py is superseded by api/services/langgraph_engine.py and "
+    "api/services/rag_engine.py. This file is kept for reference only and will "
+    "be removed in a future release.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 # ── Configuration ─────────────────────────────────────────────────────────────
+# NOTE: The module-level constants below read environment variables at import
+# time.  This is an intentional design choice for a standalone script — there is
+# no application server lifecycle to hook into, so eager env-var reads are
+# acceptable here.  Do not replicate this pattern in package modules; use
+# api/config.py (with lazy class attributes) instead.
 
 DB_PATH = os.getenv("DB_PATH", "./data/ibkr.duckdb")
 
@@ -287,6 +306,9 @@ def decompose_query(query: str, llm_client: Any = None) -> List[str]:
 
 def _llm_decompose(query: str, client: Any) -> List[str]:
     """Use an LLM to decompose compound queries into atomic sub-queries."""
+    from api.config import Config
+    _cfg = Config.get_provider_config()
+
     prompt = (
         "You are a query decomposition engine. Break the following compound "
         "financial question into independent atomic sub-questions. Each sub-question "
@@ -297,7 +319,7 @@ def _llm_decompose(query: str, client: Any) -> List[str]:
     )
 
     resp = client.chat.completions.create(
-        model=os.getenv("CHAT_MODEL", "deepseek-chat"),
+        model=_cfg["model"],
         messages=[{"role": "user", "content": prompt}],
         temperature=0.0,
         max_tokens=300,
