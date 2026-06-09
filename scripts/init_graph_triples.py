@@ -5,7 +5,7 @@ Creates the graph_triples table (if absent) and populates it from all
 .graphify_chunk_*.json files in the graphify-out/ directory.
 
 Usage:
-    python3 scripts/init_graph_triples.py [--db-path ./data/ibkr.duckdb]
+    python3 scripts/init_graph_triples.py [--db-path ./data/rag.duckdb]
 
 This script is idempotent: it uses INSERT OR IGNORE semantics so it is safe
 to re-run without creating duplicates.
@@ -108,7 +108,7 @@ def init_graph_triples(db_path: str, graphify_dir: str, ticker: str = "") -> Non
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Populate graph_triples table from graphify-out JSON")
-    parser.add_argument("--db-path",       default="./data/ibkr.duckdb",  help="Path to DuckDB file")
+    parser.add_argument("--db-path",       default="./data/rag.duckdb",  help="Path to DuckDB file")
     parser.add_argument("--graphify-dir",  default="./graphify-out",       help="Directory containing .graphify_chunk_*.json files")
     parser.add_argument("--ticker",        default="",                     help="Ticker symbol to tag all triples with (optional)")
     args = parser.parse_args()

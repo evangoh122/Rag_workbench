@@ -7,7 +7,7 @@ This script:
 3. Stores the facts in DuckDB for use by the RAG pipeline
 
 Usage:
-    python3 scripts/bootstrap_db.py [--tickers AAPL,TSLA,MSFT] [--db-path ./data/ibkr.duckdb]
+    python3 scripts/bootstrap_db.py [--tickers AAPL,TSLA,MSFT] [--db-path ./data/rag.duckdb]
 """
 from __future__ import annotations
 
@@ -32,18 +32,41 @@ load_dotenv()
 EDGAR_USER_AGENT = os.getenv("EDGAR_USER_AGENT", "RAGWorkbench/1.0 (research@example.com)")
 SEC_RATE_LIMIT_DELAY = 0.15  # 10 req/s max -> 100ms + margin
 
-# CIK lookup for common tickers
+# CIK lookup for semiconductor tickers
 TICKER_TO_CIK = {
-    "AAPL": "0000320193",
-    "TSLA": "0001318605",
-    "MSFT": "0000789019",
-    "NVDA": "0001045810",
-    "AMZN": "0001018724",
-    "META": "0001326801",
-    "GOOGL": "0001652044",
-    "JPM": "0000019617",
-    "GS": "0000886982",
-    "BAC": "0000070858",
+    # Semiconductor Design & IP
+    "ADI": "0000006607",   # Analog Devices
+    "AMD": "0000002488",   # Advanced Micro Devices
+    "AVGO": "0001730168",  # Broadcom
+    "INTC": "0000050863",  # Intel
+    "MU": "0000723125",    # Micron Technology
+    "NVDA": "0001045810",  # Nvidia
+    "QCOM": "0000804328",  # Qualcomm
+    "TXN": "0000097476",   # Texas Instruments
+    "TSM": "0001046179",   # Taiwan Semiconductor
+    "MRVL": "0000721938",  # Marvell Technology
+    "NXPI": "0001109168",  # NXP Semiconductors
+    "MCHP": "0000831368",  # Microchip Technology
+    "MPWR": "0001267902",  # Monolithic Power Systems
+    "SWKS": "0000412700",  # Skyworks Solutions
+    "QRVO": "0001603872",  # Qorvo
+    "ON": "0001666635",    # ON Semiconductor (if needed)
+    # Semiconductor Equipment & Materials
+    "AMAT": "0000069515",  # Applied Materials
+    "LRCX": "0000707549",  # Lam Research
+    "KLAC": "0000799167",  # KLA Corporation
+    "TER": "0000097210",   # Teradyne
+    "ENTG": "0001170010",  # Entegris
+    "ONTO": "0001055605",  # Onto Innovation
+    "FORM": "0001003485",  # FormFactor
+    "PLAB": "0000867840",  # Photronics
+    "COHU": "0000021539",  # Cohu
+    "KLIC": "0000031277",  # Kulicke & Soffa
+    "ICHR": "0001680247",  # Ichor
+    "VECO": "0000707478",  # Veeco Instruments
+    "AEHR": "0001049521",  # Aehr Test Systems
+    "ACLS": "0000897077",  # Axcelis Technologies
+    "AMKR": "0001057887",  # Amkor Technology
 }
 
 # Key financial concepts to extract
@@ -246,7 +269,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Bootstrap DuckDB with SEC EDGAR XBRL data")
     parser.add_argument("--tickers", default="AAPL,TSLA,MSFT,NVDA,AMZN",
                         help="Comma-separated ticker symbols")
-    parser.add_argument("--db-path", default="./data/ibkr.duckdb",
+    parser.add_argument("--db-path", default="./data/rag.duckdb",
                         help="Path to DuckDB file")
     args = parser.parse_args()
 

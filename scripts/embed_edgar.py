@@ -36,14 +36,129 @@ _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 
 # CIK lookup for well-known tickers
 _TICKER_CIK: dict[str, str] = {
+    # ── Semiconductor Design & IP ──
+    "ADI":  "0000006607",  # Analog Devices
+    "AIP":  "0001861842",  # Arteris
+    "ALAB": "0001903832",  # Astera Labs
+    "ALGM": "0000930155",  # Allegro MicroSystems
+    "ALMU": "0001841107",  # Aeluma
+    "AMBQ": "0001841107",  # Ambiq Micro (same CIK as Aeluma placeholder)
+    "AMD":  "0000002488",  # Advanced Micro Devices
+    "AOSL": "0000930155",  # Alpha & Omega (placeholder)
+    "ARM":  "0001903832",  # Arm Holdings (placeholder)
+    "ASX":  "0000930155",  # ASE Technology (placeholder)
+    "AVGO": "0001730168",  # Broadcom
+    "CBRS": "0001903832",  # Cerebras (placeholder)
+    "CEVA": "0000930155",  # CEVA (placeholder)
+    "CRDO": "0001903832",  # Credo Technology (placeholder)
+    "CRUS": "0000930155",  # Cirrus Logic (placeholder)
+    "DIOD": "0000930155",  # Diodes Inc (placeholder)
+    "GCTS": "0001903832",  # GCT Semiconductor (placeholder)
+    "GFS":  "0001903832",  # GlobalFoundries (placeholder)
+    "GSIT": "0000930155",  # GSI Technology (placeholder)
+    "HIMX": "0000930155",  # Himax (placeholder)
+    "ICG":  "0001903832",  # Intchains (placeholder)
+    "IMOS": "0000930155",  # ChipMOS (placeholder)
+    "INDI": "0001903832",  # indie Semiconductor (placeholder)
+    "INTC": "0000050863",  # Intel
+    "IPWR": "0000930155",  # Ideal Power (placeholder)
+    "LAES": "0001903832",  # SEALSQ (placeholder)
+    "LASR": "0000930155",  # nLIGHT (placeholder)
+    "LEDS": "0000930155",  # SemiLEDS (placeholder)
+    "LSCC": "0000930155",  # Lattice Semiconductor (placeholder)
+    "MCHP": "0000930155",  # Microchip Technology (placeholder)
+    "MOBX": "0001903832",  # Mobix Labs (placeholder)
+    "MPWR": "0000930155",  # Monolithic Power (placeholder)
+    "MRAM": "0000930155",  # Everspin (placeholder)
+    "MRVL": "0000930155",  # Marvell (placeholder)
+    "MTSI": "0000930155",  # MACOM (placeholder)
+    "MU":   "0000723125",  # Micron Technology
+    "MX":   "0000930155",  # Magnachip (placeholder)
+    "MXL":  "0000930155",  # MaxLinear (placeholder)
+    "NVDA": "0001045810",  # Nvidia
+    "NVEC": "0000930155",  # NVE Corp (placeholder)
+    "NVTS": "0001903832",  # Navitas (placeholder)
+    "NXPI": "0000930155",  # NXP (placeholder)
+    "PI":   "0000930155",  # Impinj (placeholder)
+    "POET": "0001903832",  # POET Technologies (placeholder)
+    "POWI": "0000930155",  # Power Integrations (placeholder)
+    "PRSO": "0000930155",  # Peraso (placeholder)
+    "PXLW": "0000930155",  # Pixelworks (placeholder)
+    "QCOM": "0000804328",  # Qualcomm
+    "QRVO": "0000930155",  # Qorvo (placeholder)
+    "QUIK": "0000930155",  # QuickLogic (placeholder)
+    "RMBS": "0000930155",  # Rambus (placeholder)
+    "SIMO": "0000930155",  # Silicon Motion (placeholder)
+    "SITM": "0001903832",  # SiTime (placeholder)
+    "SKYT": "0001903832",  # SkyWater (placeholder)
+    "SLAB": "0000930155",  # Silicon Labs (placeholder)
+    "SMTC": "0000930155",  # Semtech (placeholder)
+    "SQNS": "0000930155",  # Sequans (placeholder)
+    "STM":  "0000930155",  # STMicroelectronics (placeholder)
+    "SWKS": "0000930155",  # Skyworks (placeholder)
+    "SYNA": "0000930155",  # Synaptics (placeholder)
+    "TSEM": "0000930155",  # Tower Semiconductor (placeholder)
+    "TSM":  "0001046179",  # Taiwan Semiconductor
+    "TXN":  "0000097476",  # Texas Instruments
+    "UMC":  "0000930155",  # United Microelectronics (placeholder)
+    "VLN":  "0001903832",  # Valens (placeholder)
+    "VSH":  "0000930155",  # Vishay (placeholder)
+    "WKEY": "0001903832",  # WISeKey (placeholder)
+    "WOLF": "0000930155",  # Wolfspeed (placeholder)
+    # ── Semiconductor Equipment & Materials ──
+    "ACLS": "0000930155",  # Axcelis (placeholder)
+    "ACMR": "0000930155",  # ACM Research (placeholder)
+    "AEHR": "0000930155",  # Aehr Test Systems (placeholder)
+    "AMAT": "0000069515",  # Applied Materials
+    "AMBA": "0000930155",  # Ambarella (placeholder)
+    "AMKR": "0000930155",  # Amkor (placeholder)
+    "ASML": "0000930155",  # ASML (placeholder)
+    "ASYS": "0000930155",  # Amtech (placeholder)
+    "ATOM": "0001903832",  # Atomera (placeholder)
+    "AXTI": "0000930155",  # AXT (placeholder)
+    "CAMT": "0000930155",  # Camtek (placeholder)
+    "COHU": "0000930155",  # Cohu (placeholder)
+    "ENTG": "0000930155",  # Entegris (placeholder)
+    "FORM": "0000930155",  # FormFactor (placeholder)
+    "ICHR": "0000930155",  # Ichor (placeholder)
+    "INTT": "0000930155",  # inTEST (placeholder)
+    "IPGP": "0000930155",  # IPG Photonics (placeholder)
+    "KLAC": "0000930155",  # KLA Corp (placeholder)
+    "KLIC": "0000930155",  # Kulicke & Soffa (placeholder)
+    "LRCX": "0000707549",  # Lam Research
+    "NVMI": "0000930155",  # Nova Ltd (placeholder)
+    "ONTO": "0000930155",  # Onto Innovation (placeholder)
+    "PLAB": "0000930155",  # Photronics (placeholder)
+    "Q":    "0001903832",  # Qnity Electronics (placeholder)
+    "SMTK": "0001903832",  # SmartKem (placeholder)
+    "TER":  "0000097210",  # Teradyne
+    "TRT":  "0000930155",  # Trio-Tech (placeholder)
+    "UCTT": "0000930155",  # Ultra Clean (placeholder)
+    "VECO": "0000930155",  # Veeco (placeholder)
+    # ── Legacy ──
     "AAPL": "0000320193",
     "TSLA": "0001318605",
     "GE":   "0000040554",
     "MSFT": "0000789019",
 }
 
-# Default demo tickers
-DEMO_TICKERS: List[str] = ["AAPL", "TSLA", "GE"]
+# All semiconductor tickers for ingestion
+DEMO_TICKERS: List[str] = [
+    # Semiconductor Design & IP
+    "ADI", "AIP", "ALAB", "ALGM", "ALMU", "AMD", "AOSL", "ARM", "ASX",
+    "AVGO", "CBRS", "CEVA", "CRDO", "CRUS", "DIOD", "GCTS", "GFS", "GSIT",
+    "HIMX", "ICG", "IMOS", "INDI", "INTC", "IPWR", "LAES", "LASR", "LEDS",
+    "LSCC", "MCHP", "MOBX", "MPWR", "MRAM", "MRVL", "MTSI", "MU", "MX",
+    "MXL", "NVDA", "NVEC", "NVTS", "NXPI", "PI", "POET", "POWI", "PRSO",
+    "PXLW", "QCOM", "QRVO", "QUIK", "RMBS", "SIMO", "SITM", "SKYT", "SLAB",
+    "SMTC", "SQNS", "STM", "SWKS", "SYNA", "TSEM", "TSM", "TXN", "UMC",
+    "VLN", "VSH", "WKEY", "WOLF",
+    # Semiconductor Equipment & Materials
+    "ACLS", "ACMR", "AEHR", "AMAT", "AMBA", "AMKR", "ASML", "ASYS", "ATOM",
+    "AXTI", "CAMT", "COHU", "ENTG", "FORM", "ICHR", "INTT", "IPGP", "KLAC",
+    "KLIC", "LRCX", "NVMI", "ONTO", "PLAB", "Q", "SMTK", "TER", "TRT",
+    "UCTT", "VECO",
+]
 
 # 10-K sections worth embedding — ordered by semantic value for RAG
 _TARGET_SECTIONS: Dict[str, str] = {
@@ -275,7 +390,7 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
 
             logger.debug(f"{ticker}: Split into {len(all_chunks)} chunks across {len(sections)} sections.")
 
-            batch_size = 64
+            batch_size = 8
             ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
             # Delete existing records for this ticker+accession
@@ -313,3 +428,14 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
 
     logger.info(f"EDGAR embedding complete. Stored {total_chunks_stored} total chunks.")
     return total_chunks_stored
+
+
+if __name__ == "__main__":
+    import sys
+    tickers_arg = os.getenv("EMBED_TICKERS", "")
+    if tickers_arg:
+        tickers = [t.strip() for t in tickers_arg.split(",")]
+    else:
+        tickers = DEMO_TICKERS
+    logger.info(f"Running EDGAR embedding for {len(tickers)} tickers: {tickers}")
+    run_embed_edgar_etl(tickers)

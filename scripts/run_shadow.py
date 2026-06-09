@@ -6,7 +6,7 @@ and runs the eval pipeline (schema + XBRL cross-validation + semantic +
 confidence scoring) to produce a CalibrationReport.
 
 Usage:
-    python scripts/run_shadow.py [--tickers AAPL,TSLA,MSFT] [--db-path ./data/ibkr.duckdb]
+    python scripts/run_shadow.py [--tickers AAPL,TSLA,MSFT] [--db-path ./data/rag.duckdb]
 """
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def load_extractions(conn: duckdb.DuckDBPyConnection, tickers: list[str]) -> lis
 def main():
     parser = argparse.ArgumentParser(description="Run shadow deployment over historical filings")
     parser.add_argument("--tickers", default="", help="Comma-separated tickers (empty = all)")
-    parser.add_argument("--db-path", default="./data/ibkr.duckdb", help="DuckDB path")
+    parser.add_argument("--db-path", default="./data/rag.duckdb", help="DuckDB path")
     parser.add_argument("--output", default="./data/shadow_report.json", help="Report output path")
     args = parser.parse_args()
 

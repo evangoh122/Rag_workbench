@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 class Config:
-    DB_PATH = os.getenv("DB_PATH", "./data/ibkr.duckdb")
+    DB_PATH = os.getenv("DB_PATH", "./data/rag.duckdb")
     REVIEW_DB_PATH = os.getenv("REVIEW_DB_PATH", "./data/review_queue.duckdb")
 
     # ── LangSmith (tracing & observability) ──────────────────────────────────
@@ -29,7 +29,7 @@ class Config:
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     
     # Embedding Settings
-    EMBEDDING_MODEL = "models/text-embedding-004"
+    EMBEDDING_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
     EMBEDDING_DIM = 768
 
     @classmethod
@@ -56,7 +56,12 @@ class Config:
                 "base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
                 "default_model": os.getenv("OLLAMA_MODEL", "llama3.2"),
                 "api_key": "ollama",
-            }
+            },
+            "mimo": {
+                "base_url": os.getenv("MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
+                "default_model": os.getenv("MIMO_MODEL", "mimo-v2.5-pro"),
+                "api_key": os.getenv("MIMO_API_KEY") or os.getenv("XIAOMI_API_KEY"),
+            },
         }
         cfg = providers.get(cls.CHAT_PROVIDER, providers["deepseek"])
         return {

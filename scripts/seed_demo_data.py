@@ -5,7 +5,7 @@ Used when SEC EDGAR API is unreachable (e.g., sandbox environment).
 Data is based on publicly available annual report figures for AAPL, TSLA, MSFT.
 
 Usage:
-    python3 scripts/seed_demo_data.py [--db-path ./data/ibkr.duckdb]
+    python3 scripts/seed_demo_data.py [--db-path ./data/rag.duckdb]
 """
 from __future__ import annotations
 
@@ -141,6 +141,6 @@ def seed(db_path: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Seed DuckDB with demo XBRL data")
-    parser.add_argument("--db-path", default="./data/ibkr.duckdb", help="Path to DuckDB file")
+    parser.add_argument("--db-path", default="./data/rag.duckdb", help="Path to DuckDB file")
     args = parser.parse_args()
     seed(db_path=args.db_path)
