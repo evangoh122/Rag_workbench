@@ -26,9 +26,12 @@ from api.config import Config
 
 DB_PATH = Config.DB_PATH
 
-# SEC requires a user-agent
-_EMAIL = os.getenv("EDGAR_EMAIL", "research@example.com")
-_COMPANY = "RAG-Workbench"
+# SEC requires a user-agent — parse from EDGAR_USER_AGENT (same var used by edgar_adapter.py)
+# Format: "Company Name email@example.com"
+_user_agent = os.getenv("EDGAR_USER_AGENT", "RAG-Workbench research@example.com")
+_parts = _user_agent.split(" ", 1)
+_COMPANY = _parts[0] if _parts else "RAG-Workbench"
+_EMAIL = _parts[1] if len(_parts) > 1 else "research@example.com"
 _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 
 # CIK lookup for well-known tickers
