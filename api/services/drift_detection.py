@@ -1,6 +1,6 @@
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from loguru import logger
 
 # MiMo delivers this
 try:
@@ -9,7 +9,6 @@ except ImportError:  # pragma: no cover
     compute_agreement_rate = None        # MiMo delivers this
     count_unrecognized_concepts = None   # MiMo delivers this
 
-logger = logging.getLogger(__name__)
 
 
 @dataclass

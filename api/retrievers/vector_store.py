@@ -8,43 +8,6 @@ from loguru import logger
 from rank_bm25 import BM25Okapi
 import numpy as np
 
-
-class VectorStoreRetriever:
-    def __init__(self, top_k: int = 5):
-        self.top_k = top_k
-
-    _ALLOWED_TABLES = {"ticker_embeddings", "edgar_embeddings"}
-
-    def search(self, query: str, table_name: str = "ticker_embeddings") -> List[Document]:
-        if table_name not in self._ALLOWED_TABLES:
-            logger.warning("Rejected search on non-whitelisted table: %s", table_name)
-            return []
-
-        try:
-            conn = db_manager.get_connection()
-            embeddings = get_embeddings()
-            qvec = embeddings.embed_query(query)
-
-            rows = conn.execute(f"""
-                SELECT ticker, text,
-                       array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
-                FROM {table_name}
-                ORDER BY dist ASC
-                LIMIT ?
-            """, [qvec, self.top_k]).fetchall()
-
-            return [
-                Document(
-                    page_content=r[1],
-                    metadata={"source": f"vector_search::{table_name}", "ticker": r[0], "distance": r[2]},
-                )
-                for r in rows
-            ]
-        except Exception as e:
-            logger.warning(f"Vector search failed for {table_name}: {e}")
-            return []
-
-
 class BM25EmbeddingRetriever:
     """BM25 search over stored edgar_embeddings text."""
 
@@ -104,7 +67,6 @@ class BM25EmbeddingRetriever:
         self._metadata = []
         self._bm25 = None
 
-
 def _rrf_merge(
     dense: List[Document],
     sparse: List[Document],
@@ -129,7 +91,6 @@ def _rrf_merge(
         content_map[key]
         for key in sorted(scores, key=scores.__getitem__, reverse=True)
     ]
-
 
 # Module-level singleton BM25 retriever
 _bm25_retriever = BM25EmbeddingRetriever(top_k=5)

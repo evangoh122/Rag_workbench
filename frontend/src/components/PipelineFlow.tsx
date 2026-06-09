@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ReactFlow, Background, Controls } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -14,81 +14,95 @@ interface PipelineFlowProps {
 }
 
 const PipelineFlow: React.FC<PipelineFlowProps> = ({ status = {} }) => {
-  const getNodeColor = (nodeStatus?: string) => {
+  const getNodeStyle = (nodeStatus?: string) => {
+    const baseStyle = { 
+      borderRadius: '12px', 
+      padding: '14px 20px',
+      fontSize: '14px',
+      fontWeight: 600,
+      color: 'white',
+      border: '1px solid rgba(255,255,255,0.1)',
+      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+      width: 180,
+      textAlign: 'center' as const
+    };
+
     switch (nodeStatus) {
       case 'success':
-        return '#10b981'; // green-500
+        return { ...baseStyle, background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', borderColor: '#34d399' };
       case 'error':
-        return '#ef4444'; // red-500
+        return { ...baseStyle, background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)', borderColor: '#f87171' };
       case 'pending':
-        return '#3b82f6'; // blue-500
+        return { ...baseStyle, background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)', borderColor: '#818cf8', animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' };
       default:
-        return '#4b5563'; // gray-600
+        return { ...baseStyle, background: '#161b24', color: '#9ca3af', borderColor: '#202532', boxShadow: 'none' };
     }
   };
 
-  const initialNodes = [
+  const initialNodes = useMemo(() => [
     {
       id: 'input',
-      data: { label: 'Input' },
-      position: { x: 50, y: 50 },
-      style: { background: getNodeColor(status.input), color: 'white', borderRadius: '8px', padding: '10px' },
+      data: { label: '1. User Input' },
+      position: { x: 250, y: 50 },
+      style: getNodeStyle(status.input),
     },
     {
       id: 'retrieval',
-      data: { label: 'Retrieval' },
-      position: { x: 50, y: 150 },
-      style: { background: getNodeColor(status.retrieval), color: 'white', borderRadius: '8px', padding: '10px' },
+      data: { label: '2. Document Retrieval' },
+      position: { x: 250, y: 150 },
+      style: getNodeStyle(status.retrieval),
     },
     {
       id: 'extraction',
-      data: { label: 'XBRL Extraction' },
-      position: { x: 50, y: 250 },
-      style: { background: getNodeColor(status.extraction), color: 'white', borderRadius: '8px', padding: '10px' },
+      data: { label: '3. XBRL Extraction' },
+      position: { x: 250, y: 250 },
+      style: getNodeStyle(status.extraction),
     },
     {
       id: 'math',
-      data: { label: 'Math Execution' },
-      position: { x: 50, y: 350 },
-      style: { background: getNodeColor(status.math), color: 'white', borderRadius: '8px', padding: '10px' },
+      data: { label: '4. Math Execution' },
+      position: { x: 250, y: 350 },
+      style: getNodeStyle(status.math),
     },
     {
       id: 'verification',
-      data: { label: 'Verification' },
-      position: { x: 50, y: 450 },
-      style: { background: getNodeColor(status.verification), color: 'white', borderRadius: '8px', padding: '10px' },
+      data: { label: '5. Verification' },
+      position: { x: 250, y: 450 },
+      style: getNodeStyle(status.verification),
     },
     {
       id: 'output',
-      data: { label: 'Output' },
-      position: { x: 50, y: 550 },
-      style: { background: getNodeColor(status.output), color: 'white', borderRadius: '8px', padding: '10px' },
+      data: { label: '6. Final Output' },
+      position: { x: 250, y: 550 },
+      style: getNodeStyle(status.output),
     },
-  ];
+  ], [status]);
 
-  const initialEdges = [
-    { id: 'e1-2', source: 'input', target: 'retrieval', animated: status.retrieval === 'pending' },
-    { id: 'e2-3', source: 'retrieval', target: 'extraction', animated: status.extraction === 'pending' },
-    { id: 'e3-4', source: 'extraction', target: 'math', animated: status.math === 'pending' },
-    { id: 'e4-5', source: 'math', target: 'verification', animated: status.verification === 'pending' },
-    { id: 'e5-6', source: 'verification', target: 'output', animated: status.output === 'pending' },
-  ];
+  const initialEdges = useMemo(() => [
+    { id: 'e1-2', source: 'input', target: 'retrieval', animated: status.retrieval === 'pending', style: { stroke: '#4b5563', strokeWidth: 2 } },
+    { id: 'e2-3', source: 'retrieval', target: 'extraction', animated: status.extraction === 'pending', style: { stroke: '#4b5563', strokeWidth: 2 } },
+    { id: 'e3-4', source: 'extraction', target: 'math', animated: status.math === 'pending', style: { stroke: '#4b5563', strokeWidth: 2 } },
+    { id: 'e4-5', source: 'math', target: 'verification', animated: status.verification === 'pending', style: { stroke: '#4b5563', strokeWidth: 2 } },
+    { id: 'e5-6', source: 'verification', target: 'output', animated: status.output === 'pending', style: { stroke: '#4b5563', strokeWidth: 2 } },
+  ], [status]);
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#111827' }}>
+    <div style={{ width: '100%', height: '100%' }}>
       <ReactFlow
         nodes={initialNodes}
         edges={initialEdges}
         fitView
-        nodesDraggable={false}
+        fitViewOptions={{ padding: 0.2 }}
+        nodesDraggable={true}
         nodesConnectable={false}
         elementsSelectable={false}
       >
-        <Background color="#374151" gap={16} />
-        <Controls />
+        <Background color="#202532" gap={24} size={2} />
+        <Controls style={{ button: { backgroundColor: '#161b24', border: '1px solid #202532', color: '#9ca3af', fill: '#9ca3af' } }} />
       </ReactFlow>
     </div>
   );
 };
 
 export default PipelineFlow;
+

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, ClipboardList, ShieldCheck } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, ClipboardList, ShieldCheck, Activity, MessageSquare, BarChart3 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage } from './api/chat';
 import type { ChatResponse } from './api/chat';
@@ -23,7 +23,7 @@ interface Message {
   math_steps?: string[];
 }
 
-type AppView = 'chat' | 'review';
+type AppView = 'chat' | 'traceability' | 'results';
 
 type PipelineStatus = {
   input?: 'success' | 'error' | 'pending';
@@ -58,6 +58,8 @@ function App() {
 
     if (mode === 'auditable') {
       setPipelineStatus({ input: 'success', retrieval: 'pending' });
+      // If the user submits from the traceability view, we might want to stay there or move them.
+      // We'll keep them wherever they are.
     }
     const userMsg: Message = { role: 'user', content: input };
     setMessages(prev => [...prev, userMsg]);
@@ -126,25 +128,69 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0e1117] text-white font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 bg-[#131926] border-r border-[#2a3246] flex flex-col p-5">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#0a0c10] text-gray-200 font-sans selection:bg-blue-500/30">
+      {/* Sidebar Navigation */}
+      <aside className="w-72 flex-shrink-0 bg-[#0f1219] border-r border-[#202532] flex flex-col p-5 shadow-[4px_0_24px_rgba(0,0,0,0.2)] z-10 relative">
         {/* Logo */}
-        <div className="flex items-center gap-2.5 mb-8">
-          <Search size={24} className="text-blue-500" />
-          <h2 className="m-0 text-lg font-semibold">RAG Workbench</h2>
+        <div className="flex items-center gap-3 mb-8 px-1">
+          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
+            <Search size={22} className="text-white" />
+          </div>
+          <h2 className="m-0 text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-100 to-gray-400 tracking-tight">RAG Workbench</h2>
         </div>
 
-        {/* Mode toggle (only visible in chat view) */}
-        {view === 'chat' && (
+        {/* Main Navigation */}
+        <nav className="flex flex-col gap-2 mb-8">
+          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest px-2 mb-2">Sections</div>
+          <button
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+              view === 'chat'
+                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+            }`}
+            onClick={() => setView('chat')}
+          >
+            <MessageSquare size={18} className={view === 'chat' ? 'text-blue-400' : 'text-gray-500'} />
+            Testing Chat
+          </button>
+          
+          <button
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+              view === 'traceability'
+                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+            }`}
+            onClick={() => setView('traceability')}
+          >
+            <Activity size={18} className={view === 'traceability' ? 'text-purple-400' : 'text-gray-500'} />
+            Pipeline Traceability
+          </button>
+
+          <button
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+              view === 'results'
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+            }`}
+            onClick={() => setView('results')}
+          >
+            <BarChart3 size={18} className={view === 'results' ? 'text-emerald-400' : 'text-gray-500'} />
+            Results & Testing
+          </button>
+        </nav>
+
+        {/* Mode & Context (Only show if relevant) */}
+        {(view === 'chat' || view === 'traceability') && (
           <div className="flex flex-col gap-2 mb-6">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1">Engine Mode</div>
-            <div className="grid grid-cols-1 gap-1">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest px-2 mb-2">Configuration</div>
+            
+            {/* Engine Toggle */}
+            <div className="bg-[#161b24] p-1.5 rounded-xl flex flex-col gap-1 border border-[#202532]">
               <button
-                className={`flex items-center gap-2.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+                className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
                   mode === 'auditable'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2130]'
+                    ? 'bg-[#202532] text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
                 }`}
                 onClick={() => setMode('auditable')}
               >
@@ -152,10 +198,10 @@ function App() {
                 Auditable RAG
               </button>
               <button
-                className={`flex items-center gap-2.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+                className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
                   mode === 'sql'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2130]'
+                    ? 'bg-[#202532] text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
                 }`}
                 onClick={() => setMode('sql')}
               >
@@ -163,10 +209,10 @@ function App() {
                 SQL
               </button>
               <button
-                className={`flex items-center gap-2.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+                className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
                   mode === 'rag'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2130]'
+                    ? 'bg-[#202532] text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
                 }`}
                 onClick={() => setMode('rag')}
               >
@@ -174,172 +220,240 @@ function App() {
                 Basic RAG
               </button>
             </div>
+
+            {/* Ticker Selector */}
+            {mode === 'auditable' && (
+              <div className="mt-4 px-2">
+                <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">Target Ticker</label>
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input 
+                    type="text" 
+                    value={ticker} 
+                    onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                    className="w-full bg-[#161b24] border border-[#202532] rounded-xl pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-gray-600"
+                    placeholder="e.g. AAPL"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Ticker Selector */}
-        {view === 'chat' && mode === 'auditable' && (
-          <div className="mb-6 px-1">
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Company Ticker</label>
-            <input 
-              type="text" 
-              value={ticker} 
-              onChange={(e) => setTicker(e.target.value.toUpperCase())}
-              className="w-full bg-[#1c2130] border border-[#2a3246] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-              placeholder="e.g. AAPL"
-            />
-          </div>
-        )}
-
-        {/* Review Queue nav link */}
-        <button
-          className={`w-full flex items-center gap-2.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 mb-2 ${
-            view === 'review'
-              ? 'bg-[#1c2130] text-blue-400'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2130] bg-transparent'
-          }`}
-          onClick={() => setView('review')}
-        >
-          <ClipboardList size={16} />
-          Review Queue
-        </button>
-
-        {/* Back to chat button when in review view */}
-        {view === 'review' && (
-          <button
-            className="w-full flex items-center gap-2.5 py-2 px-3 rounded-md text-sm font-medium text-gray-400 hover:text-gray-200 bg-transparent hover:bg-[#1c2130] border-0 cursor-pointer transition-all duration-200 mb-2"
-            onClick={() => setView('chat')}
-          >
-            <Search size={16} />
-            Back to Chat
-          </button>
-        )}
-
-        {/* Clear chat button — only in chat view */}
-        {view === 'chat' && (
+        {/* Clear chat button */}
+        {(view === 'chat' || view === 'traceability') && (
           <div className="mt-auto">
             <button
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm text-gray-400 hover:text-gray-200 bg-transparent border-0 cursor-pointer transition-all duration-200 hover:bg-[#1c2130]"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium text-gray-400 hover:text-red-400 bg-transparent border border-[#202532] hover:border-red-900/50 hover:bg-red-500/5 cursor-pointer transition-all duration-300"
               onClick={() => {
                 setMessages([]);
                 setPipelineStatus({});
               }}
             >
               <RefreshCcw size={16} />
-              Clear Chat
+              Reset Session
             </button>
           </div>
         )}
 
         {/* Drift alert at bottom of sidebar */}
-        <DriftAlert />
+        <div className={view === 'results' ? 'mt-auto' : 'mt-4'}>
+          <DriftAlert />
+        </div>
       </aside>
 
-      {/* Main content */}
-      {view === 'review' ? (
-        <ReviewQueue />
-      ) : (
-        <div className="flex-1 flex flex-row h-full min-w-0">
-          {/* Chat Pane */}
-          <div className="flex-1 flex flex-col h-full border-r border-[#2a3246]">
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col h-full min-w-0 bg-[#0a0c10] relative">
+        
+        {/* VIEW: RESULTS */}
+        {view === 'results' && (
+          <div className="flex-1 overflow-hidden animate-in fade-in duration-300">
+            <ReviewQueue />
+          </div>
+        )}
+
+        {/* VIEW: TRACEABILITY */}
+        {view === 'traceability' && (
+          <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
+            <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
+              <h1 className="text-xl font-semibold text-white flex items-center gap-3">
+                <Activity className="text-purple-400" />
+                Pipeline Traceability
+              </h1>
+              <p className="text-sm text-gray-400 mt-1">Live visualization of the execution steps for your last query.</p>
+            </header>
+            <div className="flex-1 relative bg-[#0a0c10]">
+              <PipelineFlow status={pipelineStatus} />
+            </div>
+            {/* Input allowed in Traceability view too */}
+            <div className="px-8 py-6 bg-gradient-to-t from-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+              <form
+                onSubmit={handleSubmit}
+                className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 pointer-events-auto"
+              >
+                <input
+                  className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-4 py-3 text-base outline-none w-full"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Test a query to trace its execution..."
+                  disabled={loading}
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !input.trim()}
+                  className="flex items-center justify-center px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl border-0 cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 ml-2"
+                >
+                  Trace <Send size={16} />
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW: CHAT */}
+        {view === 'chat' && (
+          <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
             {/* Header */}
-            <header className="px-6 py-4 border-b border-[#2a3246] flex items-center justify-between flex-shrink-0">
-              <div className="text-sm text-gray-400">
-                Mode:{' '}
-                <strong className="text-white">
-                  {mode === 'sql' ? 'Database (SQL)' : mode === 'rag' ? 'Knowledge Base (RAG)' : 'Auditable Filing QA'}
-                </strong>
+            <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-semibold text-white flex items-center gap-3">
+                  <MessageSquare className="text-blue-400" />
+                  Testing Interface
+                </h1>
+                <div className="text-sm text-gray-400 mt-1 flex items-center gap-2">
+                  Engine: <span className="text-gray-200 font-medium px-2 py-0.5 bg-[#161b24] rounded-md border border-[#202532]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : 'Auditable Filing QA'}</span>
+                </div>
+              </div>
+              {/* Mini Pipeline Status Indicator */}
+              <div className="flex items-center gap-2 bg-[#161b24] px-4 py-2 rounded-xl border border-[#202532] shadow-sm">
+                 <div className="text-xs font-semibold text-gray-400 uppercase mr-2">Pipeline</div>
+                 {['input', 'retrieval', 'extraction', 'math', 'verification', 'output'].map(step => {
+                   const s = pipelineStatus[step as keyof PipelineStatus];
+                   return (
+                     <div key={step} className="group relative">
+                       <div className={`w-3 h-3 rounded-full border-2 border-[#161b24] shadow-sm transition-colors duration-500 ${
+                         s === 'success' ? 'bg-emerald-500' : s === 'error' ? 'bg-red-500' : s === 'pending' ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'
+                       }`} />
+                     </div>
+                   );
+                 })}
               </div>
             </header>
 
             {/* Chat area */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6">
+            <div className="flex-1 overflow-y-auto px-8 py-8 flex flex-col gap-8 scroll-smooth pb-32">
               {messages.length === 0 && (
-                <div className="text-center mt-24 text-gray-400">
-                  <h3 className="text-lg font-medium mb-2">
-                    How can I help you with your financial data today?
+                <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto">
+                  <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(59,130,246,0.15)] border border-blue-500/20">
+                    <MessageSquare size={32} className="text-blue-400" />
+                  </div>
+                  <h3 className="text-2xl font-semibold text-white mb-3">
+                    Start a Testing Session
                   </h3>
-                  <p className="text-sm">
+                  <p className="text-gray-400 text-base leading-relaxed mb-8">
                     {mode === 'auditable' 
-                      ? `Ask a question about ${ticker}'s latest 10-K filing.`
-                      : 'Try asking: "Show me AAPL closing prices for the last 30 days"'}
+                      ? `Ask questions about ${ticker}'s SEC filings. The system will retrieve relevant excerpts, extract XBRL facts, and verify the math.`
+                      : 'Test the basic retrieval or SQL capabilities of the platform.'}
                   </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
+                     <button onClick={() => setInput(`What was ${ticker}'s total revenue in the last fiscal year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                        "What was {ticker}'s total revenue?"
+                     </button>
+                     <button onClick={() => setInput(`Did ${ticker}'s gross margin improve year-over-year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                        "Did {ticker}'s gross margin improve?"
+                     </button>
+                  </div>
                 </div>
               )}
 
               {messages.map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`flex gap-4 max-w-[95%] ${
+                  className={`flex gap-5 max-w-[90%] ${
                     msg.role === 'user' ? 'self-end flex-row-reverse' : 'self-start'
                   }`}
                 >
+                  {/* Avatar */}
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border ${
+                     msg.role === 'user' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-[#161b24] border-[#202532] text-blue-400'
+                  }`}>
+                    {msg.role === 'user' ? <Database size={18} /> : <Search size={18} />}
+                  </div>
+
+                  {/* Message Bubble */}
                   <div
-                    className={`px-4 py-3 rounded-2xl leading-relaxed ${
+                    className={`px-5 py-4 rounded-2xl leading-relaxed text-[15px] shadow-sm ${
                       msg.role === 'user'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-[#1e293b] text-gray-100'
+                        ? 'bg-blue-600 text-white rounded-tr-sm'
+                        : 'bg-[#161b24] text-gray-200 border border-[#202532] rounded-tl-sm'
                     }`}
                   >
-                    <ReactMarkdown
-                      allowedElements={['p', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'a', 'br', 'hr']}
-                      skipHtml
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
+                    <div className="prose prose-invert prose-p:leading-relaxed prose-pre:bg-[#0a0c10] prose-pre:border prose-pre:border-[#202532] max-w-none">
+                      <ReactMarkdown
+                        allowedElements={['p', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'a', 'br', 'hr']}
+                        skipHtml
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
 
                     {msg.role === 'assistant' && (msg.sources || msg.verification) && (
-                      <AuditTrail
-                        sources={msg.sources}
-                        xbrl_facts={msg.xbrl_facts}
-                        verification={msg.verification}
-                        math_steps={msg.math_steps}
-                      />
+                      <div className="mt-4 pt-4 border-t border-[#202532]/50">
+                        <AuditTrail
+                          sources={msg.sources}
+                          xbrl_facts={msg.xbrl_facts}
+                          verification={msg.verification}
+                          math_steps={msg.math_steps}
+                        />
+                      </div>
                     )}
 
                     {msg.sql && (
-                      <pre className="mt-3 bg-black text-gray-300 rounded p-3 text-sm font-mono whitespace-pre-wrap overflow-x-auto">
+                      <pre className="mt-4 bg-[#0a0c10] border border-[#202532] text-gray-300 rounded-xl p-4 text-sm font-mono whitespace-pre-wrap overflow-x-auto shadow-inner">
                         <code>{msg.sql}</code>
                       </pre>
                     )}
 
                     {msg.data && msg.data.length > 0 && (
-                      <div className="mt-3 bg-[#0a0c10] border border-[#2a3246] rounded-lg overflow-x-auto">
-                        <table className="w-full border-collapse text-sm">
-                          <thead>
-                            <tr>
-                              {Object.keys(msg.data[0]).map(key => (
-                                <th
-                                  key={key}
-                                  className="text-left px-3 py-3 bg-[#161b22] border-b border-[#2a3246] text-gray-400 font-medium"
-                                >
-                                  {key}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {msg.data.slice(0, 10).map((row, i) => (
-                              <tr
-                                key={i}
-                                className={i % 2 === 0 ? '' : 'bg-[#0d1117]'}
-                              >
-                                {Object.values(row).map((val, j) => (
-                                  <td
-                                    key={j}
-                                    className="px-3 py-3 border-b border-[#2a3246]"
+                      <div className="mt-4 bg-[#0a0c10] border border-[#202532] rounded-xl overflow-hidden shadow-inner">
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse text-sm">
+                            <thead>
+                              <tr>
+                                {Object.keys(msg.data[0]).map(key => (
+                                  <th
+                                    key={key}
+                                    className="text-left px-4 py-3 bg-[#13171f] border-b border-[#202532] text-gray-400 font-semibold"
                                   >
-                                    {typeof val === 'number'
-                                      ? val.toLocaleString()
-                                      : String(val ?? '')}
-                                  </td>
+                                    {key}
+                                  </th>
                                 ))}
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody>
+                              {msg.data.slice(0, 10).map((row, i) => (
+                                <tr
+                                  key={i}
+                                  className={`transition-colors hover:bg-[#161b24] ${i % 2 === 0 ? '' : 'bg-[#0c0e14]'}`}
+                                >
+                                  {Object.values(row).map((val, j) => (
+                                    <td
+                                      key={j}
+                                      className="px-4 py-3 border-b border-[#202532]/50 text-gray-300"
+                                    >
+                                      {typeof val === 'number'
+                                        ? val.toLocaleString()
+                                        : String(val ?? '')}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                         {msg.data.length > 10 && (
-                          <div className="px-3 py-2 text-xs text-gray-400 text-center">
+                          <div className="px-4 py-2.5 bg-[#13171f] border-t border-[#202532] text-xs text-gray-500 font-medium text-center uppercase tracking-wider">
                             Showing 10 of {msg.data.length} rows
                           </div>
                         )}
@@ -350,9 +464,17 @@ function App() {
               ))}
 
               {loading && (
-                <div className="flex gap-4 max-w-[85%] self-start">
-                  <div className="px-4 py-3 rounded-2xl bg-[#1e293b] text-gray-100 italic opacity-70">
-                    Thinking...
+                <div className="flex gap-5 max-w-[90%] self-start animate-in slide-in-from-bottom-2 duration-300">
+                  <div className="w-10 h-10 rounded-xl bg-[#161b24] border border-[#202532] text-blue-400 flex items-center justify-center shadow-sm">
+                    <Search size={18} className="animate-pulse" />
+                  </div>
+                  <div className="px-6 py-4 rounded-2xl rounded-tl-sm bg-[#161b24] text-gray-400 border border-[#202532] flex items-center gap-3">
+                    <div className="flex gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    Processing query...
                   </div>
                 </div>
               )}
@@ -361,13 +483,13 @@ function App() {
             </div>
 
             {/* Input bar */}
-            <div className="px-6 py-6 bg-[#0e1117] flex-shrink-0">
+            <div className="px-8 py-6 bg-gradient-to-t from-[#0a0c10] via-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
               <form
                 onSubmit={handleSubmit}
-                className="max-w-3xl mx-auto flex items-center bg-[#1c2130] border border-[#2a3246] rounded-xl px-4 py-2 transition-colors duration-200 focus-within:border-blue-600"
+                className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 pointer-events-auto"
               >
                 <input
-                  className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 py-3 text-base outline-none"
+                  className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-4 py-3 text-base outline-none w-full"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={
@@ -382,27 +504,19 @@ function App() {
                 <button
                   type="submit"
                   disabled={loading || !input.trim()}
-                  className="flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-lg border-0 cursor-pointer transition-opacity duration-200 disabled:opacity-50 disabled:cursor-not-allowed ml-2"
+                  className="flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl border-0 cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 ml-2"
                 >
-                  <Send size={18} />
+                  Send <Send size={16} />
                 </button>
               </form>
             </div>
           </div>
+        )}
 
-          {/* Pipeline Flow Pane */}
-          <div className="hidden lg:flex w-80 flex-shrink-0 bg-[#0e1117] flex col">
-            <header className="px-6 py-4 border-b border-[#2a3246] flex items-center justify-between">
-              <div className="text-sm font-semibold">Pipeline Execution</div>
-            </header>
-            <div className="flex-1">
-              <PipelineFlow status={pipelineStatus} />
-            </div>
-          </div>
-        </div>
-      )}
+      </main>
     </div>
   );
 }
 
 export default App;
+

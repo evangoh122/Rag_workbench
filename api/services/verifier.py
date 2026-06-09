@@ -4,15 +4,14 @@ verifier.py — Numeric and Semantic Entailment Verification logic.
 This service implements the verification layer as described in the Prompt Plan.
 It provides numeric cross-check with tolerance and NLI-based entailment verification.
 """
-import logging
 from typing import Tuple
 
+from loguru import logger
 try:
     from sentence_transformers import CrossEncoder
 except ImportError:
     CrossEncoder = None
 
-logger = logging.getLogger(__name__)
 
 class Verifier:
     def __init__(self, model_name: str = "cross-encoder/nli-deberta-v3-small"):

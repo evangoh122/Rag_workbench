@@ -1,4 +1,3 @@
-import logging
 import os
 import hmac
 from typing import Optional
@@ -33,12 +32,12 @@ except ImportError:  # pragma: no cover
     get_calibration_data = None
     persist_calibration_result = None
 
+from loguru import logger
 try:
     from api.services.calibration import recalibrate_thresholds
 except ImportError:  # pragma: no cover
     recalibrate_thresholds = None
 
-logger = logging.getLogger(__name__)
 
 _REVIEW_API_KEY: str | None = os.getenv("REVIEW_API_KEY") or None
 

@@ -16,6 +16,13 @@ import os
 from typing import Optional
 
 import pandas as pd
+from loguru import logger
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from api.models.eval_types import (
     ExtractionResult,
@@ -151,9 +158,17 @@ def fetch_filing(cik: str, accession: str) -> ExtractionResult:
             "edgartools is not installed. Run: pip install 'edgartools>=2.26.0'"
         ) from exc
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((ConnectionError, TimeoutError, OSError)),
+        reraise=True,
+    )
+    def _fetch() -> object:
+        return Company(cik).get_filing(accession_number=accession)
+
     try:
-        company = Company(cik)
-        filing = company.get_filing(accession_number=accession)
+        filing = _fetch()
     except Exception as exc:
         raise EdgarAdapterError(
             f"EdgarTools failed to fetch filing (CIK={cik}, accession={accession}): {exc}"

@@ -99,7 +99,7 @@ function DecisionCard({
 
         <ConfidenceBar value={decision.confidence} />
 
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#1c2130] text-gray-300 border border-[#2a3246] flex-shrink-0">
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#1c222e] text-gray-300 border border-[#2a3246] flex-shrink-0">
           {decision.form_type}
         </span>
       </div>
@@ -135,7 +135,7 @@ function DecisionCard({
       {/* Status / actions */}
       <div className="flex items-center gap-3 pt-1">
         {decision.status === 'reviewed' ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-[#1c2130] text-gray-400 border border-[#2a3246]">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-[#1c222e] text-gray-400 border border-[#2a3246]">
             <CheckCircle size={14} className="text-green-500" />
             Reviewed
           </span>
@@ -375,4 +375,6 @@ export default function ReviewQueue() {
       </div>
     </div>
   );
+}
+
 }

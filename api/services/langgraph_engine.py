@@ -5,13 +5,13 @@ Nodes: Retrieval -> XBRL Extraction -> Math Execution -> Verification -> Output
 Conditional edge on Verification failure: -> Abstention
 """
 import os
-import logging
 from typing import TypedDict, List, Dict, Any, Optional, Union
 import polars as pl
 
 from langgraph.graph import StateGraph, END
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
 from api.services.verifier import verify_numeric, verify_entailment
+from loguru import logger
 from api.services.financial_calc import (
     FactExtractor, CalcResult,
     gross_margin, operating_margin, net_margin, ebitda, ebitda_margin,
@@ -22,7 +22,6 @@ from api.services.financial_calc import (
     normalize_to_usd,
 )
 
-logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # State Definition

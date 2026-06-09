@@ -5,13 +5,12 @@ Provides functions to download filings, extract XBRL facts as Polars DataFrames,
 and chunk text sections for RAG.
 """
 import os
-import logging
 from functools import lru_cache
 from typing import List, Dict, Optional
 import polars as pl
 from edgar import Company, set_identity
+from loguru import logger
 
-logger = logging.getLogger(__name__)
 
 def _ensure_identity():
     user_agent = os.getenv("EDGAR_USER_AGENT")
