@@ -84,6 +84,8 @@ def _trigger_out_of_range(result: ExtractionResult, ctx: ScorerContext) -> bool:
     return ReasonCode.OUT_OF_RANGE in validation.reason_codes
 
 
+# Spec §4.3 lists 8 deterministic always-escalate triggers (CONSTRAINT-004).
+# _trigger_out_of_range was implemented but accidentally omitted from this list.
 ALL_TRIGGERS: list[tuple[str, TriggerFn]] = [
     ("balance_sheet_imbalance", _trigger_balance_sheet_imbalance),
     ("amended_filing", _trigger_amended_filing),
@@ -93,6 +95,7 @@ ALL_TRIGGERS: list[tuple[str, TriggerFn]] = [
     ("going_concern", _trigger_going_concern),
     ("xbrl_mismatch", _trigger_xbrl_mismatch),
     ("unrecognized_concept", _trigger_unrecognized_concept),
+    ("out_of_range", _trigger_out_of_range),          # REQ-CR-04 / spec §4.3
 ]
 
 

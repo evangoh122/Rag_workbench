@@ -41,9 +41,12 @@ class TestReasonCodeEnum(unittest.TestCase):
 
 class TestRouteEnum(unittest.TestCase):
     def test_route_values(self):
-        self.assertEqual(Route.AUTO.value, "auto")
-        self.assertEqual(Route.SAMPLED_REVIEW.value, "sampled_review")
-        self.assertEqual(Route.ESCALATE.value, "escalate")
+        # Route enum values are uppercase to match the DB CHECK constraint in
+        # review_decisions (route IN ('SAMPLED_REVIEW', 'ESCALATE')).
+        # See BUG-1 fix in fix/audit-corrections.
+        self.assertEqual(Route.AUTO.value, "AUTO")
+        self.assertEqual(Route.SAMPLED_REVIEW.value, "SAMPLED_REVIEW")
+        self.assertEqual(Route.ESCALATE.value, "ESCALATE")
 
     def test_route_is_str_enum(self):
         self.assertIsInstance(Route.ESCALATE, str)

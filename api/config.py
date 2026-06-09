@@ -41,7 +41,9 @@ class Config:
                 "api_key": cls.DEEPSEEK_API_KEY,
             },
             "openai": {
-                "base_url": "https://api.openai.com/v1",
+                # OPENAI_API_BASE allows proxy overrides (e.g. sandbox LLM proxy).
+                # Falls back to the official OpenAI endpoint when not set.
+                "base_url": os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1"),
                 "default_model": "gpt-4o",
                 "api_key": cls.OPENAI_API_KEY,
             },

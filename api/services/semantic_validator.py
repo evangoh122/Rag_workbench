@@ -71,7 +71,42 @@ def _check_identity(result: ExtractionResult, reason_codes: list[ReasonCode], de
 
 
 def _check_referential(result: ExtractionResult, reason_codes: list[ReasonCode], details: dict) -> None:
-    pass
+    """Check referential consistency of the extraction record (REQ-SEM-02).
+
+    Validates:
+    1. CIK is a non-empty digit string (format guard).
+    2. Period date is a valid ISO-8601 date string (YYYY-MM-DD).
+    3. Accession number CIK prefix matches the record CIK where possible
+       (accession format: XXXXXXXXXX-YY-ZZZZZZ where X is the submitter CIK).
+    """
+    import re as _re
+    _ISO_DATE_RE = _re.compile(r'^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$')
+    _ACCESSION_RE = _re.compile(r'^(\d{10})-(\d{2})-(\d{6})$')
+
+    # 1. CIK must be non-empty digits
+    if not result.cik or not result.cik.strip().isdigit():
+        reason_codes.append(ReasonCode.REFERENTIAL)
+        details["cik_format"] = f"CIK must be a digit string, got '{result.cik}'"
+
+    # 2. Period date format
+    if result.period and not _ISO_DATE_RE.match(result.period):
+        reason_codes.append(ReasonCode.REFERENTIAL)
+        details["period_format"] = (
+            f"Period must be YYYY-MM-DD, got '{result.period}'"
+        )
+
+    # 3. Accession CIK prefix consistency
+    m = _ACCESSION_RE.match(result.accession or "")
+    if m:
+        accession_cik = m.group(1).lstrip("0")
+        record_cik    = result.cik.lstrip("0")
+        if accession_cik and record_cik and accession_cik != record_cik:
+            # Some filings are submitted by a parent entity, so this is a
+            # WARNING-level signal rather than a hard error — we flag it but
+            # do not add a REFERENTIAL code to avoid false positives.
+            details.setdefault("referential_warnings", []).append(
+                f"Accession CIK prefix ({accession_cik}) differs from record CIK ({record_cik})"
+            )
 
 
 def _check_plausibility(
