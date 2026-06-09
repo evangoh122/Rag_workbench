@@ -40,7 +40,11 @@ class CalibrationReport:
     escalation_count: int = 0
     confidence_histogram: dict[str, int] = field(default_factory=dict)
     trigger_counts: dict[str, int] = field(default_factory=dict)
-    agreement_rate: float = 0.0
+    # agreement_rate is populated externally by the calibration service after
+    # reviewer verdicts are available (review_queue.compute_agreement_rate).
+    # The shadow runner operates on raw ExtractionResult objects before any
+    # human review, so it cannot compute this metric itself.
+    agreement_rate: Optional[float] = None
     filings: list[FilingResult] = field(default_factory=list)
     recommendations: dict[str, float] = field(default_factory=dict)
 

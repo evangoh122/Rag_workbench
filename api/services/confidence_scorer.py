@@ -25,6 +25,7 @@ TriggerFn = Callable[[ExtractionResult, "ScorerContext"], bool]
 class ScorerContext:
     ticker: str = ""
     xbrl_result: CrossValidationResult = field(default_factory=CrossValidationResult)
+    is_downstream: bool = False  # True when extraction feeds a user-facing figure or downstream action
 
 
 def _trigger_balance_sheet_imbalance(result: ExtractionResult, ctx: ScorerContext) -> bool:
@@ -84,6 +85,13 @@ def _trigger_out_of_range(result: ExtractionResult, ctx: ScorerContext) -> bool:
     return ReasonCode.OUT_OF_RANGE in validation.reason_codes
 
 
+def _trigger_downstream_action(result: ExtractionResult, ctx: ScorerContext) -> bool:
+    """Trigger 8: extraction feeds a user-facing financial figure or downstream action."""
+    return ctx.is_downstream
+
+
+# Spec §4.3 lists 8 deterministic always-escalate triggers (CONSTRAINT-004).
+# _trigger_out_of_range was implemented but accidentally omitted from this list.
 ALL_TRIGGERS: list[tuple[str, TriggerFn]] = [
     ("balance_sheet_imbalance", _trigger_balance_sheet_imbalance),
     ("amended_filing", _trigger_amended_filing),
@@ -93,6 +101,8 @@ ALL_TRIGGERS: list[tuple[str, TriggerFn]] = [
     ("going_concern", _trigger_going_concern),
     ("xbrl_mismatch", _trigger_xbrl_mismatch),
     ("unrecognized_concept", _trigger_unrecognized_concept),
+    ("out_of_range", _trigger_out_of_range),          # REQ-CR-04 / spec §4.3
+    ("downstream_action", _trigger_downstream_action), # REQ-CR-06: feeds user-facing figure
 ]
 
 
@@ -106,6 +116,7 @@ def _get_cut_points() -> dict[str, float]:
 def score_and_route(
     result: ExtractionResult,
     ticker: str = "",
+    is_downstream: bool = False,
 ) -> Decision:
     xbrl_result = cross_validate(result, ticker)
     semantic_validation = validate_semantic(result, ticker)
@@ -121,7 +132,7 @@ def score_and_route(
     }
     base_valid = xbrl_result.validation.is_valid and semantic_validation.is_valid
 
-    ctx = ScorerContext(ticker=ticker, xbrl_result=xbrl_result)
+    ctx = ScorerContext(ticker=ticker, xbrl_result=xbrl_result, is_downstream=is_downstream)
     triggers_fired = [name for name, fn in ALL_TRIGGERS if fn(result, ctx)]
 
     record_confidence = xbrl_result.record_confidence
@@ -156,7 +167,8 @@ def score_and_route(
 def evaluate_triggers_only(
     result: ExtractionResult,
     ticker: str = "",
+    is_downstream: bool = False,
 ) -> list[str]:
     """Return list of trigger names that fire — for use by shadow runner."""
-    ctx = ScorerContext(ticker=ticker, xbrl_result=cross_validate(result, ticker))
+    ctx = ScorerContext(ticker=ticker, xbrl_result=cross_validate(result, ticker), is_downstream=is_downstream)
     return [name for name, fn in ALL_TRIGGERS if fn(result, ctx)]

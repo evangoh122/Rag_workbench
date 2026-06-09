@@ -86,6 +86,7 @@ def validate_read_only_sql(sql: str) -> Optional[str]:
         "read_parquet", "read_text", "set", "update", "vacuum",
         "sqlite_scan", "sqlite_attach", "postgres_scan",
         "postgres_attach", "mysql_scan", "mysql_attach",
+        "information_schema",
     }
     tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", compact.lower()))
     found = sorted(tokens & blocked)
@@ -94,6 +95,9 @@ def validate_read_only_sql(sql: str) -> Optional[str]:
 
     if re.search(r"\bduckdb_\w+\s*\(", compact.lower()):
         return "Rejected SQL referencing internal DuckDB functions."
+
+    if re.search(r"\bduckdb_\w+\b", compact.lower()):
+        return "Rejected SQL referencing internal DuckDB system tables/views."
 
     return None
 
