@@ -29,6 +29,7 @@ from api.models.eval_types import (
     ExtractedField,
     Provenance,
 )
+from api.services._edgar_identity import ensure_edgar_identity
 
 
 class EdgarAdapterError(Exception):
@@ -36,25 +37,13 @@ class EdgarAdapterError(Exception):
 
 
 def _set_edgar_identity() -> None:
-    """Configure the EdgarTools identity header before any SEC API call.
-
-    EdgarTools reads EDGAR_USER_AGENT from the environment. The SEC requires
-    a User-Agent of the form 'Name email@example.com'. Set this env var in
-    your .env file — do not hard-code an address in source.
-    """
     user_agent = os.getenv("EDGAR_USER_AGENT")
     if not user_agent:
-        # Fallback for local development if not in env, but ideally should be set.
-        # We raise error as per PLAN-02.
         raise EdgarAdapterError(
             "EDGAR_USER_AGENT environment variable is not set. "
             "Set it to 'Your Name your@email.com' before calling fetch_filing()."
         )
-    try:
-        import edgar  # noqa: PLC0415 — deferred to keep top-level import-safe
-        edgar.set_identity(user_agent)
-    except Exception as exc:  # pragma: no cover
-        raise EdgarAdapterError(f"Failed to set EdgarTools identity: {exc}") from exc
+    ensure_edgar_identity()
 
 
 def _xbrl_dataframe_to_fields(df: pd.DataFrame, concept_col: str = "concept") -> list[ExtractedField]:
@@ -165,7 +154,7 @@ def fetch_filing(cik: str, accession: str) -> ExtractionResult:
         reraise=True,
     )
     def _fetch() -> object:
-        return Company(cik).get_filing(accession_number=accession)
+        return Company(cik).get_filings(accession_number=accession)[0]
 
     try:
         filing = _fetch()

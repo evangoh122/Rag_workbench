@@ -1,23 +1,13 @@
 """
 sec_client.py — EDGAR data ingestion using edgartools and Polars.
-
-Provides functions to download filings, extract XBRL facts as Polars DataFrames,
-and chunk text sections for RAG.
 """
 import os
 from functools import lru_cache
 from typing import List, Dict, Optional
 import polars as pl
-from edgar import Company, set_identity
+from edgar import Company
 from loguru import logger
-
-
-def _ensure_identity():
-    user_agent = os.getenv("EDGAR_USER_AGENT")
-    if not user_agent:
-        logger.warning("EDGAR_USER_AGENT not set. SEC API calls may fail.")
-    else:
-        set_identity(user_agent)
+from api.services._edgar_identity import ensure_edgar_identity
 
 @lru_cache(maxsize=32)
 def get_latest_10k_facts(ticker: str) -> pl.DataFrame:
@@ -25,7 +15,7 @@ def get_latest_10k_facts(ticker: str) -> pl.DataFrame:
     Download the latest 10-K for a ticker and extract XBRL facts into a Polars DataFrame.
     Columns: Concept, Value, Unit, Period
     """
-    _ensure_identity()
+    ensure_edgar_identity()
     try:
         company = Company(ticker)
         filing = company.get_filing(form="10-K")
@@ -57,7 +47,7 @@ def chunk_filing_sections(ticker: str, accession_number: Optional[str] = None) -
     Chunk the text sections of a 10-K filing.
     Returns a list of dictionaries with chunk_text and metadata.
     """
-    _ensure_identity()
+    ensure_edgar_identity()
     try:
         company = Company(ticker)
         if accession_number:
