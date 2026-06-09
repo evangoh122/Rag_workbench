@@ -6,6 +6,7 @@ and chunk text sections for RAG.
 """
 import os
 import logging
+from functools import lru_cache
 from typing import List, Dict, Optional
 import polars as pl
 from edgar import Company, set_identity
@@ -15,11 +16,11 @@ logger = logging.getLogger(__name__)
 def _ensure_identity():
     user_agent = os.getenv("EDGAR_USER_AGENT")
     if not user_agent:
-        # For development, we might have a default or skip
         logger.warning("EDGAR_USER_AGENT not set. SEC API calls may fail.")
     else:
         set_identity(user_agent)
 
+@lru_cache(maxsize=32)
 def get_latest_10k_facts(ticker: str) -> pl.DataFrame:
     """
     Download the latest 10-K for a ticker and extract XBRL facts into a Polars DataFrame.
