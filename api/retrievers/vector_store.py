@@ -1,3 +1,4 @@
+import re
 from typing import List
 from langchain_core.documents import Document
 from api.db.database import db_manager
@@ -7,6 +8,17 @@ from loguru import logger
 
 from rank_bm25 import BM25Okapi
 import numpy as np
+
+_STOP = {
+    "a", "an", "the", "and", "or", "of", "in", "to", "for",
+    "is", "was", "are", "were",
+}
+
+
+def _tokenize(text: str) -> list[str]:
+    """Remove punctuation, lowercase, split, drop stopwords."""
+    tokens = re.findall(r"[a-zA-Z0-9]+", text.lower())
+    return [t for t in tokens if t not in _STOP and len(t) > 1]
 
 class BM25EmbeddingRetriever:
     """BM25 search over stored edgar_embeddings text."""
@@ -34,7 +46,7 @@ class BM25EmbeddingRetriever:
             }
             for r in rows
         ]
-        tokenized = [doc.lower().split() for doc in self._corpus]
+        tokenized = [_tokenize(doc) for doc in self._corpus]
         self._bm25 = BM25Okapi(tokenized)
 
     def search(self, conn, query: str) -> List[Document]:
@@ -46,7 +58,7 @@ class BM25EmbeddingRetriever:
                 return []
         if not self._bm25:
             return []
-        scores = self._bm25.get_scores(query.lower().split())
+        scores = self._bm25.get_scores(_tokenize(query))
         top_idx = np.argsort(scores)[::-1][: self.top_k]
         return [
             Document(
