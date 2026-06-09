@@ -129,7 +129,7 @@ _TICKER_CIK: dict[str, str] = {
     "NVMI": "0001109345",  # Nova Ltd
     "ONTO": "0000704532",  # Onto Innovation
     "PLAB": "0000810136",  # Photronics
-    "Q":    "0002058873",  # Quintana Energy Services (ticker Q)
+    "Q":    "0002058873",  # Qnity Electronics
     "SMTK": "0001817760",  # SmartKem
     "TER":  "0000097210",  # Teradyne
     "TRT":  "0000732026",  # Trio-Tech International
