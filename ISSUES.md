@@ -34,7 +34,7 @@
 | # | Issue | File | Fix |
 |---|-------|------|-----|
 | 18 | Inconsistent logging | `calibration.py` | Standardized on loguru |
-| 19 | `load_dotenv()` called 7 times | `main.py` | Removed redundant call (config.py handles it) |
+| 19 | `load_dotenv()` called 7 times | `main.py` | Removed redundant call |
 | 21 | No retry for SEC API | `edgar_adapter.py` | `tenacity` retry with exponential backoff |
 | 22 | DuckDB lock serializes all access | `database.py` | `threading.RLock()` for reentrant locking |
 | 23 | Deprecated `on_event("startup")` | `main.py` | Migrated to `lifespan` context manager |
@@ -47,23 +47,31 @@
 | 25 | Missing `requests` in requirements | `requirements.txt` | Added `requests>=2.31.0` |
 | 26 | Missing dev dependencies | `requirements-dev.txt` | Created with pytest, httpx, ruff |
 | 27 | `edgartools` allows breaking v3.x | `requirements.txt` | Pinned `>=2.26.0,<3.0.0` |
+| 29 | BM25 index rebuilt on every restart | `asymmetric_rag.py` | Disk cache with pickle save/load |
+| 30 | Embedding one-at-a-time | `asymmetric_rag.py` | ThreadPoolExecutor parallel embedding |
 | 31 | Non-deterministic `hash()` | `rag_engine.py` | `hashlib.sha256()` |
 | 34 | Bare `except Exception` silent | `edgar_adapter.py` | Added `logger.debug()` messages |
+| 35 | `print()` instead of logger | `run.py` | Replaced with `logger.info()` |
 | 37 | Dead code `VectorStoreRetriever` | `vector_store.py` | Removed |
 | 38 | New DuckDB connection per query | `asymmetric_rag.py` | Uses `db_manager.get_connection()` |
+| 39 | Inconsistent provider naming | `asymmetric_rag.py` | Uses `Config.get_provider_config()` |
 
-### Previously Resolved (deepseek branch)
+### Audit Report - Resolved
 
-| # | Issue | Fix |
-|---|-------|-----|
-| 5 | SQL injection LIMIT | Parameterized `LIMIT ?` |
-| 7 | SQL injection f-string | Parameterized placeholders |
-| 14 | Hardcoded MiMo URL | Env var `MIMO_BASE_URL` |
-| 23 | Deprecated on_event | Lifespan context manager |
-| 24 | No graceful shutdown | `db_manager.close()` |
-| 31 | Non-deterministic hash | `hashlib.sha256()` |
-| 34 | Bare except | `logger.debug()` |
-| 38 | New DB connection per query | `db_manager.get_connection()` |
+| ID | Issue | Fix |
+|----|-------|-----|
+| C2 | Test import error | Function exists |
+| C3 | SQL injection in vector_store.py | Table whitelist + parameterized LIMIT |
+| H1 | Wrong form_type | Graceful `getattr` fallback |
+| H3 | Duplicate ChatRequest | Consolidated to schemas.py |
+| H4 | Auth middleware unused | Wired into all routes |
+| H6 | Rate limiter unbounded | TTLCache |
+| L1 | Naive BM25 tokenization | Regex-based punctuation removal |
+| L4 | 10-K/A has 0.0 confidence | Documented; needs data-layer fix |
+| L6 | Missing `__all__` | Defined in `__init__.py` |
+| L9 | RRF passes dummy scores | Now passes actual similarity/bm25 scores |
+| L10 | Regex backtracking risk | Line-bounded pattern without DOTALL |
+| L11 | Frontend API hardcoded | Uses `VITE_API_BASE` env var |
 
 ---
 
@@ -75,39 +83,29 @@
 |---|-------|------|--------|
 | 2 | Real API keys in `.env` | `.env` | Rotate keys; use secrets manager |
 | 15 | No API key scoping | `auth.py` | Design: implement key scopes |
-| 16 | Audit scripts expose codebase | `scripts/` | Gate with confirmation flag |
 
 ### P2 - Architecture & Design
 
 | # | Issue | File | Action |
 |---|-------|------|--------|
-| 17 | Two parallel RAG implementations | `asymmetric_rag.py` vs `rag_engine.py` | Consolidate |
+| 17 | Two parallel RAG implementations | `asymmetric_rag.py` vs `rag_engine.py` | Consolidate or deprecate one |
 | 20 | Module-level global state (18+ vars) | Multiple | Encapsulate in config class |
 
 ### P3 - Code Quality
 
 | # | Issue | File | Action |
 |---|-------|------|--------|
-| 29 | BM25 index rebuilt on every restart | `asymmetric_rag.py` | Serialize index to disk |
-| 30 | Embedding one-at-a-time | `asymmetric_rag.py` | Batch embedding API |
 | 32 | `warnings.filterwarnings` too broad | `main.py` | Already targeted; low priority |
-| 35 | `print()` in run.py | `run.py` | Acceptable for CLI output |
-| 39 | Inconsistent provider naming | `asymmetric_rag.py` | Consolidate configs |
-| 40 | DuckDB file possibly tracked | `data/` | Not tracked; verified |
 
 ### Audit Report - Outstanding
 
 | ID | Issue | Action |
 |----|-------|--------|
 | C1 | API keys in `.env` | Rotate keys |
-| H2 | XBRL_MISMATCH false positives | Investigate validator |
-| L1 | Naive BM25 tokenization | Add punctuation removal |
+| H2 | XBRL_MISMATCH false positives | Investigate XbrlCrossValidator |
 | L2 | Query instruction prefix | Verify against Qwen3 docs |
-| L3 | No confidence differentiation | Tune provenance scores |
-| L4 | 10-K/A has 0.0 confidence | Add "no data" signal |
-| L8 | Separate EDGAR identities | Consolidate scripts |
-| L9 | RRF passes dummy scores | Pass actual scores |
-| L10 | Regex backtracking risk | Use atomic patterns |
+| L3 | No confidence differentiation | Tune provenance base scores |
+| L8 | Separate EDGAR identities | Consolidate embed_edgar + edgar_adapter |
 
 ---
 
@@ -116,8 +114,8 @@
 | Category | Resolved | Outstanding |
 |----------|----------|-------------|
 | P0 Critical | 1 | 0 |
-| P1 Security | 12 | 3 (user action) |
+| P1 Security | 12 | 2 (user action) |
 | P2 Architecture | 6 | 2 |
-| P3 Code Quality | 7 | 6 |
-| Audit Report | 10 | 9 |
-| **Total** | **36** | **20** |
+| P3 Code Quality | 11 | 1 |
+| Audit Report | 12 | 5 |
+| **Total** | **42** | **10** |
