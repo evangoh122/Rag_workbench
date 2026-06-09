@@ -33,10 +33,14 @@ export interface ChatResponse {
   type?: 'text' | 'table' | 'error';
   sql?: string;
   data?: Record<string, unknown>[];
-  sources?: Source[];
-  xbrl_facts?: XBRLFact[];
-  verification?: Verification;
+  sources?: any[];
+  xbrl_facts?: any[];
+  verification?: {
+    status: string;
+    reasoning: string;
+  };
   math_steps?: string[];
+  pipeline_status?: Record<string, 'success' | 'error' | 'pending'>;
 }
 
 interface HistoryEntry {
@@ -62,6 +66,17 @@ export async function sendRagMessage(
   const response = await axios.post<ChatResponse>(`${API_BASE}/chat/rag`, {
     message,
     history,
+  });
+  return response.data;
+}
+
+export async function sendAuditableRagMessage(
+  message: string,
+  ticker: string = 'AAPL',
+): Promise<ChatResponse> {
+  const response = await axios.post<ChatResponse>(`${API_BASE}/chat/auditable-rag`, {
+    message,
+    ticker,
   });
   return response.data;
 }

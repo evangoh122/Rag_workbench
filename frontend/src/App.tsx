@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, ClipboardList } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, ClipboardList, ShieldCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { sendSqlMessage, sendRagMessage } from './api/chat';
-import type { ChatResponse, Source, XBRLFact, Verification } from './api/chat';
+import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage } from './api/chat';
+import type { ChatResponse } from './api/chat';
 import ReviewQueue from './pages/ReviewQueue';
 import DriftAlert from './components/DriftAlert';
 import AuditTrail from './components/AuditTrail';
@@ -14,9 +14,12 @@ interface Message {
   type?: 'text' | 'table' | 'error';
   sql?: string;
   data?: Record<string, unknown>[];
-  sources?: Source[];
-  xbrl_facts?: XBRLFact[];
-  verification?: Verification;
+  sources?: any[];
+  xbrl_facts?: any[];
+  verification?: {
+    status: string;
+    reasoning: string;
+  };
   math_steps?: string[];
 }
 
@@ -34,10 +37,11 @@ type PipelineStatus = {
 function App() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [mode, setMode] = useState<'sql' | 'rag'>('sql');
+  const [mode, setMode] = useState<'sql' | 'rag' | 'auditable'>('auditable');
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<AppView>('chat');
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
+  const [ticker, setTicker] = useState('AAPL');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -52,7 +56,9 @@ function App() {
     e.preventDefault();
     if (!input.trim() || loading) return;
 
-    setPipelineStatus({ input: 'success', retrieval: 'pending' });
+    if (mode === 'auditable') {
+      setPipelineStatus({ input: 'success', retrieval: 'pending' });
+    }
     const userMsg: Message = { role: 'user', content: input };
     setMessages(prev => [...prev, userMsg]);
     const currentInput = input;
@@ -65,18 +71,24 @@ function App() {
       let data: ChatResponse;
       if (mode === 'sql') {
         data = await sendSqlMessage(currentInput, history);
-      } else {
+      } else if (mode === 'rag') {
         data = await sendRagMessage(currentInput, history);
+      } else {
+        data = await sendAuditableRagMessage(currentInput, ticker);
       }
 
-      setPipelineStatus({
-        input: 'success',
-        retrieval: 'success',
-        extraction: 'success',
-        math: 'success',
-        verification: 'success',
-        output: 'success',
-      });
+      if (data.pipeline_status) {
+        setPipelineStatus(data.pipeline_status);
+      } else if (mode !== 'auditable') {
+        setPipelineStatus({
+          input: 'success',
+          retrieval: 'success',
+          extraction: 'success',
+          math: 'success',
+          verification: 'success',
+          output: 'success',
+        });
+      }
 
       const assistantMsg: Message = {
         role: 'assistant',
@@ -125,29 +137,57 @@ function App() {
 
         {/* Mode toggle (only visible in chat view) */}
         {view === 'chat' && (
-          <div className="flex bg-[#1c2130] rounded-lg p-1 mb-6">
-            <button
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
-                mode === 'sql'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-              onClick={() => setMode('sql')}
-            >
-              <Database size={16} />
-              SQL
-            </button>
-            <button
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
-                mode === 'rag'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-              onClick={() => setMode('rag')}
-            >
-              <BookOpen size={16} />
-              RAG
-            </button>
+          <div className="flex flex-col gap-2 mb-6">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1">Engine Mode</div>
+            <div className="grid grid-cols-1 gap-1">
+              <button
+                className={`flex items-center gap-2.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+                  mode === 'auditable'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2130]'
+                }`}
+                onClick={() => setMode('auditable')}
+              >
+                <ShieldCheck size={16} />
+                Auditable RAG
+              </button>
+              <button
+                className={`flex items-center gap-2.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+                  mode === 'sql'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2130]'
+                }`}
+                onClick={() => setMode('sql')}
+              >
+                <Database size={16} />
+                SQL
+              </button>
+              <button
+                className={`flex items-center gap-2.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+                  mode === 'rag'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c2130]'
+                }`}
+                onClick={() => setMode('rag')}
+              >
+                <BookOpen size={16} />
+                Basic RAG
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Ticker Selector */}
+        {view === 'chat' && mode === 'auditable' && (
+          <div className="mb-6 px-1">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Company Ticker</label>
+            <input 
+              type="text" 
+              value={ticker} 
+              onChange={(e) => setTicker(e.target.value.toUpperCase())}
+              className="w-full bg-[#1c2130] border border-[#2a3246] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              placeholder="e.g. AAPL"
+            />
           </div>
         )}
 
@@ -207,7 +247,7 @@ function App() {
               <div className="text-sm text-gray-400">
                 Mode:{' '}
                 <strong className="text-white">
-                  {mode === 'sql' ? 'Database (SQL)' : 'Knowledge Base (RAG)'}
+                  {mode === 'sql' ? 'Database (SQL)' : mode === 'rag' ? 'Knowledge Base (RAG)' : 'Auditable Filing QA'}
                 </strong>
               </div>
             </header>
@@ -220,7 +260,9 @@ function App() {
                     How can I help you with your financial data today?
                   </h3>
                   <p className="text-sm">
-                    Try asking: &quot;Show me AAPL closing prices for the last 30 days&quot;
+                    {mode === 'auditable' 
+                      ? `Ask a question about ${ticker}'s latest 10-K filing.`
+                      : 'Try asking: "Show me AAPL closing prices for the last 30 days"'}
                   </p>
                 </div>
               )}
@@ -331,7 +373,9 @@ function App() {
                   placeholder={
                     mode === 'sql'
                       ? 'Ask a SQL question...'
-                      : 'Ask a Knowledge Base question...'
+                      : mode === 'rag' 
+                      ? 'Ask a Knowledge Base question...'
+                      : `Ask about ${ticker}'s SEC filing...`
                   }
                   disabled={loading}
                 />
@@ -347,7 +391,7 @@ function App() {
           </div>
 
           {/* Pipeline Flow Pane */}
-          <div className="hidden lg:flex w-80 flex-shrink-0 bg-[#0e1117] flex-col">
+          <div className="hidden lg:flex w-80 flex-shrink-0 bg-[#0e1117] flex col">
             <header className="px-6 py-4 border-b border-[#2a3246] flex items-center justify-between">
               <div className="text-sm font-semibold">Pipeline Execution</div>
             </header>
