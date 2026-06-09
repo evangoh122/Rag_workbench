@@ -1,6 +1,7 @@
 import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from loguru import logger
@@ -9,26 +10,29 @@ from api.routes import chat
 from api.routes.review import router as review_router
 from api.config import Config
 from api.middleware.rate_limit import rate_limit_middleware
+from api.middleware.cors_config import configure_cors
+from api.db.database import db_manager
 
-app = FastAPI(title="RAG Workbench API")
 
-# Ownership: Gemini (Security)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("RAG Workbench starting up (provider={})", Config.CHAT_PROVIDER)
+    if Config.LANGSMITH_TRACING and Config.LANGSMITH_API_KEY:
+        logger.info("LangSmith tracing: enabled (project={})", Config.LANGSMITH_PROJECT)
+    yield
+    logger.info("RAG Workbench shutting down — closing database connections")
+    db_manager.close()
+
+
+app = FastAPI(title="RAG Workbench API", lifespan=lifespan)
+
 app.middleware("http")(rate_limit_middleware)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+configure_cors(app)
 
-# Ownership: Claude (Architecture)
 app.include_router(chat.router)
 
-# Ownership: DeepSeek (API Engineering) — Phase 8
 app.include_router(review_router)
 
-# Mount static files for production (Phase 7/8)
 frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")

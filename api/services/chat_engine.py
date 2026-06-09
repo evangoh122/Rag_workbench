@@ -135,8 +135,8 @@ def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> D
             max_tokens=1024,
         )
         reply = response.choices[0].message.content.strip()
-    except Exception as e:
-        return {"type": "error", "answer": f"API error: {str(e)}"}
+    except Exception:
+        return {"type": "error", "answer": "Failed to generate a response. Please try again."}
 
     if reply.startswith("ANSWER:"):
         return {
@@ -151,7 +151,9 @@ def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> D
 
     try:
         conn = db_manager.get_connection()
-        df = conn.execute(f"SELECT * FROM ({sql}) AS chat_result LIMIT 100").df()
+        df = conn.execute(
+            f"SELECT * FROM ({sql}) AS chat_result LIMIT ?", [100]
+        ).df()
         answer = summarise_results(question, df)
         return {
             "type": "table",
@@ -159,5 +161,5 @@ def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> D
             "data": df.to_dict(orient="records"),
             "answer": answer
         }
-    except Exception as e:
-        return {"type": "error", "sql": sql, "answer": f"SQL error: {str(e)}"}
+    except Exception:
+        return {"type": "error", "answer": "Query execution failed. Please rephrase your question."}

@@ -38,8 +38,8 @@ class DuckDBVectorRetriever(BaseRetriever):
                            array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
                     FROM ticker_embeddings
                     ORDER BY dist ASC
-                    LIMIT {self.top_k}
-                """, [qvec]).fetchall()
+                    LIMIT ?
+                """, [qvec, self.top_k]).fetchall()
 
                 return [
                     Document(
@@ -54,7 +54,7 @@ class DuckDBVectorRetriever(BaseRetriever):
         return self._keyword_fallback(query)
 
     def _keyword_fallback(self, query: str) -> List[Document]:
-        words = [w for w in query.split() if len(w) >= 4]
+        words = [w for w in query.split() if len(w) >= 4][:10]
         try:
             conn = db_manager.get_connection()
             if words:
@@ -178,8 +178,8 @@ class EDGAREmbeddingsRetriever(BaseRetriever):
                        array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
                 FROM edgar_embeddings
                 ORDER BY dist ASC
-                LIMIT {self.top_k}
-            """, [qvec]).fetchall()
+                LIMIT ?
+            """, [qvec, self.top_k]).fetchall()
 
             return [
                 Document(
@@ -314,4 +314,4 @@ def ask_rag(question: str) -> str:
         return chain.invoke(question)
     except Exception as e:
         logger.error(f"RAG failed: {e}")
-        return f"RAG error: {str(e)}"
+        return "An error occurred while processing your question. Please try again."
