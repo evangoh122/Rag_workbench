@@ -19,6 +19,7 @@ Public surface:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Optional
 import polars as pl
@@ -81,8 +82,9 @@ def _fmt(v: float) -> str:
 
 
 def _guard_div(numerator: float, denominator: float, metric: str) -> float:
-    if denominator == 0.0:
-        raise ValueError(f"{metric}: denominator is zero — cannot divide.")
+    # abs_tol=1.0: catches near-zero USD values (< $1) as well as exact zero
+    if math.isclose(denominator, 0.0, abs_tol=1.0):
+        raise ValueError(f"{metric}: denominator is effectively zero ({denominator}) — cannot divide.")
     return numerator / denominator
 
 
@@ -426,6 +428,11 @@ def cagr(
         raise ValueError("cagr: start_value must be positive")
     if n_years <= 0:
         raise ValueError("cagr: n_years must be positive")
+    if end_value < 0:
+        raise ValueError(
+            "cagr: end_value is negative — CAGR is undefined when the terminal value crosses zero. "
+            "Use yoy_growth() for single-period changes that cross zero instead."
+        )
     val = (end_value / start_value) ** (1 / n_years) - 1
     pct = val * 100
     period = f"{start_period} to {end_period}" if start_period else ""
@@ -530,7 +537,9 @@ def compute_period_growth(
     prior_col = f"_prior_{value_col}"
     out = out.with_columns(shift_expr.alias(prior_col))
     out = out.with_columns(
-        ((pl.col(value_col) - pl.col(prior_col)) / pl.col(prior_col).abs() * 100)
+        # Replace zero prior values with null so division yields null (not inf)
+        ((pl.col(value_col) - pl.col(prior_col))
+         / pl.col(prior_col).abs().replace(0.0, None) * 100)
         .round(4)
         .alias(f"{value_col}_yoy_pct")
     ).drop(prior_col)
@@ -624,7 +633,6 @@ class FactExtractor:
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
-        # Build a lower-case concept column for matching
         concept_col = next(
             (c for c in df.columns if c.lower() in ("concept", "label", "name")),
             df.columns[0] if df.columns else "concept",
@@ -641,6 +649,15 @@ class FactExtractor:
         self._value_col = value_col
         self._period_col = period_col
 
+        # Fix #9: pre-build a normalised concept index for O(1) lookups.
+        # Maps normalised_concept_string -> list of row indices.
+        self._index: dict[str, list[int]] = {}
+        for i, raw in enumerate(df[concept_col].to_list()):
+            if raw is None:
+                continue
+            normed = str(raw).lower().replace("-", "").replace("_", "").replace(" ", "")
+            self._index.setdefault(normed, []).append(i)
+
     def get(
         self,
         concept: str,
@@ -651,29 +668,31 @@ class FactExtractor:
         Look up a financial concept. Returns the raw float value or None.
 
         concept: canonical name or any alias (see _CONCEPT_ALIASES).
-                 Falls back to substring match on the concept column.
         period:  ISO date string, e.g. "2023-09-30". If None, uses most recent.
         """
-        df = self._df
-        if df.is_empty():
+        if self._df.is_empty():
             return None
 
-        # Resolve aliases
         canon_key = concept.lower().replace("-", "").replace("_", "").replace(" ", "")
         aliases = _CONCEPT_ALIASES.get(canon_key, [canon_key])
 
-        # Filter rows whose concept matches any alias
-        def _matches(row_concept: str) -> bool:
-            rc = row_concept.lower().replace("-", "").replace("_", "").replace(" ", "")
-            return any(rc == a or a in rc or rc in a for a in aliases)
+        # Fix #1: use O(1) index with corrected matching — exact equality first,
+        # then alias-contains-concept only (not bidirectional), with length guard.
+        row_indices: list[int] = []
+        for normed_concept, idxs in self._index.items():
+            if any(
+                normed_concept == a                              # exact match
+                or (len(normed_concept) > 4 and normed_concept in a)  # concept is substring of alias
+                for a in aliases
+            ):
+                row_indices.extend(idxs)
 
-        mask = df[self._concept_col].map_elements(_matches, return_dtype=pl.Boolean)
-        matched = df.filter(mask)
-
-        if matched.is_empty():
+        if not row_indices:
             return None
 
-        # Filter by period if requested
+        matched = self._df[row_indices]
+
+        # Filter by period
         if period and self._period_col:
             period_filtered = matched.filter(
                 pl.col(self._period_col).cast(pl.Utf8).str.contains(period)
@@ -681,11 +700,12 @@ class FactExtractor:
             if not period_filtered.is_empty():
                 matched = period_filtered
 
-        # Take the most recent row
+        # Most recent first
         if most_recent and self._period_col:
             matched = matched.sort(self._period_col, descending=True)
 
-        val = matched[self._value_col].item(0)
+        # Fix #8: use index access instead of .item(0) to avoid strict-mode crash
+        val = matched[self._value_col][0]
         return float(val) if val is not None else None
 
     def get_multi(self, concepts: list[str], period: Optional[str] = None) -> dict[str, Optional[float]]:

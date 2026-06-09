@@ -121,76 +121,80 @@ def math_node(state: GraphState) -> Dict[str, Any]:
         extractor = FactExtractor(xbrl_df)
         periods   = extractor.periods()
         latest    = periods[-1] if periods else ""
+        # Fix #5: warn if period strings are non-ISO (affects sort correctness)
+        if latest and not latest[:4].isdigit():
+            logger.warning(f"Non-ISO period format detected: {latest!r} — sort order may be wrong")
         steps.append(f"Available periods: {periods}  | using: {latest}")
 
         # ── Route by question intent ────────────────────────────────────────
+        # Fix #2: all guards use explicit `is not None` to handle zero-valued facts
         # Gross margin
         if any(k in query for k in ("gross margin", "gross profit margin")):
             rev  = extractor.get("revenues",      period=latest)
             cogs = extractor.get("costofrevenue",  period=latest)
-            if rev and cogs:
+            if rev is not None and cogs is not None:
                 calc = gross_margin(rev, cogs, period=latest)
 
         # Operating margin
         elif any(k in query for k in ("operating margin", "operating income margin")):
             rev  = extractor.get("revenues",           period=latest)
             oi   = extractor.get("operatingincomeloss", period=latest)
-            if rev and oi:
+            if rev is not None and oi is not None:
                 calc = operating_margin(rev, oi, period=latest)
 
         # Net margin
         elif any(k in query for k in ("net margin", "profit margin", "net income margin")):
             rev = extractor.get("revenues",     period=latest)
             ni  = extractor.get("netincomeloss", period=latest)
-            if rev and ni:
+            if rev is not None and ni is not None:
                 calc = net_margin(rev, ni, period=latest)
 
         # Free cash flow / FCF
         elif any(k in query for k in ("free cash flow", "fcf")):
-            ocf   = extractor.get("netcashoperating",   period=latest)
-            capex = extractor.get("capitalexpenditures", period=latest)
-            if ocf and capex:
+            ocf   = extractor.get("netcashoperating",    period=latest)
+            capex = extractor.get("capitalexpenditures",  period=latest)
+            if ocf is not None and capex is not None:
                 calc = free_cash_flow(ocf, capex, period=latest)
 
         # Current ratio / liquidity
-        elif any(k in query for k in ("current ratio", "liquidity")):
-            ca = extractor.get("currentassets",      period=latest)
-            cl = extractor.get("currentliabilities",  period=latest)
-            if ca and cl:
+        elif any(k in query for k in ("current ratio", "liquidity ratio")):
+            ca = extractor.get("currentassets",     period=latest)
+            cl = extractor.get("currentliabilities", period=latest)
+            if ca is not None and cl is not None:
                 calc = current_ratio(ca, cl, period=latest)
 
-        # Debt / leverage
-        elif any(k in query for k in ("debt to equity", "leverage", "d/e")):
-            debt   = extractor.get("longtermdebt",      period=latest)
-            equity = extractor.get("stockholdersequity", period=latest)
-            if debt and equity:
+        # Fix #7: removed bare "leverage" keyword — too broad (matches operating leverage etc.)
+        elif any(k in query for k in ("debt to equity", "debt-to-equity", "d/e ratio")):
+            debt   = extractor.get("longtermdebt",       period=latest)
+            equity = extractor.get("stockholdersequity",  period=latest)
+            if debt is not None and equity is not None:
                 calc = debt_to_equity(debt, equity, period=latest)
 
         # Net debt
-        elif any(k in query for k in ("net debt", "net cash")):
-            debt = extractor.get("longtermdebt",       period=latest)
-            cash = extractor.get("cashandequivalents",  period=latest)
+        elif any(k in query for k in ("net debt", "net cash position")):
+            debt = extractor.get("longtermdebt",      period=latest)
+            cash = extractor.get("cashandequivalents", period=latest)
             if debt is not None and cash is not None:
                 calc = net_debt(debt, cash, period=latest)
 
         # R&D intensity
         elif any(k in query for k in ("r&d", "research and development", "rd intensity")):
-            rev = extractor.get("revenues",            period=latest)
-            rd  = extractor.get("researchanddevelopment", period=latest)
-            if rev and rd:
+            rev = extractor.get("revenues",               period=latest)
+            rd  = extractor.get("researchanddevelopment",  period=latest)
+            if rev is not None and rd is not None:
                 calc = rd_intensity(rev, rd, period=latest)
 
-        # Revenue / standalone lookup (fallback)
-        elif any(k in query for k in ("revenue", "sales", "net sales")):
+        # Revenue standalone fallback
+        elif any(k in query for k in ("revenue", "net sales", "total revenue")):
             rev = extractor.get("revenues", period=latest)
-            if rev:
+            if rev is not None:
                 result = rev
                 steps.append(f"Revenue ({latest}): ${rev:,.0f}")
 
-        # Net income standalone
-        elif any(k in query for k in ("net income", "earnings", "profit")):
+        # Net income standalone fallback
+        elif any(k in query for k in ("net income", "net earnings")):
             ni = extractor.get("netincomeloss", period=latest)
-            if ni:
+            if ni is not None:
                 result = ni
                 steps.append(f"Net Income ({latest}): ${ni:,.0f}")
 
