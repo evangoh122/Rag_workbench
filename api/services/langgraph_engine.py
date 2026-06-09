@@ -63,10 +63,12 @@ def retrieval_node(state: GraphState) -> Dict[str, Any]:
     """
     Node 1: Retrieve relevant text chunks from SEC filings using hybrid retrieval.
     Uses DuckDB vector similarity as primary, keyword search as fallback.
+    Applies retrieval rail to filter irrelevant chunks.
     """
     logger.info(f"--- RETRIEVAL: {state['ticker']} ---")
     try:
         from api.services.rag_engine import DuckDBVectorRetriever, EDGAREmbeddingsRetriever
+        from api.services.guardrails.retrieval_rails import filter_retrieval
         from langchain_core.documents import Document
 
         query = state['query']
@@ -96,6 +98,12 @@ def retrieval_node(state: GraphState) -> Dict[str, Any]:
                 c for c in chunks
                 if any(k in c['chunk_text'].lower() for k in keywords)
             ][:5]
+
+        # Apply retrieval rail — filter irrelevant chunks
+        verdict = filter_retrieval(query, retrieved)
+        if verdict.dropped_count > 0:
+            logger.info(f"Retrieval rail: dropped {verdict.dropped_count}/{verdict.original_count} irrelevant chunks")
+        retrieved = verdict.filtered_chunks
 
         return {
             "retrieved_docs": retrieved,
