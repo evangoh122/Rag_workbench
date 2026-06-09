@@ -29,19 +29,10 @@ app = FastAPI(title="RAG Workbench API", lifespan=lifespan)
 app.middleware("http")(rate_limit_middleware)
 configure_cors(app)
 
+# --- API routes MUST be registered before the static files mount ---
 app.include_router(chat.router)
-
 app.include_router(review_router)
 
-frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
-if os.path.exists(frontend_path):
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-
-    @app.exception_handler(404)
-    async def not_found_handler(request, exc):
-        if not request.url.path.startswith("/api"):
-            return FileResponse(os.path.join(frontend_path, "index.html"))
-        raise exc
 
 @app.get("/api/health")
 async def health():
@@ -52,7 +43,6 @@ async def health():
 async def health_full():
     from api.services.llm_health import get_llm_tracker
     from api.services.drift_detection import check_drift
-    from api.db.database import db_manager
 
     llm = get_llm_tracker().snapshot()
 
@@ -90,10 +80,7 @@ async def health_full():
     return {
         "status": "healthy" if db_ok else "degraded",
         "provider": Config.CHAT_PROVIDER,
-        "database": {
-            "connected": db_ok,
-            "error": db_error,
-        },
+        "database": {"connected": db_ok, "error": db_error},
         "drift": drift,
         "llm": {
             "total_calls": llm["total_calls"],
@@ -104,6 +91,18 @@ async def health_full():
             "recent_errors": llm["recent_errors"],
         },
     }
+
+
+# --- Static files mount (catch-all) MUST come last ---
+frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
+if os.path.exists(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
+    @app.exception_handler(404)
+    async def not_found_handler(request, exc):
+        if not request.url.path.startswith("/api"):
+            return FileResponse(os.path.join(frontend_path, "index.html"))
+        raise exc
 
 if __name__ == "__main__":
     import uvicorn
