@@ -164,13 +164,13 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Data Structures & Reader Adapter | 2/2 | Completed | 2026-06-09 |
-| 2. Schema Validator | 0/? | Not started | - |
-| 3. XBRL Cross-Validation & companyfacts Client | 0/? | Not started | - |
-| 4. Semantic Validator | 0/? | Not started | - |
-| 5. Confidence Scoring, Routing & Triggers | 0/? | Not started | - |
-| 6. Shadow Deployment & Calibration | 0/? | Not started | - |
-| 7. Metrics Dashboard | 0/? | Not started | - |
-| 8. Review Queue, Feedback Loop & Drift Alerts | 0/? | Not started | - |
+| 2. Schema Validator | 1/1 | Completed | 2026-06-09 |
+| 3. XBRL Cross-Validation & companyfacts Client | 1/1 | Completed | 2026-06-09 |
+| 4. Semantic Validator | 1/1 | Completed | 2026-06-09 |
+| 5. Confidence Scoring, Routing & Triggers | 1/1 | Completed | 2026-06-09 |
+| 6. Shadow Deployment & Calibration | 1/1 | Completed | 2026-06-09 |
+| 7. Metrics Dashboard | 1/1 | Completed | 2026-06-09 |
+| 8. Review Queue, Feedback Loop & Drift Alerts | 1/1 | Completed | 2026-06-09 |
 | 9. LangGraph Auditable RAG | 1/1 | Completed | 2026-06-07 |
 | 10. Knowledge Graph RAG Engine | 1/1 | Completed | 2026-06-07 |
 | 11. GraphRAG Frontend Integration | 1/1 | Completed | 2026-06-09 |

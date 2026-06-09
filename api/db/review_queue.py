@@ -270,7 +270,8 @@ def count_unrecognized_concepts(
     window_hours: int = 24,
 ) -> int:
     """Count decisions in the last *window_hours* hours where triggers_fired
-    contains the string 'UNRECOGNIZED_CONCEPT'.
+    contains the string 'unrecognized_concept' (lowercase — matches the trigger
+    name registered in confidence_scorer.ALL_TRIGGERS).
 
     Args:
         conn:         Active DuckDB connection.
@@ -284,7 +285,7 @@ def count_unrecognized_concepts(
         SELECT COUNT(*) AS cnt
         FROM   review_decisions
         WHERE  created_at >= current_timestamp - INTERVAL (?) HOUR
-          AND  triggers_fired::VARCHAR LIKE '%UNRECOGNIZED_CONCEPT%'
+          AND  triggers_fired::VARCHAR LIKE '%unrecognized_concept%'
         """,
         [window_hours],
     )

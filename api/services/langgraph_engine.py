@@ -12,6 +12,15 @@ from langgraph.graph import StateGraph, END
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
 from api.services.verifier import verify_numeric, verify_entailment
 from loguru import logger
+
+# Eval pipeline (Phases 2-5) — wired in as a post-extraction node.
+try:
+    from api.models.eval_types import ExtractionResult, ExtractedField, Provenance
+    from api.services.schema_validator import validate_extraction
+    from api.services.confidence_scorer import score_and_route
+    _EVAL_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _EVAL_AVAILABLE = False
 from api.services.financial_calc import (
     FactExtractor, CalcResult,
     gross_margin, operating_margin, net_margin, ebitda, ebitda_margin,
@@ -41,6 +50,10 @@ class GraphState(TypedDict):
     verification_reasoning: str
     final_answer: str
     status: Dict[str, str] # {node_name: 'success' | 'error' | 'pending'}
+    # Eval pipeline outputs (populated by eval_node, optional)
+    eval_route: Optional[str]           # AUTO | SAMPLED_REVIEW | ESCALATE
+    eval_confidence: Optional[float]    # record-level confidence score
+    eval_triggers: Optional[List[str]]  # always-escalate triggers that fired
 
 # ---------------------------------------------------------------------------
 # Node Functions
@@ -263,6 +276,68 @@ def verification_node(state: GraphState) -> Dict[str, Any]:
             "status": {**state.get('status', {}), "verification": "error"}
         }
 
+def eval_node(state: GraphState) -> Dict[str, Any]:
+    """Eval Node (Phase 2-5): Run schema + confidence scoring over extracted XBRL facts.
+
+    Converts the raw xbrl_facts list into an ExtractionResult and passes it
+    through the eval pipeline.  The routing decision and confidence score are
+    stored in the state for the audit trail but do NOT block the pipeline —
+    escalation is surfaced to the caller, not used as a hard gate here so that
+    the existing abstention logic is preserved.
+    """
+    logger.info("--- EVAL ---")
+    if not _EVAL_AVAILABLE:
+        return {"status": {**state.get('status', {}), "eval": "skipped"}}
+
+    try:
+        ticker = state.get("ticker", "")
+        facts  = state.get("xbrl_facts", [])
+
+        # Build a minimal ExtractionResult from the XBRL facts in state.
+        # We use CIK=ticker as a placeholder when the real CIK is not in state.
+        fields: List[ExtractedField] = []
+        for fact in facts:
+            name  = str(fact.get("concept", fact.get("label", "")))
+            value = fact.get("value") or fact.get("val")
+            if name and value is not None:
+                try:
+                    fields.append(ExtractedField(
+                        name=name,
+                        value=float(value),
+                        provenance=Provenance.XBRL,
+                        concept=name,
+                    ))
+                except (TypeError, ValueError):
+                    pass
+
+        extraction = ExtractionResult(
+            cik=ticker,
+            accession="0000000000-00-000000",  # placeholder — real accession not in state
+            form_type="10-K",
+            period=None,
+            fields=fields,
+        )
+
+        schema_result = validate_extraction(extraction)
+        decision      = score_and_route(extraction, ticker=ticker)
+
+        logger.info(
+            "Eval: route=%s conf=%.2f triggers=%s schema_valid=%s",
+            decision.route.value, decision.confidence,
+            decision.triggers_fired, schema_result.is_valid,
+        )
+
+        return {
+            "eval_route":      decision.route.value,
+            "eval_confidence": round(decision.confidence, 4),
+            "eval_triggers":   decision.triggers_fired,
+            "status": {**state.get('status', {}), "eval": "success"},
+        }
+    except Exception as exc:
+        logger.warning("Eval node error (non-fatal): %s", exc)
+        return {"status": {**state.get('status', {}), "eval": "error"}}
+
+
 def output_node(state: GraphState) -> Dict[str, Any]:
     """
     Final Node: Format the successful answer.
@@ -271,7 +346,11 @@ def output_node(state: GraphState) -> Dict[str, Any]:
     answer = f"Based on the SEC filing for {state['ticker']}, the answer is {state['math_result']}."
     if state['verification_status'] == "PASS":
         answer += f" (Verified: {state['verification_reasoning']})"
-    
+    # Surface eval routing decision in the answer when escalation is triggered.
+    if state.get("eval_route") == "ESCALATE" and state.get("eval_triggers"):
+        answer += (
+            f" [Eval: ESCALATE — triggers: {', '.join(state['eval_triggers'])}]"
+        )
     return {
         "final_answer": answer,
         "status": {**state.get('status', {}), "output": "success"}
@@ -306,6 +385,7 @@ workflow = StateGraph(GraphState)
 # Add nodes
 workflow.add_node("retrieval", retrieval_node)
 workflow.add_node("extraction", extraction_node)
+workflow.add_node("eval", eval_node)          # Phase 2-5 eval pipeline (BUG-8 fix)
 workflow.add_node("math", math_node)
 workflow.add_node("verification", verification_node)
 workflow.add_node("output", output_node)
@@ -315,8 +395,10 @@ workflow.add_node("abstention", abstention_node)
 workflow.set_entry_point("retrieval")
 
 # Add deterministic edges
+# Pipeline: Retrieval -> Extraction -> Eval (schema+confidence) -> Math -> Verification
 workflow.add_edge("retrieval", "extraction")
-workflow.add_edge("extraction", "math")
+workflow.add_edge("extraction", "eval")
+workflow.add_edge("eval", "math")
 workflow.add_edge("math", "verification")
 
 # Add conditional edge from verification
@@ -343,13 +425,17 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
     inputs = {
         "query": query,
         "ticker": ticker,
+        "eval_route":      None,
+        "eval_confidence": None,
+        "eval_triggers":   None,
         "status": {
-            "input": "success",
-            "retrieval": "pending",
-            "extraction": "pending",
-            "math": "pending",
+            "input":        "success",
+            "retrieval":    "pending",
+            "extraction":   "pending",
+            "eval":         "pending",
+            "math":         "pending",
             "verification": "pending",
-            "output": "pending"
-        }
+            "output":       "pending",
+        },
     }
     return app.invoke(inputs)

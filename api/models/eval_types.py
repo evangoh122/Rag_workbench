@@ -36,10 +36,15 @@ class ReasonCode(str, Enum):
 
 
 class Route(str, Enum):
-    """Routing tier assigned by the confidence scorer."""
-    AUTO = "auto"
-    SAMPLED_REVIEW = "sampled_review"
-    ESCALATE = "escalate"
+    """Routing tier assigned by the confidence scorer.
+
+    Values are uppercase to match the DB CHECK constraint in review_decisions
+    (route IN ('SAMPLED_REVIEW', 'ESCALATE')) and the Pydantic Literal in
+    ReviewDecisionIn/Out.  Do not lowercase these without updating the DB schema.
+    """
+    AUTO = "AUTO"
+    SAMPLED_REVIEW = "SAMPLED_REVIEW"
+    ESCALATE = "ESCALATE"
 
 
 # ---------------------------------------------------------------------------

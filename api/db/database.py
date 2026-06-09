@@ -17,14 +17,37 @@ class DatabaseManager:
         return cls._instance
 
     def get_connection(self):
-        """Get or create the shared DuckDB connection (thread-safe)."""
+        """Get or create the shared DuckDB connection (thread-safe).
+
+        Opens the main DB in read-write mode so that graph_triples and other
+        tables can be created on first access.  The VSS extension is loaded
+        when available (required for vector-similarity search).
+        """
         with self._conn_lock:
             if self._conn is None:
-                self._conn = duckdb.connect(Config.DB_PATH, read_only=True)
+                # Open read-write so init scripts can create tables.
+                self._conn = duckdb.connect(Config.DB_PATH)
                 try:
                     self._conn.execute("LOAD vss")
-                except duckdb.IOException:
+                except (duckdb.IOException, Exception):
                     pass
+                # Ensure graph_triples table exists (BUG-10 fix).
+                self._conn.execute("""
+                    CREATE TABLE IF NOT EXISTS graph_triples (
+                        id          VARCHAR PRIMARY KEY,
+                        ticker      VARCHAR NOT NULL DEFAULT '',
+                        subject     VARCHAR NOT NULL,
+                        predicate   VARCHAR NOT NULL,
+                        object      VARCHAR NOT NULL,
+                        confidence  DOUBLE  DEFAULT 1.0,
+                        source_file VARCHAR,
+                        source_loc  VARCHAR
+                    )
+                """)
+                self._conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_gt_ticker_subj
+                    ON graph_triples (ticker, subject)
+                """)
             return self._conn
 
     def get_review_connection(self):
