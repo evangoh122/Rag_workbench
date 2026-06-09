@@ -43,18 +43,6 @@ if os.path.exists(frontend_path):
             return FileResponse(os.path.join(frontend_path, "index.html"))
         raise exc
 
-@app.on_event("startup")
-async def validate_config():
-    if Config.CHAT_PROVIDER == "anthropic":
-        logger.warning(
-            "CHAT_PROVIDER=anthropic: SQL chat mode is unsupported. "
-            "RAG mode will work. Switch to deepseek, openai, or ollama for SQL mode."
-        )
-    if Config.LANGSMITH_TRACING and Config.LANGSMITH_API_KEY:
-        logger.info("LangSmith tracing: enabled (project=%s)", Config.LANGSMITH_PROJECT)
-    else:
-        logger.info("LangSmith tracing: disabled")
-
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "provider": Config.CHAT_PROVIDER}

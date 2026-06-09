@@ -28,6 +28,8 @@ import hashlib
 from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
 
+import threading
+
 import duckdb
 import numpy as np
 from loguru import logger
@@ -857,13 +859,16 @@ class AsymmetricFinancialRAG:
 # ── Singleton & Public API ────────────────────────────────────────────────────
 
 _rag_instance: Optional[AsymmetricFinancialRAG] = None
+_rag_lock = threading.Lock()
 
 
 def get_rag() -> AsymmetricFinancialRAG:
-    """Get or create the singleton RAG instance."""
+    """Get or create the singleton RAG instance (thread-safe)."""
     global _rag_instance
     if _rag_instance is None:
-        _rag_instance = AsymmetricFinancialRAG()
+        with _rag_lock:
+            if _rag_instance is None:
+                _rag_instance = AsymmetricFinancialRAG()
     return _rag_instance
 
 
