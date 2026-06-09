@@ -130,7 +130,7 @@ Return a dict (for the LangGraph state):
 
 ```python
 {
-    "final_answer": f"Apple's gross margin for FY2023 was {result.display()}",
+    "final_answer": f"Nvidia's gross margin for FY2025 was {result.display()}",
     "math_steps":   [result.formula],
     "math_result":  result.value,
     "verification": check_result.verdict   # from identity checker
@@ -156,7 +156,7 @@ Return `"ABSTAIN"` (not a guess) when:
 ## Period handling rules
 
 1. Always use the **exact period string** from the XBRL data, not the question's phrasing.
-   - Question: "FY2023" → XBRL might say "2023-09-30" (Apple's fiscal year end)
+   - Question: "FY2025" → XBRL might say "2025-01-26" (Nvidia's fiscal year end)
    - Use `extractor.periods()` to see what's available.
 
 2. For YoY questions, pull **two periods** explicitly — do not assume "prior year":
@@ -197,7 +197,7 @@ These metrics **cannot** be verified against XBRL. Always flag them:
 
 - Adjusted EBITDA / Non-GAAP EBITDA
 - Non-GAAP EPS / Adjusted EPS
-- Industrial Free Cash Flow (GE, Honeywell)
+- Industrial Free Cash Flow (Honeywell, 3M)
 - Organic revenue growth
 - Constant currency revenue
 
@@ -206,7 +206,7 @@ explicitly as non-GAAP, and set `verification.status = "unverifiable"`.
 
 ---
 
-## Example end-to-end: "What was Apple's gross margin in FY2023?"
+## Example end-to-end: "What was Nvidia's gross margin in FY2025?"
 
 ```python
 # Step 1: Extract
@@ -224,7 +224,7 @@ identity = check_gross_profit(revenue, cogs, revenue - cogs)
 
 # Step 4: Compose answer
 answer = (
-    f"Apple's gross margin for FY2023 was **{result.value:.1f}%**.\n\n"
+    f"Nvidia's gross margin for FY2025 was **{result.value:.1f}%**.\n\n"
     f"Calculation: {result.formula}\n"
     f"Source: EDGAR XBRL (accession 0000320193-23-000077)\n"
     f"Identity check: {identity.verdict} (delta {identity.delta_pct:.2f}%)"
@@ -232,7 +232,7 @@ answer = (
 ```
 
 **Output the AI should produce:**
-> Apple's gross margin for FY2023 was **44.1%**.
+> Nvidia's gross margin for FY2025 was **75.1%**.
 > Calculation: (383.285B - 214.137B) / 383.285B = 44.13%
 > Source: EDGAR XBRL (accession 0000320193-23-000077)
 > Identity check: PASS (delta 0.00%)

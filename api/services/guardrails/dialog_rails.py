@@ -54,18 +54,11 @@ _FINANCIAL_KEYWORDS: set[str] = {
     # Business
     "fiscal year", "fiscal quarter", "segment", "subsidiary",
     "acquisition", "merger", "spinoff", "ipo", "offering",
-    # Tesla-specific
-    "vehicle delivery", "production", "automotive", "energy storage",
-    # Apple-specific
-    "iphone", "mac", "ipad", "services revenue", "wearables",
-    # Microsoft-specific
-    "azure", "cloud revenue", "office 365", "windows",
-    # Amazon-specific
-    "aws", "prime", "fulfillment", "third party",
-    # NVIDIA-specific
-    "gpu", "data center", "gaming", "ai chip",
-    # GE-specific
-    "aviation", "healthcare", "power", "renewable",
+    # Semiconductor-specific
+    "gpu", "data center", "gaming", "ai chip", "semiconductor",
+    "wafer", "fab", "foundry", "chip", "asic", "fpga",
+    "dram", "nand", "memory", "microcontroller", "analog",
+    "test equipment", "packaging", "substrate", "euv lithography",
 }
 
 # ── Off-topic indicators ─────────────────────────────────────────────────────

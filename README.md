@@ -83,7 +83,7 @@ Single Docker container (Nginx + Uvicorn + Supervisor). Deploys to Hugging Face 
 
 | File | What it does |
 |---|---|
-| `golden_set.csv` | 25 labelled questions (AAPL, TSLA, GE) across 8 failure modes |
+| `golden_set.csv` | 50 labelled semiconductor questions across 8 failure modes |
 | `run_eval.py` | Deterministic 4-axis scorer: correctness, XBRL verified, has sources, abstention |
 | `ragas_eval.py` | LLM-judge metrics: faithfulness, answer relevancy, context precision/recall |
 
@@ -156,11 +156,11 @@ Set `CHAT_PROVIDER` in `.env`:
 ## Ingest real filings
 
 ```bash
-# Ingest AAPL, TSLA, GE (10-K, latest available)
-python scripts/run_ingestion.py
+# Ingest semiconductor tickers (10-K, latest available)
+python scripts/embed_edgar.py
 
 # Or specific tickers
-EMBED_TICKERS=AAPL,MSFT python scripts/embed_edgar.py
+EMBED_TICKERS=NVDA,AMD python scripts/embed_edgar.py
 ```
 
 Each chunk is stored with: `ticker`, `accession`, `cik`, `section_id`, `form_type`, `period_of_report`, `chunk_index`. The retriever uses this metadata for the audit trail.
@@ -190,14 +190,14 @@ python evals/run_eval.py --mode gaap_vs_nongaap
 
 | Mode | Description | Example |
 |---|---|---|
-| `baseline` | Clean GAAP number, direct XBRL match | AAPL revenue |
-| `period_mismatch` | Question asks for year X, model pulls year X+1 | TSLA 2021 vs 2022 |
-| `gaap_vs_nongaap` | GAAP and non-GAAP differ materially | TSLA net income |
-| `segment` | Revenue must come from a specific segment only | AAPL iPhone revenue |
-| `derived_calculation` | Requires arithmetic, not a direct XBRL tag | AAPL gross margin % |
-| `restatement` | Company restated prior financials | GE 2018 restatement |
-| `segment_reorg` | Segment structure changed between filings | GE Healthcare spinoff |
-| `abstention_failure` | No GAAP equivalent exists — model must decline | Non-GAAP EBITDA margin |
+| `baseline` | Clean GAAP number, direct XBRL match | NVDA revenue |
+| `period_mismatch` | Question asks for year X, model pulls year X+1 | QCOM 2023 vs 2024 |
+| `gaap_vs_nongaap` | GAAP and non-GAAP differ materially | AMD non-GAAP gross margin |
+| `segment` | Revenue must come from a specific segment only | QCOM QCT vs QTL revenue |
+| `derived_calculation` | Requires arithmetic, not a direct XBRL tag | NVDA gross margin % |
+| `restatement` | Company restated prior financials | INTC restatement |
+| `segment_reorg` | Segment structure changed between filings | AVGO segment reorg |
+| `abstention_failure` | No GAAP equivalent exists — model must decline | Non-GAAP metrics |
 
 ---
 
@@ -320,7 +320,7 @@ Three rounds of peer review were completed before merging to `main`. Review repo
 │       └── pages/       # ReviewQueue
 ├── scripts/
 │   ├── embed_edgar.py   # 10-K ingestion with provenance metadata
-│   └── run_ingestion.py # One-shot ingest for AAPL, TSLA, GE
+│   └── run_ingestion.py # One-shot ingest for NVDA, AMD, QCOM
 ├── tests/               # Unit tests (eval_types, edgar_adapter, verifier)
 ├── Dockerfile           # Multi-stage: Node → Python → Nginx+Supervisor
 ├── nginx.conf           # Port 7860, /api/ proxied to FastAPI

@@ -141,8 +141,8 @@ class TestXbrlDataframeToFields(unittest.TestCase):
 class TestFetchFilingSmoke(unittest.TestCase):
     """Integration smoke test — requires EDGAR_USER_AGENT env var and network access."""
 
-    CIK = "0000320193"
-    ACCESSION = "0000320193-23-000064"  # Apple 10-K FY2023
+    CIK = "0001045810"
+    ACCESSION = "0001045810-25-000012"  # Nvidia 10-K FY2025
 
     def test_fetch_real_filing_returns_extraction_result(self):
         from api.services.edgar_adapter import fetch_filing

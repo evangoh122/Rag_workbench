@@ -1,8 +1,8 @@
 """
-seed_demo_data.py — Seed DuckDB with realistic synthetic XBRL facts for demo.
+seed_demo_data.py — Seed DuckDB with realistic XBRL facts for semiconductor demo.
 
 Used when SEC EDGAR API is unreachable (e.g., sandbox environment).
-Data is based on publicly available annual report figures for AAPL, TSLA, MSFT.
+Data is based on publicly available annual report figures for semiconductor companies.
 
 Usage:
     python3 scripts/seed_demo_data.py [--db-path ./data/rag.duckdb]
@@ -21,47 +21,49 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Realistic financial data (from public 10-K filings, in USD)
 DEMO_DATA = [
-    # AAPL FY2023 (period ending 2023-09-30)
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "Revenues", "value": 383_285_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": "2022-10-01", "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "NetIncomeLoss", "value": 96_995_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": "2022-10-01", "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "Assets", "value": 352_583_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": None, "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "Liabilities", "value": 290_437_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": None, "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "StockholdersEquity", "value": 62_146_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": None, "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "OperatingIncomeLoss", "value": 114_301_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": "2022-10-01", "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "GrossProfit", "value": 169_148_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": "2022-10-01", "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "CostOfGoodsAndServicesSold", "value": 214_137_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": "2022-10-01", "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "ResearchAndDevelopmentExpense", "value": 29_915_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": "2022-10-01", "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "CashAndCashEquivalentsAtCarryingValue", "value": 29_965_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": None, "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "LongTermDebt", "value": 95_281_000_000, "unit": "USD", "period_end": "2023-09-30", "period_start": None, "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "EarningsPerShareBasic", "value": 6.16, "unit": "USD/shares", "period_end": "2023-09-30", "period_start": "2022-10-01", "form_type": "10-K", "accession": "0000320193-23-000106", "filed": "2023-11-03", "fiscal_year": 2023, "fiscal_period": "FY"},
-    # AAPL FY2022 (period ending 2022-09-24)
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "Revenues", "value": 394_328_000_000, "unit": "USD", "period_end": "2022-09-24", "period_start": "2021-09-26", "form_type": "10-K", "accession": "0000320193-22-000108", "filed": "2022-10-28", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "NetIncomeLoss", "value": 99_803_000_000, "unit": "USD", "period_end": "2022-09-24", "period_start": "2021-09-26", "form_type": "10-K", "accession": "0000320193-22-000108", "filed": "2022-10-28", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "Assets", "value": 352_755_000_000, "unit": "USD", "period_end": "2022-09-24", "period_start": None, "form_type": "10-K", "accession": "0000320193-22-000108", "filed": "2022-10-28", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "Liabilities", "value": 302_083_000_000, "unit": "USD", "period_end": "2022-09-24", "period_start": None, "form_type": "10-K", "accession": "0000320193-22-000108", "filed": "2022-10-28", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "AAPL", "cik": "0000320193", "concept": "StockholdersEquity", "value": 50_672_000_000, "unit": "USD", "period_end": "2022-09-24", "period_start": None, "form_type": "10-K", "accession": "0000320193-22-000108", "filed": "2022-10-28", "fiscal_year": 2022, "fiscal_period": "FY"},
-    # TSLA FY2022 (period ending 2022-12-31)
-    {"ticker": "TSLA", "cik": "0001318605", "concept": "Revenues", "value": 81_462_000_000, "unit": "USD", "period_end": "2022-12-31", "period_start": "2022-01-01", "form_type": "10-K", "accession": "0001318605-23-000006", "filed": "2023-01-31", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "TSLA", "cik": "0001318605", "concept": "NetIncomeLoss", "value": 12_556_000_000, "unit": "USD", "period_end": "2022-12-31", "period_start": "2022-01-01", "form_type": "10-K", "accession": "0001318605-23-000006", "filed": "2023-01-31", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "TSLA", "cik": "0001318605", "concept": "Assets", "value": 82_338_000_000, "unit": "USD", "period_end": "2022-12-31", "period_start": None, "form_type": "10-K", "accession": "0001318605-23-000006", "filed": "2023-01-31", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "TSLA", "cik": "0001318605", "concept": "Liabilities", "value": 36_440_000_000, "unit": "USD", "period_end": "2022-12-31", "period_start": None, "form_type": "10-K", "accession": "0001318605-23-000006", "filed": "2023-01-31", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "TSLA", "cik": "0001318605", "concept": "StockholdersEquity", "value": 44_704_000_000, "unit": "USD", "period_end": "2022-12-31", "period_start": None, "form_type": "10-K", "accession": "0001318605-23-000006", "filed": "2023-01-31", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "TSLA", "cik": "0001318605", "concept": "OperatingIncomeLoss", "value": 13_656_000_000, "unit": "USD", "period_end": "2022-12-31", "period_start": "2022-01-01", "form_type": "10-K", "accession": "0001318605-23-000006", "filed": "2023-01-31", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "TSLA", "cik": "0001318605", "concept": "GrossProfit", "value": 20_853_000_000, "unit": "USD", "period_end": "2022-12-31", "period_start": "2022-01-01", "form_type": "10-K", "accession": "0001318605-23-000006", "filed": "2023-01-31", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "TSLA", "cik": "0001318605", "concept": "CostOfGoodsAndServicesSold", "value": 60_609_000_000, "unit": "USD", "period_end": "2022-12-31", "period_start": "2022-01-01", "form_type": "10-K", "accession": "0001318605-23-000006", "filed": "2023-01-31", "fiscal_year": 2022, "fiscal_period": "FY"},
-    {"ticker": "TSLA", "cik": "0001318605", "concept": "ResearchAndDevelopmentExpense", "value": 3_075_000_000, "unit": "USD", "period_end": "2022-12-31", "period_start": "2022-01-01", "form_type": "10-K", "accession": "0001318605-23-000006", "filed": "2023-01-31", "fiscal_year": 2022, "fiscal_period": "FY"},
-    # MSFT FY2023 (period ending 2023-06-30)
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "Revenues", "value": 211_915_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": "2022-07-01", "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "NetIncomeLoss", "value": 72_361_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": "2022-07-01", "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "Assets", "value": 411_976_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": None, "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "Liabilities", "value": 205_753_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": None, "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "StockholdersEquity", "value": 206_223_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": None, "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "OperatingIncomeLoss", "value": 88_523_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": "2022-07-01", "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "GrossProfit", "value": 146_052_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": "2022-07-01", "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "CostOfGoodsAndServicesSold", "value": 65_863_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": "2022-07-01", "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "ResearchAndDevelopmentExpense", "value": 27_195_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": "2022-07-01", "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "CashAndCashEquivalentsAtCarryingValue", "value": 34_704_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": None, "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
-    {"ticker": "MSFT", "cik": "0000789019", "concept": "LongTermDebt", "value": 41_990_000_000, "unit": "USD", "period_end": "2023-06-30", "period_start": None, "form_type": "10-K", "accession": "0000789019-23-000069", "filed": "2023-07-25", "fiscal_year": 2023, "fiscal_period": "FY"},
+    # NVDA FY2025 (period ending 2025-01-26)
+    {"ticker": "NVDA", "cik": "0001045810", "concept": "Revenues", "value": 130_497_000_000, "unit": "USD", "period_end": "2025-01-26", "period_start": "2024-01-29", "form_type": "10-K", "accession": "0001045810-25-000012", "filed": "2025-02-26", "fiscal_year": 2025, "fiscal_period": "FY"},
+    {"ticker": "NVDA", "cik": "0001045810", "concept": "NetIncomeLoss", "value": 72_880_000_000, "unit": "USD", "period_end": "2025-01-26", "period_start": "2024-01-29", "form_type": "10-K", "accession": "0001045810-25-000012", "filed": "2025-02-26", "fiscal_year": 2025, "fiscal_period": "FY"},
+    {"ticker": "NVDA", "cik": "0001045810", "concept": "GrossProfit", "value": 97_936_000_000, "unit": "USD", "period_end": "2025-01-26", "period_start": "2024-01-29", "form_type": "10-K", "accession": "0001045810-25-000012", "filed": "2025-02-26", "fiscal_year": 2025, "fiscal_period": "FY"},
+    {"ticker": "NVDA", "cik": "0001045810", "concept": "ResearchAndDevelopmentExpense", "value": 12_900_000_000, "unit": "USD", "period_end": "2025-01-26", "period_start": "2024-01-29", "form_type": "10-K", "accession": "0001045810-25-000012", "filed": "2025-02-26", "fiscal_year": 2025, "fiscal_period": "FY"},
+    {"ticker": "NVDA", "cik": "0001045810", "concept": "Assets", "value": 111_600_000_000, "unit": "USD", "period_end": "2025-01-26", "period_start": None, "form_type": "10-K", "accession": "0001045810-25-000012", "filed": "2025-02-26", "fiscal_year": 2025, "fiscal_period": "FY"},
+    {"ticker": "NVDA", "cik": "0001045810", "concept": "NetCashProvidedByUsedInOperatingActivities", "value": 64_100_000_000, "unit": "USD", "period_end": "2025-01-26", "period_start": "2024-01-29", "form_type": "10-K", "accession": "0001045810-25-000012", "filed": "2025-02-26", "fiscal_year": 2025, "fiscal_period": "FY"},
+    # AMD FY2024 (period ending 2024-12-28)
+    {"ticker": "AMD", "cik": "0000002488", "concept": "NetIncomeLoss", "value": 1_641_000_000, "unit": "USD", "period_end": "2024-12-28", "period_start": "2023-12-31", "form_type": "10-K", "accession": "0000002488-25-000007", "filed": "2025-02-04", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "AMD", "cik": "0000002488", "concept": "GrossProfit", "value": 12_700_000_000, "unit": "USD", "period_end": "2024-12-28", "period_start": "2023-12-31", "form_type": "10-K", "accession": "0000002488-25-000007", "filed": "2025-02-04", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "AMD", "cik": "0000002488", "concept": "ResearchAndDevelopmentExpense", "value": 6_500_000_000, "unit": "USD", "period_end": "2024-12-28", "period_start": "2023-12-31", "form_type": "10-K", "accession": "0000002488-25-000007", "filed": "2025-02-04", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "AMD", "cik": "0000002488", "concept": "Assets", "value": 69_200_000_000, "unit": "USD", "period_end": "2024-12-28", "period_start": None, "form_type": "10-K", "accession": "0000002488-25-000007", "filed": "2025-02-04", "fiscal_year": 2024, "fiscal_period": "FY"},
+    # QCOM FY2024 (period ending 2024-09-29)
+    {"ticker": "QCOM", "cik": "0000804328", "concept": "Revenues", "value": 38_962_000_000, "unit": "USD", "period_end": "2024-09-29", "period_start": "2023-10-01", "form_type": "10-K", "accession": "0000804328-24-000022", "filed": "2024-11-06", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "QCOM", "cik": "0000804328", "concept": "NetIncomeLoss", "value": 10_142_000_000, "unit": "USD", "period_end": "2024-09-29", "period_start": "2023-10-01", "form_type": "10-K", "accession": "0000804328-24-000022", "filed": "2024-11-06", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "QCOM", "cik": "0000804328", "concept": "ResearchAndDevelopmentExpense", "value": 8_900_000_000, "unit": "USD", "period_end": "2024-09-29", "period_start": "2023-10-01", "form_type": "10-K", "accession": "0000804328-24-000022", "filed": "2024-11-06", "fiscal_year": 2024, "fiscal_period": "FY"},
+    # TXN FY2024 (period ending 2024-12-31)
+    {"ticker": "TXN", "cik": "0000097476", "concept": "NetIncomeLoss", "value": 4_799_000_000, "unit": "USD", "period_end": "2024-12-31", "period_start": "2024-01-01", "form_type": "10-K", "accession": "0000097476-25-000008", "filed": "2025-02-05", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "TXN", "cik": "0000097476", "concept": "GrossProfit", "value": 9_100_000_000, "unit": "USD", "period_end": "2024-12-31", "period_start": "2024-01-01", "form_type": "10-K", "accession": "0000097476-25-000008", "filed": "2025-02-05", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "TXN", "cik": "0000097476", "concept": "ResearchAndDevelopmentExpense", "value": 2_000_000_000, "unit": "USD", "period_end": "2024-12-31", "period_start": "2024-01-01", "form_type": "10-K", "accession": "0000097476-25-000008", "filed": "2025-02-05", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "TXN", "cik": "0000097476", "concept": "Assets", "value": 35_500_000_000, "unit": "USD", "period_end": "2024-12-31", "period_start": None, "form_type": "10-K", "accession": "0000097476-25-000008", "filed": "2025-02-05", "fiscal_year": 2024, "fiscal_period": "FY"},
+    # INTC FY2024 (period ending 2024-12-28)
+    {"ticker": "INTC", "cik": "0000050863", "concept": "NetIncomeLoss", "value": -18_756_000_000, "unit": "USD", "period_end": "2024-12-28", "period_start": "2023-12-31", "form_type": "10-K", "accession": "0000050863-25-000004", "filed": "2025-01-30", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "INTC", "cik": "0000050863", "concept": "GrossProfit", "value": 17_300_000_000, "unit": "USD", "period_end": "2024-12-28", "period_start": "2023-12-31", "form_type": "10-K", "accession": "0000050863-25-000004", "filed": "2025-01-30", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "INTC", "cik": "0000050863", "concept": "ResearchAndDevelopmentExpense", "value": 16_500_000_000, "unit": "USD", "period_end": "2024-12-28", "period_start": "2023-12-31", "form_type": "10-K", "accession": "0000050863-25-000004", "filed": "2025-01-30", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "INTC", "cik": "0000050863", "concept": "Assets", "value": 196_500_000_000, "unit": "USD", "period_end": "2024-12-28", "period_start": None, "form_type": "10-K", "accession": "0000050863-25-000004", "filed": "2025-01-30", "fiscal_year": 2024, "fiscal_period": "FY"},
+    # MU FY2024 (period ending 2024-08-29)
+    {"ticker": "MU", "cik": "0000723125", "concept": "NetIncomeLoss", "value": 778_000_000, "unit": "USD", "period_end": "2024-08-29", "period_start": "2023-09-01", "form_type": "10-K", "accession": "0000723125-24-000033", "filed": "2024-10-25", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "MU", "cik": "0000723125", "concept": "GrossProfit", "value": 5_600_000_000, "unit": "USD", "period_end": "2024-08-29", "period_start": "2023-09-01", "form_type": "10-K", "accession": "0000723125-24-000033", "filed": "2024-10-25", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "MU", "cik": "0000723125", "concept": "Assets", "value": 69_400_000_000, "unit": "USD", "period_end": "2024-08-29", "period_start": None, "form_type": "10-K", "accession": "0000723125-24-000033", "filed": "2024-10-25", "fiscal_year": 2024, "fiscal_period": "FY"},
+    # AVGO FY2024 (period ending 2024-11-03)
+    {"ticker": "AVGO", "cik": "0001730168", "concept": "NetIncomeLoss", "value": 5_895_000_000, "unit": "USD", "period_end": "2024-11-03", "period_start": "2023-10-30", "form_type": "10-K", "accession": "0001730168-24-000025", "filed": "2024-12-20", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "AVGO", "cik": "0001730168", "concept": "GrossProfit", "value": 32_500_000_000, "unit": "USD", "period_end": "2024-11-03", "period_start": "2023-10-30", "form_type": "10-K", "accession": "0001730168-24-000025", "filed": "2024-12-20", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "AVGO", "cik": "0001730168", "concept": "ResearchAndDevelopmentExpense", "value": 9_300_000_000, "unit": "USD", "period_end": "2024-11-03", "period_start": "2023-10-30", "form_type": "10-K", "accession": "0001730168-24-000025", "filed": "2024-12-20", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "AVGO", "cik": "0001730168", "concept": "Assets", "value": 165_600_000_000, "unit": "USD", "period_end": "2024-11-03", "period_start": None, "form_type": "10-K", "accession": "0001730168-24-000025", "filed": "2024-12-20", "fiscal_year": 2024, "fiscal_period": "FY"},
+    # LRCX FY2024 (period ending 2024-06-30)
+    {"ticker": "LRCX", "cik": "0000707549", "concept": "NetIncomeLoss", "value": 3_800_000_000, "unit": "USD", "period_end": "2024-06-30", "period_start": "2023-07-01", "form_type": "10-K", "accession": "0000707549-24-000035", "filed": "2024-08-15", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "LRCX", "cik": "0000707549", "concept": "GrossProfit", "value": 7_100_000_000, "unit": "USD", "period_end": "2024-06-30", "period_start": "2023-07-01", "form_type": "10-K", "accession": "0000707549-24-000035", "filed": "2024-08-15", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "LRCX", "cik": "0000707549", "concept": "ResearchAndDevelopmentExpense", "value": 1_900_000_000, "unit": "USD", "period_end": "2024-06-30", "period_start": "2023-07-01", "form_type": "10-K", "accession": "0000707549-24-000035", "filed": "2024-08-15", "fiscal_year": 2024, "fiscal_period": "FY"},
+    # TER FY2024 (period ending 2024-12-31)
+    {"ticker": "TER", "cik": "0000097210", "concept": "Revenues", "value": 2_800_000_000, "unit": "USD", "period_end": "2024-12-31", "period_start": "2024-01-01", "form_type": "10-K", "accession": "0000097210-25-000006", "filed": "2025-02-13", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "TER", "cik": "0000097210", "concept": "NetIncomeLoss", "value": 542_400_000, "unit": "USD", "period_end": "2024-12-31", "period_start": "2024-01-01", "form_type": "10-K", "accession": "0000097210-25-000006", "filed": "2025-02-13", "fiscal_year": 2024, "fiscal_period": "FY"},
+    {"ticker": "TER", "cik": "0000097210", "concept": "GrossProfit", "value": 1_600_000_000, "unit": "USD", "period_end": "2024-12-31", "period_start": "2024-01-01", "form_type": "10-K", "accession": "0000097210-25-000006", "filed": "2025-02-13", "fiscal_year": 2024, "fiscal_period": "FY"},
 ]
 
 
@@ -128,11 +130,22 @@ def seed(db_path: str) -> None:
         ])
 
     # Insert ticker metadata
-    for ticker, name in [("AAPL", "Apple Inc."), ("TSLA", "Tesla, Inc."), ("MSFT", "Microsoft Corporation")]:
+    semis = [
+        ("NVDA", "Nvidia Corporation", "Technology", "Semiconductors"),
+        ("AMD", "Advanced Micro Devices", "Technology", "Semiconductors"),
+        ("QCOM", "Qualcomm Incorporated", "Technology", "Semiconductors"),
+        ("TXN", "Texas Instruments Incorporated", "Technology", "Semiconductors"),
+        ("INTC", "Intel Corporation", "Technology", "Semiconductors"),
+        ("MU", "Micron Technology Inc.", "Technology", "Semiconductors"),
+        ("AVGO", "Broadcom Inc.", "Technology", "Semiconductors"),
+        ("LRCX", "Lam Research Corporation", "Technology", "Semiconductor Equipment"),
+        ("TER", "Teradyne Inc.", "Technology", "Semiconductor Equipment"),
+    ]
+    for ticker, name, sector, industry in semis:
         conn.execute("""
             INSERT OR REPLACE INTO ticker_embeddings (ticker, description, sector, industry)
             VALUES (?, ?, ?, ?)
-        """, [ticker, name, "Technology", "Consumer Electronics" if ticker == "AAPL" else "Software"])
+        """, [ticker, name, sector, industry])
 
     count = conn.execute("SELECT COUNT(*) FROM xbrl_facts").fetchone()[0]
     conn.close()
@@ -140,7 +153,7 @@ def seed(db_path: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Seed DuckDB with demo XBRL data")
+    parser = argparse.ArgumentParser(description="Seed DuckDB with semiconductor XBRL data")
     parser.add_argument("--db-path", default="./data/rag.duckdb", help="Path to DuckDB file")
     args = parser.parse_args()
     seed(db_path=args.db_path)

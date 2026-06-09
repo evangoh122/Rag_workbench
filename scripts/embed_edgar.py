@@ -106,40 +106,35 @@ _TICKER_CIK: dict[str, str] = {
     "WKEY": "0001903832",  # WISeKey (placeholder)
     "WOLF": "0000930155",  # Wolfspeed (placeholder)
     # ── Semiconductor Equipment & Materials ──
-    "ACLS": "0000930155",  # Axcelis (placeholder)
-    "ACMR": "0000930155",  # ACM Research (placeholder)
-    "AEHR": "0000930155",  # Aehr Test Systems (placeholder)
+    "ACLS": "0000897077",  # Axcelis Technologies
+    "ACMR": "0001680062",  # ACM Research
+    "AEHR": "0001040470",  # Aehr Test Systems
     "AMAT": "0000069515",  # Applied Materials
-    "AMBA": "0000930155",  # Ambarella (placeholder)
-    "AMKR": "0000930155",  # Amkor (placeholder)
-    "ASML": "0000930155",  # ASML (placeholder)
-    "ASYS": "0000930155",  # Amtech (placeholder)
-    "ATOM": "0001903832",  # Atomera (placeholder)
-    "AXTI": "0000930155",  # AXT (placeholder)
-    "CAMT": "0000930155",  # Camtek (placeholder)
-    "COHU": "0000930155",  # Cohu (placeholder)
-    "ENTG": "0000930155",  # Entegris (placeholder)
-    "FORM": "0000930155",  # FormFactor (placeholder)
-    "ICHR": "0000930155",  # Ichor (placeholder)
-    "INTT": "0000930155",  # inTEST (placeholder)
-    "IPGP": "0000930155",  # IPG Photonics (placeholder)
-    "KLAC": "0000930155",  # KLA Corp (placeholder)
-    "KLIC": "0000930155",  # Kulicke & Soffa (placeholder)
+    "AMBA": "0001280263",  # Ambarella
+    "AMKR": "0001047127",  # Amkor Technology
+    "ASML": "0000937966",  # ASML Holding
+    "ASYS": "0000720500",  # Amtech Systems
+    "ATOM": "0001420520",  # Atomera
+    "AXTI": "0001051627",  # AXT Inc
+    "CAMT": "0001109138",  # Camtek
+    "COHU": "0000021535",  # Cohu
+    "ENTG": "0001101302",  # Entegris
+    "FORM": "0001039399",  # FormFactor
+    "ICHR": "0001652535",  # Ichor Holdings
+    "INTT": "0001036262",  # inTEST Corp
+    "IPGP": "0001111928",  # IPG Photonics
+    "KLAC": "0000319201",  # KLA Corp
+    "KLIC": "0000056978",  # Kulicke & Soffa
     "LRCX": "0000707549",  # Lam Research
-    "NVMI": "0000930155",  # Nova Ltd (placeholder)
-    "ONTO": "0000930155",  # Onto Innovation (placeholder)
-    "PLAB": "0000930155",  # Photronics (placeholder)
-    "Q":    "0001903832",  # Qnity Electronics (placeholder)
-    "SMTK": "0001903832",  # SmartKem (placeholder)
+    "NVMI": "0001109345",  # Nova Ltd
+    "ONTO": "0000704532",  # Onto Innovation
+    "PLAB": "0000810136",  # Photronics
+    "Q":    "0002058873",  # Qnity Electronics
+    "SMTK": "0001817760",  # SmartKem
     "TER":  "0000097210",  # Teradyne
-    "TRT":  "0000930155",  # Trio-Tech (placeholder)
-    "UCTT": "0000930155",  # Ultra Clean (placeholder)
-    "VECO": "0000930155",  # Veeco (placeholder)
-    # ── Legacy ──
-    "AAPL": "0000320193",
-    "TSLA": "0001318605",
-    "GE":   "0000040554",
-    "MSFT": "0000789019",
+    "TRT":  "0000732026",  # Trio-Tech International
+    "UCTT": "0001275014",  # Ultra Clean Holdings
+    "VECO": "0000103145",  # Veeco Instruments
 }
 
 # All semiconductor tickers for ingestion
@@ -322,7 +317,7 @@ def _ensure_schema(conn) -> None:
 def run_embed_edgar_etl(tickers: List[str] = None) -> int:
     """
     Main ETL job: use sec-edgar-downloader to fetch 10-Ks, chunk, embed, and store in DuckDB.
-    Defaults to DEMO_TICKERS (AAPL, TSLA, GE) if no tickers provided.
+    Defaults to DEMO_TICKERS if no tickers provided.
     """
     if tickers is None:
         tickers = DEMO_TICKERS

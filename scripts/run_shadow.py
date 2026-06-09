@@ -6,7 +6,7 @@ and runs the eval pipeline (schema + XBRL cross-validation + semantic +
 confidence scoring) to produce a CalibrationReport.
 
 Usage:
-    python scripts/run_shadow.py [--tickers AAPL,TSLA,MSFT] [--db-path ./data/rag.duckdb]
+    python scripts/run_shadow.py [--tickers NVDA,AMD,QCOM] [--db-path ./data/rag.duckdb]
 """
 from __future__ import annotations
 

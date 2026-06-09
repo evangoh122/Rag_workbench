@@ -129,7 +129,7 @@ def fetch_filing(cik: str, accession: str) -> ExtractionResult:
     """Fetch a SEC filing via EdgarTools and return a typed ExtractionResult.
 
     Args:
-        cik: SEC Central Index Key, e.g. "0000320193" (Apple).
+        cik: SEC Central Index Key, e.g. "0001045810" (Nvidia).
         accession: SEC accession number, e.g. "0000320193-23-000064".
 
     Returns:

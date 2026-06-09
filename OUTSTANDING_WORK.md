@@ -45,7 +45,7 @@ All 11 roadmap phases are marked "Completed" in ROADMAP.md, but several items re
 
 ## Recommended Implementation Order
 
-1. **A3** — Bootstrap DuckDB with XBRL data for 3-5 tickers (AAPL, TSLA, MSFT)
+1. **A3** — Bootstrap DuckDB with XBRL data for semiconductor tickers (NVDA, AMD, QCOM)
 2. **A4** — Populate graph_triples from graphify-out
 3. **A2** — Wire vector/hybrid retrieval into langgraph_engine
 4. **A1** — Implement trigger 8 (downstream action context flag)

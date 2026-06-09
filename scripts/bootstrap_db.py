@@ -7,7 +7,7 @@ This script:
 3. Stores the facts in DuckDB for use by the RAG pipeline
 
 Usage:
-    python3 scripts/bootstrap_db.py [--tickers AAPL,TSLA,MSFT] [--db-path ./data/rag.duckdb]
+    python3 scripts/bootstrap_db.py [--tickers NVDA,AMD,QCOM] [--db-path ./data/rag.duckdb]
 """
 from __future__ import annotations
 
