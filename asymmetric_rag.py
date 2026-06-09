@@ -137,8 +137,11 @@ class OllamaEmbedder:
         return resp["embedding"]
 
     def embed_queries_batch(self, texts: List[str]) -> List[List[float]]:
-        """Embed multiple queries using the 0.6B model (for query decomposition)."""
-        return [self.embed_query(t) for t in texts]
+        """Embed multiple queries in parallel using thread pool."""
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(texts), 8)) as pool:
+            futures = [pool.submit(self.embed_query, t) for t in texts]
+            return [f.result() for f in futures]
 
     def _embed_batch(self, texts: List[str], model: str) -> List[List[float]]:
         """Embed a batch of texts, one at a time (Ollama doesn't support batch embed)."""
@@ -207,8 +210,10 @@ class BM25Index:
 
     @staticmethod
     def _tokenize(text: str) -> List[str]:
-        """Simple whitespace + lowercasing tokenization."""
-        return text.lower().split()
+        """Lowercase, strip punctuation, split on whitespace."""
+        import re
+        tokens = re.findall(r"[a-zA-Z0-9]+", text.lower())
+        return tokens
 
 
 # ── Reciprocal Rank Fusion ────────────────────────────────────────────────────
@@ -786,9 +791,9 @@ class AsymmetricFinancialRAG:
 
         RRF_score(d) = Σ 1/(k + rank_i(d)) across all ranking lists.
         """
-        # Build rankings as [(doc_id, score), ...]
-        dense_ranking = [(c.doc_id, 0.0) for c in dense]
-        sparse_ranking = [(c.doc_id, 0.0) for c in sparse]
+        # Build rankings as [(doc_id, score), ...] using actual retrieval scores
+        dense_ranking = [(c.doc_id, c.metadata.get("similarity", 0.0)) for c in dense]
+        sparse_ranking = [(c.doc_id, c.metadata.get("bm25_score", 0.0)) for c in sparse]
 
         fused_scores = reciprocal_rank_fusion(
             [dense_ranking, sparse_ranking], k=RRF_K

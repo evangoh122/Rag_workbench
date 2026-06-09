@@ -116,9 +116,11 @@ def _extract_sections_with_labels(text: str) -> List[tuple[str, str]]:
     extracted: List[tuple[str, str]] = []
 
     for label, pattern in _TARGET_SECTIONS.items():
+        # Use a bounded match: find the section start, then capture until the next
+        # item heading or end of text. The [^\n]*? approach limits cross-line backtracking.
         section_re = re.compile(
-            r"(?:^|\n)(\s*" + pattern + r".*?)(?=\n\s*item\s+\d|$)",
-            re.IGNORECASE | re.DOTALL | re.MULTILINE,
+            r"(?:^|\n)(\s*" + pattern + r"[^\n]*(?:\n(?!\s*item\s+\d)[^\n]*)*)",
+            re.IGNORECASE | re.MULTILINE,
         )
         match = section_re.search(text)
         if match:
