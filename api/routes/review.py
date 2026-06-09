@@ -44,9 +44,13 @@ except ImportError:  # pragma: no cover
 
 
 _REVIEW_API_KEY: str | None = os.getenv("REVIEW_API_KEY") or None
+_ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
 
 if not _REVIEW_API_KEY:
-    logger.warning("REVIEW_API_KEY env var not set — review endpoints are unauthenticated.")
+    if _ENVIRONMENT == "production":
+        logger.error("REVIEW_API_KEY env var not set in production mode — review endpoints are unauthenticated.")
+    else:
+        logger.warning("REVIEW_API_KEY env var not set — review endpoints are unauthenticated.")
 
 
 async def get_review_conn(x_api_key: str | None = Header(default=None, alias="X-API-Key")):
