@@ -41,17 +41,23 @@ import requests
 
 GOLDEN_SET_PATH = Path(__file__).parent / "golden_set.csv"
 RESULTS_DIR = Path(__file__).parent / "results"
+PROJECT_ROOT = Path(__file__).parent.parent
+
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # ---------------------------------------------------------------------------
-# LLM client (reads .env, mirrors api/config.py)
+# LLM client (uses centralized provider config)
 # ---------------------------------------------------------------------------
 
-def _load_env() -> None:
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(Path(__file__).parent.parent / ".env")
-    except ImportError:
-        pass
+_llm_cfg: dict | None = None
+
+
+def _get_llm_cfg() -> dict:
+    global _llm_cfg
+    if _llm_cfg is None:
+        from api.config import Config
+        _llm_cfg = Config.get_provider_config()
+    return _llm_cfg
 
 
 def _llm_call(prompt: str, max_tokens: int = 256) -> str:
@@ -59,38 +65,7 @@ def _llm_call(prompt: str, max_tokens: int = 256) -> str:
     Single-shot LLM call using the configured CHAT_PROVIDER.
     Returns the model's text response.
     """
-    _load_env()
-    provider = os.getenv("CHAT_PROVIDER", "deepseek").lower()
-    model = os.getenv("CHAT_MODEL") or None
-
-    providers = {
-        "deepseek": {
-            "base_url": "https://api.deepseek.com/v1",
-            "api_key":  os.getenv("DEEPSEEK_API_KEY", ""),
-            "model":    model or "deepseek-chat",
-        },
-        "openai": {
-            "base_url": "https://api.openai.com/v1",
-            "api_key":  os.getenv("OPENAI_API_KEY", ""),
-            "model":    model or "gpt-4o-mini",
-        },
-        "anthropic": {
-            "base_url": "https://api.anthropic.com/v1",
-            "api_key":  os.getenv("ANTHROPIC_API_KEY", ""),
-            "model":    model or "claude-haiku-4-5-20251001",
-        },
-        "mimo": {
-            "base_url": os.getenv("MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
-            "api_key":  os.getenv("XIAOMI_API_KEY", ""),
-            "model":    model or "MiMo-7B-RL",
-        },
-        "ollama": {
-            "base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
-            "api_key":  "ollama",
-            "model":    model or os.getenv("OLLAMA_MODEL", "llama3.2"),
-        },
-    }
-    cfg = providers.get(provider, providers["deepseek"])
+    cfg = _get_llm_cfg()
 
     resp = requests.post(
         f"{cfg['base_url']}/chat/completions",

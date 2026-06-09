@@ -67,24 +67,34 @@ def validate_read_only_sql(sql: str) -> Optional[str]:
     compact = strip_sql_comments(sql)
     if not compact:
         return "The model did not return a SQL query."
-    if ";" in compact:
-        return "Rejected SQL with semicolons or multiple statements."
+
+    if len(compact) > 4096:
+        return "Rejected overly long SQL statement."
+
+    if compact.count(";") > 1:
+        return "Rejected SQL with multiple statements."
 
     first = compact.lstrip().split(None, 1)[0].lower()
     if first not in {"select", "with"}:
         return "Rejected SQL because only SELECT and WITH queries are allowed."
 
-    # Using a slightly improved list based on feedback but keeping safety
     blocked = {
-        "attach", "call", "copy", "create", "delete", "detach", "drop",
-        "export", "from_csv", "glob", "httpfs", "import", "insert",
-        "install", "load", "pragma", "read_blob", "read_csv", "read_json",
-        "read_parquet", "read_text", "set", "update",
+        "alter", "attach", "call", "checkpoint", "copy", "create",
+        "delete", "detach", "drop", "export", "from_csv", "glob",
+        "httpfs", "import", "insert", "install", "load", "pragma",
+        "read_blob", "read_csv", "read_csv_auto", "read_json",
+        "read_parquet", "read_text", "set", "update", "vacuum",
+        "sqlite_scan", "sqlite_attach", "postgres_scan",
+        "postgres_attach", "mysql_scan", "mysql_attach",
     }
     tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", compact.lower()))
     found = sorted(tokens & blocked)
     if found:
         return f"Rejected SQL containing blocked keyword/function: {', '.join(found)}."
+
+    if re.search(r"\bduckdb_\w+\s*\(", compact.lower()):
+        return "Rejected SQL referencing internal DuckDB functions."
+
     return None
 
 @traceable(name="chat_summarise_results")
@@ -151,9 +161,13 @@ def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> D
 
     try:
         conn = db_manager.get_connection()
+        conn.execute("SET threads TO 2")
+        conn.execute("SET memory_limit TO '256MB'")
         df = conn.execute(
             f"SELECT * FROM ({sql}) AS chat_result LIMIT ?", [100]
         ).df()
+        conn.execute("RESET memory_limit")
+        conn.execute("RESET threads")
         answer = summarise_results(question, df)
         return {
             "type": "table",
