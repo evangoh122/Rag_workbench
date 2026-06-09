@@ -34,10 +34,20 @@ def _get_embeddings():
     global _embeddings
     if _embeddings is None:
         logger.info(f"Initializing Ollama embeddings ({OLLAMA_EMBED_MODEL})...")
-        _embeddings = OllamaEmbeddings(
-            model=OLLAMA_EMBED_MODEL,
-            base_url=OLLAMA_BASE_URL,
-        )
+        try:
+            _embeddings = OllamaEmbeddings(
+                model=OLLAMA_EMBED_MODEL,
+                base_url=OLLAMA_BASE_URL,
+            )
+            # Verify connection with a test embed
+            _embeddings.embed_query("test")
+            logger.info("Ollama embeddings connection verified")
+        except Exception as e:
+            logger.error(f"Failed to connect to Ollama at {OLLAMA_BASE_URL}: {e}")
+            raise RuntimeError(
+                f"Ollama not available at {OLLAMA_BASE_URL}. "
+                "Ensure Ollama is running and nomic-embed-text is pulled."
+            ) from e
     return _embeddings
 
 
