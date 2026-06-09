@@ -13,7 +13,13 @@ class VectorStoreRetriever:
     def __init__(self, top_k: int = 5):
         self.top_k = top_k
 
+    _ALLOWED_TABLES = {"ticker_embeddings", "edgar_embeddings"}
+
     def search(self, query: str, table_name: str = "ticker_embeddings") -> List[Document]:
+        if table_name not in self._ALLOWED_TABLES:
+            logger.warning("Rejected search on non-whitelisted table: %s", table_name)
+            return []
+
         try:
             conn = db_manager.get_connection()
             embeddings = get_embeddings()
@@ -24,8 +30,8 @@ class VectorStoreRetriever:
                        array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
                 FROM {table_name}
                 ORDER BY dist ASC
-                LIMIT {self.top_k}
-            """, [qvec]).fetchall()
+                LIMIT ?
+            """, [qvec, self.top_k]).fetchall()
 
             return [
                 Document(

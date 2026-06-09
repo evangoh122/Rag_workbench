@@ -4,10 +4,45 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '*/20 * * * *'   # ping every 20 min to prevent sleep
+    - cron: '*/20 * * * *'
+  workflow_dispatch: {}
 
 jobs:
+  sync-secrets:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync API keys to HuggingFace Space secrets
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+        run: |
+          upload_secret() {
+            local key=$1
+            local value=$2
+            if [ -n "$value" ]; then
+              echo "Uploading secret: $key"
+              curl -sf -X POST \
+                "https://huggingface.co/api/spaces/$HF_USERNAME/rag-workbench/secrets" \
+                -H "Authorization: Bearer $HF_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{\"key\": \"$key\", \"value\": \"$value\"}" \
+                -o /dev/null -w "  -> HTTP %{http_code}\n" || echo "  -> FAILED"
+            else
+              echo "Skipping $key (not set in GitHub Secrets)"
+            fi
+          }
+          upload_secret "GEMINI_API_KEY"     "${{ secrets.GEMINI_API_KEY }}"
+          upload_secret "GOOGLE_API_KEY"      "${{ secrets.GOOGLE_API_KEY }}"
+          upload_secret "DEEPSEEK_API_KEY"    "${{ secrets.DEEPSEEK_API_KEY }}"
+          upload_secret "XIAOMI_API_KEY"      "${{ secrets.XIAOMI_API_KEY }}"
+          upload_secret "OPENAI_API_KEY"      "${{ secrets.OPENAI_API_KEY }}"
+          upload_secret "ANTHROPIC_API_KEY"   "${{ secrets.ANTHROPIC_API_KEY }}"
+          upload_secret "REVIEW_API_KEY"      "${{ secrets.REVIEW_API_KEY }}"
+          upload_secret "LANGSMITH_API_KEY"   "${{ secrets.LANGSMITH_API_KEY }}"
+
   deploy:
+    needs: sync-secrets
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:

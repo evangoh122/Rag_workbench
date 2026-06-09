@@ -1,4 +1,6 @@
+import hashlib
 import os
+import threading
 from typing import List, Dict, Any, Optional
 import pandas as pd
 from loguru import logger
@@ -38,8 +40,8 @@ class DuckDBVectorRetriever(BaseRetriever):
                            array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
                     FROM ticker_embeddings
                     ORDER BY dist ASC
-                    LIMIT {self.top_k}
-                """, [qvec]).fetchall()
+                    LIMIT ?
+                """, [qvec, self.top_k]).fetchall()
 
                 return [
                     Document(
@@ -54,7 +56,7 @@ class DuckDBVectorRetriever(BaseRetriever):
         return self._keyword_fallback(query)
 
     def _keyword_fallback(self, query: str) -> List[Document]:
-        words = [w for w in query.split() if len(w) >= 4]
+        words = [w for w in query.split() if len(w) >= 4][:10]
         try:
             conn = db_manager.get_connection()
             if words:
@@ -178,8 +180,8 @@ class EDGAREmbeddingsRetriever(BaseRetriever):
                        array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
                 FROM edgar_embeddings
                 ORDER BY dist ASC
-                LIMIT {self.top_k}
-            """, [qvec]).fetchall()
+                LIMIT ?
+            """, [qvec, self.top_k]).fetchall()
 
             return [
                 Document(
@@ -250,11 +252,11 @@ Answer:""")
 
 
 def _format_docs(docs: List[Document]) -> str:
-    # Deduplication based on content hash
+    # Deduplication based on deterministic content hash
     seen = set()
     unique_docs = []
     for d in docs:
-        content_hash = hash(d.page_content)
+        content_hash = hashlib.sha256(d.page_content.encode()).hexdigest()
         if content_hash not in seen:
             seen.add(content_hash)
             unique_docs.append(d)
@@ -268,42 +270,51 @@ def _format_docs(docs: List[Document]) -> str:
     return "\n\n".join(parts) if parts else "No context found."
 
 
+_vector_retriever = DuckDBVectorRetriever(top_k=5)
+_edgar_facts_retriever = EDGARFactsRetriever()
+_edgar_emb_retriever = EDGAREmbeddingsRetriever(top_k=5)
+_price_retriever = PriceContextRetriever()
+
+
 @traceable(name="rag_combined_retriever")
 def _combined_retriever(query: str) -> List[Document]:
     """Run all four retrievers sequentially and merge results."""
-    vector_docs = DuckDBVectorRetriever(top_k=5).invoke(query)
-    edgar_facts = EDGARFactsRetriever().invoke(query)
-    edgar_emb   = EDGAREmbeddingsRetriever(top_k=5).invoke(query)
-    price_docs  = PriceContextRetriever().invoke(query)
+    vector_docs = _vector_retriever.invoke(query)
+    edgar_facts = _edgar_facts_retriever.invoke(query)
+    edgar_emb   = _edgar_emb_retriever.invoke(query)
+    price_docs  = _price_retriever.invoke(query)
     return vector_docs + edgar_facts + edgar_emb + price_docs
 
 
 _rag_chain = None
+_rag_chain_lock = threading.Lock()
 
 def get_rag_chain():
     global _rag_chain
     if _rag_chain is None:
-        cfg = Config.get_provider_config()
-        
-        if Config.CHAT_PROVIDER == "anthropic":
-            from langchain_anthropic import ChatAnthropic
-            llm = ChatAnthropic(model=cfg["model"], api_key=cfg["api_key"])
-        else:
-            llm = ChatOpenAI(
-                model=cfg["model"], 
-                api_key=cfg["api_key"] or "local", 
-                base_url=cfg["base_url"]
-            )
+        with _rag_chain_lock:
+            if _rag_chain is None:
+                cfg = Config.get_provider_config()
 
-        _rag_chain = (
-            {
-                "context":  lambda q: _format_docs(_combined_retriever(q)),
-                "question": RunnablePassthrough(),
-            }
-            | _RAG_PROMPT
-            | llm
-            | StrOutputParser()
-        )
+                if Config.CHAT_PROVIDER == "anthropic":
+                    from langchain_anthropic import ChatAnthropic
+                    llm = ChatAnthropic(model=cfg["model"], api_key=cfg["api_key"])
+                else:
+                    llm = ChatOpenAI(
+                        model=cfg["model"],
+                        api_key=cfg["api_key"] or "local",
+                        base_url=cfg["base_url"]
+                    )
+
+                _rag_chain = (
+                    {
+                        "context":  lambda q: _format_docs(_combined_retriever(q)),
+                        "question": RunnablePassthrough(),
+                    }
+                    | _RAG_PROMPT
+                    | llm
+                    | StrOutputParser()
+                )
     return _rag_chain
 
 
@@ -314,4 +325,4 @@ def ask_rag(question: str) -> str:
         return chain.invoke(question)
     except Exception as e:
         logger.error(f"RAG failed: {e}")
-        return f"RAG error: {str(e)}"
+        return "An error occurred while processing your question. Please try again."

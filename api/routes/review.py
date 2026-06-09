@@ -1,5 +1,6 @@
 import logging
 import os
+import hmac
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
@@ -39,22 +40,24 @@ except ImportError:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
-# Set REVIEW_API_KEY env var to require a bearer token on all review endpoints.
-# If unset, auth is disabled (safe for local development).
 _REVIEW_API_KEY: str | None = os.getenv("REVIEW_API_KEY") or None
+
+if not _REVIEW_API_KEY:
+    logger.warning("REVIEW_API_KEY env var not set — review endpoints are unauthenticated.")
 
 
 async def get_review_conn(x_api_key: str | None = Header(default=None, alias="X-API-Key")):
-    """Optional API key guard + writable review DB connection."""
-    if _REVIEW_API_KEY and x_api_key != _REVIEW_API_KEY:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    if _REVIEW_API_KEY:
+        if not x_api_key:
+            raise HTTPException(status_code=401, detail="X-API-Key header required")
+        if not hmac.compare_digest(x_api_key.encode(), _REVIEW_API_KEY.encode()):
+            raise HTTPException(status_code=401, detail="Unauthorized")
     return db_manager.get_review_connection()
 
 
 router = APIRouter(prefix="/api/review", tags=["review"])
 
 
-# 1. GET /queue — list review queue (REQ-RQ-01)
 @router.get("/queue", response_model=list[ReviewDecisionOut])
 async def list_review_queue(
     status: Optional[str] = None,
@@ -72,7 +75,6 @@ async def list_review_queue(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-# 2. POST /queue — pipeline registers a routing decision (REQ-RQ-01)
 @router.post("/queue", status_code=201)
 async def add_review_decision(
     body: ReviewDecisionIn,
@@ -95,7 +97,6 @@ async def add_review_decision(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-# 3. POST /decisions/{decision_id}/verdict — reviewer records verdict (REQ-RQ-02)
 @router.post("/decisions/{decision_id}/verdict", status_code=204)
 async def record_reviewer_verdict(
     decision_id: str,
@@ -130,13 +131,8 @@ async def record_reviewer_verdict(
     return Response(status_code=204)
 
 
-# 4. GET /drift — current drift status (REQ-RQ-03/04/05)
 @router.get("/drift", response_model=DriftStatusOut)
 async def get_drift_status(conn=Depends(get_review_conn)):
-    """
-    Checks agreement rate and unrecognized-concept count.
-    Escalation rate is intentionally excluded (REQ-RQ-05).
-    """
     try:
         status: DriftStatus = check_drift(
             conn,
@@ -164,7 +160,6 @@ async def get_drift_status(conn=Depends(get_review_conn)):
     )
 
 
-# 5. POST /calibrate — trigger calibration recalculation (REQ-RQ-02/06)
 @router.post("/calibrate", response_model=CalibrationResultOut)
 async def run_calibration(conn=Depends(get_review_conn)):
     if get_calibration_data is None or persist_calibration_result is None:

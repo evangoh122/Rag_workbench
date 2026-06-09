@@ -80,7 +80,7 @@ def _llm_call(prompt: str, max_tokens: int = 256) -> str:
             "model":    model or "claude-haiku-4-5-20251001",
         },
         "mimo": {
-            "base_url": "https://token-plan-sgp.xiaomimimo.com/v1",
+            "base_url": os.getenv("MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
             "api_key":  os.getenv("XIAOMI_API_KEY", ""),
             "model":    model or "MiMo-7B-RL",
         },

@@ -28,6 +28,8 @@ import hashlib
 from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass, field
 
+import threading
+
 import duckdb
 import numpy as np
 from loguru import logger
@@ -788,13 +790,11 @@ class AsymmetricFinancialRAG:
 
     def _get_structured_context(self, query: str) -> List[RetrievedChunk]:
         """Get context from structured DuckDB sources (EDGAR facts, prices)."""
-        conn = duckdb.connect(DB_PATH, read_only=True)
-        try:
-            facts = query_edgar_facts_structured(conn, query)
-            prices = query_price_context_structured(conn, query)
-            return facts + prices
-        finally:
-            conn.close()
+        from api.db.database import db_manager
+        conn = db_manager.get_connection()
+        facts = query_edgar_facts_structured(conn, query)
+        prices = query_price_context_structured(conn, query)
+        return facts + prices
 
     def _format_context(self, chunks: List[RetrievedChunk]) -> str:
         """Format retrieved chunks into a context string for the LLM."""
@@ -814,23 +814,17 @@ class AsymmetricFinancialRAG:
     def _synthesize(self, question: str, context: str) -> str:
         """Generate answer from context using the configured LLM."""
         from openai import OpenAI
+        from api.config import Config
 
-        provider = os.getenv("CHAT_PROVIDER", "deepseek").lower()
-        providers = {
-            "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat", "key_env": "DEEPSEEK_API_KEY"},
-            "openai":   {"base_url": "https://api.openai.com/v1", "model": "gpt-4o", "key_env": "OPENAI_API_KEY"},
-            "mimo":     {"base_url": os.getenv("MIMO_BASE_URL", "http://localhost:11434/v1"), "model": os.getenv("MIMO_MODEL", "xiaomi/MiMo-7B-RL"), "key_env": "MIMO_API_KEY"},
-            "ollama":   {"base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"), "model": os.getenv("OLLAMA_MODEL", "llama3.2"), "key_env": None},
-        }
-        cfg = providers.get(provider, providers["deepseek"])
-        api_key = os.getenv(cfg["key_env"], "") if cfg["key_env"] else "local"
-        model = os.getenv("CHAT_MODEL") or cfg["model"]
+        cfg = Config.get_provider_config()
+        api_key = cfg["api_key"] or "local"
+        model = cfg["model"]
 
         try:
-            client = OpenAI(api_key=api_key or "local", base_url=cfg["base_url"])
-        except Exception as e:
-            logger.error(f"Failed to init LLM client: {e}")
-            return f"Error initializing LLM: {e}"
+            client = OpenAI(api_key=api_key, base_url=cfg["base_url"])
+        except Exception:
+            logger.error("Failed to init LLM client")
+            return "Error initializing LLM"
 
         prompt = (
             "You are a financial analyst assistant. Answer the question using ONLY "
@@ -857,13 +851,16 @@ class AsymmetricFinancialRAG:
 # ── Singleton & Public API ────────────────────────────────────────────────────
 
 _rag_instance: Optional[AsymmetricFinancialRAG] = None
+_rag_lock = threading.Lock()
 
 
 def get_rag() -> AsymmetricFinancialRAG:
-    """Get or create the singleton RAG instance."""
+    """Get or create the singleton RAG instance (thread-safe)."""
     global _rag_instance
     if _rag_instance is None:
-        _rag_instance = AsymmetricFinancialRAG()
+        with _rag_lock:
+            if _rag_instance is None:
+                _rag_instance = AsymmetricFinancialRAG()
     return _rag_instance
 
 

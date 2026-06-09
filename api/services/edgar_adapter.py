@@ -124,7 +124,7 @@ def _html_tables_to_fields(filing) -> list[ExtractedField]:  # type: ignore[type
                     )
                 )
     except Exception:  # noqa: BLE001 — structured table extraction is best-effort
-        pass
+        logger.debug("Structured table extraction skipped (no tables found or parse error)")
 
     return fields
 
@@ -176,7 +176,7 @@ def fetch_filing(cik: str, accession: str) -> ExtractionResult:
             ):
                 xbrl_fields.extend(_xbrl_dataframe_to_fields(df))
     except Exception:  # noqa: BLE001 — XBRL block may not exist for all form types
-        pass
+        logger.debug("XBRL extraction skipped (no structured facts for this filing)")
 
     # --- Extract structured HTML table fields ---
     table_fields = _html_tables_to_fields(filing)
