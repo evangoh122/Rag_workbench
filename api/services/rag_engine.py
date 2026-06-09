@@ -1,3 +1,4 @@
+import hashlib
 import os
 from typing import List, Dict, Any, Optional
 import pandas as pd
@@ -248,8 +249,6 @@ Question: {question}
 
 Answer:""")
 
-
-import hashlib
 
 def _format_docs(docs: List[Document]) -> str:
     # Deduplication based on deterministic content hash
