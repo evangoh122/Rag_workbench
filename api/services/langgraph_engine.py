@@ -12,6 +12,15 @@ import polars as pl
 from langgraph.graph import StateGraph, END
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
 from api.services.verifier import verify_numeric, verify_entailment
+from api.services.financial_calc import (
+    FactExtractor, CalcResult,
+    gross_margin, operating_margin, net_margin, ebitda, ebitda_margin,
+    rd_intensity, sga_intensity, yoy_growth, cagr,
+    current_ratio, quick_ratio, debt_to_equity, net_debt, working_capital,
+    free_cash_flow, fcf_margin, fcf_conversion, capex_intensity,
+    check_balance_sheet, check_gross_profit, check_fcf_identity,
+    normalize_to_usd,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,38 +96,136 @@ def extraction_node(state: GraphState) -> Dict[str, Any]:
 
 def math_node(state: GraphState) -> Dict[str, Any]:
     """
-    Node 3: Execute math or reasoning based on extracted facts.
+    Node 3: Route to the right Polars financial calculator based on query intent.
+
+    AI identifies the question type. Python does ALL arithmetic via financial_calc.
+    See docs/FINANCIAL_CALC_INSTRUCTIONS.md for the full instruction set.
     """
-    logger.info("--- MATH EXECUTION ---")
-    # For this scaffold, we'll implement a simple keyword-based extractor
-    # that looks for specific values in the XBRL facts.
+    logger.info("--- MATH EXECUTION (financial_calc) ---")
     try:
-        facts = state['xbrl_facts']
-        query = state['query'].lower()
-        
-        result = None
-        steps = []
-        
-        # Trivial logic: find the first fact that matches a concept in the query
-        for fact in facts:
-            concept = fact.get('concept', '').lower()
-            if concept in query or query in concept:
-                result = fact.get('value')
-                steps.append(f"Found value for {concept}: {result}")
-                break
-        
+        facts_list = state['xbrl_facts']
+        query      = state['query'].lower()
+        steps:  list[str] = []
+        result: Optional[Union[float, str]] = None
+        calc: Optional[CalcResult] = None
+
+        if not facts_list:
+            return {
+                "math_result": "ABSTAIN: No XBRL facts available for this filing.",
+                "math_steps": ["Extraction returned 0 facts."],
+                "status": {**state.get('status', {}), "math": "success"},
+            }
+
+        # Build Polars DataFrame from the list-of-dicts state
+        xbrl_df = pl.DataFrame(facts_list)
+        extractor = FactExtractor(xbrl_df)
+        periods   = extractor.periods()
+        latest    = periods[-1] if periods else ""
+        steps.append(f"Available periods: {periods}  | using: {latest}")
+
+        # ── Route by question intent ────────────────────────────────────────
+        # Gross margin
+        if any(k in query for k in ("gross margin", "gross profit margin")):
+            rev  = extractor.get("revenues",      period=latest)
+            cogs = extractor.get("costofrevenue",  period=latest)
+            if rev and cogs:
+                calc = gross_margin(rev, cogs, period=latest)
+
+        # Operating margin
+        elif any(k in query for k in ("operating margin", "operating income margin")):
+            rev  = extractor.get("revenues",           period=latest)
+            oi   = extractor.get("operatingincomeloss", period=latest)
+            if rev and oi:
+                calc = operating_margin(rev, oi, period=latest)
+
+        # Net margin
+        elif any(k in query for k in ("net margin", "profit margin", "net income margin")):
+            rev = extractor.get("revenues",     period=latest)
+            ni  = extractor.get("netincomeloss", period=latest)
+            if rev and ni:
+                calc = net_margin(rev, ni, period=latest)
+
+        # Free cash flow / FCF
+        elif any(k in query for k in ("free cash flow", "fcf")):
+            ocf   = extractor.get("netcashoperating",   period=latest)
+            capex = extractor.get("capitalexpenditures", period=latest)
+            if ocf and capex:
+                calc = free_cash_flow(ocf, capex, period=latest)
+
+        # Current ratio / liquidity
+        elif any(k in query for k in ("current ratio", "liquidity")):
+            ca = extractor.get("currentassets",      period=latest)
+            cl = extractor.get("currentliabilities",  period=latest)
+            if ca and cl:
+                calc = current_ratio(ca, cl, period=latest)
+
+        # Debt / leverage
+        elif any(k in query for k in ("debt to equity", "leverage", "d/e")):
+            debt   = extractor.get("longtermdebt",      period=latest)
+            equity = extractor.get("stockholdersequity", period=latest)
+            if debt and equity:
+                calc = debt_to_equity(debt, equity, period=latest)
+
+        # Net debt
+        elif any(k in query for k in ("net debt", "net cash")):
+            debt = extractor.get("longtermdebt",       period=latest)
+            cash = extractor.get("cashandequivalents",  period=latest)
+            if debt is not None and cash is not None:
+                calc = net_debt(debt, cash, period=latest)
+
+        # R&D intensity
+        elif any(k in query for k in ("r&d", "research and development", "rd intensity")):
+            rev = extractor.get("revenues",            period=latest)
+            rd  = extractor.get("researchanddevelopment", period=latest)
+            if rev and rd:
+                calc = rd_intensity(rev, rd, period=latest)
+
+        # Revenue / standalone lookup (fallback)
+        elif any(k in query for k in ("revenue", "sales", "net sales")):
+            rev = extractor.get("revenues", period=latest)
+            if rev:
+                result = rev
+                steps.append(f"Revenue ({latest}): ${rev:,.0f}")
+
+        # Net income standalone
+        elif any(k in query for k in ("net income", "earnings", "profit")):
+            ni = extractor.get("netincomeloss", period=latest)
+            if ni:
+                result = ni
+                steps.append(f"Net Income ({latest}): ${ni:,.0f}")
+
+        # If a CalcResult was produced, record it
+        if calc is not None:
+            result = calc.value
+            steps.append(calc.display())
+            # Run accounting identity check as a bonus verification signal
+            try:
+                assets = extractor.get("assets",      period=latest)
+                liabs  = extractor.get("liabilities",  period=latest)
+                eq     = extractor.get("stockholdersequity", period=latest)
+                if assets and liabs and eq:
+                    identity = check_balance_sheet(assets, liabs, eq, period=latest)
+                    steps.append(f"Balance sheet identity: {identity.verdict} "
+                                 f"(delta {identity.delta_pct:.2f}%)")
+            except Exception:
+                pass
+
         if result is None:
-            result = "Data not found in XBRL financials."
-            steps.append("Failed to find matching XBRL concept.")
+            result = "ABSTAIN: Could not determine the appropriate calculation for this query."
+            steps.append("No matching calculation route found.")
 
         return {
             "math_result": result,
             "math_steps": steps,
-            "status": {**state.get('status', {}), "math": "success"}
+            "status": {**state.get('status', {}), "math": "success"},
         }
     except Exception as e:
         logger.error(f"Math node failed: {e}")
-        return {"status": {**state.get('status', {}), "math": "error"}}
+        return {
+            "math_result": f"ABSTAIN: Math node error — {e}",
+            "math_steps": [str(e)],
+            "status": {**state.get('status', {}), "math": "error"},
+        }
 
 def verification_node(state: GraphState) -> Dict[str, Any]:
     """
