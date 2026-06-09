@@ -14,7 +14,7 @@ def _validate_db_path(path: str) -> str:
         return str(Path(__file__).parent.parent / "data" / "rag.duckdb")
     resolved = Path(path).resolve()
     project_root = Path(__file__).parent.parent.resolve()
-    if not str(resolved).startswith(str(project_root)):
+    if not resolved.is_relative_to(project_root):
         logger.warning(f"DB_PATH '{path}' is outside project root. Falling back to default.")
         return str(project_root / "data" / "rag.duckdb")
     return str(resolved)
@@ -99,8 +99,8 @@ def _validate_startup():
     """Warn on missing but recommended env vars."""
     if not Config.DEEPSEEK_API_KEY and Config.CHAT_PROVIDER == "deepseek":
         logger.warning("DEEPSEEK_API_KEY not set — deepseek provider will fail")
-    if not Config.GOOGLE_API_KEY and Config.CHAT_PROVIDER not in ("ollama", "mimo"):
-        logger.warning("GOOGLE_API_KEY/GEMINI_API_KEY not set — embeddings may fail")
+    if not Config.GOOGLE_API_KEY and Config.CHAT_PROVIDER == "google":
+        logger.warning("GOOGLE_API_KEY/GEMINI_API_KEY not set — google provider will fail")
 
 
 _validate_startup()
