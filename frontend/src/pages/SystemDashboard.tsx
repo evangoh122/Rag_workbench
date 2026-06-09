@@ -3,9 +3,7 @@ import {
   Database, AlertTriangle, CheckCircle, RefreshCcw,
   FileText, GitBranch, Layers, Zap, Server, ArrowRight,
 } from 'lucide-react';
-import axios from 'axios';
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
+import client from '../api/client';
 
 interface StatsData {
   data: {
@@ -96,7 +94,7 @@ export default function SystemDashboard() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await axios.get<StatsData>(`${API_BASE}/stats`);
+      const res = await client.get<StatsData>('/stats');
       setStats(res.data);
       setLastRefresh(new Date());
     } catch {

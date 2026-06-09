@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, AlertTriangle, CheckCircle, TrendingDown, BarChart3 } from 'lucide-react';
-import axios from 'axios';
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
+import client from '../api/client';
 
 interface MetricsData {
   agreement_rate: number;
@@ -37,8 +35,8 @@ export default function MetricsDashboard() {
   const fetchData = async () => {
     try {
       const [metricsRes, driftRes] = await Promise.all([
-        axios.get<MetricsData>(`${API_BASE}/review/metrics`),
-        axios.get<DriftData>(`${API_BASE}/review/drift`),
+        client.get<MetricsData>('/review/metrics'),
+        client.get<DriftData>('/review/drift'),
       ]);
       setMetrics(metricsRes.data);
       setDrift(driftRes.data);

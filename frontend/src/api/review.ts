@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
+import client from './client';
 
 export interface ReviewDecision {
   id: string;
@@ -40,23 +38,23 @@ export interface CalibrationResult {
 }
 
 export async function getReviewQueue(): Promise<ReviewDecision[]> {
-  const response = await axios.get<ReviewDecision[]>(`${API_BASE}/review/queue`);
+  const response = await client.get<ReviewDecision[]>('/review/queue');
   return response.data;
 }
 
 export async function submitVerdict(verdict: Verdict): Promise<void> {
-  await axios.post(`${API_BASE}/review/decisions/${verdict.decision_id}/verdict`, {
+  await client.post(`/review/decisions/${verdict.decision_id}/verdict`, {
     reviewer_agrees: verdict.reviewer_agrees,
     notes: verdict.notes,
   });
 }
 
 export async function getDriftStatus(): Promise<DriftStatus> {
-  const response = await axios.get<DriftStatus>(`${API_BASE}/review/drift`);
+  const response = await client.get<DriftStatus>('/review/drift');
   return response.data;
 }
 
 export async function triggerCalibration(): Promise<CalibrationResult> {
-  const response = await axios.post<CalibrationResult>(`${API_BASE}/review/calibrate`);
+  const response = await client.post<CalibrationResult>('/review/calibrate');
   return response.data;
 }

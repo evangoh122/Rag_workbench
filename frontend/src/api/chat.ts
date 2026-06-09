@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
+import client from './client';
 
 export interface Source {
   ticker: string;
@@ -54,7 +52,7 @@ export async function sendSqlMessage(
   message: string,
   history: HistoryEntry[],
 ): Promise<ChatResponse> {
-  const response = await axios.post<ChatResponse>(`${API_BASE}/chat/sql`, {
+  const response = await client.post<ChatResponse>('/chat/sql', {
     message,
     history,
   });
@@ -65,7 +63,7 @@ export async function sendRagMessage(
   message: string,
   history: HistoryEntry[],
 ): Promise<ChatResponse> {
-  const response = await axios.post<ChatResponse>(`${API_BASE}/chat/rag`, {
+  const response = await client.post<ChatResponse>('/chat/rag', {
     message,
     history,
   });
@@ -76,7 +74,7 @@ export async function sendGraphRagMessage(
   message: string,
   ticker: string = 'AAPL',
 ): Promise<ChatResponse> {
-  const response = await axios.post<ChatResponse>(`${API_BASE}/chat/graph-rag`, {
+  const response = await client.post<ChatResponse>('/chat/graph-rag', {
     message,
     ticker,
   });
@@ -87,7 +85,7 @@ export async function sendAuditableRagMessage(
   message: string,
   ticker: string = 'AAPL',
 ): Promise<ChatResponse> {
-  const response = await axios.post<ChatResponse>(`${API_BASE}/chat/auditable-rag`, {
+  const response = await client.post<ChatResponse>('/chat/auditable-rag', {
     message,
     ticker,
   });
