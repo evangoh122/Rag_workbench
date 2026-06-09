@@ -1,12 +1,13 @@
 # ROADMAP.md
-<!-- SEC Filing Eval & HITL Framework -->
-<!-- Phase order is mandated by CONSTRAINT-011 and must not be reordered. -->
+<!-- RAG Workbench — Multi-Track Roadmap -->
+<!-- Eval pipeline phases 1-8 are mandated by CONSTRAINT-011 and must not be reordered. -->
+<!-- RAG pipeline phases 9+ are independent and can be built in parallel. -->
 
-Generated: 2026-06-07
+Updated: 2026-06-09
 
 ---
 
-## Phases
+## Track A: Eval Pipeline (SEC Filing Evaluation & HITL)
 
 - [x] **Phase 1: Data Structures & Reader Adapter** - Define the ExtractionResult contract and wrap EdgarTools output into it
 - [ ] **Phase 2: Schema Validator** - Implement layer-1 validation (field presence, types, unit sanity)
@@ -16,6 +17,12 @@ Generated: 2026-06-07
 - [ ] **Phase 6: Shadow Deployment & Calibration** - Run read-only over historical filings; calibrate AUTO/SAMPLED_REVIEW/ESCALATE cut points
 - [ ] **Phase 7: Metrics Dashboard** - Surface rolling agreement rate, routing distribution, and escalation signals
 - [ ] **Phase 8: Review Queue, Feedback Loop & Drift Alerts** - Complete the HITL loop with human review, scorer feedback, and drift detection
+
+## Track B: RAG Pipeline (LangGraph + Knowledge Graph)
+
+- [x] **Phase 9: LangGraph Auditable RAG** - Deterministic DAG for SEC filings (retrieval → extraction → math → verify → output/abstention)
+- [x] **Phase 10: Knowledge Graph RAG Engine** - Entity extraction → DuckDB graph query → LLM synthesis with `graph_triples`
+- [x] **Phase 11: GraphRAG Frontend Integration** - Engine toggle, entity badges, triple visualization in React UI
 
 ---
 
@@ -116,6 +123,40 @@ Plans:
 **Plans**: TBD
 **UI hint**: yes
 
+### Phase 9: LangGraph Auditable RAG
+**Goal**: Deterministic LangGraph DAG retrieves SEC filing chunks, extracts XBRL facts via Polars, executes financial math, verifies against source, and routes to output or abstention
+**Depends on**: Phase 1 (EvalPipeline dataclasses)
+**Owner**: Claude (engine), MiMo (math), DeepSeek (review)
+**Success Criteria** (what must be TRUE):
+  1. Given a ticker and financial query, the DAG executes all 6 nodes (retrieval, extraction, math, verification, output/abstention) without error
+  2. Financial calculators (gross/operating/net margin, FCF, ratios, EBITDA) produce correct numeric results from XBRL facts
+  3. Accounting identity checks (balance sheet, gross profit, FCF) run automatically and appear in math_steps
+  4. Failed verification routes to abstention node with explicit reasoning
+**Files**: `api/services/langgraph_engine.py`, `api/services/financial_calc.py`, `api/services/sec_client.py`, `api/services/verifier.py`
+
+### Phase 10: Knowledge Graph RAG Engine
+**Goal**: LLM extracts 1-3 search entities from query, DuckDB `graph_triples` table is queried with ILIKE matching, and a second LLM call synthesizes the final answer from retrieved triples
+**Depends on**: Nothing (standalone module)
+**Owner**: MiMo (engine), DeepSeek (review)
+**Success Criteria** (what must be TRUE):
+  1. `EntitiesOutput` Pydantic model constrains LLM to return 1-3 entity strings
+  2. DuckDB queries use parameterized `?` placeholders — no SQL injection
+  3. `with_structured_output` produces typed entity list or empty on parse failure
+  4. Empty entity extraction returns "no relevant knowledge graph data found" without error
+**Files**: `api/services/graph_rag_engine.py`, `api/db/database.py`
+
+### Phase 11: GraphRAG Frontend Integration
+**Goal**: React UI exposes Graph RAG mode with engine toggle, ticker selector, entity badges, triple visualization (subject → predicate → object), and graph-specific suggested queries
+**Depends on**: Phase 10
+**Owner**: Claude
+**Success Criteria** (what must be TRUE):
+  1. Graph RAG button appears in engine toggle alongside SQL, Basic RAG, Auditable RAG
+  2. Ticker selector visible for both Graph and Auditable modes
+  3. Entities render as indigo badges; triples render as styled subject→predicate→object rows
+  4. Frontend TypeScript compiles with 0 errors (`tsc -b && vite build`)
+  5. Backend tests all pass (32 passed, 3 skipped)
+**Files**: `frontend/src/App.tsx`, `frontend/src/api/chat.ts`, `api/routes/chat.py`
+
 ---
 
 ## Progress Table
@@ -130,15 +171,18 @@ Plans:
 | 6. Shadow Deployment & Calibration | 0/? | Not started | - |
 | 7. Metrics Dashboard | 0/? | Not started | - |
 | 8. Review Queue, Feedback Loop & Drift Alerts | 0/? | Not started | - |
+| 9. LangGraph Auditable RAG | 1/1 | Completed | 2026-06-07 |
+| 10. Knowledge Graph RAG Engine | 1/1 | Completed | 2026-06-07 |
+| 11. GraphRAG Frontend Integration | 1/1 | Completed | 2026-06-09 |
 
 ---
 
 ## Coverage
 
-**Total requirements**: 35
-**Mapped to phases**: 35/35
+**Total requirements**: 35 (eval) + 0 (RAG — requirements embedded in success criteria)
+**Mapped to phases**: 35/35 (eval)
 
-| Phase | Requirements |
+| Phase | Requirements / Artifacts |
 |-------|-------------|
 | 1 | REQ-DS-01, REQ-DS-02, REQ-DS-03, REQ-DS-04 |
 | 2 | REQ-SV-01, REQ-SV-02, REQ-SV-03, REQ-SV-04 |
@@ -148,3 +192,6 @@ Plans:
 | 6 | REQ-SD-01, REQ-SD-02, REQ-SD-03 |
 | 7 | REQ-MD-01, REQ-MD-02, REQ-MD-03 |
 | 8 | REQ-RQ-01, REQ-RQ-02, REQ-RQ-03, REQ-RQ-04, REQ-RQ-05, REQ-RQ-06 |
+| 9 | `api/services/langgraph_engine.py`, `api/services/financial_calc.py`, `api/services/verifier.py` |
+| 10 | `api/services/graph_rag_engine.py`, `api/db/database.py` (graph_triples queries) |
+| 11 | `api/routes/chat.py` (/graph-rag endpoint), `frontend/src/App.tsx`, `frontend/src/api/chat.ts` |

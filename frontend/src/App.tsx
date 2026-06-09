@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, ClipboardList, ShieldCheck, Activity, MessageSquare, BarChart3 } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, ShieldCheck, Activity, MessageSquare, BarChart3, Network } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage } from './api/chat';
+import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse } from './api/chat';
 import ReviewQueue from './pages/ReviewQueue';
 import DriftAlert from './components/DriftAlert';
@@ -21,6 +21,8 @@ interface Message {
     reasoning: string;
   };
   math_steps?: string[];
+  entities?: string[];
+  triples?: Record<string, string>[];
 }
 
 type AppView = 'chat' | 'traceability' | 'results';
@@ -37,7 +39,7 @@ type PipelineStatus = {
 function App() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [mode, setMode] = useState<'sql' | 'rag' | 'auditable'>('auditable');
+  const [mode, setMode] = useState<'sql' | 'rag' | 'auditable' | 'graph'>('auditable');
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<AppView>('chat');
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
@@ -75,6 +77,8 @@ function App() {
         data = await sendSqlMessage(currentInput, history);
       } else if (mode === 'rag') {
         data = await sendRagMessage(currentInput, history);
+      } else if (mode === 'graph') {
+        data = await sendGraphRagMessage(currentInput, ticker);
       } else {
         data = await sendAuditableRagMessage(currentInput, ticker);
       }
@@ -102,6 +106,8 @@ function App() {
         xbrl_facts: data.xbrl_facts,
         verification: data.verification,
         math_steps: data.math_steps,
+        entities: data.entities,
+        triples: data.triples,
       };
 
       setMessages(prev => [...prev, assistantMsg]);
@@ -219,10 +225,21 @@ function App() {
                 <BookOpen size={16} />
                 Basic RAG
               </button>
+              <button
+                className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
+                  mode === 'graph'
+                    ? 'bg-[#202532] text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
+                }`}
+                onClick={() => setMode('graph')}
+              >
+                <Network size={16} />
+                Graph RAG
+              </button>
             </div>
 
             {/* Ticker Selector */}
-            {mode === 'auditable' && (
+            {(mode === 'auditable' || mode === 'graph') && (
               <div className="mt-4 px-2">
                 <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">Target Ticker</label>
                 <div className="relative">
@@ -321,7 +338,7 @@ function App() {
                   Testing Interface
                 </h1>
                 <div className="text-sm text-gray-400 mt-1 flex items-center gap-2">
-                  Engine: <span className="text-gray-200 font-medium px-2 py-0.5 bg-[#161b24] rounded-md border border-[#202532]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : 'Auditable Filing QA'}</span>
+                  Engine: <span className="text-gray-200 font-medium px-2 py-0.5 bg-[#161b24] rounded-md border border-[#202532]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
                 </div>
               </div>
               {/* Mini Pipeline Status Indicator */}
@@ -353,16 +370,31 @@ function App() {
                   <p className="text-gray-400 text-base leading-relaxed mb-8">
                     {mode === 'auditable' 
                       ? `Ask questions about ${ticker}'s SEC filings. The system will retrieve relevant excerpts, extract XBRL facts, and verify the math.`
+                      : mode === 'graph'
+                      ? `Ask about ${ticker}'s knowledge graph. The system will identify entities, query the knowledge graph, and synthesize insights.`
                       : 'Test the basic retrieval or SQL capabilities of the platform.'}
                   </p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
+                     {mode === 'graph' ? (
+                       <>
+                         <button onClick={() => setInput(`What are the key relationships for ${ticker} in the knowledge graph?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                           "What are {ticker}'s key relationships?"
+                         </button>
+                         <button onClick={() => setInput(`Show me the suppliers and partners of ${ticker}`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                           "Show me {ticker}'s suppliers and partners"
+                         </button>
+                       </>
+                     ) : (
+                       <>
                      <button onClick={() => setInput(`What was ${ticker}'s total revenue in the last fiscal year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
                         "What was {ticker}'s total revenue?"
                      </button>
                      <button onClick={() => setInput(`Did ${ticker}'s gross margin improve year-over-year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
                         "Did {ticker}'s gross margin improve?"
                      </button>
+                       </>
+                     )}
                   </div>
                 </div>
               )}
@@ -406,6 +438,41 @@ function App() {
                           verification={msg.verification}
                           math_steps={msg.math_steps}
                         />
+                      </div>
+                    )}
+
+                    {msg.role === 'assistant' && msg.entities && msg.entities.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-[#202532]/50">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Network size={14} className="text-indigo-400" />
+                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Search Entities</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {msg.entities.map((entity, i) => (
+                            <span key={i} className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-sm text-indigo-300 font-mono">
+                              {entity}
+                            </span>
+                          ))}
+                        </div>
+                        {msg.triples && msg.triples.length > 0 && (
+                          <>
+                            <div className="flex items-center gap-2 mb-3 mt-4">
+                              <Search size={14} className="text-blue-400" />
+                              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Knowledge Graph Triples ({msg.triples.length})</span>
+                            </div>
+                            <div className="bg-[#0a0c10] border border-[#202532] rounded-xl overflow-hidden shadow-inner">
+                              {msg.triples.map((triple, i) => (
+                                <div key={i} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-mono ${i % 2 === 0 ? 'bg-[#0c0e14]' : ''} ${i > 0 ? 'border-t border-[#202532]/50' : ''}`}>
+                                  <span className="text-blue-300">{triple.subject}</span>
+                                  <span className="text-gray-500">&rarr;</span>
+                                  <span className="text-emerald-400 text-xs px-1.5 py-0.5 bg-emerald-500/10 rounded border border-emerald-500/20">{triple.predicate}</span>
+                                  <span className="text-gray-500">&rarr;</span>
+                                  <span className="text-purple-300">{triple.object}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
 
@@ -497,6 +564,8 @@ function App() {
                       ? 'Ask a SQL question...'
                       : mode === 'rag' 
                       ? 'Ask a Knowledge Base question...'
+                      : mode === 'graph'
+                      ? `Ask about ${ticker}'s knowledge graph...`
                       : `Ask about ${ticker}'s SEC filing...`
                   }
                   disabled={loading}

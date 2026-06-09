@@ -98,7 +98,7 @@ const PipelineFlow: React.FC<PipelineFlowProps> = ({ status = {} }) => {
         elementsSelectable={false}
       >
         <Background color="#202532" gap={24} size={2} />
-        <Controls style={{ button: { backgroundColor: '#161b24', border: '1px solid #202532', color: '#9ca3af', fill: '#9ca3af' } }} />
+        <Controls className="[&>button]:bg-[#161b24] [&>button]:border-[#202532] [&>button]:text-gray-400 [&>button]:fill-gray-400" />
       </ReactFlow>
     </div>
   );

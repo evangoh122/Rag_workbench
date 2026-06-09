@@ -376,5 +376,3 @@ export default function ReviewQueue() {
     </div>
   );
 }
-
-}
