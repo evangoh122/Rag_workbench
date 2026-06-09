@@ -111,7 +111,7 @@ cp .env.example .env
 #   DEEPSEEK_API_KEY=sk-...         (or any supported provider)
 #   GEMINI_API_KEY=...              (for embeddings)
 #   EDGAR_USER_AGENT=Your Name your@email.com
-#   DB_PATH=./data/ibkr.duckdb     (or your DuckDB path)
+#   DB_PATH=./data/rag.duckdb     (or your DuckDB path)
 
 # 3. Start the backend
 uvicorn api.main:app --reload --port 8000
@@ -131,7 +131,7 @@ docker run -p 7860:7860 \
   -e DEEPSEEK_API_KEY=sk-... \
   -e GEMINI_API_KEY=... \
   -e EDGAR_USER_AGENT="Your Name your@email.com" \
-  -e DB_PATH=/app/data/ibkr.duckdb \
+  -e DB_PATH=/app/data/rag.duckdb \
   -v $(pwd)/data:/app/data \
   rag-workbench
 # → http://localhost:7860

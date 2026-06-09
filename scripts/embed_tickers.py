@@ -2,7 +2,7 @@
 embed_tickers.py
 Generates text embeddings for ticker descriptions and stores them in DuckDB.
 
-Uses Gemini (Google AI) for embeddings to ensure high quality and zero local compute load.
+Uses Ollama (nomic-embed-text) for local embeddings.
 """
 import os
 from datetime import datetime, timezone
@@ -10,14 +10,20 @@ from typing import List
 
 import duckdb
 from loguru import logger
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_ollama import OllamaEmbeddings
 
 from api.config import Config
 
 DB_PATH = Config.DB_PATH
 
-_embeddings = None   # lazy-loaded Gemini embeddings
-EMBEDDING_DIM = Config.EMBEDDING_DIM
+_embeddings = None
+EMBEDDING_DIM = 768  # nomic-embed-text output dim
+
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+# Strip /v1 suffix if present — OllamaEmbeddings adds its own path
+if OLLAMA_BASE_URL.endswith("/v1"):
+    OLLAMA_BASE_URL = OLLAMA_BASE_URL[:-3]
+OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 
 
 def _utcnow() -> str:
@@ -27,24 +33,29 @@ def _utcnow() -> str:
 def _get_embeddings():
     global _embeddings
     if _embeddings is None:
-        api_key = Config.GOOGLE_API_KEY
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY not set in .env. Needed for Gemini embeddings.")
-
-        logger.info(f"Initializing Gemini embeddings ({Config.EMBEDDING_MODEL})...")
-        _embeddings = GoogleGenerativeAIEmbeddings(
-            model=Config.EMBEDDING_MODEL,
-            google_api_key=api_key
-        )
+        logger.info(f"Initializing Ollama embeddings ({OLLAMA_EMBED_MODEL})...")
+        try:
+            _embeddings = OllamaEmbeddings(
+                model=OLLAMA_EMBED_MODEL,
+                base_url=OLLAMA_BASE_URL,
+            )
+            # Verify connection with a test embed (timeout handled by requests)
+            _embeddings.embed_query("test")
+            logger.info("Ollama embeddings connection verified")
+        except Exception as e:
+            _embeddings = None
+            logger.error(f"Failed to connect to Ollama at {OLLAMA_BASE_URL}: {e}")
+            raise RuntimeError(
+                f"Ollama not available at {OLLAMA_BASE_URL}. "
+                "Ensure Ollama is running and nomic-embed-text is pulled."
+            ) from e
     return _embeddings
 
-
-# ── Embedding ETL ─────────────────────────────────────────────────────────────
 
 def run_embed_tickers_etl(batch_size: int = 100) -> int:
     """
     Read descriptions from polygon_tickers (DuckDB), embed with
-    Gemini, and upsert into DuckDB ticker_embeddings.
+    Ollama, and upsert into DuckDB ticker_embeddings.
     Returns number of tickers embedded.
     """
     with duckdb.connect(DB_PATH, read_only=True) as conn:
@@ -92,12 +103,12 @@ def run_embed_tickers_etl(batch_size: int = 100) -> int:
                     """, [row["ticker"], texts[j], vecs[j], ts])
 
                 total += len(batch)
-                logger.debug(f"Embedded {total}/{len(rows)} tickers using Gemini")
+                logger.debug(f"Embedded {total}/{len(rows)} tickers using Ollama")
             except Exception as e:
                 logger.error(f"Batch embedding failed: {e}")
                 continue
 
         conn.commit()
 
-    logger.info(f"Embedding ETL complete: {total} tickers using Gemini")
+    logger.info(f"Embedding ETL complete: {total} tickers using Ollama")
     return total
