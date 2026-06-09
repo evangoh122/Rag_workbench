@@ -89,6 +89,17 @@ No PRD documents were ingested. All requirements below are derived from CONSTRAI
 | REQ-RQ-05 | Escalation-rate movement must not be used as a sole alert trigger | CONSTRAINT-008 |
 | REQ-RQ-06 | Hand-labeling for narrative fields (no XBRL equivalent) must be scoped to 50–100 edge-case records | CONSTRAINT-010 |
 
+### NeMo Guardrails System (REQ-GR)
+
+| ID | Requirement | Source |
+|----|-------------|--------|
+| REQ-GR-01 | **Input Rails:** System must intercept and block prompt injection or jailbreak attempts before hitting the main LLM | Security |
+| REQ-GR-02 | **Dialog Rails:** System must detect off-topic requests (non-financial) and gracefully refuse to answer | UX/Scope |
+| REQ-GR-03 | **Retrieval Rails:** System must evaluate retrieved context for relevance and drop irrelevant chunks before generation | Quality |
+| REQ-GR-04 | **Execution Rails:** SQL mode must be read-only; Math execution must be bounded to prevent resource exhaustion | Security |
+| REQ-GR-05 | **Output Rails (Hallucination):** System must run a final check (e.g., entailment) to block ungrounded claims | Quality |
+| REQ-GR-06 | **Output Rails (Data):** System must ensure responses do not leak system prompts or sensitive PII | Security |
+
 ---
 
 ## Traceability
@@ -130,3 +141,9 @@ No PRD documents were ingested. All requirements below are derived from CONSTRAI
 | REQ-RQ-04 | Phase 8 | Pending |
 | REQ-RQ-05 | Phase 8 | Pending |
 | REQ-RQ-06 | Phase 8 | Pending |
+| REQ-GR-01 | Phase 13 | Pending |
+| REQ-GR-02 | Phase 13 | Pending |
+| REQ-GR-03 | Phase 14 | Pending |
+| REQ-GR-04 | Phase 14 | Pending |
+| REQ-GR-05 | Phase 15 | Pending |
+| REQ-GR-06 | Phase 15 | Pending |

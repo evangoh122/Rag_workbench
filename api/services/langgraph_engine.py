@@ -61,20 +61,50 @@ class GraphState(TypedDict):
 
 def retrieval_node(state: GraphState) -> Dict[str, Any]:
     """
-    Node 1: Retrieve relevant text chunks from the SEC filing.
+    Node 1: Retrieve relevant text chunks from SEC filings using hybrid retrieval.
+    Uses DuckDB vector similarity as primary, keyword search as fallback.
+    Applies retrieval rail to filter irrelevant chunks.
     """
     logger.info(f"--- RETRIEVAL: {state['ticker']} ---")
     try:
-        # Mocking for now, in a real app this would query the vector store
-        # or use chunk_filing_sections
-        chunks = chunk_filing_sections(state['ticker'])
-        # Simple keyword search as a placeholder for actual vector retrieval
-        keywords = state['query'].lower().split()
-        retrieved = [
-            c for c in chunks 
-            if any(k in c['chunk_text'].lower() for k in keywords)
-        ][:5]
-        
+        from api.services.rag_engine import DuckDBVectorRetriever, EDGAREmbeddingsRetriever
+        from api.services.guardrails.retrieval_rails import filter_retrieval
+        from langchain_core.documents import Document
+
+        query = state['query']
+        ticker = state['ticker']
+
+        # Primary: vector similarity search on EDGAR embeddings
+        retrieved = []
+        try:
+            edgar_retriever = EDGAREmbeddingsRetriever(top_k=5)
+            docs = edgar_retriever.invoke(query)
+            retrieved = [
+                {
+                    "chunk_text": d.page_content,
+                    "metadata": d.metadata,
+                    "source": d.metadata.get("source", "edgar_embeddings"),
+                }
+                for d in docs
+            ]
+        except Exception as e:
+            logger.warning(f"Vector retrieval failed, falling back to keyword: {e}")
+
+        # Fallback: keyword search on filing sections
+        if not retrieved:
+            chunks = chunk_filing_sections(ticker)
+            keywords = query.lower().split()
+            retrieved = [
+                c for c in chunks
+                if any(k in c['chunk_text'].lower() for k in keywords)
+            ][:5]
+
+        # Apply retrieval rail — filter irrelevant chunks
+        verdict = filter_retrieval(query, retrieved)
+        if verdict.dropped_count > 0:
+            logger.info(f"Retrieval rail: dropped {verdict.dropped_count}/{verdict.original_count} irrelevant chunks")
+        retrieved = verdict.filtered_chunks
+
         return {
             "retrieved_docs": retrieved,
             "status": {**state.get('status', {}), "retrieval": "success"}
