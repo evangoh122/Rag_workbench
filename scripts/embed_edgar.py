@@ -155,7 +155,6 @@ DEMO_TICKERS: List[str] = [
     "UCTT", "VECO",
 ]
 
-# 10-K sections worth embedding — ordered by semantic value for RAG
 _TARGET_SECTIONS: Dict[str, str] = {
     "item_1":   r"item\s+1[\s.:—–-]+business",
     "item_1a":  r"item\s+1a[\s.:—–-]+risk\s+factor",
@@ -163,35 +162,61 @@ _TARGET_SECTIONS: Dict[str, str] = {
     "item_7a":  r"item\s+7a[\s.:—–-]+quantitative",
     "item_8":   r"item\s+8[\s.:—–-]+financial\s+statement",
 }
-# Pattern that marks the START of any target or adjacent section (used as end boundary)
 _ANY_ITEM = re.compile(
     r"(?:^|\n)\s*item\s+\d+[a-z]?[\s.:—–-]",
     re.IGNORECASE | re.MULTILINE,
 )
 
+# 20-F sections for foreign private issuers
+_20F_SECTIONS: Dict[str, str] = {
+    "item_1":   r"item\s+1[\s.:—–-]+description\s+of\s+business",
+    "item_3":   r"item\s+3[\s.:—–-]+key\s+information",
+    "item_4":   r"item\s+4[\s.:—–-]+information\s+on\s+the\s+company",
+    "item_5":   r"item\s+5[\s.:—–-]+operating",
+    "item_6":   r"item\s+6[\s.:—–-]+directors",
+    "item_7":   r"item\s+7[\s.:—–-]+major\s+shareholders",
+    "item_8":   r"item\s+8[\s.:—–-]+financial\s+information",
+    "item_10":  r"item\s+10[\s.:—–-]+additional\s+information",
+    "item_11":  r"item\s+11[\s.:—–-]+quantitative",
+}
+
+
+def _fetch_filing_with_downloader(ticker: str, form_types: List[str] = None) -> tuple[str, str]:
+    """Download the latest filing for the given form types. Returns (file_path, form_type)."""
+    if form_types is None:
+        form_types = ["10-K", "20-F", "10-Q"]
+
+    dl = Downloader(_COMPANY, _EMAIL, _DOWNLOAD_DIR)
+
+    for form_type in form_types:
+        try:
+            num_downloaded = dl.get(form_type, ticker, limit=1, download_details=True)
+            if num_downloaded == 0:
+                continue
+
+            ticker_dir = _DOWNLOAD_DIR / "sec-edgar-filings" / ticker / form_type
+            if not ticker_dir.exists():
+                continue
+
+            accession_dirs = [d for d in ticker_dir.iterdir() if d.is_dir()]
+            if not accession_dirs:
+                continue
+
+            primary_doc_path = accession_dirs[0] / "primary-document.html"
+            if primary_doc_path.exists():
+                logger.info(f"Found {form_type} for {ticker}")
+                return str(primary_doc_path), form_type
+        except Exception as e:
+            logger.debug(f"Failed to download {form_type} for {ticker}: {e}")
+            continue
+
+    return "", ""
+
 
 def fetch_latest_10k_with_downloader(ticker: str) -> str:
     """Download the latest 10-K and return path to primary HTML document."""
-    dl = Downloader(_COMPANY, _EMAIL, _DOWNLOAD_DIR)
-
-    try:
-        num_downloaded = dl.get("10-K", ticker, limit=1, download_details=True)
-        if num_downloaded == 0:
-            return ""
-
-        ticker_dir = _DOWNLOAD_DIR / "sec-edgar-filings" / ticker / "10-K"
-        if not ticker_dir.exists():
-            return ""
-
-        accession_dirs = [d for d in ticker_dir.iterdir() if d.is_dir()]
-        if not accession_dirs:
-            return ""
-
-        primary_doc_path = accession_dirs[0] / "primary-document.html"
-        return str(primary_doc_path) if primary_doc_path.exists() else ""
-    except Exception as e:
-        logger.warning(f"Failed to download 10-K for {ticker}: {e}")
-        return ""
+    file_path, _ = _fetch_filing_with_downloader(ticker, ["10-K"])
+    return file_path
 
 
 def _extract_period_of_report(html_content: str, accession_dir_name: str) -> str:
@@ -316,7 +341,7 @@ def _ensure_schema(conn) -> None:
 
 def run_embed_edgar_etl(tickers: List[str] = None) -> int:
     """
-    Main ETL job: use sec-edgar-downloader to fetch 10-Ks, chunk, embed, and store in DuckDB.
+    Main ETL job: use sec-edgar-downloader to fetch 10-K/20-F/10-Q, chunk, embed, and store in DuckDB.
     Defaults to DEMO_TICKERS if no tickers provided.
     """
     if tickers is None:
@@ -343,12 +368,12 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
         _ensure_schema(conn)
 
         for ticker in tickers:
-            logger.info(f"Processing 10-K for {ticker}...")
+            logger.info(f"Processing filings for {ticker}...")
 
-            file_path = fetch_latest_10k_with_downloader(ticker)
+            file_path, form_type = _fetch_filing_with_downloader(ticker, ["10-K", "20-F", "10-Q"])
 
             if not file_path:
-                logger.warning(f"No 10-K filing downloaded for {ticker}.")
+                logger.warning(f"No filings downloaded for {ticker}.")
                 continue
 
             text, raw_html = parse_html_file(file_path)
@@ -376,7 +401,7 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
             for section_label, section_text in sections:
                 provenance_header = (
                     f"[TICKER:{ticker.upper()} | SECTION:{section_label} | "
-                    f"PERIOD:{period_of_report} | FORM:10-K]\n"
+                    f"PERIOD:{period_of_report} | FORM:{form_type}]\n"
                 )
                 section_with_header = provenance_header + section_text
                 section_chunks = text_splitter.split_text(section_with_header)
@@ -410,7 +435,7 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
                         ticker, accession, chunk_text, vecs[j], ts,
                         cik,
                         section_label,
-                        "10-K",
+                        form_type,
                         period_of_report,
                         i + j,
                     ])
