@@ -28,11 +28,16 @@ Filing text:
 
 Available tickers: AAPL, TSLA, MSFT
 
-Common concept names (use exactly as shown):
-  Revenues, NetIncomeLoss, Assets, Liabilities, StockholdersEquity,
+Confirmed concept names (present for AAPL, TSLA, MSFT):
+  NetIncomeLoss, Assets, Liabilities, StockholdersEquity,
   OperatingIncomeLoss, GrossProfit, CostOfGoodsAndServicesSold,
   ResearchAndDevelopmentExpense, NetCashProvidedByUsedInOperatingActivities,
-  CashAndCashEquivalentsAtCarryingValue
+  CashAndCashEquivalentsAtCarryingValue, LongTermDebt,
+  EarningsPerShareBasic, CommonStockSharesOutstanding,
+  PaymentsToAcquirePropertyPlantAndEquipment
+
+Note: 'Revenues' only exists for some tickers/years. For AAPL revenue,
+use GrossProfit + CostOfGoodsAndServicesSold instead.
 
 Notes:
 - Use DuckDB SQL syntax.
