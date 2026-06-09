@@ -12,8 +12,5 @@ logs/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
-DATA_AUDIT_REPORT.md
-ISSUES.md
 .env.calibration
-.env.example
 evals/results/
