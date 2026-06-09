@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Database, Cpu, AlertTriangle, CheckCircle, RefreshCcw,
+  Database, AlertTriangle, CheckCircle, RefreshCcw,
   FileText, GitBranch, Layers, Zap, Server, ArrowRight,
 } from 'lucide-react';
 import axios from 'axios';

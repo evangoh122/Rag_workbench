@@ -99,13 +99,24 @@ async def health_full():
 
 frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
 if os.path.exists(frontend_path):
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
 
-    @app.exception_handler(404)
-    async def not_found_handler(request, exc):
-        if not request.url.path.startswith("/api"):
+    from fastapi import Request
+    from starlette.responses import Response as StarletteResponse
+
+    async def _not_found(req: Request, exc: Exception):
+        if not req.url.path.startswith("/api"):
             return FileResponse(os.path.join(frontend_path, "index.html"))
-        raise exc
+        return StarletteResponse(content='{"detail":"Not Found"}', status_code=404, media_type="application/json")
+
+    app.add_exception_handler(404, _not_found)
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str, request: Request):
+        file_path = os.path.join(frontend_path, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(frontend_path, "index.html"))
 
 if __name__ == "__main__":
     import uvicorn
