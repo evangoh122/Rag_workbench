@@ -23,8 +23,8 @@ async def get_stats():
     try:
         conn = db_manager.get_connection()
         db_main_ok = True
-        data["filing_chunks"]         = _count(conn, "SELECT COUNT(*) FROM edgar_chunks")
-        data["companies_with_chunks"] = _count(conn, "SELECT COUNT(DISTINCT ticker) FROM edgar_chunks")
+        data["filing_chunks"]         = _count(conn, "SELECT COUNT(*) FROM edgar_embeddings")
+        data["companies_with_chunks"] = _count(conn, "SELECT COUNT(DISTINCT ticker) FROM edgar_embeddings")
         data["xbrl_facts"]            = _count(conn, "SELECT COUNT(*) FROM xbrl_facts")
         data["companies_with_xbrl"]   = _count(conn, "SELECT COUNT(DISTINCT ticker) FROM xbrl_facts")
         data["graph_triples"]         = _count(conn, "SELECT COUNT(*) FROM graph_triples")
@@ -32,7 +32,7 @@ async def get_stats():
         # ticker coverage list
         try:
             rows = conn.execute(
-                "SELECT DISTINCT ticker FROM edgar_chunks ORDER BY ticker"
+                "SELECT DISTINCT ticker FROM edgar_embeddings ORDER BY ticker"
             ).fetchall()
             data["tickers_embedded"] = [r[0] for r in rows]
         except Exception:
