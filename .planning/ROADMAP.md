@@ -10,19 +10,26 @@ Updated: 2026-06-09
 ## Track A: Eval Pipeline (SEC Filing Evaluation & HITL)
 
 - [x] **Phase 1: Data Structures & Reader Adapter** - Define the ExtractionResult contract and wrap EdgarTools output into it
-- [ ] **Phase 2: Schema Validator** - Implement layer-1 validation (field presence, types, unit sanity)
-- [ ] **Phase 3: XBRL Cross-Validation & companyfacts Client** - Build the XBRL fact lookup that unlocks semantic validation and honest confidence scoring
-- [ ] **Phase 4: Semantic Validator** - Implement layer-2 validation (accounting identities, referential integrity, plausibility)
-- [ ] **Phase 5: Confidence Scoring, Routing & Always-Escalate Triggers** - Wire provenance-based confidence, three-tier routing, and all eight deterministic triggers
-- [ ] **Phase 6: Shadow Deployment & Calibration** - Run read-only over historical filings; calibrate AUTO/SAMPLED_REVIEW/ESCALATE cut points
-- [ ] **Phase 7: Metrics Dashboard** - Surface rolling agreement rate, routing distribution, and escalation signals
-- [ ] **Phase 8: Review Queue, Feedback Loop & Drift Alerts** - Complete the HITL loop with human review, scorer feedback, and drift detection
+- [x] **Phase 2: Schema Validator** - Implement layer-1 validation (field presence, types, unit sanity)
+- [x] **Phase 3: XBRL Cross-Validation & companyfacts Client** - Build the XBRL fact lookup that unlocks semantic validation and honest confidence scoring
+- [x] **Phase 4: Semantic Validator** - Implement layer-2 validation (accounting identities, referential integrity, plausibility)
+- [x] **Phase 5: Confidence Scoring, Routing & Always-Escalate Triggers** - Wire provenance-based confidence, three-tier routing, and all eight deterministic triggers
+- [x] **Phase 6: Shadow Deployment & Calibration** - Run read-only over historical filings; calibrate AUTO/SAMPLED_REVIEW/ESCALATE cut points
+- [x] **Phase 7: Metrics Dashboard** - Surface rolling agreement rate, routing distribution, and escalation signals
+- [x] **Phase 8: Review Queue, Feedback Loop & Drift Alerts** - Complete the HITL loop with human review, scorer feedback, and drift detection
 
 ## Track B: RAG Pipeline (LangGraph + Knowledge Graph)
 
 - [x] **Phase 9: LangGraph Auditable RAG** - Deterministic DAG for SEC filings (retrieval → extraction → math → verify → output/abstention)
 - [x] **Phase 10: Knowledge Graph RAG Engine** - Entity extraction → DuckDB graph query → LLM synthesis with `graph_triples`
 - [x] **Phase 11: GraphRAG Frontend Integration** - Engine toggle, entity badges, triple visualization in React UI
+- [ ] **Phase 12: Outstanding Integrations & Fixes** - Implement trigger 8, wire vector retrieval, run shadow deployment, calibrate thresholds, and run RAGAS eval
+
+## Track C: NeMo Guardrails System
+
+- [ ] **Phase 13: Input & Dialog Rails** - Implement prompt injection detection, jailbreak prevention, and conversational state tracking
+- [ ] **Phase 14: Retrieval & Execution Rails** - Implement relevance checking for retrieved context and safe execution boundaries for math/SQL
+- [ ] **Phase 15: Output Rails** - Implement hallucination detection, formatting checks, and sensitive data masking
 
 ---
 
@@ -157,6 +164,49 @@ Plans:
   5. Backend tests all pass (32 passed, 3 skipped)
 **Files**: `frontend/src/App.tsx`, `frontend/src/api/chat.ts`, `api/routes/chat.py`
 
+### Phase 12: Outstanding Integrations & Fixes
+**Goal**: Complete all unexecuted requirements from Track A and Track B to achieve a true end-to-end working system.
+**Depends on**: Phases 1-11
+**Owner**: MiMo / DeepSeek
+**Success Criteria** (what must be TRUE):
+  1. Trigger 8 ("downstream action") is implemented via a context flag and added to `ALL_TRIGGERS`.
+  2. `retrieval_node` in `langgraph_engine.py` uses proper vector/hybrid retrieval against DuckDB, replacing naive keyword search.
+  3. A shadow deployment script (`scripts/run_shadow.py`) exists and has been executed over historical filings.
+  4. Calibration endpoint has been run on shadow data to replace default `ROUTING_THRESHOLD` env vars with real derived cut points.
+  5. RAGAS evaluation script (`evals/ragas_eval.py`) has been run against the live system and results stored.
+**Files**: `api/services/confidence_scorer.py`, `api/services/langgraph_engine.py`, `scripts/run_shadow.py`, `evals/ragas_eval.py`
+
+### Phase 13: Input & Dialog Rails
+**Goal**: Protect the system from malicious inputs and maintain coherent, on-topic conversational state.
+**Depends on**: Phase 12
+**Requirements**: REQ-GR-01, REQ-GR-02
+**Owner**: MiMo / DeepSeek
+**Success Criteria** (what must be TRUE):
+  1. Input rail blocks known prompt injection and jailbreak patterns before they reach the main LLM.
+  2. Dialog rail detects off-topic queries (e.g., non-financial questions) and gracefully refuses to answer.
+  3. Rails are implemented using a standard framework pattern (like NeMo Guardrails or equivalent LangGraph nodes).
+**Files**: `api/services/guardrails/input_rails.py`, `api/services/guardrails/dialog_rails.py`
+
+### Phase 14: Retrieval & Execution Rails
+**Goal**: Ensure retrieved context is relevant and execution environments (math/SQL) operate within safe boundaries.
+**Depends on**: Phase 13
+**Requirements**: REQ-GR-03, REQ-GR-04
+**Owner**: MiMo / DeepSeek
+**Success Criteria** (what must be TRUE):
+  1. Retrieval rail evaluates retrieved chunks against the query and drops irrelevant context before generation.
+  2. Execution rail enforces read-only access for SQL mode and bounds math execution to prevent resource exhaustion or arbitrary code execution.
+**Files**: `api/services/guardrails/retrieval_rails.py`, `api/services/guardrails/execution_rails.py`
+
+### Phase 15: Output Rails
+**Goal**: Prevent the system from emitting hallucinations, malformed data, or sensitive PII.
+**Depends on**: Phase 14
+**Requirements**: REQ-GR-05, REQ-GR-06
+**Owner**: MiMo / DeepSeek
+**Success Criteria** (what must be TRUE):
+  1. Output rail performs a final check (e.g., SelfCheckGPT or entailment) to block ungrounded claims.
+  2. Output rail ensures responses do not contain leaked system prompts or unauthorized PII.
+**Files**: `api/services/guardrails/output_rails.py`
+
 ---
 
 ## Progress Table
@@ -174,13 +224,17 @@ Plans:
 | 9. LangGraph Auditable RAG | 1/1 | Completed | 2026-06-07 |
 | 10. Knowledge Graph RAG Engine | 1/1 | Completed | 2026-06-07 |
 | 11. GraphRAG Frontend Integration | 1/1 | Completed | 2026-06-09 |
+| 12. Outstanding Integrations & Fixes | 0/1 | Pending | |
+| 13. Input & Dialog Rails | 0/1 | Pending | |
+| 14. Retrieval & Execution Rails | 0/1 | Pending | |
+| 15. Output Rails | 0/1 | Pending | |
 
 ---
 
 ## Coverage
 
-**Total requirements**: 35 (eval) + 0 (RAG — requirements embedded in success criteria)
-**Mapped to phases**: 35/35 (eval)
+**Total requirements**: 35 (eval) + 6 (guardrails) = 41
+**Mapped to phases**: 41/41
 
 | Phase | Requirements / Artifacts |
 |-------|-------------|
@@ -195,3 +249,7 @@ Plans:
 | 9 | `api/services/langgraph_engine.py`, `api/services/financial_calc.py`, `api/services/verifier.py` |
 | 10 | `api/services/graph_rag_engine.py`, `api/db/database.py` (graph_triples queries) |
 | 11 | `api/routes/chat.py` (/graph-rag endpoint), `frontend/src/App.tsx`, `frontend/src/api/chat.ts` |
+| 12 | Outstanding fixes for Phase 5, 6, 9 |
+| 13 | REQ-GR-01, REQ-GR-02 |
+| 14 | REQ-GR-03, REQ-GR-04 |
+| 15 | REQ-GR-05, REQ-GR-06 |
