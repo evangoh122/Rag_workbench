@@ -249,12 +249,14 @@ Question: {question}
 Answer:""")
 
 
+import hashlib
+
 def _format_docs(docs: List[Document]) -> str:
-    # Deduplication based on content hash
+    # Deduplication based on deterministic content hash
     seen = set()
     unique_docs = []
     for d in docs:
-        content_hash = hash(d.page_content)
+        content_hash = hashlib.sha256(d.page_content.encode()).hexdigest()
         if content_hash not in seen:
             seen.add(content_hash)
             unique_docs.append(d)

@@ -23,7 +23,7 @@ class DatabaseManager:
                 self._conn = duckdb.connect(Config.DB_PATH, read_only=True)
                 try:
                     self._conn.execute("LOAD vss")
-                except Exception:
+                except duckdb.IOException:
                     pass
             return self._conn
 
