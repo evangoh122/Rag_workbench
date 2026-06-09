@@ -267,7 +267,7 @@ def bootstrap(tickers: list[str], db_path: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Bootstrap DuckDB with SEC EDGAR XBRL data")
-    parser.add_argument("--tickers", default="AAPL,TSLA,MSFT,NVDA,AMZN",
+    parser.add_argument("--tickers", default="NVDA,AMD,QCOM,TXN,MU",
                         help="Comma-separated ticker symbols")
     parser.add_argument("--db-path", default="./data/rag.duckdb",
                         help="Path to DuckDB file")
