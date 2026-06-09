@@ -10,13 +10,13 @@ Updated: 2026-06-09
 ## Track A: Eval Pipeline (SEC Filing Evaluation & HITL)
 
 - [x] **Phase 1: Data Structures & Reader Adapter** - Define the ExtractionResult contract and wrap EdgarTools output into it
-- [ ] **Phase 2: Schema Validator** - Implement layer-1 validation (field presence, types, unit sanity)
-- [ ] **Phase 3: XBRL Cross-Validation & companyfacts Client** - Build the XBRL fact lookup that unlocks semantic validation and honest confidence scoring
-- [ ] **Phase 4: Semantic Validator** - Implement layer-2 validation (accounting identities, referential integrity, plausibility)
-- [ ] **Phase 5: Confidence Scoring, Routing & Always-Escalate Triggers** - Wire provenance-based confidence, three-tier routing, and all eight deterministic triggers
-- [ ] **Phase 6: Shadow Deployment & Calibration** - Run read-only over historical filings; calibrate AUTO/SAMPLED_REVIEW/ESCALATE cut points
-- [ ] **Phase 7: Metrics Dashboard** - Surface rolling agreement rate, routing distribution, and escalation signals
-- [ ] **Phase 8: Review Queue, Feedback Loop & Drift Alerts** - Complete the HITL loop with human review, scorer feedback, and drift detection
+- [x] **Phase 2: Schema Validator** - Implement layer-1 validation (field presence, types, unit sanity)
+- [x] **Phase 3: XBRL Cross-Validation & companyfacts Client** - Build the XBRL fact lookup that unlocks semantic validation and honest confidence scoring
+- [x] **Phase 4: Semantic Validator** - Implement layer-2 validation (accounting identities, referential integrity, plausibility)
+- [x] **Phase 5: Confidence Scoring, Routing & Always-Escalate Triggers** - Wire provenance-based confidence, three-tier routing, and all eight deterministic triggers
+- [x] **Phase 6: Shadow Deployment & Calibration** - Run read-only over historical filings; calibrate AUTO/SAMPLED_REVIEW/ESCALATE cut points
+- [x] **Phase 7: Metrics Dashboard** - Surface rolling agreement rate, routing distribution, and escalation signals
+- [x] **Phase 8: Review Queue, Feedback Loop & Drift Alerts** - Complete the HITL loop with human review, scorer feedback, and drift detection
 
 ## Track B: RAG Pipeline (LangGraph + Knowledge Graph)
 
@@ -233,8 +233,8 @@ Plans:
 
 ## Coverage
 
-**Total requirements**: 35 (eval) + 0 (RAG — requirements embedded in success criteria)
-**Mapped to phases**: 35/35 (eval)
+**Total requirements**: 35 (eval) + 6 (guardrails) = 41
+**Mapped to phases**: 41/41
 
 | Phase | Requirements / Artifacts |
 |-------|-------------|
