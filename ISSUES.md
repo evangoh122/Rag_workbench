@@ -28,6 +28,7 @@
 | 12 | No CORS origin validation | `cors_config.py` | Regex validation |
 | 13 | Error messages leak internals | Multiple | Generic messages to client |
 | 14 | Hardcoded MiMo URL | `ragas_eval.py` | Reads `MIMO_BASE_URL` from env |
+| 15 | No API key scoping | `auth.py` | `get_admin_api_key()` with `ADMIN_API_KEY` env var |
 
 ### P2 - Architecture
 
@@ -82,7 +83,6 @@
 | # | Issue | File | Action |
 |---|-------|------|--------|
 | 2 | Real API keys in `.env` | `.env` | Rotate keys; use secrets manager |
-| 15 | No API key scoping | `auth.py` | Design: implement key scopes |
 
 ### P2 - Architecture & Design
 
@@ -105,7 +105,6 @@
 | H2 | XBRL_MISMATCH false positives | Investigate XbrlCrossValidator |
 | L2 | Query instruction prefix | Verify against Qwen3 docs |
 | L3 | No confidence differentiation | Tune provenance base scores |
-| L8 | Separate EDGAR identities | Consolidate embed_edgar + edgar_adapter |
 
 ---
 
@@ -114,8 +113,8 @@
 | Category | Resolved | Outstanding |
 |----------|----------|-------------|
 | P0 Critical | 1 | 0 |
-| P1 Security | 12 | 2 (user action) |
+| P1 Security | 13 | 1 (user action) |
 | P2 Architecture | 6 | 2 |
 | P3 Code Quality | 11 | 1 |
-| Audit Report | 12 | 5 |
-| **Total** | **42** | **10** |
+| Audit Report | 13 | 4 |
+| **Total** | **44** | **8** |
