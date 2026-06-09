@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse } from './api/chat';
 import ReviewQueue from './pages/ReviewQueue';
+import MetricsDashboard from './pages/MetricsDashboard';
 import DriftAlert from './components/DriftAlert';
 import AuditTrail from './components/AuditTrail';
 import PipelineFlow from './components/PipelineFlow';
@@ -25,7 +26,7 @@ interface Message {
   triples?: Record<string, string>[];
 }
 
-type AppView = 'chat' | 'traceability' | 'results';
+type AppView = 'chat' | 'traceability' | 'results' | 'metrics';
 
 type PipelineStatus = {
   input?: 'success' | 'error' | 'pending';
@@ -183,6 +184,18 @@ function App() {
             <BarChart3 size={18} className={view === 'results' ? 'text-emerald-400' : 'text-gray-500'} />
             Results & Testing
           </button>
+
+          <button
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+              view === 'metrics'
+                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+            }`}
+            onClick={() => setView('metrics')}
+          >
+            <Activity size={18} className={view === 'metrics' ? 'text-cyan-400' : 'text-gray-500'} />
+            Metrics Dashboard
+          </button>
         </nav>
 
         {/* Mode & Context (Only show if relevant) */}
@@ -274,7 +287,7 @@ function App() {
         )}
 
         {/* Drift alert at bottom of sidebar */}
-        <div className={view === 'results' ? 'mt-auto' : 'mt-4'}>
+        <div className={(view === 'results' || view === 'metrics') ? 'mt-auto' : 'mt-4'}>
           <DriftAlert />
         </div>
       </aside>
@@ -286,6 +299,13 @@ function App() {
         {view === 'results' && (
           <div className="flex-1 overflow-hidden animate-in fade-in duration-300">
             <ReviewQueue />
+          </div>
+        )}
+
+        {/* VIEW: METRICS */}
+        {view === 'metrics' && (
+          <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
+            <MetricsDashboard />
           </div>
         )}
 

@@ -24,6 +24,8 @@ try:
         get_calibration_data,
         persist_calibration_result,
     )
+    from api.db.review_queue import compute_agreement_rate
+    from api.db.review_queue import count_unrecognized_concepts
 except ImportError:  # pragma: no cover
     list_decisions = None
     insert_decision = None
@@ -31,6 +33,8 @@ except ImportError:  # pragma: no cover
     insert_verdict = None
     get_calibration_data = None
     persist_calibration_result = None
+    compute_agreement_rate = None
+    count_unrecognized_concepts = None
 
 from loguru import logger
 try:
@@ -128,6 +132,43 @@ async def record_reviewer_verdict(
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return Response(status_code=204)
+
+
+@router.get("/metrics")
+async def get_pipeline_metrics(conn=Depends(get_review_conn)):
+    try:
+        agreement_rate = 0.0
+        if compute_agreement_rate is not None:
+            agreement_rate = compute_agreement_rate(conn, window=100)
+
+        routes_query = """
+            SELECT route, COUNT(*) as cnt
+            FROM review_decisions
+            GROUP BY route
+        """
+        cursor = conn.execute(routes_query)
+        routing = {"auto": 0, "sampled_review": 0, "escalate": 0}
+        total = 0
+        for row in cursor.fetchall():
+            r = row[0]
+            cnt = row[1]
+            if r in routing:
+                routing[r] = cnt
+            total += cnt
+
+        escalation_rate = 0.0
+        if total > 0:
+            escalation_rate = routing["escalate"] / total
+
+        return {
+            "agreement_rate": agreement_rate,
+            "routing_distribution": routing,
+            "escalation_rate": round(escalation_rate, 4),
+            "total_decisions": total,
+        }
+    except Exception:
+        logger.exception("Failed to compute metrics")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/drift", response_model=DriftStatusOut)
