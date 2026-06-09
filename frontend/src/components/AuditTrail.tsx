@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
-import type { Source, XBRLFact, Verification } from '../api/chat';
+import type { Source, XBRLFact } from '../api/chat';
+
+interface VerificationResult {
+  status: string;
+  reasoning: string;
+}
 
 interface AuditTrailProps {
   sources?: Source[];
   xbrl_facts?: XBRLFact[];
-  verification?: Verification;
+  verification?: VerificationResult;
   math_steps?: string[];
 }
 
@@ -36,26 +41,27 @@ function CollapsibleSection({ title, children, defaultOpen = false }: Collapsibl
   );
 }
 
-function VerificationBadge({ verification }: { verification: Verification }) {
-  if (verification.status === 'not_checked') return null;
+function VerificationBadge({ verification }: { verification: VerificationResult }) {
+  const status = verification.status;
+  if (!status || status === 'not_checked') return null;
 
-  if (verification.status === 'verified') {
+  if (status === 'verified' || status === 'PASS') {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-900 text-green-300 border border-green-700">
-        ✓ XBRL Verified
+        &#x2713; Verified ({verification.reasoning})
       </span>
     );
   }
 
-  if (verification.status === 'mismatch') {
+  if (status === 'mismatch' || status === 'FAIL') {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-900 text-red-300 border border-red-700">
-        ✗ XBRL Mismatch — claimed {verification.claimed_value}, XBRL says {verification.xbrl_value}
+        &#x2717; Verification Failed — {verification.reasoning}
       </span>
     );
   }
 
-  if (verification.status === 'unverifiable') {
+  if (status === 'unverifiable' || status === 'ERROR') {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-800 text-gray-400 border border-gray-600">
         Unverifiable

@@ -39,7 +39,7 @@ This document defines the roles, responsibilities, and ownership model for the A
 | Middleware | Gemini | `api/middleware/` |
 | Retrievers | Gemini/MiMo | `api/retrievers/` |
 | Configuration | Claude | `api/config.py` |
-| Core RAG Pipeline | Claude | `asymmetric_rag.py` |
+| Core RAG Pipeline | Claude | `api/services/graph_rag_engine.py`, `api/services/langgraph_engine.py` |
 | Ingestion Scripts | Gemini | `scripts/embed_*.py` |
 | Data Pipelines | MiMo | `data/` |
 | Startup Logic | MiMo | `run.py` |

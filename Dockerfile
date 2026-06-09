@@ -50,7 +50,7 @@ COPY --from=python-builder /install /usr/local
 # Copy application code
 COPY api/ ./api/
 COPY scripts/ ./scripts/
-COPY main.py run.py asymmetric_rag.py ./
+COPY main.py run.py ./
 
 # Copy React build from Stage 1
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist

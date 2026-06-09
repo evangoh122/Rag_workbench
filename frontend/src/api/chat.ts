@@ -41,6 +41,8 @@ export interface ChatResponse {
   };
   math_steps?: string[];
   pipeline_status?: Record<string, 'success' | 'error' | 'pending'>;
+  entities?: string[];
+  triples?: Record<string, string>[];
 }
 
 interface HistoryEntry {
@@ -66,6 +68,17 @@ export async function sendRagMessage(
   const response = await axios.post<ChatResponse>(`${API_BASE}/chat/rag`, {
     message,
     history,
+  });
+  return response.data;
+}
+
+export async function sendGraphRagMessage(
+  message: string,
+  ticker: string = 'AAPL',
+): Promise<ChatResponse> {
+  const response = await axios.post<ChatResponse>(`${API_BASE}/chat/graph-rag`, {
+    message,
+    ticker,
   });
   return response.data;
 }
