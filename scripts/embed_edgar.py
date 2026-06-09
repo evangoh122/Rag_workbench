@@ -34,107 +34,107 @@ _COMPANY = _parts[0] if _parts else "RAG-Workbench"
 _EMAIL = _parts[1] if len(_parts) > 1 else "research@example.com"
 _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 
-# CIK lookup for well-known tickers
+# CIK lookup for well-known tickers — sourced from SEC EDGAR company_tickers.json
 _TICKER_CIK: dict[str, str] = {
     # ── Semiconductor Design & IP ──
     "ADI":  "0000006607",  # Analog Devices
-    "AIP":  "0001861842",  # Arteris
-    "ALAB": "0001903832",  # Astera Labs
-    "ALGM": "0000930155",  # Allegro MicroSystems
-    "ALMU": "0001841107",  # Aeluma
-    "AMBQ": "0001841107",  # Ambiq Micro (same CIK as Aeluma placeholder)
+    "AIP":  "0001667011",  # Arteris
+    "ALAB": "0001736297",  # Astera Labs
+    "ALGM": "0000866291",  # Allegro MicroSystems
+    "ALMU": "0001828805",  # Aeluma
+    "AMBQ": "0001500412",  # Ambiq Micro
     "AMD":  "0000002488",  # Advanced Micro Devices
-    "AOSL": "0000930155",  # Alpha & Omega (placeholder)
-    "ARM":  "0001903832",  # Arm Holdings (placeholder)
-    "ASX":  "0000930155",  # ASE Technology (placeholder)
+    "AOSL": "0001387467",  # Alpha & Omega Semiconductor
+    "ARM":  "0001973239",  # Arm Holdings
+    "ASX":  "0001122411",  # ASE Technology
     "AVGO": "0001730168",  # Broadcom
-    "CBRS": "0001903832",  # Cerebras (placeholder)
-    "CEVA": "0000930155",  # CEVA (placeholder)
-    "CRDO": "0001903832",  # Credo Technology (placeholder)
-    "CRUS": "0000930155",  # Cirrus Logic (placeholder)
-    "DIOD": "0000930155",  # Diodes Inc (placeholder)
-    "GCTS": "0001903832",  # GCT Semiconductor (placeholder)
-    "GFS":  "0001903832",  # GlobalFoundries (placeholder)
-    "GSIT": "0000930155",  # GSI Technology (placeholder)
-    "HIMX": "0000930155",  # Himax (placeholder)
-    "ICG":  "0001903832",  # Intchains (placeholder)
-    "IMOS": "0000930155",  # ChipMOS (placeholder)
-    "INDI": "0001903832",  # indie Semiconductor (placeholder)
+    "CBRS": "0002021728",  # Cerebras Systems
+    "CEVA": "0001173489",  # CEVA
+    "CRDO": "0001807794",  # Credo Technology
+    "CRUS": "0000772406",  # Cirrus Logic
+    "DIOD": "0000029002",  # Diodes Inc
+    "GCTS": "0001851961",  # GCT Semiconductor
+    "GFS":  "0001709048",  # GlobalFoundries
+    "GSIT": "0001126741",  # GSI Technology
+    "HIMX": "0001342338",  # Himax Technologies
+    "ICG":  "0001895597",  # Intchains Group
+    "IMOS": "0001123134",  # ChipMOS Technologies
+    "INDI": "0001841925",  # indie Semiconductor
     "INTC": "0000050863",  # Intel
-    "IPWR": "0000930155",  # Ideal Power (placeholder)
-    "LAES": "0001903832",  # SEALSQ (placeholder)
-    "LASR": "0000930155",  # nLIGHT (placeholder)
-    "LEDS": "0000930155",  # SemiLEDS (placeholder)
-    "LSCC": "0000930155",  # Lattice Semiconductor (placeholder)
-    "MCHP": "0000930155",  # Microchip Technology (placeholder)
-    "MOBX": "0001903832",  # Mobix Labs (placeholder)
-    "MPWR": "0000930155",  # Monolithic Power (placeholder)
-    "MRAM": "0000930155",  # Everspin (placeholder)
-    "MRVL": "0000930155",  # Marvell (placeholder)
-    "MTSI": "0000930155",  # MACOM (placeholder)
+    "IPWR": "0001507957",  # Ideal Power
+    "LAES": "0001951222",  # SEALSQ Corp
+    "LASR": "0001124796",  # nLIGHT
+    "LEDS": "0001333822",  # SemiLEDs
+    "LSCC": "0000855658",  # Lattice Semiconductor
+    "MCHP": "0000827054",  # Microchip Technology
+    "MOBX": "0001855467",  # Mobix Labs
+    "MPWR": "0001280452",  # Monolithic Power Systems
+    "MRAM": "0001438423",  # Everspin Technologies
+    "MRVL": "0001835632",  # Marvell Technology
+    "MTSI": "0001493594",  # MACOM Technology Solutions
     "MU":   "0000723125",  # Micron Technology
-    "MX":   "0000930155",  # Magnachip (placeholder)
-    "MXL":  "0000930155",  # MaxLinear (placeholder)
+    "MX":   "0001325702",  # Magnachip Semiconductor
+    "MXL":  "0001288469",  # MaxLinear
     "NVDA": "0001045810",  # Nvidia
-    "NVEC": "0000930155",  # NVE Corp (placeholder)
-    "NVTS": "0001903832",  # Navitas (placeholder)
-    "NXPI": "0000930155",  # NXP (placeholder)
-    "PI":   "0000930155",  # Impinj (placeholder)
-    "POET": "0001903832",  # POET Technologies (placeholder)
-    "POWI": "0000930155",  # Power Integrations (placeholder)
-    "PRSO": "0000930155",  # Peraso (placeholder)
-    "PXLW": "0000930155",  # Pixelworks (placeholder)
+    "NVEC": "0000724910",  # NVE Corp
+    "NVTS": "0001821769",  # Navitas Semiconductor
+    "NXPI": "0001413447",  # NXP Semiconductors
+    "PI":   "0001114995",  # Impinj
+    "POET": "0001437424",  # POET Technologies
+    "POWI": "0000833640",  # Power Integrations
+    "PRSO": "0000890394",  # Peraso Technologies
+    "PXLW": "0001040161",  # Pixelworks
     "QCOM": "0000804328",  # Qualcomm
-    "QRVO": "0000930155",  # Qorvo (placeholder)
-    "QUIK": "0000930155",  # QuickLogic (placeholder)
-    "RMBS": "0000930155",  # Rambus (placeholder)
-    "SIMO": "0000930155",  # Silicon Motion (placeholder)
-    "SITM": "0001903832",  # SiTime (placeholder)
-    "SKYT": "0001903832",  # SkyWater (placeholder)
-    "SLAB": "0000930155",  # Silicon Labs (placeholder)
-    "SMTC": "0000930155",  # Semtech (placeholder)
-    "SQNS": "0000930155",  # Sequans (placeholder)
-    "STM":  "0000930155",  # STMicroelectronics (placeholder)
-    "SWKS": "0000930155",  # Skyworks (placeholder)
-    "SYNA": "0000930155",  # Synaptics (placeholder)
-    "TSEM": "0000930155",  # Tower Semiconductor (placeholder)
+    "QRVO": "0001604778",  # Qorvo
+    "QUIK": "0000882508",  # QuickLogic
+    "RMBS": "0000917273",  # Rambus
+    "SIMO": "0001329394",  # Silicon Motion Technology
+    "SITM": "0001451809",  # SiTime
+    "SKYT": "0001819974",  # SkyWater Technology
+    "SLAB": "0001038074",  # Silicon Laboratories
+    "SMTC": "0000088941",  # Semtech
+    "SQNS": "0001383395",  # Sequans Communications
+    "STM":  "0000932787",  # STMicroelectronics
+    "SWKS": "0000004127",  # Skyworks Solutions
+    "SYNA": "0000817720",  # Synaptics
+    "TSEM": "0000928876",  # Tower Semiconductor
     "TSM":  "0001046179",  # Taiwan Semiconductor
     "TXN":  "0000097476",  # Texas Instruments
-    "UMC":  "0000930155",  # United Microelectronics (placeholder)
-    "VLN":  "0001903832",  # Valens (placeholder)
-    "VSH":  "0000930155",  # Vishay (placeholder)
-    "WKEY": "0001903832",  # WISeKey (placeholder)
-    "WOLF": "0000930155",  # Wolfspeed (placeholder)
+    "UMC":  "0001033767",  # United Microelectronics
+    "VLN":  "0001863006",  # Valens Semiconductor
+    "VSH":  "0000103730",  # Vishay Intertechnology
+    "WKEY": "0001738699",  # WISeKey International
+    "WOLF": "0000895419",  # Wolfspeed
     # ── Semiconductor Equipment & Materials ──
-    "ACLS": "0000930155",  # Axcelis (placeholder)
-    "ACMR": "0000930155",  # ACM Research (placeholder)
-    "AEHR": "0000930155",  # Aehr Test Systems (placeholder)
+    "ACLS": "0000897077",  # Axcelis Technologies
+    "ACMR": "0001680062",  # ACM Research
+    "AEHR": "0001040470",  # Aehr Test Systems
     "AMAT": "0000069515",  # Applied Materials
-    "AMBA": "0000930155",  # Ambarella (placeholder)
-    "AMKR": "0000930155",  # Amkor (placeholder)
-    "ASML": "0000930155",  # ASML (placeholder)
-    "ASYS": "0000930155",  # Amtech (placeholder)
-    "ATOM": "0001903832",  # Atomera (placeholder)
-    "AXTI": "0000930155",  # AXT (placeholder)
-    "CAMT": "0000930155",  # Camtek (placeholder)
-    "COHU": "0000930155",  # Cohu (placeholder)
-    "ENTG": "0000930155",  # Entegris (placeholder)
-    "FORM": "0000930155",  # FormFactor (placeholder)
-    "ICHR": "0000930155",  # Ichor (placeholder)
-    "INTT": "0000930155",  # inTEST (placeholder)
-    "IPGP": "0000930155",  # IPG Photonics (placeholder)
-    "KLAC": "0000930155",  # KLA Corp (placeholder)
-    "KLIC": "0000930155",  # Kulicke & Soffa (placeholder)
+    "AMBA": "0001280263",  # Ambarella
+    "AMKR": "0001047127",  # Amkor Technology
+    "ASML": "0000937966",  # ASML Holding
+    "ASYS": "0000720500",  # Amtech Systems
+    "ATOM": "0001420520",  # Atomera
+    "AXTI": "0001051627",  # AXT Inc
+    "CAMT": "0001109138",  # Camtek
+    "COHU": "0000021535",  # Cohu
+    "ENTG": "0001101302",  # Entegris
+    "FORM": "0001039399",  # FormFactor
+    "ICHR": "0001652535",  # Ichor Holdings
+    "INTT": "0001036262",  # inTEST Corp
+    "IPGP": "0001111928",  # IPG Photonics
+    "KLAC": "0000319201",  # KLA Corp
+    "KLIC": "0000056978",  # Kulicke & Soffa
     "LRCX": "0000707549",  # Lam Research
-    "NVMI": "0000930155",  # Nova Ltd (placeholder)
-    "ONTO": "0000930155",  # Onto Innovation (placeholder)
-    "PLAB": "0000930155",  # Photronics (placeholder)
-    "Q":    "0001903832",  # Qnity Electronics (placeholder)
-    "SMTK": "0001903832",  # SmartKem (placeholder)
+    "NVMI": "0001109345",  # Nova Ltd
+    "ONTO": "0000704532",  # Onto Innovation
+    "PLAB": "0000810136",  # Photronics
+    "Q":    "0002058873",  # Quintana Energy Services (ticker Q)
+    "SMTK": "0001817760",  # SmartKem
     "TER":  "0000097210",  # Teradyne
-    "TRT":  "0000930155",  # Trio-Tech (placeholder)
-    "UCTT": "0000930155",  # Ultra Clean (placeholder)
-    "VECO": "0000930155",  # Veeco (placeholder)
+    "TRT":  "0000732026",  # Trio-Tech International
+    "UCTT": "0001275014",  # Ultra Clean Holdings
+    "VECO": "0000103145",  # Veeco Instruments
     # ── Legacy ──
     "AAPL": "0000320193",
     "TSLA": "0001318605",
