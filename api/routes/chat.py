@@ -1,17 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from api.services.chat_engine import chat_sql
 from api.services.rag_engine import ask_rag
 from api.services.langgraph_engine import run_auditable_rag
 from api.middleware.auth import get_api_key
+from api.models.schemas import ChatRequest
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
-
-class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=8000)
-    ticker: Optional[str] = Field(default="AAPL", max_length=10)
-    history: Optional[List[Dict[str, str]]] = Field(default=None, max_length=50)
 
 @router.post("/sql")
 async def chat_sql_endpoint(req: ChatRequest, _=Depends(get_api_key)):
