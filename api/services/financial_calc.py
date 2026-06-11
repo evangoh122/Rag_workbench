@@ -626,7 +626,7 @@ def compute_margins(df: pl.DataFrame) -> pl.DataFrame:
 _CONCEPT_ALIASES: dict[str, list[str]] = {
     "revenues":                  ["revenues", "revenue", "netsales", "totalrevenues",
                                   "revenuesfromcontractswithcustomers", "salesrevenuenet"],
-    "costofrevenue":             ["costofrevenue", "costofgoodsandservices", "costofsales"],
+    "costofrevenue":             ["costofrevenue", "costofgoodsandservices", "costofgoodsandservicessold", "costofsales"],
     "grossprofit":               ["grossprofit"],
     "operatingincomeloss":       ["operatingincomeloss", "operatingincome",
                                   "incomefromoperations"],
