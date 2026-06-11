@@ -59,31 +59,34 @@ _FINANCIAL_KEYWORDS: set[str] = {
     "wafer", "fab", "foundry", "chip", "asic", "fpga",
     "dram", "nand", "memory", "microcontroller", "analog",
     "test equipment", "packaging", "substrate", "euv lithography",
+    # Risk & governance
+    "risk", "risks", "risk factor", "management discussion", "md&a",
+    "material weakness", "going concern", "contingency", "litigation",
 }
 
 # ── Off-topic indicators ─────────────────────────────────────────────────────
 # Queries strongly matching these are off-topic.
 
 _OFF_TOPIC_PATTERNS: list[tuple[str, str]] = [
-    (r"(recipe|cook|bake|ingredient)",
+    (r"\b(recipe|cook|bake|ingredient)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
-    (r"(weather|temperature|forecast|rain|snow)",
+    (r"\b(weather|temperature|forecast|rain|snow)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
-    (r"(sports|football|basketball|soccer|baseball|game score)",
+    (r"\b(sports|football|basketball|soccer|baseball|game score)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
-    (r"(movie|tv show|netflix|youtube|music|song|album)",
+    (r"\b(movie|tv show|netflix|youtube|music|song|album)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
-    (r"(politics|election|president|senator|congress|democrat|republican)",
+    (r"\b(politics|election|president|senator|congress|democrat|republican)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
-    (r"(joke|riddle|poem|story|tale|novel)",
+    (r"\b(joke|riddle|poem|story|tale|novel)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
-    (r"(homework|exam|test|quiz|assignment|essay)",
+    (r"\b(homework|exam|test|quiz|assignment|essay)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
-    (r"(travel|hotel|flight|vacation|restaurant|food)",
+    (r"\b(travel|hotel|flight|vacation|restaurant|food)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
-    (r"(dating|relationship|love|romance|marriage)",
+    (r"\b(dating|relationship|love|romance|marriage)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
-    (r"(medical|doctor|symptom|disease|medication|health advice)",
+    (r"\b(medical|doctor|symptom|disease|medication|health advice)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
 ]
 
