@@ -27,7 +27,7 @@ def base_state():
     }
 
 class TestLangGraphNodes:
-    @patch("api.services.langgraph_engine.EDGAREmbeddingsRetriever")
+    @patch("api.services.langgraph_engine.EDGARHybridRetriever")
     @patch("api.services.langgraph_engine.rerank_docs")
     @patch("api.services.langgraph_engine.filter_retrieval")
     def test_retrieval_node(self, mock_filter, mock_rerank, mock_retriever_cls, base_state):

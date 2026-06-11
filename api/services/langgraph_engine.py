@@ -15,6 +15,7 @@ from api.config import Config
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
 from api.services.verifier import verifier
 from api.services.rag_engine import EDGAREmbeddingsRetriever, PolygonRetriever
+from api.services.hybrid_retriever import EDGARHybridRetriever
 from api.services.reranker import rerank as rerank_docs
 from api.services.guardrails.retrieval_rails import filter_retrieval
 from loguru import logger
@@ -74,13 +75,13 @@ def retrieval_node(state: GraphState) -> Dict[str, Any]:
         query = state['query']
         ticker = state['ticker']
 
-        # 1. Retrieve SEC Filing Chunks (Primary: vector similarity)
+        # 1. Retrieve SEC Filing Chunks (BM25 + Vector hybrid with RRF)
         docs = []
         try:
-            edgar_retriever = EDGAREmbeddingsRetriever(top_k=5, ticker=ticker)
-            docs = edgar_retriever.invoke(query)
+            hybrid_retriever = EDGARHybridRetriever(top_k=5, ticker=ticker)
+            docs = hybrid_retriever.invoke(query)
         except Exception as e:
-            logger.warning(f"Vector retrieval failed, falling back to keyword: {e}")
+            logger.warning("Hybrid retrieval failed, falling back to keyword: {}", e)
 
         # Fallback: keyword search on filing sections
         if not docs:

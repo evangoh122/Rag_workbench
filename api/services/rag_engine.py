@@ -16,6 +16,7 @@ from api.config import Config
 from api.db.database import db_manager
 from api.services.embeddings import get_embeddings
 from api.services.reranker import rerank
+from api.services.hybrid_retriever import EDGARHybridRetriever
 
 
 from api.models.eval_types import PolygonData
@@ -349,18 +350,18 @@ def _format_docs(docs: List[Document]) -> str:
 
 _vector_retriever = DuckDBVectorRetriever(top_k=5)
 _edgar_facts_retriever = EDGARFactsRetriever()
-_edgar_emb_retriever = EDGAREmbeddingsRetriever(top_k=5)
+_edgar_hybrid_retriever = EDGARHybridRetriever(top_k=5)
 _price_retriever = PriceContextRetriever()
 
 
 @traceable(name="rag_combined_retriever")
 def _combined_retriever(query: str) -> List[Document]:
-    """Run all four retrievers, rerank by cross-encoder relevance, and return top results."""
+    """Run all retrievers, rerank by cross-encoder relevance, and return top results."""
     vector_docs = _vector_retriever.invoke(query)
     edgar_facts = _edgar_facts_retriever.invoke(query)
-    edgar_emb   = _edgar_emb_retriever.invoke(query)
+    edgar_hybrid = _edgar_hybrid_retriever.invoke(query)
     price_docs  = _price_retriever.invoke(query)
-    all_docs = vector_docs + edgar_facts + edgar_emb + price_docs
+    all_docs = vector_docs + edgar_facts + edgar_hybrid + price_docs
     return rerank(query, all_docs, top_k=Config.RERANKER_TOP_K)
 
 
