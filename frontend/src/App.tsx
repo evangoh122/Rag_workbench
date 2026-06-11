@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, ShieldCheck, Activity, MessageSquare, BarChart3, Network, Server, Cpu } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, ShieldCheck, Activity, MessageSquare, BarChart3, Network, Server, Cpu, Presentation } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse, Source, XBRLFact } from './api/chat';
@@ -8,6 +8,8 @@ import MetricsDashboard from './pages/MetricsDashboard';
 import SystemDashboard from './pages/SystemDashboard';
 import Methodology from './pages/Methodology';
 import StocksList from './pages/StocksList';
+import GoogleSlides from './pages/GoogleSlides';
+import posthog from 'posthog-js';
 import DriftAlert from './components/DriftAlert';
 import AuditTrail from './components/AuditTrail';
 import PipelineFlow from './components/PipelineFlow';
@@ -29,7 +31,7 @@ interface Message {
   triples?: Record<string, string>[];
 }
 
-type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks';
+type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'slides';
 
 type PipelineStatus = {
   input?: 'success' | 'error' | 'pending';
@@ -58,6 +60,12 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    if (import.meta.env.VITE_POSTHOG_KEY) {
+      posthog.capture('$pageview', { view });
+    }
+  }, [view]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
@@ -72,6 +80,10 @@ function App() {
     const currentInput = input;
     setInput('');
     setLoading(true);
+
+    if (import.meta.env.VITE_POSTHOG_KEY) {
+      posthog.capture('chat_send', { mode, query_length: currentInput.length });
+    }
 
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
@@ -124,6 +136,9 @@ function App() {
         err instanceof Error
           ? err.message
           : 'An unexpected error occurred';
+      if (import.meta.env.VITE_POSTHOG_KEY) {
+        posthog.capture('chat_error', { mode, error: message });
+      }
       setMessages(prev => [
         ...prev,
         {
@@ -233,6 +248,17 @@ function App() {
           >
             <Cpu size={18} className={view === 'stocks' ? 'text-emerald-400' : 'text-gray-500'} />
             Stocks
+          </button>
+          <button
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+              view === 'slides'
+                ? 'bg-pink-500/10 text-pink-400 border-pink-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+            }`}
+            onClick={() => setView('slides')}
+          >
+            <Presentation size={18} className={view === 'slides' ? 'text-pink-400' : 'text-gray-500'} />
+            Presentation
           </button>
         </nav>
 
@@ -358,6 +384,13 @@ function App() {
         {view === 'methodology' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
             <Methodology />
+          </div>
+        )}
+
+        {/* VIEW: SLIDES */}
+        {view === 'slides' && (
+          <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
+            <GoogleSlides />
           </div>
         )}
 
