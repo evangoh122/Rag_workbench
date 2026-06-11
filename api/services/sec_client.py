@@ -42,6 +42,7 @@ def get_latest_10k_facts(ticker: str) -> pl.DataFrame:
         logger.error(f"Error fetching XBRL facts for {ticker}: {e}")
         return pl.DataFrame()
 
+@lru_cache(maxsize=32)
 def chunk_filing_sections(ticker: str, accession_number: Optional[str] = None) -> List[Dict[str, str]]:
     """
     Chunk the text sections of a 10-K filing.
