@@ -743,6 +743,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                     "Cite specific sections, risks, or statements from the filing. "
                     "If the question involves a financial metric or number, call the "
                     "calculate_financial_metric tool to compute it precisely. "
+                    "Use Polars, never Pandas for any data operations. "
                     "Do not fabricate numbers, statistics, or claims not present in the context. "
                     "If the context is insufficient, say so clearly."
                 ),
