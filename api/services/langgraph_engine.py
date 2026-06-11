@@ -9,8 +9,12 @@ from typing import TypedDict, List, Dict, Any, Optional, Union
 import polars as pl
 
 from langgraph.graph import StateGraph, END
+from langchain_core.documents import Document
+
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
-from api.services.verifier import verify_numeric, verify_entailment
+from api.services.verifier import verify_entailment
+from api.services.rag_engine import DuckDBVectorRetriever, EDGAREmbeddingsRetriever
+from api.services.guardrails.retrieval_rails import filter_retrieval
 from loguru import logger
 
 # Eval pipeline (Phases 2-5) — wired in as a post-extraction node.
@@ -67,10 +71,6 @@ def retrieval_node(state: GraphState) -> Dict[str, Any]:
     """
     logger.info(f"--- RETRIEVAL: {state['ticker']} ---")
     try:
-        from api.services.rag_engine import DuckDBVectorRetriever, EDGAREmbeddingsRetriever
-        from api.services.guardrails.retrieval_rails import filter_retrieval
-        from langchain_core.documents import Document
-
         query = state['query']
         ticker = state['ticker']
 
@@ -445,13 +445,19 @@ workflow.add_conditional_edges(
 workflow.add_edge("output", END)
 workflow.add_edge("abstention", END)
 
-# Compile
-app = workflow.compile()
+_app = None
+
+def get_app():
+    global _app
+    if _app is None:
+        _app = workflow.compile()
+    return _app
 
 def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
     """
     Run the LangGraph DAG for a given query and ticker.
     """
+    app = get_app()
     inputs = {
         "query": query,
         "ticker": ticker,

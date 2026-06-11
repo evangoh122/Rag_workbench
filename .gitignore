@@ -15,4 +15,8 @@ frontend/.vite/
 .env.calibration
 evals/results/
 OUTSTANDING_WORK.md
+# Graphify cache
+graphify-out/cache/
+.claude/settings.local.json
+*.duckdb.wal
 ISSUES.md

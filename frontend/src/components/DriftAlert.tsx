@@ -17,14 +17,15 @@ export default function DriftAlert() {
       const data = await getDriftStatus();
       setStatus(data);
       setUnavailable(false);
-    } catch {
+    } catch (err) {
+      console.error('Failed to fetch drift status:', err);
       setUnavailable(true);
     }
   }, []);
 
   useEffect(() => {
     void fetchStatus();
-    const interval = setInterval(() => void fetchStatus(), 60_000);
+    const interval = setInterval(() => void fetchStatus(), 30_000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
 

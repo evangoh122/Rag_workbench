@@ -16,7 +16,7 @@ from langchain_openai import ChatOpenAI
 
 from api.config import Config
 from api.db.database import db_manager
-from scripts.embed_tickers import _get_embeddings as get_embeddings
+from api.services.embeddings import get_embeddings
 
 
 # ── Retrievers ────────────────────────────────────────────────────────────────

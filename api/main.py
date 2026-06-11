@@ -1,22 +1,27 @@
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from starlette.responses import Response as StarletteResponse
 from loguru import logger
 
 from api.routes import chat
 from api.routes.review import router as review_router
 from api.routes.stats import router as stats_router
-from api.config import Config
+from api.config import config, Config
 from api.middleware.rate_limit import rate_limit_middleware
 from api.middleware.cors_config import configure_cors
 from api.db.database import db_manager
+from api.services.llm_health import get_llm_tracker
+from api.services.drift_detection import check_drift
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    config.validate_startup()
+    config.init_langsmith()
     logger.info("RAG Workbench starting up (provider={})", Config.CHAT_PROVIDER)
     if Config.LANGSMITH_TRACING and Config.LANGSMITH_API_KEY:
         logger.info("LangSmith tracing: enabled (project={})", Config.LANGSMITH_PROJECT)
@@ -42,10 +47,6 @@ async def health():
 
 @app.get("/api/health/full")
 async def health_full():
-    from api.services.llm_health import get_llm_tracker
-    from api.services.drift_detection import check_drift
-    from api.db.database import db_manager
-
     llm = get_llm_tracker().snapshot()
 
     db_ok = False
@@ -100,9 +101,6 @@ async def health_full():
 frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
 if os.path.exists(frontend_path):
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
-
-    from fastapi import Request
-    from starlette.responses import Response as StarletteResponse
 
     async def _not_found(req: Request, exc: Exception):
         if not req.url.path.startswith("/api"):

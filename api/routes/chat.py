@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional, Dict
+from loguru import logger
 from api.services.chat_engine import chat_sql
 from api.services.rag_engine import ask_rag
 from api.services.langgraph_engine import run_auditable_rag
 from api.services.graph_rag_engine import run_graph_rag
-from api.middleware.auth import get_api_key
+from api.middleware.auth import get_read_api_key
 from api.models.schemas import ChatRequest
 from api.services.guardrails.input_rails import check_input
 from api.services.guardrails.dialog_rails import check_dialog
@@ -35,7 +36,7 @@ def _apply_output_rails(answer: str, context: str = "") -> str:
 
 
 @router.post("/sql")
-async def chat_sql_endpoint(req: ChatRequest, _=Depends(get_api_key)):
+async def chat_sql_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
     _apply_input_rails(req.message)
     try:
         result = chat_sql(req.message, req.history)
@@ -50,7 +51,7 @@ async def chat_sql_endpoint(req: ChatRequest, _=Depends(get_api_key)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/rag")
-async def chat_rag_endpoint(req: ChatRequest, _=Depends(get_api_key)):
+async def chat_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
     _apply_input_rails(req.message)
     try:
         answer = ask_rag(req.message)
@@ -64,7 +65,7 @@ async def chat_rag_endpoint(req: ChatRequest, _=Depends(get_api_key)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/graph-rag")
-async def chat_graph_rag_endpoint(req: ChatRequest, _=Depends(get_api_key)):
+async def chat_graph_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
     _apply_input_rails(req.message)
     try:
         if not req.ticker:
@@ -85,7 +86,7 @@ async def chat_graph_rag_endpoint(req: ChatRequest, _=Depends(get_api_key)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/auditable-rag")
-async def chat_auditable_rag_endpoint(req: ChatRequest, _=Depends(get_api_key)):
+async def chat_auditable_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
     _apply_input_rails(req.message)
     try:
         result = run_auditable_rag(req.message, req.ticker)
@@ -106,7 +107,6 @@ async def chat_auditable_rag_endpoint(req: ChatRequest, _=Depends(get_api_key)):
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Chat route failed")
         _tracker.record_failure(str(e), context="chat/auditable-rag")
         raise HTTPException(status_code=500, detail="Internal server error")

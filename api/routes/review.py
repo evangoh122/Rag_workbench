@@ -43,22 +43,9 @@ except ImportError:  # pragma: no cover
     recalibrate_thresholds = None
 
 
-_REVIEW_API_KEY: str | None = os.getenv("REVIEW_API_KEY") or None
-_ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
+from api.middleware.auth import get_write_api_key
 
-if not _REVIEW_API_KEY:
-    if _ENVIRONMENT == "production":
-        logger.error("REVIEW_API_KEY env var not set in production mode — review endpoints are unauthenticated.")
-    else:
-        logger.warning("REVIEW_API_KEY env var not set — review endpoints are unauthenticated.")
-
-
-async def get_review_conn(x_api_key: str | None = Header(default=None, alias="X-API-Key")):
-    if _REVIEW_API_KEY:
-        if not x_api_key:
-            raise HTTPException(status_code=401, detail="X-API-Key header required")
-        if not hmac.compare_digest(x_api_key.encode(), _REVIEW_API_KEY.encode()):
-            raise HTTPException(status_code=401, detail="Unauthorized")
+async def get_review_conn(_=Depends(get_write_api_key)):
     return db_manager.get_review_connection()
 
 

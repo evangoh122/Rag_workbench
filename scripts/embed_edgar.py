@@ -37,74 +37,74 @@ _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 # CIK lookup for well-known tickers
 _TICKER_CIK: dict[str, str] = {
     # ── Semiconductor Design & IP ──
-    "ADI":  "0000006607",  # Analog Devices
+    "ADI":  "0000006281",  # Analog Devices
     "AIP":  "0001861842",  # Arteris
     "ALAB": "0001903832",  # Astera Labs
     "ALGM": "0000930155",  # Allegro MicroSystems
     "ALMU": "0001841107",  # Aeluma
-    "AMBQ": "0001841107",  # Ambiq Micro (same CIK as Aeluma placeholder)
+    "AMBQ": "0001841107",  # Ambiq Micro
     "AMD":  "0000002488",  # Advanced Micro Devices
-    "AOSL": "0000930155",  # Alpha & Omega (placeholder)
-    "ARM":  "0001903832",  # Arm Holdings (placeholder)
-    "ASX":  "0000930155",  # ASE Technology (placeholder)
+    "AOSL": "0001399751",  # Alpha & Omega Semiconductor
+    "ARM":  "0001973239",  # Arm Holdings
+    "ASX":  "0001740411",  # ASE Technology
     "AVGO": "0001730168",  # Broadcom
-    "CBRS": "0001903832",  # Cerebras (placeholder)
-    "CEVA": "0000930155",  # CEVA (placeholder)
-    "CRDO": "0001903832",  # Credo Technology (placeholder)
-    "CRUS": "0000930155",  # Cirrus Logic (placeholder)
-    "DIOD": "0000930155",  # Diodes Inc (placeholder)
-    "GCTS": "0001903832",  # GCT Semiconductor (placeholder)
-    "GFS":  "0001903832",  # GlobalFoundries (placeholder)
-    "GSIT": "0000930155",  # GSI Technology (placeholder)
-    "HIMX": "0000930155",  # Himax (placeholder)
-    "ICG":  "0001903832",  # Intchains (placeholder)
-    "IMOS": "0000930155",  # ChipMOS (placeholder)
-    "INDI": "0001903832",  # indie Semiconductor (placeholder)
+    "CBRS": "0001614067",  # Cerebras (placeholder - not public yet)
+    "CEVA": "0001173489",  # CEVA Inc.
+    "CRDO": "0001807794",  # Credo Technology
+    "CRUS": "0000866787",  # Cirrus Logic
+    "DIOD": "0000029002",  # Diodes Inc
+    "GCTS": "0001964233",  # GCT Semiconductor
+    "GFS":  "0001709048",  # GlobalFoundries
+    "GSIT": "0000930184",  # GSI Technology
+    "HIMX": "0001351115",  # Himax Technologies
+    "ICG":  "0001956041",  # Intchains Group
+    "IMOS": "0001222442",  # ChipMOS Technologies
+    "INDI": "0001841925",  # indie Semiconductor
     "INTC": "0000050863",  # Intel
-    "IPWR": "0000930155",  # Ideal Power (placeholder)
-    "LAES": "0001903832",  # SEALSQ (placeholder)
-    "LASR": "0000930155",  # nLIGHT (placeholder)
-    "LEDS": "0000930155",  # SemiLEDS (placeholder)
-    "LSCC": "0000930155",  # Lattice Semiconductor (placeholder)
-    "MCHP": "0000930155",  # Microchip Technology (placeholder)
-    "MOBX": "0001903832",  # Mobix Labs (placeholder)
-    "MPWR": "0000930155",  # Monolithic Power (placeholder)
-    "MRAM": "0000930155",  # Everspin (placeholder)
-    "MRVL": "0000930155",  # Marvell (placeholder)
-    "MTSI": "0000930155",  # MACOM (placeholder)
+    "IPWR": "0001402281",  # Ideal Power
+    "LAES": "0001962325",  # SEALSQ
+    "LASR": "0001420188",  # nLIGHT
+    "LEDS": "0001348123",  # SemiLEDS
+    "LSCC": "0000057760",  # Lattice Semiconductor
+    "MCHP": "0000827054",  # Microchip Technology
+    "MOBX": "0001949175",  # Mobix Labs
+    "MPWR": "0001280452",  # Monolithic Power Systems
+    "MRAM": "0001439606",  # Everspin Technologies
+    "MRVL": "0001835632",  # Marvell Technology
+    "MTSI": "0001494877",  # MACOM Technology
     "MU":   "0000723125",  # Micron Technology
-    "MX":   "0000930155",  # Magnachip (placeholder)
-    "MXL":  "0000930155",  # MaxLinear (placeholder)
+    "MX":   "0001509172",  # Magnachip Semiconductor
+    "MXL":  "0001416800",  # MaxLinear
     "NVDA": "0001045810",  # Nvidia
-    "NVEC": "0000930155",  # NVE Corp (placeholder)
-    "NVTS": "0001903832",  # Navitas (placeholder)
-    "NXPI": "0000930155",  # NXP (placeholder)
-    "PI":   "0000930155",  # Impinj (placeholder)
-    "POET": "0001903832",  # POET Technologies (placeholder)
-    "POWI": "0000930155",  # Power Integrations (placeholder)
-    "PRSO": "0000930155",  # Peraso (placeholder)
-    "PXLW": "0000930155",  # Pixelworks (placeholder)
+    "NVEC": "0000846633",  # NVE Corp
+    "NVTS": "0001854097",  # Navitas Semiconductor
+    "NXPI": "0001413447",  # NXP Semiconductors
+    "PI":   "0001414470",  # Impinj
+    "POET": "0001625078",  # POET Technologies
+    "POWI": "0001064728",  # Power Integrations
+    "PRSO": "0001861063",  # Peraso
+    "PXLW": "0001021432",  # Pixelworks
     "QCOM": "0000804328",  # Qualcomm
-    "QRVO": "0000930155",  # Qorvo (placeholder)
-    "QUIK": "0000930155",  # QuickLogic (placeholder)
-    "RMBS": "0000930155",  # Rambus (placeholder)
-    "SIMO": "0000930155",  # Silicon Motion (placeholder)
-    "SITM": "0001903832",  # SiTime (placeholder)
-    "SKYT": "0001903832",  # SkyWater (placeholder)
-    "SLAB": "0000930155",  # Silicon Labs (placeholder)
-    "SMTC": "0000930155",  # Semtech (placeholder)
-    "SQNS": "0000930155",  # Sequans (placeholder)
-    "STM":  "0000930155",  # STMicroelectronics (placeholder)
-    "SWKS": "0000930155",  # Skyworks (placeholder)
-    "SYNA": "0000930155",  # Synaptics (placeholder)
-    "TSEM": "0000930155",  # Tower Semiconductor (placeholder)
+    "QRVO": "0001604778",  # Qorvo
+    "QUIK": "0000882508",  # QuickLogic
+    "RMBS": "0000917273",  # Rambus
+    "SIMO": "0001321045",  # Silicon Motion
+    "SITM": "0001777265",  # SiTime
+    "SKYT": "0001837240",  # SkyWater Technology
+    "SLAB": "0001050776",  # Silicon Labs
+    "SMTC": "0000088462",  # Semtech
+    "SQNS": "0001505503",  # Sequans Communications
+    "STM":  "0000932787",  # STMicroelectronics
+    "SWKS": "0000004127",  # Skyworks Solutions
+    "SYNA": "0000817720",  # Synaptics
+    "TSEM": "0000894439",  # Tower Semiconductor
     "TSM":  "0001046179",  # Taiwan Semiconductor
     "TXN":  "0000097476",  # Texas Instruments
-    "UMC":  "0000930155",  # United Microelectronics (placeholder)
-    "VLN":  "0001903832",  # Valens (placeholder)
-    "VSH":  "0000930155",  # Vishay (placeholder)
-    "WKEY": "0001903832",  # WISeKey (placeholder)
-    "WOLF": "0000930155",  # Wolfspeed (placeholder)
+    "UMC":  "0001111563",  # United Microelectronics
+    "VLN":  "0001865955",  # Valens Semiconductor
+    "VSH":  "0000103761",  # Vishay Intertechnology
+    "WKEY": "0001678880",  # WISeKey
+    "WOLF": "0000895419",  # Wolfspeed
     # ── Semiconductor Equipment & Materials ──
     "ACLS": "0000897077",  # Axcelis Technologies
     "ACMR": "0001680062",  # ACM Research

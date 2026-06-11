@@ -57,7 +57,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 
 def load_chunk(conn: duckdb.DuckDBPyConnection, path: str, ticker: str = "") -> int:
     """Load edges from a single graphify chunk JSON file.  Returns row count inserted."""
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
 
     edges = data.get("edges", [])

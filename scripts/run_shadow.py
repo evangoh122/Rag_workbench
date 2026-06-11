@@ -98,7 +98,7 @@ def main():
 
     # Save report
     os.makedirs(os.path.dirname(args.output) if os.path.dirname(args.output) else ".", exist_ok=True)
-    with open(args.output, "w") as f:
+    with open(args.output, "w", encoding="utf-8") as f:
         f.write(report_to_json(report))
 
     # Print summary

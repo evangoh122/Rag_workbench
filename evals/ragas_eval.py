@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Optional
 
 import requests
+from api.config import Config
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -55,7 +56,6 @@ _llm_cfg: dict | None = None
 def _get_llm_cfg() -> dict:
     global _llm_cfg
     if _llm_cfg is None:
-        from api.config import Config
         _llm_cfg = Config.get_provider_config()
     return _llm_cfg
 
@@ -314,8 +314,8 @@ def run(
         print("No questions matched the filter.")
         sys.exit(1)
 
-    _load_env()
-    provider = os.getenv("CHAT_PROVIDER", "deepseek")
+    Config.validate_startup()
+    provider = Config.CHAT_PROVIDER
     print(f"\n{'='*68}")
     print(f"  RAGAS-equivalent Eval  --  {len(questions)} question(s)")
     print(f"  Metrics : {', '.join(metric_names)}")

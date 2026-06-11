@@ -1,6 +1,7 @@
 # Reviewed by DeepSeek: LGTM
 from pydantic import BaseModel, Field
 from typing import TypedDict, List, Dict, Any
+from loguru import logger
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
 
@@ -39,7 +40,7 @@ def extract_entities(state: GraphRAGState) -> dict:
         response = structured_llm.invoke(prompt)
         entities = response.entities[:3] if response.entities else []
     except Exception as e:
-        print(f"Failed to parse entities: {e}")
+        logger.error(f"Failed to parse entities: {e}")
         entities = []
         
     return {"search_entities": entities}
@@ -77,7 +78,7 @@ def query_graph(state: GraphRAGState) -> dict:
                 "object": row[3]
             })
     except Exception as e:
-        print(f"Error querying graph DB: {e}")
+        logger.error(f"Error querying graph DB: {e}")
         
     return {"extracted_triples": extracted_triples}
 

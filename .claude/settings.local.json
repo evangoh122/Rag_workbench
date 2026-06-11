@@ -29,7 +29,13 @@
       "PowerShell(New-Item *)",
       "Bash(git rm *)",
       "Bash(git restore *)",
-      "Skill(gsd-plan-phase)"
+      "Skill(gsd-plan-phase)",
+      "Bash(gh pr *)",
+      "Bash(claude update *)",
+      "Bash(pip list *)",
+      "Bash(Test-Path *)",
+      "Bash(curl -s http://localhost:8000/api/health)",
+      "PowerShell(Start-Process -FilePath \"python\" -ArgumentList \"run.py\" -WorkingDirectory \"D:\\\\New folder \\(2\\)\\\\Rag_workbench\" -WindowStyle Normal -PassThru | Select-Object Id, ProcessName)"
     ]
   },
   "hooks": {

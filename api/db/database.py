@@ -1,6 +1,7 @@
 import duckdb
 import threading
 from api.config import Config
+from api.db.review_queue import init_review_tables
 
 class DatabaseManager:
     _instance = None
@@ -59,7 +60,6 @@ class DatabaseManager:
         with self._review_conn_lock:
             if self._review_conn is None:
                 self._review_conn = duckdb.connect(Config.REVIEW_DB_PATH)
-                from api.db.review_queue import init_review_tables
                 init_review_tables(self._review_conn)
             return self._review_conn
 
