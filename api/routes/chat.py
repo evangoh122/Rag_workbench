@@ -17,7 +17,7 @@ from api.models.schemas import (
 from api.services.guardrails.input_rails import check_input
 from api.services.guardrails.dialog_rails import check_dialog
 from api.services.guardrails.output_rails import check_output
-from api.db.review_queue import get_connection
+from api.db.database import db_manager
 from api.services.llm_health import get_llm_tracker
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -271,16 +271,20 @@ class FeedbackRequest(BaseModel):
 
 @router.post("/feedback", status_code=204)
 async def chat_feedback_endpoint(req: FeedbackRequest, _=Depends(get_read_api_key)):
+    import uuid
+    vid = str(uuid.uuid4())
+    did = req.message_id or vid
     try:
-        conn = get_connection()
+        conn = db_manager.get_connection()
         conn.execute("""
-            INSERT INTO reviewer_verdicts (id, route, agrees, created_at, notes)
-            VALUES (?, ?, ?, datetime('now'), ?)
+            INSERT INTO reviewer_verdicts (id, decision_id, reviewer_agrees, notes)
+            VALUES (?, ?, ?, ?)
         """, (
-            req.message_id or f"chat-{datetime.now(timezone.utc).isoformat()}",
-            "CHAT_FEEDBACK",
+            vid,
+            did,
             1 if req.agrees else 0,
             f"Query: {req.query[:200]} | Answer: {req.answer[:200]}",
         ))
     except Exception as e:
         logger.warning(f"Failed to record chat feedback: {e}")
+        raise HTTPException(status_code=500, detail="Failed to record feedback")

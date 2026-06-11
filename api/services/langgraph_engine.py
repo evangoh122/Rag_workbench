@@ -663,6 +663,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
     """
     logger.info("--- QUALITATIVE OUTPUT ---")
     try:
+        import json
         from openai import OpenAI
 
         docs = state.get("retrieved_docs", [])
@@ -707,13 +708,12 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
 
         ticker = state.get("ticker", "")
 
-        # Define tools the LLM can call
         tools = [
             {
                 "type": "function",
                 "function": {
                     "name": "calculate_financial_metric",
-                    "description": "Calculate a financial metric (margin, ratio, growth rate) from XBRL data. Use this when the question involves a specific number or calculation.",
+                    "description": "Calculate a financial metric (margin, ratio, growth rate) from XBRL data. Use when the question involves a specific number or calculation.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -723,7 +723,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                                     "gross_margin", "operating_margin", "net_margin",
                                     "gross_margin_growth", "free_cash_flow",
                                     "current_ratio", "debt_to_equity", "rd_intensity",
-                                    "yoy_growth", "revenue", "net_income",
+                                    "revenue", "net_income",
                                 ],
                                 "description": "The financial metric to calculate",
                             },
@@ -742,7 +742,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                     "Answer questions using the provided context from SEC filings and XBRL facts. "
                     "Cite specific sections, risks, or statements from the filing. "
                     "If the question involves a financial metric or number, call the "
-                    "calculate_financial_metric tool to compute it precisely — never do math yourself. "
+                    "calculate_financial_metric tool to compute it precisely. "
                     "Do not fabricate numbers, statistics, or claims not present in the context. "
                     "If the context is insufficient, say so clearly."
                 ),
@@ -778,22 +778,19 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
             math_steps = []
 
             for tool_call in msg.tool_calls:
-                metric = tool_call.function.arguments
-                import json
                 try:
-                    args = json.loads(metric)
+                    args = json.loads(tool_call.function.arguments)
                     metric_name = args.get("metric", "")
                 except (json.JSONDecodeError, KeyError):
-                    metric_name = metric
+                    metric_name = ""
 
-                # Execute the requested calculation
                 tool_result = _execute_tool(metric_name, state)
                 math_steps.append(tool_result.get("display", str(tool_result)))
 
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "content": json.dumps(tool_result) if isinstance(tool_result, dict) else str(tool_result),
+                    "content": json.dumps(tool_result),
                 })
 
             # Second call — LLM generates final answer with tool results
@@ -803,7 +800,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                 temperature=cfg.get("temperature", 0.3),
                 max_tokens=cfg.get("max_tokens", 4096),
             )
-            answer = resp2.choices[0].message.content.strip()
+            answer = (resp2.choices[0].message.content or "").strip()
 
             return {
                 "final_answer": answer,
@@ -815,7 +812,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
             }
 
         # No tools needed — direct answer
-        answer = msg.content.strip() if msg.content else "I could not generate an answer."
+        answer = (msg.content or "").strip()
 
         return {
             "final_answer": answer,
@@ -859,7 +856,7 @@ def _execute_tool(metric: str, state: GraphState) -> dict:
         if metric == "gross_margin":
             rev = extractor.get("revenues", period=latest)
             cogs = extractor.get("costofrevenue", period=latest)
-            if rev and cogs:
+            if rev is not None and cogs is not None:
                 r = gross_margin(rev, cogs, period=latest)
                 return {"value": r.value, "display": r.display(), "unit": r.unit}
 
@@ -875,42 +872,42 @@ def _execute_tool(metric: str, state: GraphState) -> dict:
         elif metric == "operating_margin":
             rev = extractor.get("revenues", period=latest)
             oi = extractor.get("operatingincomeloss", period=latest)
-            if rev and oi:
+            if rev is not None and oi is not None:
                 r = operating_margin(rev, oi, period=latest)
                 return {"value": r.value, "display": r.display(), "unit": r.unit}
 
         elif metric == "net_margin":
             rev = extractor.get("revenues", period=latest)
             ni = extractor.get("netincomeloss", period=latest)
-            if rev and ni:
+            if rev is not None and ni is not None:
                 r = net_margin(rev, ni, period=latest)
                 return {"value": r.value, "display": r.display(), "unit": r.unit}
 
         elif metric == "free_cash_flow":
             ocf = extractor.get("netcashoperating", period=latest)
             capex = extractor.get("capitalexpenditures", period=latest)
-            if ocf and capex:
+            if ocf is not None and capex is not None:
                 r = free_cash_flow(ocf, capex, period=latest)
                 return {"value": r.value, "display": r.display(), "unit": r.unit}
 
         elif metric == "current_ratio":
             ca = extractor.get("currentassets", period=latest)
             cl = extractor.get("currentliabilities", period=latest)
-            if ca and cl:
+            if ca is not None and cl is not None:
                 r = current_ratio(ca, cl, period=latest)
                 return {"value": r.value, "display": r.display(), "unit": r.unit}
 
         elif metric == "debt_to_equity":
             debt = extractor.get("longtermdebt", period=latest)
             eq = extractor.get("stockholdersequity", period=latest)
-            if debt and eq:
+            if debt is not None and eq is not None:
                 r = debt_to_equity(debt, eq, period=latest)
                 return {"value": r.value, "display": r.display(), "unit": r.unit}
 
         elif metric == "rd_intensity":
             rev = extractor.get("revenues", period=latest)
             rd = extractor.get("researchanddevelopment", period=latest)
-            if rev and rd:
+            if rev is not None and rd is not None:
                 r = rd_intensity(rev, rd, period=latest)
                 return {"value": r.value, "display": r.display(), "unit": r.unit}
 

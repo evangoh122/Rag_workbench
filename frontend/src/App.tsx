@@ -253,7 +253,7 @@ function App() {
             onClick={() => setView('stocks')}
           >
             <Cpu size={18} className={view === 'stocks' ? 'text-emerald-400' : 'text-gray-500'} />
-            Stocks
+            Coverage List
           </button>
         </nav>
 
@@ -338,7 +338,7 @@ function App() {
             <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
               <h1 className="text-xl font-semibold text-white flex items-center gap-3">
                 <Cpu className="text-emerald-400" />
-                Covered Stocks
+                Coverage List
               </h1>
             </header>
             <StocksList />
@@ -590,11 +590,15 @@ function App() {
                           disabled={feedbackSent.has(idx)}
                           onClick={async () => {
                             setFeedbackSent(prev => new Set(prev).add(idx));
-                            await submitChatFeedback(
-                              messages[idx - 1]?.content ?? '',
-                              msg.content,
-                              true,
-                            );
+                            try {
+                              await submitChatFeedback(
+                                messages[idx - 1]?.content ?? '',
+                                msg.content,
+                                true,
+                              );
+                            } catch {
+                              setFeedbackSent(prev => { const next = new Set(prev); next.delete(idx); return next; });
+                            }
                           }}
                           className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border-0 cursor-pointer transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                             feedbackSent.has(idx)
@@ -609,11 +613,15 @@ function App() {
                           disabled={feedbackSent.has(idx)}
                           onClick={async () => {
                             setFeedbackSent(prev => new Set(prev).add(idx));
-                            await submitChatFeedback(
-                              messages[idx - 1]?.content ?? '',
-                              msg.content,
-                              false,
-                            );
+                            try {
+                              await submitChatFeedback(
+                                messages[idx - 1]?.content ?? '',
+                                msg.content,
+                                false,
+                              );
+                            } catch {
+                              setFeedbackSent(prev => { const next = new Set(prev); next.delete(idx); return next; });
+                            }
                           }}
                           className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border-0 cursor-pointer transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                             feedbackSent.has(idx)
