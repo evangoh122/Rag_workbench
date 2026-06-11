@@ -92,6 +92,15 @@ class Config:
     def POLYGON_API_KEY(self) -> str | None:
         return os.getenv("POLYGON_API_KEY") or None
 
+    # MiMo reasoning model needs large token budget
+    @property
+    def MIMO_MAX_TOKENS(self) -> int:
+        return int(os.getenv("MIMO_MAX_TOKENS", "16384"))
+
+    @property
+    def MIMO_TEMPERATURE(self) -> float:
+        return float(os.getenv("MIMO_TEMPERATURE", "0.2"))
+
     # Embedding Settings
     @property
     def EMBEDDING_MODEL(self) -> str:
@@ -131,6 +140,8 @@ class Config:
                 "base_url": os.getenv("MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
                 "default_model": os.getenv("MIMO_MODEL", "mimo-v2.5-pro"),
                 "api_key": self.MIMO_API_KEY,
+                "max_tokens": self.MIMO_MAX_TOKENS,
+                "temperature": self.MIMO_TEMPERATURE,
             },
         }
 

@@ -124,8 +124,8 @@ def summarise_results(question: str, df: pd.DataFrame) -> str:
                     "Write a concise 1-2 sentence plain-English answer summarizing the findings. No markdown."
                 ),
             }],
-            temperature=0.3,
-            max_tokens=200,
+            temperature=cfg.get("temperature", 0.3),
+            max_tokens=cfg.get("max_tokens", 200),
         )
         return resp.choices[0].message.content.strip()
     except Exception:
@@ -145,8 +145,8 @@ def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> D
         response = client.chat.completions.create(
             model=cfg["model"],
             messages=messages,
-            temperature=0.1,
-            max_tokens=1024,
+            temperature=cfg.get("temperature", 0.1),
+            max_tokens=cfg.get("max_tokens", 1024),
         )
         reply = response.choices[0].message.content.strip()
     except Exception:

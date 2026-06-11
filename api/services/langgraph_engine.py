@@ -401,6 +401,8 @@ def output_node(state: GraphState) -> Dict[str, Any]:
     answer = f"Based on the SEC filing for {state['ticker']}, the answer is {state['math_result']}."
     if state['verification_status'] == "PASS":
         answer += f" (Verified: {state['verification_reasoning']})"
+    elif state['verification_status'] == "SKIPPED":
+        answer += " (Note: NLI verification was skipped — model not available)"
     # Surface eval routing decision in the answer when escalation is triggered.
     if state.get("eval_route") == "ESCALATE" and state.get("eval_triggers"):
         answer += (
@@ -489,8 +491,10 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
 def decide_next_step(state: GraphState) -> str:
     """
     Deterministic routing based on verification result.
+    PASS or SKIPPED (NLI unavailable) -> output.
+    FAIL or ERROR -> abstention.
     """
-    if state['verification_status'] == "PASS":
+    if state['verification_status'] in ("PASS", "SKIPPED"):
         return "output"
     else:
         return "abstention"

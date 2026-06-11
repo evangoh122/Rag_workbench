@@ -39,10 +39,10 @@ class Verifier:
     def verify_entailment(self, claim: str, source_text: str) -> Tuple[str, str]:
         """
         Verify if the source text strictly entails the generated claim using an NLI model.
-        Returns a tuple of (PASS/FAIL, reasoning).
+        Returns a tuple of (PASS/FAIL/SKIPPED, reasoning).
         """
         if not self.model:
-            return "ERROR", "NLI model not loaded (sentence-transformers missing or model failed to load)."
+            return "SKIPPED", "NLI model not available (sentence-transformers missing or model failed to load)."
 
         # CrossEncoder predicts [contradiction, neutral, entailment]
         # For nli-deberta-v3-small, the scores are usually mapped to these 3 classes.

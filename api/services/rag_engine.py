@@ -94,6 +94,9 @@ class DuckDBVectorRetriever(BaseRetriever):
 
             if count > 0:
                 embeddings = get_embeddings()
+                if embeddings is None:
+                    logger.warning("Ollama embeddings not available — falling back to keyword search")
+                    return self._keyword_fallback(query)
                 qvec = embeddings.embed_query(query)
 
                 rows = conn.execute(f"""
@@ -234,6 +237,9 @@ class EDGAREmbeddingsRetriever(BaseRetriever):
                 return []
 
             embeddings = get_embeddings()
+            if embeddings is None:
+                logger.warning("Ollama embeddings not available — skipping vector search")
+                return []
             qvec = embeddings.embed_query(query)
 
             rows = conn.execute(f"""

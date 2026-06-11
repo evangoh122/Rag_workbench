@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional, Dict
+import os
 from loguru import logger
 from api.services.chat_engine import chat_sql
 from api.services.rag_engine import ask_rag
@@ -8,7 +9,10 @@ from api.services.graph_rag_engine import run_graph_rag
 from api.services.sec_client import chunk_filing_sections
 from api.services.sec_analyzer import analyze_filing
 from api.middleware.auth import get_read_api_key
-from api.models.schemas import ChatRequest
+from api.models.schemas import (
+    ChatRequest, ChatResponse, SourceItem,
+    VerificationResult, PipelineStatus,
+)
 from api.services.guardrails.input_rails import check_input
 from api.services.guardrails.dialog_rails import check_dialog
 from api.services.guardrails.output_rails import check_output
@@ -17,6 +21,40 @@ from api.services.llm_health import get_llm_tracker
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 _tracker = get_llm_tracker()
+
+_IS_DEV = os.getenv("ENVIRONMENT", "development").lower() == "development"
+
+
+def _error_detail(e: Exception, context: str = "") -> str:
+    """Return detailed error in dev, generic in production."""
+    if _IS_DEV:
+        return f"{context}: {type(e).__name__}: {e}" if context else f"{type(e).__name__}: {e}"
+    return "Internal server error"
+
+# ── Conversational detection ─────────────────────────────────────────────────
+_CONVERSATIONAL_KEYWORDS = {
+    "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
+    "how are you", "what's up", "thanks", "thank you", "bye", "goodbye",
+    "who are you", "what can you do", "help me", "what is this",
+}
+_MAX_CONVERSATIONAL_WORDS = 6
+
+
+def _is_conversational(message: str) -> bool:
+    """Detect greetings, thanks, and simple questions that don't need RAG."""
+    msg = message.strip().lower()
+    if not msg:
+        return False
+    if any(msg == kw or msg.startswith(kw + " ") or msg.startswith(kw + ",") or msg.startswith(kw + "!")
+           for kw in _CONVERSATIONAL_KEYWORDS):
+        return True
+    if len(msg.split()) <= _MAX_CONVERSATIONAL_WORDS and not any(
+        c.isupper() for c in message.split() if len(c) > 2
+    ):
+        financial_signals = {"revenue", "margin", "profit", "income", "earnings", "stock", "price", "10-k", "10-q", "sec", "filing"}
+        if not any(w in msg for w in financial_signals):
+            return True
+    return False
 
 
 def _apply_input_rails(message: str) -> None:
@@ -37,7 +75,29 @@ def _apply_output_rails(answer: str, context: str = "") -> str:
     return answer
 
 
-@router.post("/sql")
+# ── Shared LLM call for conversational fast path ─────────────────────────────
+
+def _conversational_llm_call(message: str) -> str:
+    """Call LLM directly for conversational messages (no RAG)."""
+    from openai import OpenAI
+    from api.config import Config
+    cfg = Config.get_provider_config()
+    client = OpenAI(api_key=cfg["api_key"] or "local", base_url=cfg["base_url"])
+    resp = client.chat.completions.create(
+        model=cfg["model"],
+        messages=[
+            {"role": "system", "content": "You are a helpful financial analysis assistant. Be concise and friendly."},
+            {"role": "user", "content": message},
+        ],
+        temperature=cfg.get("temperature", 0.7),
+        max_tokens=cfg.get("max_tokens", 200),
+    )
+    return resp.choices[0].message.content.strip()
+
+
+# ── Endpoints ────────────────────────────────────────────────────────────────
+
+@router.post("/sql", response_model=ChatResponse)
 async def chat_sql_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
     _apply_input_rails(req.message)
     try:
@@ -45,28 +105,42 @@ async def chat_sql_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
         if "answer" in result:
             result["answer"] = _apply_output_rails(result["answer"])
         _tracker.record_success()
-        return result
+        return ChatResponse(
+            type=result.get("type", "text"),
+            answer=result.get("answer", ""),
+            sql=result.get("sql"),
+            data=result.get("data"),
+        )
     except HTTPException:
         raise
     except Exception as e:
         _tracker.record_failure(str(e), context="chat/sql")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=_error_detail(e, "SQL query failed"))
 
-@router.post("/rag")
+
+@router.post("/rag", response_model=ChatResponse)
 async def chat_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
     _apply_input_rails(req.message)
     try:
         answer = ask_rag(req.message)
         answer = _apply_output_rails(answer)
         _tracker.record_success()
-        return {"type": "text", "answer": answer}
+        return ChatResponse(
+            type="text",
+            answer=answer,
+            pipeline_status=PipelineStatus(
+                input="success", retrieval="success", extraction="success",
+                math="success", verification="success", output="success",
+            ),
+        )
     except HTTPException:
         raise
     except Exception as e:
         _tracker.record_failure(str(e), context="chat/rag")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=_error_detail(e, "RAG failed"))
 
-@router.post("/graph-rag")
+
+@router.post("/graph-rag", response_model=ChatResponse)
 async def chat_graph_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
     _apply_input_rails(req.message)
     try:
@@ -75,56 +149,79 @@ async def chat_graph_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key))
         result = run_graph_rag(req.message, req.ticker)
         answer = _apply_output_rails(result["final_answer"])
         _tracker.record_success()
-        return {
-            "type": "text",
-            "answer": answer,
-            "entities": result["search_entities"],
-            "triples": result["extracted_triples"]
-        }
+        return ChatResponse(
+            type="text",
+            answer=answer,
+            entities=result["search_entities"],
+            triples=result["extracted_triples"],
+            pipeline_status=PipelineStatus(
+                input="success", retrieval="success", extraction="success",
+                math="success", verification="success", output="success",
+            ),
+        )
     except HTTPException:
         raise
     except Exception as e:
         _tracker.record_failure(str(e), context="chat/graph-rag")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=_error_detail(e, "Graph RAG failed"))
 
-@router.post("/auditable-rag")
+
+@router.post("/auditable-rag", response_model=ChatResponse)
 async def chat_auditable_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
     _apply_input_rails(req.message)
     try:
+        # Fast path: conversational messages bypass the full RAG pipeline
+        if _is_conversational(req.message):
+            answer = _conversational_llm_call(req.message)
+            answer = _apply_output_rails(answer)
+            _tracker.record_success()
+            return ChatResponse(
+                type="text",
+                answer=answer,
+                verification=VerificationResult(
+                    status="SKIPPED",
+                    reasoning="Conversational query — no RAG pipeline",
+                ),
+                pipeline_status=PipelineStatus(
+                    input="success", retrieval="skipped", extraction="skipped",
+                    math="skipped", verification="skipped", output="success",
+                ),
+            )
+
         result = run_auditable_rag(req.message, req.ticker)
         answer = _apply_output_rails(result["final_answer"])
         _tracker.record_success()
-        return {
-            "type": "text",
-            "answer": answer,
-            "sources": [{"content": d["chunk_text"], "metadata": d["metadata"]} for d in result["retrieved_docs"]],
-            "xbrl_facts": result["xbrl_facts"],
-            "polygon_data": result.get("polygon_data", []),
-            "verification": {
-                "status": result["verification_status"],
-                "reasoning": result["verification_reasoning"]
-            },
-            "math_steps": result["math_steps"],
-            "pipeline_status": result["status"],
-            "lineage": result.get("lineage"),
-        }
+        return ChatResponse(
+            type="text",
+            answer=answer,
+            sources=[
+                SourceItem(content=d["chunk_text"], metadata=d["metadata"])
+                for d in result["retrieved_docs"]
+            ],
+            xbrl_facts=result["xbrl_facts"],
+            polygon_data=result.get("polygon_data", []),
+            verification=VerificationResult(
+                status=result["verification_status"],
+                reasoning=result["verification_reasoning"],
+            ),
+            math_steps=result["math_steps"],
+            pipeline_status=PipelineStatus(**result["status"]),
+            confidence=result.get("eval_confidence"),
+            eval_route=result.get("eval_route"),
+            lineage=result.get("lineage"),
+        )
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("Chat route failed")
         _tracker.record_failure(str(e), context="chat/auditable-rag")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=_error_detail(e, "Auditable RAG failed"))
 
 
 @router.post("/sec-analyzer")
 async def chat_sec_analyzer_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
     """
     Structured signal extraction from SEC filing chunks for bank analysts.
-
-    Returns:
-      - named_entities : executives, auditors, subsidiaries
-      - risk_flags     : going concern, litigation, regulatory actions, restatement risk
-      - forward_looking: guidance statements with sentiment tag
     """
     try:
         if not req.ticker:
@@ -140,4 +237,4 @@ async def chat_sec_analyzer_endpoint(req: ChatRequest, _=Depends(get_read_api_ke
         raise
     except Exception as e:
         _tracker.record_failure(str(e), context="chat/sec-analyzer")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=_error_detail(e, "SEC Analyzer failed"))

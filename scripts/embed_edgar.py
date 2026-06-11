@@ -1,11 +1,14 @@
 """
 embed_edgar.py
 Downloads the most recent 10-K for each ticker from SEC EDGAR using sec-edgar-downloader,
-extracts text from high-signal sections (Business, Risk Factors, MD&A), splits into chunks
-via LangChain, embeds with Gemini, and stores into DuckDB `edgar_embeddings`.
+extracts text from high-signal sections (Business, Risk Factors, MD&A), chunks with
+structure-aware logic (tables intact, semantic narrative splitting), embeds with Gemini,
+and stores into DuckDB `edgar_embeddings`.
 
-Section targeting avoids iXBRL boilerplate, repeated table headers, and XBRL metadata that
-degrade RAG quality when the full document is parsed with get_text().
+Structure-aware chunking:
+- Tables are detected by pipe/grid/number patterns and kept as single chunks
+- Narrative text is split by topic similarity (semantic chunking), not fixed size
+- Each chunk is tagged with section_type (balance_sheet, income_statement, md_and_a, etc.)
 """
 import os
 import re
@@ -17,10 +20,10 @@ from typing import Dict, List, Optional
 import duckdb
 from bs4 import BeautifulSoup
 from loguru import logger
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sec_edgar_downloader import Downloader
 
 from scripts.embed_tickers import _get_embeddings as _get_model
+from api.services.structure_chunker import StructureChunker
 
 from api.config import Config
 
@@ -323,14 +326,33 @@ def parse_html_file(file_path: str) -> tuple[str, str]:
 
 
 def _ensure_schema(conn) -> None:
-    """Ensure edgar_embeddings table has all required columns (idempotent)."""
-    # Add new columns if they don't exist (ALTER TABLE IF NOT EXISTS column)
+    """Ensure edgar_embeddings table exists with all required columns (idempotent)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS edgar_embeddings (
+            ticker            VARCHAR NOT NULL,
+            accession         VARCHAR NOT NULL,
+            text              TEXT NOT NULL,
+            embedding         FLOAT[],
+            updated_at        VARCHAR,
+            cik               VARCHAR,
+            section_id        VARCHAR,
+            form_type         VARCHAR DEFAULT '10-K',
+            period_of_report  VARCHAR,
+            chunk_index       INTEGER,
+            section_type      VARCHAR DEFAULT 'narrative',
+            content_type      VARCHAR DEFAULT 'narrative'
+        )
+    """)
+
+    # Add columns that may not exist in older schemas
     alter_stmts = [
         "ALTER TABLE edgar_embeddings ADD COLUMN IF NOT EXISTS cik VARCHAR",
         "ALTER TABLE edgar_embeddings ADD COLUMN IF NOT EXISTS section_id VARCHAR",
         "ALTER TABLE edgar_embeddings ADD COLUMN IF NOT EXISTS form_type VARCHAR DEFAULT '10-K'",
         "ALTER TABLE edgar_embeddings ADD COLUMN IF NOT EXISTS period_of_report VARCHAR",
         "ALTER TABLE edgar_embeddings ADD COLUMN IF NOT EXISTS chunk_index INTEGER",
+        "ALTER TABLE edgar_embeddings ADD COLUMN IF NOT EXISTS section_type VARCHAR DEFAULT 'narrative'",
+        "ALTER TABLE edgar_embeddings ADD COLUMN IF NOT EXISTS content_type VARCHAR DEFAULT 'narrative'",
     ]
     for stmt in alter_stmts:
         try:
@@ -349,10 +371,10 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
 
     logger.info("Starting EDGAR embedding ETL with sec-edgar-downloader...")
 
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500,
-        chunk_overlap=150,
-        length_function=len,
+    chunker = StructureChunker(
+        max_chunk_size=1500,
+        min_chunk_size=200,
+        similarity_threshold=0.15,
     )
 
     model = _get_model()
@@ -396,19 +418,28 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
                 )
             )
 
-            # Build chunks with metadata headers per section
-            all_chunks: List[tuple[str, str]] = []  # (chunk_text, section_label)
+            # Build chunks with structure-aware chunking
+            all_chunks = []  # list of Chunk objects
             for section_label, section_text in sections:
                 provenance_header = (
                     f"[TICKER:{ticker.upper()} | SECTION:{section_label} | "
                     f"PERIOD:{period_of_report} | FORM:{form_type}]\n"
                 )
-                section_with_header = provenance_header + section_text
-                section_chunks = text_splitter.split_text(section_with_header)
-                for chunk in section_chunks:
-                    all_chunks.append((chunk, section_label))
+                section_chunks = chunker.chunk(
+                    section_text,
+                    section_label=section_label,
+                    ticker=ticker.upper(),
+                    period=period_of_report,
+                    form_type=form_type,
+                    provenance_header=provenance_header,
+                )
+                all_chunks.extend(section_chunks)
 
-            logger.debug(f"{ticker}: Split into {len(all_chunks)} chunks across {len(sections)} sections.")
+            logger.debug(
+                f"{ticker}: Split into {len(all_chunks)} chunks across {len(sections)} sections "
+                f"({sum(1 for c in all_chunks if c.metadata.content_type == 'table')} tables, "
+                f"{sum(1 for c in all_chunks if c.metadata.content_type == 'narrative')} narrative)"
+            )
 
             batch_size = 8
             ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -421,23 +452,25 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
 
             for i in range(0, len(all_chunks), batch_size):
                 batch = all_chunks[i: i + batch_size]
-                batch_texts = [c[0] for c in batch]
-                batch_labels = [c[1] for c in batch]
+                batch_texts = [c.text for c in batch]
                 vecs = model.embed_documents(batch_texts)
 
-                for j, (chunk_text, section_label) in enumerate(zip(batch_texts, batch_labels)):
+                for j, chunk in enumerate(batch):
                     conn.execute("""
                         INSERT INTO edgar_embeddings
                             (ticker, accession, text, embedding, updated_at,
-                             cik, section_id, form_type, period_of_report, chunk_index)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             cik, section_id, form_type, period_of_report, chunk_index,
+                             section_type, content_type)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, [
-                        ticker, accession, chunk_text, vecs[j], ts,
+                        ticker, accession, chunk.text, vecs[j], ts,
                         cik,
-                        section_label,
+                        chunk.metadata.section_label,
                         form_type,
                         period_of_report,
-                        i + j,
+                        chunk.metadata.chunk_index,
+                        chunk.metadata.section_type,
+                        chunk.metadata.content_type,
                     ])
 
                 total_chunks_stored += len(batch)
