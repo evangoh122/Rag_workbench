@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse, Source, XBRLFact } from './api/chat';
+import { submitChatFeedback } from './api/review';
 import ReviewQueue from './pages/ReviewQueue';
 import MetricsDashboard from './pages/MetricsDashboard';
 import SystemDashboard from './pages/SystemDashboard';
@@ -54,6 +55,7 @@ function App() {
   const [view, setView] = useState<AppView>('chat');
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
   const [ticker, setTicker] = useState('MU');
+  const [feedbackSent, setFeedbackSent] = useState<Set<number>>(new Set());
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -578,6 +580,50 @@ function App() {
                             Showing 10 of {msg.data.length} rows
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {msg.role === 'assistant' && idx > 0 && (
+                      <div className="mt-4 pt-3 border-t border-[#202532]/50 flex items-center gap-3">
+                        <span className="text-xs text-gray-500">Was this correct?</span>
+                        <button
+                          disabled={feedbackSent.has(idx)}
+                          onClick={async () => {
+                            setFeedbackSent(prev => new Set(prev).add(idx));
+                            await submitChatFeedback(
+                              messages[idx - 1]?.content ?? '',
+                              msg.content,
+                              true,
+                            );
+                          }}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border-0 cursor-pointer transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                            feedbackSent.has(idx)
+                              ? 'bg-emerald-500/10 text-emerald-400'
+                              : 'bg-[#1c222e] text-gray-400 hover:bg-emerald-500/10 hover:text-emerald-400'
+                          }`}
+                        >
+                          <ThumbsUp size={12} />
+                          {feedbackSent.has(idx) ? 'Agreed' : 'Agree'}
+                        </button>
+                        <button
+                          disabled={feedbackSent.has(idx)}
+                          onClick={async () => {
+                            setFeedbackSent(prev => new Set(prev).add(idx));
+                            await submitChatFeedback(
+                              messages[idx - 1]?.content ?? '',
+                              msg.content,
+                              false,
+                            );
+                          }}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border-0 cursor-pointer transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                            feedbackSent.has(idx)
+                              ? 'bg-red-500/10 text-red-400'
+                              : 'bg-[#1c222e] text-gray-400 hover:bg-red-500/10 hover:text-red-400'
+                          }`}
+                        >
+                          <ThumbsDown size={12} />
+                          {feedbackSent.has(idx) ? 'Disagreed' : 'Disagree'}
+                        </button>
                       </div>
                     )}
                   </div>

@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from datetime import datetime, timezone
 import os
 from loguru import logger
 from api.services.chat_engine import chat_sql
@@ -15,6 +17,7 @@ from api.models.schemas import (
 from api.services.guardrails.input_rails import check_input
 from api.services.guardrails.dialog_rails import check_dialog
 from api.services.guardrails.output_rails import check_output
+from api.db.review_queue import get_connection
 from api.services.llm_health import get_llm_tracker
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -257,3 +260,27 @@ async def chat_sec_analyzer_endpoint(req: ChatRequest, _=Depends(get_read_api_ke
     except Exception as e:
         _tracker.record_failure(str(e), context="chat/sec-analyzer")
         raise HTTPException(status_code=500, detail=_error_detail(e, "SEC Analyzer failed"))
+
+
+class FeedbackRequest(BaseModel):
+    message_id: str = ""
+    query: str = ""
+    answer: str = ""
+    agrees: bool = True
+
+
+@router.post("/feedback", status_code=204)
+async def chat_feedback_endpoint(req: FeedbackRequest, _=Depends(get_read_api_key)):
+    try:
+        conn = get_connection()
+        conn.execute("""
+            INSERT INTO reviewer_verdicts (id, route, agrees, created_at, notes)
+            VALUES (?, ?, ?, datetime('now'), ?)
+        """, (
+            req.message_id or f"chat-{datetime.now(timezone.utc).isoformat()}",
+            "CHAT_FEEDBACK",
+            1 if req.agrees else 0,
+            f"Query: {req.query[:200]} | Answer: {req.answer[:200]}",
+        ))
+    except Exception as e:
+        logger.warning(f"Failed to record chat feedback: {e}")

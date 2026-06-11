@@ -54,6 +54,14 @@ export async function getDriftStatus(): Promise<DriftStatus> {
   return response.data;
 }
 
+export async function submitChatFeedback(
+  query: string,
+  answer: string,
+  agrees: boolean,
+): Promise<void> {
+  await client.post('/chat/feedback', { query, answer, agrees });
+}
+
 export async function triggerCalibration(): Promise<CalibrationResult> {
   const response = await client.post<CalibrationResult>('/review/calibrate');
   return response.data;
