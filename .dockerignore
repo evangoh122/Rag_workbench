@@ -21,7 +21,8 @@ node_modules
 # Data & Config
 .env
 .env.local
-data/*.duckdb
+data/review_queue.duckdb
+data/ibkr.duckdb
 data/edgar_downloads
 
 # OS Metadata
