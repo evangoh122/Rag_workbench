@@ -225,6 +225,7 @@ class EDGARFactsRetriever(BaseRetriever):
 
 class EDGAREmbeddingsRetriever(BaseRetriever):
     top_k: int = 5
+    ticker: str = ""
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
@@ -241,13 +242,23 @@ class EDGAREmbeddingsRetriever(BaseRetriever):
                 return []
             qvec = embeddings.embed_query(query)
 
-            rows = conn.execute(f"""
-                SELECT ticker, text, accession,
-                       array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
-                FROM edgar_embeddings
-                ORDER BY dist ASC
-                LIMIT ?
-            """, [qvec, self.top_k]).fetchall()
+            if self.ticker:
+                rows = conn.execute(f"""
+                    SELECT ticker, text, accession,
+                           array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
+                    FROM edgar_embeddings
+                    WHERE ticker = ?
+                    ORDER BY dist ASC
+                    LIMIT ?
+                """, [qvec, self.ticker, self.top_k]).fetchall()
+            else:
+                rows = conn.execute(f"""
+                    SELECT ticker, text, accession,
+                           array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
+                    FROM edgar_embeddings
+                    ORDER BY dist ASC
+                    LIMIT ?
+                """, [qvec, self.top_k]).fetchall()
 
             return [
                 Document(

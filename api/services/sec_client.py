@@ -17,8 +17,9 @@ def get_latest_10k_facts(ticker: str) -> pl.DataFrame:
     ensure_edgar_identity()
     try:
         company = Company(ticker)
-        filing = company.get_filing(form="10-K")
-        financials = filing.financials
+        filing = company.get_filings(form="10-K").latest()
+        full_filing = filing.obj()
+        financials = full_filing.financials
         
         if not financials:
             return pl.DataFrame()
@@ -51,9 +52,9 @@ def chunk_filing_sections(ticker: str, accession_number: Optional[str] = None) -
     try:
         company = Company(ticker)
         if accession_number:
-            filing = company.get_filing(accession_number=accession_number)
+            filing = company.get_filings(accession_number=accession_number).latest()
         else:
-            filing = company.get_filing(form="10-K")
+            filing = company.get_filings(form="10-K").latest()
             
         # Get sections using edgartools
         # edgartools supports getting sections for 10-K

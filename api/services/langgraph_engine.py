@@ -77,7 +77,7 @@ def retrieval_node(state: GraphState) -> Dict[str, Any]:
         # 1. Retrieve SEC Filing Chunks (Primary: vector similarity)
         docs = []
         try:
-            edgar_retriever = EDGAREmbeddingsRetriever(top_k=5)
+            edgar_retriever = EDGAREmbeddingsRetriever(top_k=5, ticker=ticker)
             docs = edgar_retriever.invoke(query)
         except Exception as e:
             logger.warning(f"Vector retrieval failed, falling back to keyword: {e}")

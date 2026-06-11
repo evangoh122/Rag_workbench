@@ -75,18 +75,26 @@ INSERT OR REPLACE INTO polygon_tickers (
 
 
 def fetch_ticker_details(ticker: str, api_key: str) -> dict | None:
-    """Fetch company details from Polygon for a single ticker."""
-    try:
-        resp = requests.get(
-            f"{POLYGON_BASE}/v3/reference/tickers/{ticker}",
-            params={"apiKey": api_key},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        return resp.json().get("results", {})
-    except Exception as e:
-        logger.error(f"Failed to fetch {ticker}: {e}")
-        return None
+    """Fetch company details from Polygon for a single ticker with retry on 429."""
+    for attempt in range(3):
+        try:
+            resp = requests.get(
+                f"{POLYGON_BASE}/v3/reference/tickers/{ticker}",
+                params={"apiKey": api_key},
+                timeout=15,
+            )
+            if resp.status_code == 429:
+                wait = int(resp.headers.get("Retry-After", 15))
+                logger.warning(f"Rate limited on {ticker}, waiting {wait}s (attempt {attempt+1})")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp.json().get("results", {})
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch {ticker} (attempt {attempt+1}): {e}")
+            if attempt < 2:
+                time.sleep(5)
+    return None
 
 
 def row_from_result(ticker: str, data: dict) -> tuple:

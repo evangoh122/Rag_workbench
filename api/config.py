@@ -74,7 +74,7 @@ class Config:
 
     @property
     def DEEPSEEK_MAX_TOKENS(self) -> int:
-        return int(os.getenv("DEEPSEEK_MAX_TOKENS", "16384"))
+        return int(os.getenv("DEEPSEEK_MAX_TOKENS", "4096"))
 
     @property
     def DEEPSEEK_TEMPERATURE(self) -> float:
@@ -144,21 +144,21 @@ class Config:
                 "base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
                 "default_model": os.getenv("OPENAI_MODEL", "gpt-4o"),
                 "api_key": self.OPENAI_API_KEY,
-                "max_tokens": int(os.getenv("OPENAI_MAX_TOKENS", "16384")),
+                "max_tokens": int(os.getenv("OPENAI_MAX_TOKENS", "4096")),
                 "temperature": float(os.getenv("OPENAI_TEMPERATURE", "0.1")),
             },
             "anthropic": {
                 "base_url": "https://api.anthropic.com/v1",
                 "default_model": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
                 "api_key": self.ANTHROPIC_API_KEY,
-                "max_tokens": int(os.getenv("ANTHROPIC_MAX_TOKENS", "16384")),
+                "max_tokens": int(os.getenv("ANTHROPIC_MAX_TOKENS", "4096")),
                 "temperature": float(os.getenv("ANTHROPIC_TEMPERATURE", "0.1")),
             },
             "ollama": {
                 "base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
                 "default_model": os.getenv("OLLAMA_MODEL", "llama3.2"),
                 "api_key": "ollama",
-                "max_tokens": int(os.getenv("OLLAMA_MAX_TOKENS", "16384")),
+                "max_tokens": int(os.getenv("OLLAMA_MAX_TOKENS", "4096")),
                 "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.1")),
             },
             "mimo": {

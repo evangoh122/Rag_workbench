@@ -30,6 +30,8 @@ from api.services.polygon_verifier import run_checks as polygon_run_checks
 def _llm_call(prompt: str, max_tokens: int = 1024) -> str:
     cfg = Config.get_provider_config()
     tracker = get_llm_tracker()
+    import time as _time
+    start = _time.monotonic()
     try:
         resp = requests.post(
             f"{cfg['base_url']}/chat/completions",
@@ -45,6 +47,9 @@ def _llm_call(prompt: str, max_tokens: int = 1024) -> str:
             },
             timeout=60,
         )
+        elapsed = _time.monotonic() - start
+        if elapsed > 30:
+            logger.warning(f"Slow LLM call in sec_analyzer: {elapsed:.1f}s (max_tokens={max_tokens})")
         resp.raise_for_status()
         body = resp.json()
         choices = body.get("choices")
