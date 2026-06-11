@@ -4,6 +4,7 @@ FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 ARG VITE_API_BASE="/api"
+ENV VITE_API_BASE=$VITE_API_BASE
 
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -58,6 +59,9 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 # Copy configuration files
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Remove Debian default site that conflicts on port 80
+RUN rm -f /etc/nginx/sites-enabled/default
 
 RUN mkdir -p /app/data && chown user:user /app/data
 
