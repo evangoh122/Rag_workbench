@@ -150,7 +150,7 @@ export default function AuditTrail({ sources, xbrl_facts, polygon_data, verifica
                     {src.ticker}
                   </span>
                   <span className="text-xs text-gray-500">{src.accession}</span>
-                  {src.distance !== undefined && (
+                  {src.distance != null && (
                     <span className="text-xs text-gray-600 ml-auto">dist: {src.distance.toFixed(4)}</span>
                   )}
                 </div>

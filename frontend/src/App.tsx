@@ -9,7 +9,6 @@ import SystemDashboard from './pages/SystemDashboard';
 import Methodology from './pages/Methodology';
 import StocksList from './pages/StocksList';
 import GoogleSlides from './pages/GoogleSlides';
-import posthog from 'posthog-js';
 import DriftAlert from './components/DriftAlert';
 import AuditTrail from './components/AuditTrail';
 import PipelineFlow from './components/PipelineFlow';
@@ -42,6 +41,12 @@ type PipelineStatus = {
   output?: 'success' | 'error' | 'pending';
 };
 
+let _posthog: Promise<typeof import('posthog-js').default> | null = null
+function getPosthog() {
+  if (!_posthog) _posthog = import('posthog-js').then(m => m.default)
+  return _posthog
+}
+
 function App() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -62,7 +67,7 @@ function App() {
 
   useEffect(() => {
     if (import.meta.env.VITE_POSTHOG_KEY) {
-      posthog.capture('$pageview', { view });
+      getPosthog().then(p => p.capture('$pageview', { view }))
     }
   }, [view]);
 
@@ -82,7 +87,7 @@ function App() {
     setLoading(true);
 
     if (import.meta.env.VITE_POSTHOG_KEY) {
-      posthog.capture('chat_send', { mode, query_length: currentInput.length });
+      getPosthog().then(p => p.capture('chat_send', { mode, query_length: currentInput.length }))
     }
 
     try {
@@ -137,7 +142,7 @@ function App() {
           ? err.message
           : 'An unexpected error occurred';
       if (import.meta.env.VITE_POSTHOG_KEY) {
-        posthog.capture('chat_error', { mode, error: message });
+        getPosthog().then(p => p.capture('chat_error', { mode, error: message }))
       }
       setMessages(prev => [
         ...prev,
