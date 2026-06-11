@@ -54,7 +54,6 @@ async def health_full():
     try:
         conn = db_manager.get_connection()
         conn.execute("SELECT 1")
-        conn.close()
         db_ok = True
     except Exception as e:
         db_error = str(e)
@@ -76,7 +75,6 @@ async def health_full():
             "concept_alert": drift_status.concept_alert,
             "window_size": drift_status.window_size,
         }
-        conn.close()
     except Exception as e:
         drift = {"error": str(e)}
 

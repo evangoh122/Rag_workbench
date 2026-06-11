@@ -67,8 +67,3 @@ class Verifier:
 # Singleton instance for the service
 verifier = Verifier()
 
-def verify_numeric(llm_value: float, xbrl_fact_value: float, tolerance: float = 0.005) -> bool:
-    return verifier.verify_numeric(llm_value, xbrl_fact_value, tolerance)
-
-def verify_entailment(claim: str, source_text: str) -> Tuple[str, str]:
-    return verifier.verify_entailment(claim, source_text)

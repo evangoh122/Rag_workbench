@@ -31,8 +31,8 @@ export interface ChatResponse {
   type?: 'text' | 'table' | 'error';
   sql?: string;
   data?: Record<string, unknown>[];
-  sources?: any[];
-  xbrl_facts?: any[];
+  sources?: Source[];
+  xbrl_facts?: XBRLFact[];
   verification?: {
     status: string;
     reasoning: string;

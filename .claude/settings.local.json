@@ -35,7 +35,12 @@
       "Bash(pip list *)",
       "Bash(Test-Path *)",
       "Bash(curl -s http://localhost:8000/api/health)",
-      "PowerShell(Start-Process -FilePath \"python\" -ArgumentList \"run.py\" -WorkingDirectory \"D:\\\\New folder \\(2\\)\\\\Rag_workbench\" -WindowStyle Normal -PassThru | Select-Object Id, ProcessName)"
+      "PowerShell(Start-Process -FilePath \"python\" -ArgumentList \"run.py\" -WorkingDirectory \"D:\\\\New folder \\(2\\)\\\\Rag_workbench\" -WindowStyle Normal -PassThru | Select-Object Id, ProcessName)",
+      "Bash(grep -E \"\\\\.\\(py|md\\)$\")",
+      "Bash(xargs grep -l \"retrieval\\\\|precision\\\\|recall\\\\|ranking\")",
+      "Bash(xargs grep -l \"score\\\\|metric\\\\|evaluate\\\\|benchmark\\\\|quality\")",
+      "PowerShell(Get-ChildItem 'D:\\\\New folder \\(2\\)\\\\Rag_workbench\\\\api\\\\services' -File | Where-Object {$_.Name -match 'validator|scorer|verif|shadow|drift|calibr'} | Select-Object Name)",
+      "Skill(code-review)"
     ]
   },
   "hooks": {

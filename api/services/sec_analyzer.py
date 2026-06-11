@@ -19,6 +19,7 @@ import requests
 from loguru import logger
 
 from api.config import Config
+from api.services.llm_health import get_llm_tracker
 from api.services.polygon_verifier import run_checks as polygon_run_checks
 
 
@@ -28,26 +29,33 @@ from api.services.polygon_verifier import run_checks as polygon_run_checks
 
 def _llm_call(prompt: str, max_tokens: int = 512) -> str:
     cfg = Config.get_provider_config()
-    resp = requests.post(
-        f"{cfg['base_url']}/chat/completions",
-        headers={
-            "Authorization": f"Bearer {cfg['api_key']}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": cfg["model"],
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": 0,
-        },
-        timeout=30,
-    )
-    resp.raise_for_status()
-    body = resp.json()
-    choices = body.get("choices")
-    if not choices:
-        raise ValueError(f"Provider returned no choices: {body.get('error', body)}")
-    return choices[0]["message"]["content"].strip()
+    tracker = get_llm_tracker()
+    try:
+        resp = requests.post(
+            f"{cfg['base_url']}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {cfg['api_key']}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": cfg["model"],
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+                "temperature": 0,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        choices = body.get("choices")
+        if not choices:
+            raise ValueError(f"Provider returned no choices: {body.get('error', body)}")
+        result = choices[0]["message"]["content"].strip()
+        tracker.record_success()
+        return result
+    except Exception as e:
+        tracker.record_failure(str(e), context="sec_analyzer/llm")
+        raise
 
 
 def _parse_json(text: str) -> dict:

@@ -33,6 +33,7 @@ class ReasonCode(str, Enum):
     UNKNOWN_CONCEPT = "unknown_concept"
     REFERENTIAL = "referential"
     NOVEL_FORM = "novel_form"
+    NO_DATA = "no_data"
 
 
 class Route(str, Enum):

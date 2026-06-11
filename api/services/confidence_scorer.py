@@ -139,6 +139,11 @@ def score_and_route(
     if not xbrl_result.field_confidences:
         record_confidence = PROVENANCE_BASE_SCORE.get(Provenance.NARRATIVE_LLM, 0.55)
 
+    # L4: 10-K/A has 0.0 confidence
+    if _trigger_amended_filing(result, ctx) and (not result.fields or record_confidence == 0):
+        if ReasonCode.NO_DATA not in all_reason_codes:
+            all_reason_codes.append(ReasonCode.NO_DATA)
+
     cut = _get_cut_points()
 
     if triggers_fired:

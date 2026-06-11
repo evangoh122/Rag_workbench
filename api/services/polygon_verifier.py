@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Optional
 import requests
 from loguru import logger
+from api.services.llm_health import get_llm_tracker
 
 _BASE = "https://api.polygon.io"
 _TIMEOUT = 10
@@ -168,20 +169,25 @@ def run_checks(
         Dict with keys: ticker_valid, company_name, company_active,
         financial_checks, auditor_checks, polygon_period, errors.
     """
+    tracker = get_llm_tracker()
     errors: list[str] = []
     company: dict = {}
     polygon_fin: dict = {}
 
     try:
         company = fetch_company_details(ticker, api_key)
+        tracker.record_success()
     except Exception as e:
         errors.append(f"company_details: {e}")
+        tracker.record_failure(str(e), context="polygon/company_details")
         logger.warning(f"Polygon company details failed for {ticker}: {e}")
 
     try:
         polygon_fin = fetch_latest_financials(ticker, api_key)
+        tracker.record_success()
     except Exception as e:
         errors.append(f"financials: {e}")
+        tracker.record_failure(str(e), context="polygon/financials")
         logger.warning(f"Polygon financials failed for {ticker}: {e}")
 
     financial_checks = (

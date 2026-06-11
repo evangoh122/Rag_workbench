@@ -1,31 +1,25 @@
-import unittest
-from api.services.verifier import verify_numeric
+import pytest
+from api.services.verifier import verifier, Verifier
 
-class TestVerifier(unittest.TestCase):
-    def test_verify_numeric_exact(self):
-        self.assertTrue(verify_numeric(100.0, 100.0))
+def test_verify_numeric_exact():
+    assert verifier.verify_numeric(100.0, 100.0)
 
-    def test_verify_numeric_within_tolerance(self):
-        # 0.4% difference
-        self.assertTrue(verify_numeric(100.4, 100.0))
-        self.assertTrue(verify_numeric(99.6, 100.0))
+def test_verify_numeric_within_tolerance():
+    # 0.4% difference
+    assert verifier.verify_numeric(100.4, 100.0)
+    assert verifier.verify_numeric(99.6, 100.0)
 
-    def test_verify_numeric_outside_tolerance(self):
-        # 0.6% difference
-        self.assertFalse(verify_numeric(100.6, 100.0))
-        self.assertFalse(verify_numeric(99.4, 100.0))
+def test_verify_numeric_outside_tolerance():
+    # 0.6% difference
+    assert not verifier.verify_numeric(100.6, 100.0)
+    assert not verifier.verify_numeric(99.4, 100.0)
 
-    def test_verify_numeric_zero(self):
-        self.assertTrue(verify_numeric(0.0, 0.0))
-        self.assertFalse(verify_numeric(0.1, 0.0))
+def test_verify_numeric_zero():
+    assert verifier.verify_numeric(0.0, 0.0)
+    assert not verifier.verify_numeric(0.1, 0.0)
 
-class TestVerifierEntailment(unittest.TestCase):
-    def test_verify_entailment_no_model(self):
-        # Should return ERROR if model not loaded
-        from api.services.verifier import Verifier
-        v = Verifier(model_name="non-existent-model")
-        res, reason = v.verify_entailment("claim", "source")
-        self.assertEqual(res, "ERROR")
-
-if __name__ == "__main__":
-    unittest.main()
+def test_verify_entailment_no_model():
+    # Should return ERROR if model not loaded
+    v = Verifier(model_name="non-existent-model")
+    res, reason = v.verify_entailment("claim", "source")
+    assert res == "ERROR"

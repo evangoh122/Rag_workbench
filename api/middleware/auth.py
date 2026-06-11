@@ -30,7 +30,7 @@ def _verify_key(request: Request, key_env_vars: list[str], level_name: str):
             detail="Service not configured",
         )
 
-    if not api_key:
+    if api_key is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"{API_KEY_NAME} header required",
