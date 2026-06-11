@@ -92,7 +92,7 @@ def main():
         logger.error("No extractions found. Run bootstrap_db.py first.")
         return
 
-    logger.info("Running shadow pipeline over %d extractions...", len(extractions))
+    logger.info("Running shadow pipeline over {} extractions...", len(extractions))
     report = run_shadow_pipeline(extractions, ticker=tickers[0] if len(tickers) == 1 else "")
 
     # Save report

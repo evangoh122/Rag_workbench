@@ -70,7 +70,15 @@ class Config:
     # API Keys
     @property
     def DEEPSEEK_API_KEY(self) -> str | None:
-        return os.getenv("DEEPSEEK_API_KEY")
+        return os.getenv("DEEPSEEK_API_KEY") or os.getenv("DEEP_SEEK_API_KEY")
+
+    @property
+    def DEEPSEEK_MAX_TOKENS(self) -> int:
+        return int(os.getenv("DEEPSEEK_MAX_TOKENS", "16384"))
+
+    @property
+    def DEEPSEEK_TEMPERATURE(self) -> float:
+        return float(os.getenv("DEEPSEEK_TEMPERATURE", "0.1"))
 
     @property
     def OPENAI_API_KEY(self) -> str | None:
@@ -99,7 +107,7 @@ class Config:
 
     @property
     def MIMO_TEMPERATURE(self) -> float:
-        return float(os.getenv("MIMO_TEMPERATURE", "0.15"))
+        return float(os.getenv("MIMO_TEMPERATURE", "0.1"))
 
     # ── Reranker Settings ─────────────────────────────────────────────────────
     @property
@@ -126,24 +134,32 @@ class Config:
     def get_provider_config(self):
         providers = {
             "deepseek": {
-                "base_url": "https://api.deepseek.com",
-                "default_model": "deepseek-chat",
+                "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+                "default_model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
                 "api_key": self.DEEPSEEK_API_KEY,
+                "max_tokens": self.DEEPSEEK_MAX_TOKENS,
+                "temperature": self.DEEPSEEK_TEMPERATURE,
             },
             "openai": {
-                "base_url": os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1"),
-                "default_model": "gpt-4o",
+                "base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+                "default_model": os.getenv("OPENAI_MODEL", "gpt-4o"),
                 "api_key": self.OPENAI_API_KEY,
+                "max_tokens": int(os.getenv("OPENAI_MAX_TOKENS", "16384")),
+                "temperature": float(os.getenv("OPENAI_TEMPERATURE", "0.1")),
             },
             "anthropic": {
                 "base_url": "https://api.anthropic.com/v1",
-                "default_model": "claude-sonnet-4-6",
+                "default_model": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
                 "api_key": self.ANTHROPIC_API_KEY,
+                "max_tokens": int(os.getenv("ANTHROPIC_MAX_TOKENS", "16384")),
+                "temperature": float(os.getenv("ANTHROPIC_TEMPERATURE", "0.1")),
             },
             "ollama": {
                 "base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
                 "default_model": os.getenv("OLLAMA_MODEL", "llama3.2"),
                 "api_key": "ollama",
+                "max_tokens": int(os.getenv("OLLAMA_MAX_TOKENS", "16384")),
+                "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.1")),
             },
             "mimo": {
                 "base_url": os.getenv("MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
@@ -167,6 +183,8 @@ class Config:
             "base_url": cfg["base_url"],
             "model": self.CHAT_MODEL or cfg["default_model"],
             "api_key": cfg["api_key"],
+            "max_tokens": cfg.get("max_tokens", 4096),
+            "temperature": cfg.get("temperature", 0.3),
         }
 
     def validate_startup(self):

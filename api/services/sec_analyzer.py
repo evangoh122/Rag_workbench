@@ -27,7 +27,7 @@ from api.services.polygon_verifier import run_checks as polygon_run_checks
 # LLM client (same pattern as evals/ragas_eval.py)
 # ---------------------------------------------------------------------------
 
-def _llm_call(prompt: str, max_tokens: int = 512) -> str:
+def _llm_call(prompt: str, max_tokens: int = 1024) -> str:
     cfg = Config.get_provider_config()
     tracker = get_llm_tracker()
     try:
@@ -41,9 +41,9 @@ def _llm_call(prompt: str, max_tokens: int = 512) -> str:
                 "model": cfg["model"],
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": max_tokens,
-                "temperature": 0,
+                "temperature": cfg.get("temperature", 0.1),
             },
-            timeout=30,
+            timeout=60,
         )
         resp.raise_for_status()
         body = resp.json()
@@ -151,7 +151,7 @@ def extract_named_entities(chunks: list[str]) -> dict:
 def extract_risk_flags(chunks: list[str]) -> list[dict]:
     text = _fmt_chunks(chunks, max_chunks=6)
     try:
-        raw = _llm_call(_RISK_PROMPT.format(text=text), max_tokens=768)
+        raw = _llm_call(_RISK_PROMPT.format(text=text), max_tokens=1536)
         return _parse_json(raw).get("flags", [])
     except Exception as e:
         logger.warning(f"Risk flag extraction failed: {e}")
@@ -161,7 +161,7 @@ def extract_risk_flags(chunks: list[str]) -> list[dict]:
 def extract_forward_looking(chunks: list[str]) -> list[dict]:
     text = _fmt_chunks(chunks, max_chunks=6)
     try:
-        raw = _llm_call(_FORWARD_LOOKING_PROMPT.format(text=text), max_tokens=768)
+        raw = _llm_call(_FORWARD_LOOKING_PROMPT.format(text=text), max_tokens=1536)
         return _parse_json(raw).get("statements", [])
     except Exception as e:
         logger.warning(f"Forward-looking extraction failed: {e}")

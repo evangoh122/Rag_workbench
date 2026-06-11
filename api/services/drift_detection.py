@@ -69,7 +69,7 @@ def log_drift_alert(status: DriftStatus) -> None:
     if status.agreement_alert:
         logger.warning(
             "DRIFT ALERT — agreement_rate below floor: "
-            "agreement_rate=%.4f floor=%.4f window=%d",
+            "agreement_rate={:.4f} floor={:.4f} window={}",
             status.agreement_rate,
             status.agreement_floor,
             status.window_size,
@@ -77,7 +77,7 @@ def log_drift_alert(status: DriftStatus) -> None:
     if status.concept_alert:
         logger.warning(
             "DRIFT ALERT — unrecognized concept spike: "
-            "count=%d threshold=%d window=%d",
+            "count={} threshold={} window={}",
             status.unrecognized_concept_count,
             status.concept_spike_threshold,
             status.window_size,

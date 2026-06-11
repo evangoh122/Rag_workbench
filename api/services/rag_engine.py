@@ -370,7 +370,9 @@ def get_rag_chain():
                     llm = ChatOpenAI(
                         model=cfg["model"],
                         api_key=cfg["api_key"] or "local",
-                        base_url=cfg["base_url"]
+                        base_url=cfg["base_url"],
+                        max_tokens=cfg.get("max_tokens", 4096),
+                        temperature=cfg.get("temperature", 0.3),
                     )
 
                 _rag_chain = (

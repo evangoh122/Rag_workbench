@@ -84,13 +84,13 @@ def run_shadow_pipeline(
 
             report.filings.append(fr)
             logger.info(
-                "Shadow: %s %s -> %s (conf=%.2f, triggers=%s)",
+                "Shadow: {} {} -> {} (conf={:.2f}, triggers={})",
                 result.cik, result.form_type, decision.route.value, decision.confidence,
                 decision.triggers_fired,
             )
 
         except Exception as e:
-            logger.error("Shadow error for %s %s: %s", result.cik, result.accession, e)
+            logger.error("Shadow error for {} {}: {}", result.cik, result.accession, e)
             report.errors += 1
 
     report.recommendations = _derive_recommendations(report)

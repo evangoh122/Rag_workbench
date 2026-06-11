@@ -20,7 +20,7 @@ def _validate_origins(raw: str) -> list[str]:
         if _ORIGIN_RE.match(origin):
             valid.append(origin)
         else:
-            logger.warning("CORS_ORIGINS contains invalid origin, ignoring: %s", origin)
+            logger.warning("CORS_ORIGINS contains invalid origin, ignoring: {}", origin)
     if not valid:
         logger.warning("No valid CORS origins found, defaulting to http://localhost:3000")
         return ["http://localhost:3000"]

@@ -81,15 +81,16 @@ def _conversational_llm_call(message: str) -> str:
     from openai import OpenAI
     from api.config import Config
     cfg = Config.get_provider_config()
-    client = OpenAI(api_key=cfg["api_key"] or "local", base_url=cfg["base_url"])
+    client = OpenAI(api_key=cfg["api_key"] or "local", base_url=cfg["base_url"], timeout=15.0)
     resp = client.chat.completions.create(
         model=cfg["model"],
         messages=[
             {"role": "system", "content": "You are a helpful financial analysis assistant. Be concise and friendly."},
             {"role": "user", "content": message},
         ],
-        temperature=cfg.get("temperature", 0.7),
-        max_tokens=cfg.get("max_tokens", 200),
+        temperature=0.7,
+        max_tokens=200,
+        timeout=15.0,
     )
     return resp.choices[0].message.content.strip()
 

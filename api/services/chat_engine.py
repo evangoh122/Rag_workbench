@@ -19,7 +19,7 @@ Polygon historical data:
 - polygon_bars(ticker, ts, timespan, open, high, low, close, volume, vwap, transactions)
 - polygon_snapshots(ticker, ts, bid, ask, last, prev_close, day_volume)
 - polygon_option_snapshots(underlying, expiry, strike, right, ts, day_open, day_close, day_volume, open_interest, implied_vol, delta, gamma, theta, vega)
-- polygon_tickers(ticker, name, market, primary_exchange, type, active, currency, description)
+- polygon_tickers(ticker, name, market, primary_exchange, type, active, currency_name, cik, market_cap, phone_number, address, city, state, postal_code, description, sic_code, sic_description, homepage_url, total_employees, list_date, shares_outstanding)
 
 SEC EDGAR financials:
 - edgar_filings(ticker, cik, form_type, filed_date, accession_number, primary_doc)

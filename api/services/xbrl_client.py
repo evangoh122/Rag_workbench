@@ -43,15 +43,15 @@ def _rate_limited_get(url: str) -> dict:
 def fetch_company_facts(cik: str) -> dict:
     """Fetch all companyfacts for a CIK. Cached per process."""
     if not cik.isdigit():
-        logger.warning("Invalid CIK (non-digit): %s", cik)
+        logger.warning("Invalid CIK (non-digit): {}", cik)
         return {}
     cik_padded = cik.zfill(10)
     url = COMPANYFACTS_URL.format(cik=cik_padded)
-    logger.info("Fetching companyfacts for CIK %s", cik_padded)
+    logger.info("Fetching companyfacts for CIK {}", cik_padded)
     try:
         return _rate_limited_get(url)
     except Exception as e:
-        logger.warning("companyfacts fetch failed for CIK %s: %s", cik, e)
+        logger.warning("companyfacts fetch failed for CIK {}: {}", cik, e)
         return {}
 
 def get_fact(

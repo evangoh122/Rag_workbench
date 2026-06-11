@@ -240,7 +240,7 @@ export default function Methodology() {
           <P>
             All API keys are loaded from <Tag>.env</Tag> via python-dotenv and never logged.
             The provider is selected at runtime via <Tag>CHAT_PROVIDER</Tag>; supported values are{' '}
-            <Tag>deepseek</Tag> <Tag>openai</Tag> <Tag>anthropic</Tag> <Tag>ollama</Tag> <Tag>mimo</Tag>.
+            <Tag>deepseek</Tag> <Tag>mimo</Tag>.
           </P>
           <H>Rate limiting</H>
           <P>

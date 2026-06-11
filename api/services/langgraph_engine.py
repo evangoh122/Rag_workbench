@@ -389,7 +389,7 @@ def eval_node(state: GraphState) -> Dict[str, Any]:
             "status": {**state.get('status', {}), "eval": "success"},
         }
     except Exception as exc:
-        logger.warning("Eval node error (non-fatal): %s", exc)
+        logger.warning("Eval node error (non-fatal): {}", exc)
         return {"status": {**state.get('status', {}), "eval": "error"}}
 
 

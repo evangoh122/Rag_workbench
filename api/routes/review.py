@@ -101,7 +101,7 @@ async def record_reviewer_verdict(
     try:
         decision = get_decision(conn, decision_id)
     except Exception:
-        logger.exception("DB error looking up decision %s", decision_id)
+        logger.exception("DB error looking up decision {}", decision_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     if decision is None:
@@ -117,7 +117,7 @@ async def record_reviewer_verdict(
             notes=verdict.notes,
         )
     except Exception:
-        logger.exception("Failed to record verdict for decision %s", decision_id)
+        logger.exception("Failed to record verdict for decision {}", decision_id)
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return Response(status_code=204)
