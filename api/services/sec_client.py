@@ -11,33 +11,28 @@ from api.services._edgar_identity import ensure_edgar_identity
 @lru_cache(maxsize=32)
 def get_latest_10k_facts(ticker: str) -> pl.DataFrame:
     """
-    Download the latest 10-K for a ticker and extract XBRL facts into a Polars DataFrame.
-    Columns: Concept, Value, Unit, Period
+    Fetch the latest 10-K XBRL facts for a ticker from the edgar_facts DuckDB table.
+    Columns: concept, label, value, unit, period_end, form_type
     """
-    ensure_edgar_identity()
     try:
-        company = Company(ticker)
-        filing = company.get_filings(form="10-K").latest()
-        full_filing = filing.obj()
-        financials = full_filing.financials
-        
-        if not financials:
+        from api.db.database import db_manager
+        conn = db_manager.get_connection()
+        rows = conn.execute("""
+            SELECT concept, label, value, unit, period_end, form_type
+            FROM edgar_facts
+            WHERE ticker = ?
+            ORDER BY period_end DESC
+        """, [ticker]).fetchall()
+
+        if not rows:
             return pl.DataFrame()
 
-        # Combine facts from all statements
-        all_facts = []
-        for statement in [financials.balance_sheet, financials.income_statement, financials.cash_flow_statement]:
-            if statement is not None:
-                # statement is an edgar.financials.Statement object
-                df_pd = statement.to_pandas()
-                # Convert to polars
-                df_pl = pl.from_pandas(df_pd)
-                all_facts.append(df_pl)
-        
-        if not all_facts:
-            return pl.DataFrame()
-            
-        return pl.concat(all_facts, how="diagonal")
+        df = pl.DataFrame(
+            rows,
+            schema=["concept", "label", "value", "unit", "period_end", "form_type"],
+            orient="row",
+        )
+        return df
     except Exception as e:
         logger.error(f"Error fetching XBRL facts for {ticker}: {e}")
         return pl.DataFrame()

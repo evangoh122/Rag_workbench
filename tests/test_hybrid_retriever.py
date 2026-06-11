@@ -3,8 +3,7 @@ tests/test_hybrid_retriever.py — Unit tests for BM25 + Vector hybrid retriever
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-import pytest
+from unittest.mock import patch
 from langchain_core.documents import Document
 
 from api.services.hybrid_retriever import (
