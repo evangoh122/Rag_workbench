@@ -99,7 +99,7 @@ class Config:
 
     @property
     def MIMO_TEMPERATURE(self) -> float:
-        return float(os.getenv("MIMO_TEMPERATURE", "0.2"))
+        return float(os.getenv("MIMO_TEMPERATURE", "0.15"))
 
     # Embedding Settings
     @property

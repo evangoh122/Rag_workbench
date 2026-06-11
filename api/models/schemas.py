@@ -11,9 +11,13 @@ class ChatRequest(BaseModel):
 # ── Structured Output Models ─────────────────────────────────────────────────
 
 class SourceItem(BaseModel):
-    """A retrieved source chunk with metadata."""
-    content: str = ""
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    """A retrieved source chunk with metadata. Matches frontend Source interface."""
+    ticker: str = ""
+    accession: str = ""
+    section: str = ""
+    text: str = ""
+    edgar_url: str = ""
+    distance: Optional[float] = None
 
 
 class VerificationResult(BaseModel):
@@ -27,6 +31,7 @@ class PipelineStatus(BaseModel):
     input: str = "pending"
     retrieval: str = "pending"
     extraction: str = "pending"
+    eval: str = "pending"
     math: str = "pending"
     verification: str = "pending"
     output: str = "pending"

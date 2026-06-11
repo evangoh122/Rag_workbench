@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 _tracker = get_llm_tracker()
 
-_IS_DEV = os.getenv("ENVIRONMENT", "development").lower() == "development"
+_IS_DEV = os.getenv("ENVIRONMENT", "production").lower() == "development"
 
 
 def _error_detail(e: Exception, context: str = "") -> str:
@@ -191,13 +191,24 @@ async def chat_auditable_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_k
         result = run_auditable_rag(req.message, req.ticker)
         answer = _apply_output_rails(result["final_answer"])
         _tracker.record_success()
+
+        # Map retrieved docs to flat SourceItem matching frontend expectations
+        sources = []
+        for d in result["retrieved_docs"]:
+            meta = d.get("metadata", {})
+            sources.append(SourceItem(
+                text=d.get("chunk_text", ""),
+                ticker=meta.get("ticker", ""),
+                accession=meta.get("accession_number", meta.get("accession", "")),
+                section=meta.get("section_id", meta.get("section", "")),
+                edgar_url=meta.get("edgar_url", f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={meta.get('ticker', '')}"),
+                distance=meta.get("distance"),
+            ))
+
         return ChatResponse(
             type="text",
             answer=answer,
-            sources=[
-                SourceItem(content=d["chunk_text"], metadata=d["metadata"])
-                for d in result["retrieved_docs"]
-            ],
+            sources=sources,
             xbrl_facts=result["xbrl_facts"],
             polygon_data=result.get("polygon_data", []),
             verification=VerificationResult(
@@ -232,6 +243,14 @@ async def chat_sec_analyzer_endpoint(req: ChatRequest, _=Depends(get_read_api_ke
         chunk_texts = [c["chunk_text"] for c in chunks]
         result = analyze_filing(chunk_texts, req.ticker)
         _tracker.record_success()
+        # Apply output rails to text-bearing fields in the structured result
+        if isinstance(result, dict):
+            for flag in result.get("risk_flags", []):
+                if isinstance(flag, dict) and "excerpt" in flag:
+                    flag["excerpt"] = _apply_output_rails(flag["excerpt"])
+            for fwd in result.get("forward_looking", []):
+                if isinstance(fwd, dict) and "text" in fwd:
+                    fwd["text"] = _apply_output_rails(fwd["text"])
         return result
     except HTTPException:
         raise
