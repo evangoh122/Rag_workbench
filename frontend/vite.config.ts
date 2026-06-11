@@ -1,22 +1,20 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-
-const plugins = [react(), tailwindcss()]
-
-if (process.env.ANALYZE) {
-  const { visualizer } = await import('rollup-plugin-visualizer')
-  plugins.push(visualizer({
-    open: false,
-    filename: 'bundle-analysis.html',
-    gzipSize: true,
-    brotliSize: true,
-  }))
-}
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins,
+  plugins: [
+    react(),
+    tailwindcss(),
+    ...(process.env.ANALYZE ? [visualizer({
+      open: false,
+      filename: 'bundle-analysis.html',
+      gzipSize: true,
+      brotliSize: true,
+    })] : []),
+  ],
   envDir: '../',
   server: {
     proxy: {
@@ -41,6 +39,9 @@ export default defineConfig({
           }
           if (id.includes('node_modules/lucide-react')) {
             return 'icons';
+          }
+          if (id.includes('node_modules/tailwindcss')) {
+            return 'tailwind';
           }
         },
       },
