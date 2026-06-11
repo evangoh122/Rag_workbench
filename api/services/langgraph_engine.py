@@ -608,20 +608,22 @@ _NUMERIC_KEYWORDS = [
     "percentage", "ratio", "growth rate", "yoy", "year over year",
 ]
 
-# Strong qualitative signals — these override numeric classification
+# Strong qualitative signals — these override numeric classification.
+# Only include terms that are clearly non-numeric and unlikely to appear
+# in queries that actually want a computed metric.
 _QUALITATIVE_SIGNALS = [
     "risk", "risks", "risk factor",
     "management discussion", "md&a", "highlighted by management",
-    "strategy", "outlook", "competitive", "threat", "challenge",
+    "strategy", "outlook", "competitive landscape", "threat", "challenge",
     "opportunities", "strengths", "weaknesses",
-    "explain", "describe", "summarize", "discuss",
+    "what are the risks", "what are the risk",
+    "what is the strategy", "what is the outlook",
+    "how does the company", "why did the company",
     "mentioned", "stated", "noted", "warned", "cautioned",
     "material weakness", "going concern", "contingency", "litigation",
     "regulation", "regulatory", "compliance",
     "acquisition", "merger", "divestiture",
-    "segment", "business model", "products", "services",
-    "customers", "competition", "market position",
-    "what did", "what are the", "how does", "why did",
+    "business model", "market position", "competitive advantage",
 ]
 
 
