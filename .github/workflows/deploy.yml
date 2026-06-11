@@ -5,6 +5,7 @@ on:
     branches: [main]
   schedule:
     - cron: '*/20 * * * *'
+    - cron: '0 3 * * *'
   workflow_dispatch: {}
 
 jobs:
@@ -40,6 +41,7 @@ jobs:
           upload_secret "ANTHROPIC_API_KEY"   "${{ secrets.ANTHROPIC_API_KEY }}"
           upload_secret "REVIEW_API_KEY"      "${{ secrets.REVIEW_API_KEY }}"
           upload_secret "LANGSMITH_API_KEY"   "${{ secrets.LANGSMITH_API_KEY }}"
+          upload_secret "ADMIN_API_KEY"       "${{ secrets.ADMIN_API_KEY }}"
 
   deploy:
     needs: sync-secrets
@@ -59,7 +61,7 @@ jobs:
           git push hf main --force
 
   keepalive:
-    if: github.event_name == 'schedule'
+    if: github.event.schedule == '*/20 * * * *'
     runs-on: ubuntu-latest
     steps:
       - name: Ping HF Space health endpoint
@@ -71,3 +73,42 @@ jobs:
             -o /dev/null -w "%{http_code}" || echo "000")
           echo "Health check HTTP status: $STATUS"
           [ "$STATUS" = "200" ] && echo "Space is alive" || echo "Space may be waking up"
+
+  refresh-data:
+    if: github.event.schedule == '0 3 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh XBRL data from SEC EDGAR
+        env:
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+        run: |
+          echo "Waiting for space to wake up..."
+          for i in $(seq 1 10); do
+            STATUS=$(curl -sf --max-time 30 \
+              https://$HF_USERNAME-rag-workbench.hf.space/api/health \
+              -o /dev/null -w "%{http_code}" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Space is awake"
+              break
+            fi
+            echo "Attempt $i: status $STATUS, retrying in 15s..."
+            sleep 15
+          done
+
+          echo "Triggering data refresh..."
+          RESPONSE=$(curl -sf --max-time 600 -X POST \
+            https://$HF_USERNAME-rag-workbench.hf.space/api/admin/refresh-data \
+            -H "X-API-Key: $ADMIN_API_KEY" \
+            -H "Content-Type: application/json")
+          echo "$RESPONSE"
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d['status'] in ('ok', 'partial'), f'Refresh failed: {d}'
+          skipped = d.get('skipped_tickers', [])
+          if skipped:
+              print(f'WARNING: {len(skipped)} ticker(s) skipped: {skipped}')
+          else:
+              print(f'Refresh complete — {d[\"tickers_processed\"]} tickers, {d[\"facts_loaded\"]} facts')
+          "

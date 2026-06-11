@@ -57,8 +57,26 @@ async def get_write_api_key(request: Request):
 
 
 async def get_admin_api_key(request: Request):
-    """Allow only ADMIN key."""
-    return _verify_key(request, ["ADMIN_API_KEY"], "Admin")
+    """Allow only ADMIN key. Does NOT fall back to generic API_KEY — misconfiguration
+    must hard-fail rather than silently grant admin access to a shared key."""
+    admin_key = os.getenv("ADMIN_API_KEY")
+    if not admin_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin API key not configured",
+        )
+    api_key = request.headers.get(API_KEY_NAME)
+    if api_key is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"{API_KEY_NAME} header required",
+        )
+    if hmac.compare_digest(api_key.encode(), admin_key.encode()):
+        return api_key
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Could not validate admin credentials",
+    )
 
 
 # Legacy support
