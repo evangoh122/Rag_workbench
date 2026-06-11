@@ -14,7 +14,7 @@ from langchain_core.documents import Document
 from api.config import Config
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
 from api.services.verifier import verifier
-from api.services.rag_engine import EDGAREmbeddingsRetriever, PolygonRetriever
+from api.services.rag_engine import PolygonRetriever
 from api.services.hybrid_retriever import EDGARHybridRetriever
 from api.services.reranker import rerank as rerank_docs
 from api.services.guardrails.retrieval_rails import filter_retrieval
@@ -22,7 +22,7 @@ from loguru import logger
 
 # Eval pipeline (Phases 2-5) — wired in as a post-extraction node.
 try:
-    from api.models.eval_types import ExtractionResult, ExtractedField, Provenance, PolygonData
+    from api.models.eval_types import ExtractionResult, ExtractedField, Provenance
     from api.services.schema_validator import validate_extraction
     from api.services.confidence_scorer import score_and_route
     _EVAL_AVAILABLE = True
@@ -44,12 +44,13 @@ class GraphState(TypedDict):
     """
     query: str
     ticker: str
+    query_type: str              # "numeric" | "qualitative"
     retrieved_docs: List[Dict[str, Any]]
     xbrl_facts: List[Dict[str, Any]]
     polygon_data: List[Dict[str, Any]]
     math_result: Optional[Union[float, str]]
     math_steps: List[str]
-    verification_status: str # PASS, FAIL, ERROR
+    verification_status: str # PASS, FAIL, ERROR, SKIPPED
     verification_reasoning: str
     final_answer: str
     status: Dict[str, str] # {node_name: 'success' | 'error' | 'pending'}
@@ -519,10 +520,6 @@ def abstention_node(state: GraphState) -> Dict[str, Any]:
 def lineage_node(state: GraphState) -> Dict[str, Any]:
     """
     Lineage Node: Build the audit lineage record for every response.
-
-    Collects source document identifiers and chunk IDs from retrieved docs,
-    tags the model used, and auto-inserts a review queue entry when the eval
-    pipeline routes to SAMPLED_REVIEW or ESCALATE.
     """
     logger.info("--- LINEAGE ---")
     import duckdb
@@ -572,8 +569,138 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
 
     return {
         "lineage": lineage,
-        "status": {**state.get("status", {}), "lineage": "success"},
+        "status": {**state.get('status', {}), "lineage": "success"},
     }
+
+
+# ---------------------------------------------------------------------------
+# Query Classifier — numeric vs qualitative
+# ---------------------------------------------------------------------------
+
+_NUMERIC_KEYWORDS = [
+    "gross margin", "gross profit margin",
+    "operating margin", "operating income margin",
+    "net margin", "profit margin", "net income margin",
+    "free cash flow", "fcf",
+    "current ratio", "liquidity ratio",
+    "debt to equity", "debt-to-equity", "d/e ratio",
+    "net debt", "net cash position",
+    "r&d", "research and development", "rd intensity",
+    "revenue", "net sales", "total revenue",
+    "net income", "net earnings",
+    "calculate", "compute", "what is the", "how much",
+    "percentage", "ratio", "growth rate", "yoy", "year over year",
+]
+
+_QUALITATIVE_KEYWORDS = [
+    "risk", "risks", "risk factor",
+    "highlighted by management", "management discussion", "md&a",
+    "strategy", "outlook", "competitive", "threat", "challenge",
+    "opportunities", "strengths", "weaknesses",
+    "what did", "what are", "how does", "why did",
+    "explain", "describe", "summarize", "discuss",
+    "mentioned", "stated", "noted", "warned", "cautioned",
+    "material weakness", "going concern", "contingency", "litigation",
+    "regulation", "regulatory", "compliance",
+    "acquisition", "merger", "divestiture",
+    "segment", "business model", "products", "services",
+    "customers", "competition", "market position",
+]
+
+
+def _is_numeric_query(query: str) -> bool:
+    """Check if the query requires numeric computation."""
+    q = query.lower()
+    return any(kw in q for kw in _NUMERIC_KEYWORDS)
+
+
+def classifier_node(state: GraphState) -> Dict[str, Any]:
+    """Classify query as numeric or qualitative to route the pipeline."""
+    query = state["query"]
+    qtype = "numeric" if _is_numeric_query(query) else "qualitative"
+    logger.info(f"--- CLASSIFIER: {qtype} ---")
+    return {
+        "query_type": qtype,
+        "status": {**state.get("status", {}), "classifier": "success"},
+    }
+
+
+def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
+    """Answer qualitative questions using LLM over retrieved SEC filing chunks."""
+    logger.info("--- QUALITATIVE OUTPUT ---")
+    try:
+        from openai import OpenAI
+
+        docs = state.get("retrieved_docs", [])
+        if not docs:
+            return {
+                "final_answer": "I don't have enough filing data to answer that question.",
+                "verification_status": "SKIPPED",
+                "verification_reasoning": "No retrieved documents for qualitative query.",
+                "math_steps": [],
+                "math_result": None,
+                "status": {**state.get("status", {}), "output": "success"},
+            }
+
+        # Build context from top retrieved chunks
+        context_parts = []
+        for i, doc in enumerate(docs[:5]):
+            text = doc.get("chunk_text", "")
+            meta = doc.get("metadata", {})
+            src = meta.get("source", "SEC filing")
+            ticker = meta.get("ticker", state.get("ticker", ""))
+            header = f"[Source {i+1}: {src}"
+            if ticker:
+                header += f" | {ticker}"
+            header += "]"
+            context_parts.append(f"{header}\n{text}")
+        context = "\n\n---\n\n".join(context_parts)
+
+        ticker = state.get("ticker", "")
+        prompt = f"""You are a financial analyst assistant specializing in SEC filings.
+Answer the user's question using ONLY the context below from {ticker}'s SEC filings.
+Cite specific sections, risks, or statements from the filing. Be thorough but concise.
+If the context is insufficient, say so clearly.
+
+Context:
+{context}
+
+Question: {state['query']}
+
+Answer:"""
+
+        cfg = Config.get_provider_config()
+        client = OpenAI(
+            api_key=cfg["api_key"] or "local",
+            base_url=cfg["base_url"],
+            timeout=60.0,
+        )
+        resp = client.chat.completions.create(
+            model=cfg["model"],
+            messages=[{"role": "user", "content": prompt}],
+            temperature=cfg.get("temperature", 0.3),
+            max_tokens=cfg.get("max_tokens", 4096),
+        )
+        answer = resp.choices[0].message.content.strip()
+
+        return {
+            "final_answer": answer,
+            "verification_status": "SKIPPED",
+            "verification_reasoning": "Qualitative query — numeric verification not applicable.",
+            "math_steps": ["Qualitative query — no computation needed."],
+            "math_result": None,
+            "status": {**state.get("status", {}), "output": "success"},
+        }
+    except Exception as e:
+        logger.error(f"Qualitative output failed: {e}")
+        return {
+            "final_answer": "An error occurred while generating the answer. Please try again.",
+            "verification_status": "ERROR",
+            "verification_reasoning": str(e),
+            "math_steps": [],
+            "math_result": None,
+            "status": {**state.get("status", {}), "output": "error"},
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -591,25 +718,48 @@ def decide_next_step(state: GraphState) -> str:
     else:
         return "abstention"
 
+
+def decide_pipeline(state: GraphState) -> str:
+    """Route numeric queries through math/verification, qualitative to LLM output."""
+    if state.get("query_type") == "qualitative":
+        return "qualitative_output"
+    return "extraction"
+
+
 # Initialize graph
 workflow = StateGraph(GraphState)
 
 # Add nodes
 workflow.add_node("retrieval", retrieval_node)
+workflow.add_node("classifier", classifier_node)
 workflow.add_node("extraction", extraction_node)
 workflow.add_node("eval", eval_node)          # Phase 2-5 eval pipeline (BUG-8 fix)
 workflow.add_node("math", math_node)
 workflow.add_node("verification", verification_node)
 workflow.add_node("output", output_node)
+workflow.add_node("qualitative_output", qualitative_output_node)
 workflow.add_node("abstention", abstention_node)
 workflow.add_node("lineage", lineage_node)
 
 # Set entry point
 workflow.set_entry_point("retrieval")
 
-# Add deterministic edges
-# Pipeline: Retrieval -> Extraction -> Eval (schema+confidence) -> Math -> Verification
-workflow.add_edge("retrieval", "extraction")
+# Retrieval -> Classifier (decides numeric vs qualitative)
+workflow.add_edge("retrieval", "classifier")
+
+# Classifier routes to either:
+#   numeric path: Extraction -> Eval -> Math -> Verification -> Output/Abstention
+#   qualitative path: Qualitative Output (LLM over retrieved docs)
+workflow.add_conditional_edges(
+    "classifier",
+    decide_pipeline,
+    {
+        "extraction": "extraction",
+        "qualitative_output": "qualitative_output",
+    }
+)
+
+# Numeric pipeline
 workflow.add_edge("extraction", "eval")
 workflow.add_edge("eval", "math")
 workflow.add_edge("math", "verification")
@@ -626,6 +776,7 @@ workflow.add_conditional_edges(
 
 # Both terminal nodes funnel through lineage before END
 workflow.add_edge("output", "lineage")
+workflow.add_edge("qualitative_output", "lineage")
 workflow.add_edge("abstention", "lineage")
 workflow.add_edge("lineage", END)
 
@@ -645,6 +796,7 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
     inputs = {
         "query": query,
         "ticker": ticker,
+        "query_type":       "numeric",
         "retrieved_docs":  [],
         "xbrl_facts":      [],
         "polygon_data":    [],
@@ -655,6 +807,7 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
         "status": {
             "input":        "success",
             "retrieval":    "pending",
+            "classifier":   "pending",
             "extraction":   "pending",
             "eval":         "pending",
             "math":         "pending",
