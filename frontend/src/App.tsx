@@ -175,6 +175,17 @@ function App() {
           <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest px-2 mb-2">Sections</div>
           <button
             className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+              view === 'stocks'
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+            }`}
+            onClick={() => setView('stocks')}
+          >
+            <Cpu size={18} className={view === 'stocks' ? 'text-emerald-400' : 'text-gray-500'} />
+            Coverage List
+          </button>
+          <button
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
               view === 'chat'
                 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
@@ -243,17 +254,6 @@ function App() {
           >
             <BookOpen size={18} className={view === 'methodology' ? 'text-indigo-400' : 'text-gray-500'} />
             Methodology
-          </button>
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
-              view === 'stocks'
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
-            }`}
-            onClick={() => setView('stocks')}
-          >
-            <Cpu size={18} className={view === 'stocks' ? 'text-emerald-400' : 'text-gray-500'} />
-            Coverage List
           </button>
         </nav>
 
@@ -650,7 +650,7 @@ function App() {
                       <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '150ms' }} />
                       <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
-                    Processing query...
+                    Thinking...
                   </div>
                 </div>
               )}
