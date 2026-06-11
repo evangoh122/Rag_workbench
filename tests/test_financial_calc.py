@@ -11,8 +11,7 @@ from api.services.financial_calc import (
     debt_to_equity, net_debt, working_capital, book_value_per_share,
     free_cash_flow, fcf_margin, fcf_conversion, capex_intensity,
     cagr, check_balance_sheet, check_gross_profit, check_fcf_identity,
-    normalize_to_usd, compute_period_growth, compute_margins, FactExtractor,
-    CalcResult, IdentityResult
+    normalize_to_usd, compute_period_growth, compute_margins, FactExtractor
 )
 
 class TestFinancialCalculators:

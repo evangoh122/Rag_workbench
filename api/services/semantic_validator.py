@@ -5,13 +5,12 @@ and statistically implausible values.
 """
 from __future__ import annotations
 
-import math
 from typing import Optional
 
 from api.models.eval_types import (
-    ExtractionResult, ExtractedField, ValidationResult, ReasonCode,
+    ExtractionResult, ValidationResult, ReasonCode,
 )
-from api.services.xbrl_client import fetch_company_facts, get_fact
+from api.services.xbrl_client import get_fact
 
 _TOLERANCE = 0.05  # 5% tolerance for accounting identity checks
 _HISTORICAL_SD_MULTIPLIER = 3.0  # N standard deviations for OUT_OF_RANGE

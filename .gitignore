@@ -19,4 +19,4 @@ OUTSTANDING_WORK.md
 graphify-out/cache/
 .claude/settings.local.json
 *.duckdb.wal
-ISSUES.md
+ISSUES.md*.log

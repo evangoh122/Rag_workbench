@@ -101,6 +101,15 @@ class Config:
     def MIMO_TEMPERATURE(self) -> float:
         return float(os.getenv("MIMO_TEMPERATURE", "0.15"))
 
+    # ── Reranker Settings ─────────────────────────────────────────────────────
+    @property
+    def RERANKER_MODEL(self) -> str:
+        return os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+    @property
+    def RERANKER_TOP_K(self) -> int:
+        return int(os.getenv("RERANKER_TOP_K", "5"))
+
     # Embedding Settings
     @property
     def EMBEDDING_MODEL(self) -> str:

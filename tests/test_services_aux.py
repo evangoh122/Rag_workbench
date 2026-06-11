@@ -1,4 +1,3 @@
-import time
 import pytest
 from unittest.mock import MagicMock, patch
 from api.services.llm_health import LLMHealthTracker, get_llm_tracker

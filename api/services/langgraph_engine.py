@@ -4,7 +4,6 @@ langgraph_engine.py — Deterministic RAG DAG for SEC filings.
 Nodes: Retrieval -> XBRL Extraction -> Math Execution -> Verification -> Output
 Conditional edge on Verification failure: -> Abstention
 """
-import os
 from datetime import datetime, timezone
 from typing import TypedDict, List, Dict, Any, Optional, Union
 import polars as pl
@@ -15,7 +14,8 @@ from langchain_core.documents import Document
 from api.config import Config
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
 from api.services.verifier import verifier
-from api.services.rag_engine import DuckDBVectorRetriever, EDGAREmbeddingsRetriever, PolygonRetriever
+from api.services.rag_engine import EDGAREmbeddingsRetriever, PolygonRetriever
+from api.services.reranker import rerank as rerank_docs
 from api.services.guardrails.retrieval_rails import filter_retrieval
 from loguru import logger
 
@@ -29,12 +29,7 @@ except ImportError:  # pragma: no cover
     _EVAL_AVAILABLE = False
 from api.services.financial_calc import (
     FactExtractor, CalcResult,
-    gross_margin, operating_margin, net_margin, ebitda, ebitda_margin,
-    rd_intensity, sga_intensity, yoy_growth, cagr,
-    current_ratio, quick_ratio, debt_to_equity, net_debt, working_capital,
-    free_cash_flow, fcf_margin, fcf_conversion, capex_intensity,
-    check_balance_sheet, check_gross_profit, check_fcf_identity,
-    normalize_to_usd,
+    gross_margin, operating_margin, net_margin, rd_intensity, current_ratio, debt_to_equity, net_debt, free_cash_flow, check_balance_sheet,
 )
 
 
@@ -80,29 +75,34 @@ def retrieval_node(state: GraphState) -> Dict[str, Any]:
         ticker = state['ticker']
 
         # 1. Retrieve SEC Filing Chunks (Primary: vector similarity)
-        retrieved = []
+        docs = []
         try:
             edgar_retriever = EDGAREmbeddingsRetriever(top_k=5)
             docs = edgar_retriever.invoke(query)
-            retrieved = [
-                {
-                    "chunk_text": d.page_content,
-                    "metadata": d.metadata,
-                    "source": d.metadata.get("source", "edgar_embeddings"),
-                }
-                for d in docs
-            ]
         except Exception as e:
             logger.warning(f"Vector retrieval failed, falling back to keyword: {e}")
 
         # Fallback: keyword search on filing sections
-        if not retrieved:
+        if not docs:
             chunks = chunk_filing_sections(ticker)
             keywords = query.lower().split()
-            retrieved = [
+            matched_chunks = [
                 c for c in chunks
                 if any(k in c['chunk_text'].lower() for k in keywords)
             ][:5]
+            docs = [Document(page_content=c["chunk_text"], metadata=c.get("metadata", {})) for c in matched_chunks]
+
+        # Rerank by cross-encoder relevance
+        docs = rerank_docs(query, docs, top_k=Config.RERANKER_TOP_K)
+
+        retrieved = [
+            {
+                "chunk_text": d.page_content,
+                "metadata": d.metadata,
+                "source": d.metadata.get("source", "edgar_embeddings"),
+            }
+            for d in docs
+        ]
 
         # Apply retrieval rail — filter irrelevant chunks
         verdict = filter_retrieval(query, retrieved)

@@ -1,4 +1,3 @@
-import pytest
 from api.services.verifier import verifier, Verifier
 
 def test_verify_numeric_exact():

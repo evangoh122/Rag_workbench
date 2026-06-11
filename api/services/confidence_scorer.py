@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from api.models.eval_types import (
-    ExtractionResult, ExtractedField, ValidationResult,
+    ExtractionResult, ValidationResult,
     Decision, Route, ReasonCode, Provenance,
 )
 from api.services.xbrl_cross_validator import (

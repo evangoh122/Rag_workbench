@@ -4,7 +4,6 @@ Numeric verification — compares RAG-claimed values against XBRL facts.
 import re
 from dataclasses import dataclass
 from typing import Optional
-from loguru import logger
 
 @dataclass
 class VerificationResult:

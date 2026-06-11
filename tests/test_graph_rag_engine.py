@@ -4,7 +4,6 @@ tests/test_graph_rag_engine.py — Unit tests for the GraphRAG engine.
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
-import pytest
 from api.services.graph_rag_engine import (
     extract_entities, query_graph, generate_answer, run_graph_rag,
     EntitiesOutput

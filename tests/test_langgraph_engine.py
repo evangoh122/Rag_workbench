@@ -28,14 +28,17 @@ def base_state():
 
 class TestLangGraphNodes:
     @patch("api.services.langgraph_engine.EDGAREmbeddingsRetriever")
+    @patch("api.services.langgraph_engine.rerank_docs")
     @patch("api.services.langgraph_engine.filter_retrieval")
-    def test_retrieval_node(self, mock_filter, mock_retriever_cls, base_state):
+    def test_retrieval_node(self, mock_filter, mock_rerank, mock_retriever_cls, base_state):
         mock_retriever = mock_retriever_cls.return_value
         mock_doc = MagicMock()
         mock_doc.page_content = "Apple revenue was $383B"
         mock_doc.metadata = {"source": "10-K"}
         mock_retriever.invoke.return_value = [mock_doc]
-        
+
+        mock_rerank.return_value = [mock_doc]
+
         mock_filter.return_value.filtered_chunks = [
             {"chunk_text": "Apple revenue was $383B", "metadata": {"source": "10-K"}}
         ]

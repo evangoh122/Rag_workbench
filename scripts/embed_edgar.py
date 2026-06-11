@@ -15,7 +15,7 @@ import re
 import shutil
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import duckdb
 from bs4 import BeautifulSoup
@@ -484,7 +484,6 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
 
 
 if __name__ == "__main__":
-    import sys
     tickers_arg = os.getenv("EMBED_TICKERS", "")
     if tickers_arg:
         tickers = [t.strip() for t in tickers_arg.split(",")]

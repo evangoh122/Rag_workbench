@@ -5,11 +5,9 @@ from unittest.mock import MagicMock
 mock_edgar = MagicMock()
 sys.modules["edgar"] = mock_edgar
 
-import pytest
-import polars as pl
 import pandas as pd
 from unittest.mock import patch
-from api.services.xbrl_client import fetch_company_facts, get_fact, XBRLFact
+from api.services.xbrl_client import fetch_company_facts, get_fact
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
 
 # ── XBRL Client Tests ────────────────────────────────────────────────────────

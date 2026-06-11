@@ -11,9 +11,7 @@ Covers:
 """
 from __future__ import annotations
 
-import json
-import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import duckdb
 import pytest

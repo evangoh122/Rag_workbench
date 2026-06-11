@@ -4,9 +4,7 @@ Generates text embeddings for ticker descriptions and stores them in DuckDB.
 
 Uses Ollama (nomic-embed-text) for local embeddings.
 """
-import os
 from datetime import datetime, timezone
-from typing import List
 
 import duckdb
 from loguru import logger

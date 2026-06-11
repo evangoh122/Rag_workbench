@@ -1,7 +1,6 @@
 """
 sec_client.py — EDGAR data ingestion using edgartools and Polars.
 """
-import os
 from functools import lru_cache
 from typing import List, Dict, Optional
 import polars as pl

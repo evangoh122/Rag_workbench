@@ -7,7 +7,6 @@ agreement-rate statistics.
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -15,7 +14,6 @@ from loguru import logger
 
 from api.models.eval_types import ExtractionResult, Decision, Route
 from api.services.schema_validator import validate_extraction
-from api.services.xbrl_cross_validator import cross_validate
 from api.services.semantic_validator import validate_semantic
 from api.services.confidence_scorer import score_and_route
 

@@ -1,8 +1,6 @@
-import os
-import hmac
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from api.config import Config
 from api.db.database import db_manager

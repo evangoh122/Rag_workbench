@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from api.models.eval_types import (
-    ExtractionResult, ExtractedField, Provenance, ReasonCode, ValidationResult,
+    ExtractionResult, Provenance, ReasonCode, ValidationResult,
 )
 from api.services.xbrl_client import get_fact
 

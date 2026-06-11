@@ -1,5 +1,4 @@
 import os
-import hmac
 import pytest
 from fastapi import Request, HTTPException
 from unittest.mock import MagicMock, patch

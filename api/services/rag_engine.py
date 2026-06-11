@@ -1,8 +1,6 @@
 import hashlib
-import os
 import threading
-from typing import List, Dict, Any, Optional
-import pandas as pd
+from typing import List, Optional
 from loguru import logger
 from langsmith import traceable
 
@@ -17,6 +15,7 @@ from langchain_openai import ChatOpenAI
 from api.config import Config
 from api.db.database import db_manager
 from api.services.embeddings import get_embeddings
+from api.services.reranker import rerank
 
 
 from api.models.eval_types import PolygonData
@@ -345,12 +344,13 @@ _price_retriever = PriceContextRetriever()
 
 @traceable(name="rag_combined_retriever")
 def _combined_retriever(query: str) -> List[Document]:
-    """Run all four retrievers sequentially and merge results."""
+    """Run all four retrievers, rerank by cross-encoder relevance, and return top results."""
     vector_docs = _vector_retriever.invoke(query)
     edgar_facts = _edgar_facts_retriever.invoke(query)
     edgar_emb   = _edgar_emb_retriever.invoke(query)
     price_docs  = _price_retriever.invoke(query)
-    return vector_docs + edgar_facts + edgar_emb + price_docs
+    all_docs = vector_docs + edgar_facts + edgar_emb + price_docs
+    return rerank(query, all_docs, top_k=Config.RERANKER_TOP_K)
 
 
 _rag_chain = None

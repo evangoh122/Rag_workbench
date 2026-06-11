@@ -1,6 +1,5 @@
 import pytest
 import time
-import asyncio
 from fastapi import Request, HTTPException
 from unittest.mock import AsyncMock, MagicMock
 from api.middleware.rate_limit import rate_limit_middleware

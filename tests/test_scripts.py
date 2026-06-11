@@ -9,15 +9,11 @@ for mod in ["sec_edgar_downloader", "langchain_text_splitters", "bs4", "edgar"]:
 import scripts.embed_tickers
 scripts.embed_tickers._get_embeddings = MagicMock()
 
-import json
-import os
 from unittest.mock import patch, mock_open
-import pytest
-import duckdb
 
 # Now we can import the scripts
 from scripts.embed_edgar import run_embed_edgar_etl
-from scripts.init_graph_triples import init_graph_triples, load_chunk
+from scripts.init_graph_triples import init_graph_triples
 from scripts.run_shadow import load_extractions, main as shadow_main
 
 # ── Embed Edgar Script Tests ─────────────────────────────────────────────────

@@ -4,7 +4,6 @@ tests/test_chat_engine.py — Unit tests for the SQL-based chat engine.
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
-import pytest
 import pandas as pd
 from api.services.chat_engine import (
     clean_sql, strip_sql_comments, validate_read_only_sql,
