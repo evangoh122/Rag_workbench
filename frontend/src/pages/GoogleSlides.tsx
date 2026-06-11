@@ -15,6 +15,8 @@ export default function GoogleSlides() {
       <div className="flex-1 p-8 flex items-center justify-center">
         <iframe
           src="https://docs.google.com/presentation/d/1P8DXVd4bkrs0c5r8TXNrPleH7EgB4B9bntZ8O4B7R7w/embed"
+          title="RAG Workbench Overview Slides"
+          loading="lazy"
           className="w-full h-full max-w-5xl rounded-2xl border border-[#202532] shadow-2xl"
           allowFullScreen
         />

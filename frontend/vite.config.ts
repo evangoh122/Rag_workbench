@@ -43,6 +43,9 @@ export default defineConfig({
           if (id.includes('node_modules/tailwindcss')) {
             return 'tailwind';
           }
+          if (id.includes('node_modules/posthog-js') || id.includes('node_modules/axios')) {
+            return 'vendor-core';
+          }
         },
       },
     },
