@@ -173,7 +173,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   value={ticker} 
                   onChange={(e) => setTicker(e.target.value.toUpperCase())}
                   className="w-full bg-[#161b24] border border-[#202532] rounded-xl pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-gray-600"
-                  placeholder="e.g. AAPL"
+                  placeholder="e.g. MU"
                 />
               </div>
             </div>

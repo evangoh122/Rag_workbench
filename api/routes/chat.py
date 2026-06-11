@@ -99,6 +99,7 @@ async def chat_auditable_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_k
             "answer": answer,
             "sources": [{"content": d["chunk_text"], "metadata": d["metadata"]} for d in result["retrieved_docs"]],
             "xbrl_facts": result["xbrl_facts"],
+            "polygon_data": result.get("polygon_data", []),
             "verification": {
                 "status": result["verification_status"],
                 "reasoning": result["verification_reasoning"]

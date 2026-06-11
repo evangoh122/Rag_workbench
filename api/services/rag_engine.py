@@ -19,7 +19,68 @@ from api.db.database import db_manager
 from api.services.embeddings import get_embeddings
 
 
+from api.models.eval_types import PolygonData
+
+
 # ── Retrievers ────────────────────────────────────────────────────────────────
+
+class PolygonRetriever:
+    """Fetch structured metadata and prices from Polygon.io tables."""
+    def invoke(self, query: str, ticker: Optional[str] = None) -> List[PolygonData]:
+        try:
+            conn = db_manager.get_connection()
+            query_upper = query.upper()
+            
+            # 1. Identify tickers
+            if ticker:
+                tickers = [ticker.upper()]
+            else:
+                tickers = [r[0] for r in conn.execute(
+                    "SELECT ticker FROM polygon_tickers WHERE INSTR(?, ticker) > 0",
+                    [query_upper]
+                ).fetchall()]
+
+            if not tickers:
+                return []
+
+            results = []
+            ph = ", ".join("?" * len(tickers))
+            
+            # 2. Get metadata
+            meta_rows = conn.execute(f"""
+                SELECT ticker, name, description
+                FROM polygon_tickers
+                WHERE ticker IN ({ph})
+            """, tickers).fetchall()
+            
+            meta_map = {r[0]: {"name": r[1], "desc": r[2]} for r in meta_rows}
+
+            # 3. Get latest prices
+            price_rows = conn.execute(f"""
+                SELECT ticker, ts::DATE AS date, close, volume
+                FROM polygon_bars
+                WHERE ticker IN ({ph}) AND timespan = 'day'
+                QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY ts DESC) = 1
+            """, tickers).fetchall()
+            
+            price_map = {r[0]: {"date": str(r[1]), "close": r[2], "volume": r[3]} for r in price_rows}
+
+            for t in tickers:
+                m = meta_map.get(t, {"name": t, "desc": None})
+                p = price_map.get(t, {"date": None, "close": None, "volume": None})
+                results.append(PolygonData(
+                    ticker=t,
+                    name=m["name"],
+                    description=m["desc"],
+                    last_price=p["close"],
+                    price_date=p["date"],
+                    volume=p["volume"]
+                ))
+            return results
+        except Exception as e:
+            logger.warning(f"Polygon retrieval failed: {e}")
+            return []
+
 
 class DuckDBVectorRetriever(BaseRetriever):
     top_k: int = 5

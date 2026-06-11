@@ -1,6 +1,6 @@
 # Issue Tracker
 
-**Last updated:** 2026-06-11 (audit sweep — verified all outstanding + scanned for new issues)
+**Last updated:** 2026-06-11 (merged outstanding tasks from .claude/tasks.md, .mimo/tasks.md, .gemini/tasks.md)
 
 ---
 
@@ -122,7 +122,22 @@
 |----|-------|--------|--------|
 | C1 | API keys in `.env` | **Still outstanding** | Rotate keys (deferred) |
 | L2 | Query instruction prefix | **Still outstanding** | Verify against Qwen3 docs |
-| L4 | 10-K/A has 0.0 confidence | **Still outstanding** | Add "no data" signal |
+| L4 | 10-K/A has 0.0 confidence | **Fixed** | `eval_node` now returns `eval_confidence=None, eval_triggers=["no_data"]` when `fields=[]`, instead of running scorer on empty extraction |
+
+### Phase 1 — SEC Filing Eval & HITL Framework (Pending)
+
+| ID | Task | File(s) | Detail |
+|----|------|---------|--------|
+| PH1-01 | Create `eval_types.py` dataclasses (PLAN-01) | `api/models/eval_types.py`, `tests/test_eval_types.py`, `api/models/__init__.py` | **Done** — 8 types including PolygonData; 15 tests pass; `__init__.py` re-exports all 8 |
+| PH1-02 | EdgarTools adapter (PLAN-02, blocks on PH1-01) | `api/services/edgar_adapter.py`, `tests/test_edgar_adapter.py`, `requirements.txt` | `fetch_filing(cik, accession) -> ExtractionResult`; XBRL→Provenance.XBRL, HTML→Provenance.STRUCTURED_TABLE. Plan: `.planning/phases/01-data-structures-reader-adapter/01-PLAN-02.md` |
+
+### Health Tracking — Pending Fixes (from code review)
+
+| ID | Issue | File | Detail |
+|----|-------|------|--------|
+| HLT-01 | Polygon REST calls pollute `LLMHealthTracker` | `api/services/polygon_verifier.py` | **Fixed** — removed all tracker calls from `polygon_verifier.py`; Polygon errors now only appear in `errors[]` list in the response, not in LLM health metrics |
+| HLT-02 | Silent extractor failures hidden from API consumers | `api/services/sec_analyzer.py` | **Fixed** — `extraction_errors: list[str]` added to `analyze_filing` response; `named_entities` empty sentinel wired; `risk_flags`/`forward_looking` silent failures tracked via LLM health tracker (see HLT-03 below) |
+| HLT-03 | `risk_flags`/`forward_looking` empty not surfaced in `extraction_errors` | `api/services/sec_analyzer.py` | Design gap — empty `[]` from these extractors is ambiguous (failure vs no results found); tracked via `LLMHealthTracker` context `sec_analyzer/llm`; refactoring extractors to return `(result, error)` tuple would fix this properly |
 
 ### LOW — Code Quality / Frontend
 
@@ -134,6 +149,11 @@
 | N22 | No frontend tests | `frontend/` | Add vitest/jest config |
 | N23 | Mixed test frameworks | `tests/` | Standardize on `pytest` |
 | N26 | `verify_numeric` confusion | `verifier.py` | Clean up wrapper redundancy |
+| N27 | `axios.post` called inline | `frontend/src/App.tsx` ~L45 | **Already fixed** — App.tsx imports from `./api/chat`; no inline axios calls remain |
+| N28 | `any` type annotations in App.tsx | `frontend/src/App.tsx` | **Fixed** — `sources?: Source[]`, `xbrl_facts?: XBRLFact[]` (typed from `chat.ts`); `data?: Record<string,unknown>[]`; `catch (err: unknown)` all already in place |
+| N29 | `<ReactMarkdown>` missing XSS prop | `frontend/src/App.tsx` | **Already fixed** — uses `allowedElements` whitelist + `skipHtml` (stronger than disallowedElements) |
+| N30 | `AuditTrail` hidden when only `xbrl_facts` present | `frontend/src/App.tsx` | **Fixed** — gate expanded to `msg.sources \|\| msg.verification \|\| msg.xbrl_facts?.length \|\| msg.math_steps?.length` |
+| N31 | `fact.value.toLocaleString()` crashes on null XBRL value | `frontend/src/components/AuditTrail.tsx:196` | **Fixed** — guarded: `fact.value != null ? fact.value.toLocaleString() : '—'` |
 
 ### TEST GAPS — Major Modules With Zero Tests
 
@@ -169,7 +189,9 @@
 | Manus Audit | 3 | 0 | 3 |
 | P2 Architecture | 8 | 0 | 8 |
 | P3 Code Quality | 13 | 0 | 13 |
-| New Issues (N) | 20 | 6 | 26 |
+| New Issues (N) | 20 | 9 | 29 |
 | Guardrails (GR) | 6 | 0 | 6 |
 | Audit Report | 16 | 3 | 19 |
-| **Total** | **81** | **10** | **91** |
+| Phase 1 Eval/HITL | 0 | 2 | 2 |
+| Health Tracking | 0 | 2 | 2 |
+| **Total** | **81** | **17** | **98** |

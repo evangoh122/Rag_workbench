@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
-import type { Source, XBRLFact } from '../api/chat';
+import type { Source, XBRLFact, PolygonData } from '../api/chat';
 
 interface VerificationResult {
   status: string;
@@ -10,6 +10,7 @@ interface VerificationResult {
 interface AuditTrailProps {
   sources?: Source[];
   xbrl_facts?: XBRLFact[];
+  polygon_data?: PolygonData[];
   verification?: VerificationResult;
   math_steps?: string[];
 }
@@ -72,13 +73,14 @@ function VerificationBadge({ verification }: { verification: VerificationResult 
   return null;
 }
 
-export default function AuditTrail({ sources, xbrl_facts, verification, math_steps }: AuditTrailProps) {
+export default function AuditTrail({ sources, xbrl_facts, polygon_data, verification, math_steps }: AuditTrailProps) {
   const hasSources = sources && sources.length > 0;
   const hasXBRL = xbrl_facts && xbrl_facts.length > 0;
+  const hasPolygon = polygon_data && polygon_data.length > 0;
   const hasMath = math_steps && math_steps.length > 0;
   const hasVerification = verification && verification.status !== 'not_checked';
 
-  if (!hasSources && !hasXBRL && !hasMath && !hasVerification) return null;
+  if (!hasSources && !hasXBRL && !hasPolygon && !hasMath && !hasVerification) return null;
 
   return (
     <div className="mt-3 text-sm">
@@ -87,6 +89,51 @@ export default function AuditTrail({ sources, xbrl_facts, verification, math_ste
         <div className="mb-2">
           <VerificationBadge verification={verification} />
         </div>
+      )}
+
+      {/* Polygon Market Data section */}
+      {hasPolygon && (
+        <CollapsibleSection title="Polygon Market Data" defaultOpen={true}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr>
+                  {['Ticker', 'Name', 'Price', 'Date', 'Volume'].map(col => (
+                    <th
+                      key={col}
+                      className="text-left px-2 py-2 text-gray-400 font-medium border-b border-[#2a3246]"
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {polygon_data!.map((poly, idx) => (
+                  <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-[#0a0c10]'}>
+                    <td className="px-2 py-1.5 font-mono text-blue-300 border-b border-[#1a1f2e]">{poly.ticker}</td>
+                    <td className="px-2 py-1.5 text-gray-300 border-b border-[#1a1f2e]">{poly.name}</td>
+                    <td className="px-2 py-1.5 text-green-400 border-b border-[#1a1f2e]">
+                      {poly.last_price ? `$${poly.last_price.toFixed(2)}` : 'N/A'}
+                    </td>
+                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1a1f2e]">{poly.price_date || 'N/A'}</td>
+                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1a1f2e]">
+                      {poly.volume ? poly.volume.toLocaleString() : 'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {polygon_data![0].description && (
+              <div className="mt-3 p-2 bg-[#161b22] rounded border border-[#2a3246]">
+                <p className="text-[10px] uppercase text-gray-500 font-bold mb-1">Company Description</p>
+                <p className="text-gray-400 text-xs leading-relaxed italic">
+                  "{polygon_data![0].description}"
+                </p>
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
       )}
 
       {/* Sources section */}
@@ -146,7 +193,9 @@ export default function AuditTrail({ sources, xbrl_facts, verification, math_ste
                   <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-[#0a0c10]'}>
                     <td className="px-2 py-1.5 font-mono text-blue-300 border-b border-[#1a1f2e]">{fact.concept}</td>
                     <td className="px-2 py-1.5 text-gray-300 border-b border-[#1a1f2e]">{fact.label}</td>
-                    <td className="px-2 py-1.5 text-gray-100 border-b border-[#1a1f2e]">{fact.value.toLocaleString()}</td>
+                    <td className="px-2 py-1.5 text-gray-100 border-b border-[#1a1f2e]">
+                      {fact.value != null ? fact.value.toLocaleString() : '—'}
+                    </td>
                     <td className="px-2 py-1.5 text-gray-400 border-b border-[#1a1f2e]">{fact.unit}</td>
                     <td className="px-2 py-1.5 text-gray-400 border-b border-[#1a1f2e]">{fact.period}</td>
                   </tr>

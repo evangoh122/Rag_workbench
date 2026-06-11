@@ -15,13 +15,13 @@ from langchain_core.documents import Document
 from api.config import Config
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
 from api.services.verifier import verifier
-from api.services.rag_engine import DuckDBVectorRetriever, EDGAREmbeddingsRetriever
+from api.services.rag_engine import DuckDBVectorRetriever, EDGAREmbeddingsRetriever, PolygonRetriever
 from api.services.guardrails.retrieval_rails import filter_retrieval
 from loguru import logger
 
 # Eval pipeline (Phases 2-5) — wired in as a post-extraction node.
 try:
-    from api.models.eval_types import ExtractionResult, ExtractedField, Provenance
+    from api.models.eval_types import ExtractionResult, ExtractedField, Provenance, PolygonData
     from api.services.schema_validator import validate_extraction
     from api.services.confidence_scorer import score_and_route
     _EVAL_AVAILABLE = True
@@ -50,6 +50,7 @@ class GraphState(TypedDict):
     ticker: str
     retrieved_docs: List[Dict[str, Any]]
     xbrl_facts: List[Dict[str, Any]]
+    polygon_data: List[Dict[str, Any]]
     math_result: Optional[Union[float, str]]
     math_steps: List[str]
     verification_status: str # PASS, FAIL, ERROR
@@ -69,16 +70,16 @@ class GraphState(TypedDict):
 
 def retrieval_node(state: GraphState) -> Dict[str, Any]:
     """
-    Node 1: Retrieve relevant text chunks from SEC filings using hybrid retrieval.
-    Uses DuckDB vector similarity as primary, keyword search as fallback.
-    Applies retrieval rail to filter irrelevant chunks.
+    Node 1: Retrieve relevant text chunks from SEC filings and Polygon data.
+    Uses DuckDB vector similarity as primary for filings.
+    Uses PolygonRetriever for structured market data.
     """
     logger.info(f"--- RETRIEVAL: {state['ticker']} ---")
     try:
         query = state['query']
         ticker = state['ticker']
 
-        # Primary: vector similarity search on EDGAR embeddings
+        # 1. Retrieve SEC Filing Chunks (Primary: vector similarity)
         retrieved = []
         try:
             edgar_retriever = EDGAREmbeddingsRetriever(top_k=5)
@@ -109,8 +110,19 @@ def retrieval_node(state: GraphState) -> Dict[str, Any]:
             logger.info(f"Retrieval rail: dropped {verdict.dropped_count}/{verdict.original_count} irrelevant chunks")
         retrieved = verdict.filtered_chunks
 
+        # 2. Retrieve Polygon Data (Structured metadata and prices)
+        polygon_data = []
+        try:
+            poly_retriever = PolygonRetriever()
+            poly_results = poly_retriever.invoke(query, ticker=ticker)
+            import dataclasses
+            polygon_data = [dataclasses.asdict(p) for p in poly_results]
+        except Exception as e:
+            logger.warning(f"Polygon retrieval failed: {e}")
+
         return {
             "retrieved_docs": retrieved,
+            "polygon_data": polygon_data,
             "status": {**state.get('status', {}), "retrieval": "success"}
         }
     except Exception as e:
@@ -344,6 +356,15 @@ def eval_node(state: GraphState) -> Dict[str, Any]:
                 except (TypeError, ValueError):
                     pass
 
+        if not fields:
+            logger.info("Eval: no XBRL fields extracted — skipping scorer (no_data)")
+            return {
+                "eval_route":      None,
+                "eval_confidence": None,
+                "eval_triggers":   ["no_data"],
+                "status": {**state.get('status', {}), "eval": "no_data"},
+            }
+
         extraction = ExtractionResult(
             cik=ticker,
             accession="0000000000-00-000000",  # placeholder — real accession not in state
@@ -528,6 +549,9 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
     inputs = {
         "query": query,
         "ticker": ticker,
+        "retrieved_docs":  [],
+        "xbrl_facts":      [],
+        "polygon_data":    [],
         "eval_route":      None,
         "eval_confidence": None,
         "eval_triggers":   None,

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Database, BookOpen, RefreshCcw, Search, ShieldCheck, Activity, MessageSquare, BarChart3, Network, Server } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
-import type { ChatResponse } from './api/chat';
+import type { ChatResponse, Source, XBRLFact } from './api/chat';
 import ReviewQueue from './pages/ReviewQueue';
 import MetricsDashboard from './pages/MetricsDashboard';
 import SystemDashboard from './pages/SystemDashboard';
@@ -17,8 +17,8 @@ interface Message {
   type?: 'text' | 'table' | 'error';
   sql?: string;
   data?: Record<string, unknown>[];
-  sources?: any[];
-  xbrl_facts?: any[];
+  sources?: Source[];
+  xbrl_facts?: XBRLFact[];
   verification?: {
     status: string;
     reasoning: string;
@@ -46,7 +46,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<AppView>('chat');
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
-  const [ticker, setTicker] = useState('AAPL');
+  const [ticker, setTicker] = useState('MU');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -288,7 +288,7 @@ function App() {
                     value={ticker} 
                     onChange={(e) => setTicker(e.target.value.toUpperCase())}
                     className="w-full bg-[#161b24] border border-[#202532] rounded-xl pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-gray-600"
-                    placeholder="e.g. AAPL"
+                    placeholder="e.g. MU"
                   />
                 </div>
               </div>
@@ -490,7 +490,7 @@ function App() {
                       </ReactMarkdown>
                     </div>
 
-                    {msg.role === 'assistant' && (msg.sources || msg.verification) && (
+                    {msg.role === 'assistant' && (msg.sources || msg.verification || msg.xbrl_facts?.length || msg.math_steps?.length) && (
                       <div className="mt-4 pt-4 border-t border-[#202532]/50">
                         <AuditTrail
                           sources={msg.sources}

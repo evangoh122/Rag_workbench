@@ -18,6 +18,15 @@ export interface XBRLFact {
   ticker: string;
 }
 
+export interface PolygonData {
+  ticker: string;
+  name: string;
+  description?: string;
+  last_price?: number;
+  price_date?: string;
+  volume?: number;
+}
+
 export interface Verification {
   status: 'verified' | 'mismatch' | 'unverifiable' | 'not_checked';
   claimed_value?: number;
@@ -33,6 +42,7 @@ export interface ChatResponse {
   data?: Record<string, unknown>[];
   sources?: Source[];
   xbrl_facts?: XBRLFact[];
+  polygon_data?: PolygonData[];
   verification?: {
     status: string;
     reasoning: string;
@@ -72,7 +82,7 @@ export async function sendRagMessage(
 
 export async function sendGraphRagMessage(
   message: string,
-  ticker: string = 'AAPL',
+  ticker: string = 'MU',
 ): Promise<ChatResponse> {
   const response = await client.post<ChatResponse>('/chat/graph-rag', {
     message,
@@ -83,7 +93,7 @@ export async function sendGraphRagMessage(
 
 export async function sendAuditableRagMessage(
   message: string,
-  ticker: string = 'AAPL',
+  ticker: string = 'MU',
 ): Promise<ChatResponse> {
   const response = await client.post<ChatResponse>('/chat/auditable-rag', {
     message,

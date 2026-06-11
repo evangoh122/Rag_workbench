@@ -89,6 +89,17 @@ class ValidationResult:
 
 
 @dataclass
+class PolygonData:
+    """Consolidated Polygon.io metadata and market data for a ticker."""
+    ticker: str
+    name: str
+    description: Optional[str] = None
+    last_price: Optional[float] = None
+    price_date: Optional[str] = None
+    volume: Optional[int] = None
+
+
+@dataclass
 class Decision:
     """Final routing decision produced by the confidence scorer."""
     route: Route

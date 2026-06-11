@@ -178,8 +178,14 @@ def analyze_filing(
     xbrl_facts: Optional[list[dict]] = None,
 ) -> dict:
     """Run extractors on filing chunks and cross-check against Polygon.io."""
+    extraction_errors: list[str] = []
+
     named_entities = extract_named_entities(chunks)
+    if not any(named_entities.values()):
+        extraction_errors.append("named_entities: all extractors returned empty")
+
     risk_flags = extract_risk_flags(chunks)
+
     forward_looking = extract_forward_looking(chunks)
 
     result: dict = {
@@ -189,6 +195,7 @@ def analyze_filing(
         "forward_looking": forward_looking,
         "chunk_count": len(chunks),
         "model": Config.get_provider_config()["model"],
+        "extraction_errors": extraction_errors,
         "polygon_verification": None,
     }
 

@@ -70,7 +70,7 @@ class TestLangGraphNodes:
         assert result["math_result"] == 40.0
         assert any("Gross Margin" in step for step in result["math_steps"])
 
-    @patch("api.services.langgraph_engine.verify_entailment")
+    @patch("api.services.langgraph_engine.verifier.verify_entailment")
     def test_verification_node_pass(self, mock_verify, base_state):
         base_state["retrieved_docs"] = [{"chunk_text": "Revenue was $1000"}]
         base_state["math_result"] = 1000.0
