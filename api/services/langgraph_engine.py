@@ -588,23 +588,8 @@ _NUMERIC_KEYWORDS = [
     "r&d", "research and development", "rd intensity",
     "revenue", "net sales", "total revenue",
     "net income", "net earnings",
-    "calculate", "compute", "what is the", "how much",
+    "calculate", "compute", "how much",
     "percentage", "ratio", "growth rate", "yoy", "year over year",
-]
-
-_QUALITATIVE_KEYWORDS = [
-    "risk", "risks", "risk factor",
-    "highlighted by management", "management discussion", "md&a",
-    "strategy", "outlook", "competitive", "threat", "challenge",
-    "opportunities", "strengths", "weaknesses",
-    "what did", "what are", "how does", "why did",
-    "explain", "describe", "summarize", "discuss",
-    "mentioned", "stated", "noted", "warned", "cautioned",
-    "material weakness", "going concern", "contingency", "litigation",
-    "regulation", "regulatory", "compliance",
-    "acquisition", "merger", "divestiture",
-    "segment", "business model", "products", "services",
-    "customers", "competition", "market position",
 ]
 
 
@@ -657,17 +642,22 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
         context = "\n\n---\n\n".join(context_parts)
 
         ticker = state.get("ticker", "")
-        prompt = f"""You are a financial analyst assistant specializing in SEC filings.
-Answer the user's question using ONLY the context below from {ticker}'s SEC filings.
-Cite specific sections, risks, or statements from the filing. Be thorough but concise.
-If the context is insufficient, say so clearly.
-
-Context:
-{context}
-
-Question: {state['query']}
-
-Answer:"""
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    f"You are a financial analyst assistant specializing in SEC filings for {ticker}. "
+                    "Answer questions using ONLY the provided context from SEC filings. "
+                    "Cite specific sections, risks, or statements from the filing. "
+                    "Do not fabricate numbers, statistics, or claims not present in the context. "
+                    "If the context is insufficient, say so clearly."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Context from SEC filings:\n\n{context}\n\nQuestion: {state['query']}",
+            },
+        ]
 
         cfg = Config.get_provider_config()
         client = OpenAI(
@@ -677,7 +667,7 @@ Answer:"""
         )
         resp = client.chat.completions.create(
             model=cfg["model"],
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             temperature=cfg.get("temperature", 0.3),
             max_tokens=cfg.get("max_tokens", 4096),
         )
@@ -695,8 +685,8 @@ Answer:"""
         logger.error(f"Qualitative output failed: {e}")
         return {
             "final_answer": "An error occurred while generating the answer. Please try again.",
-            "verification_status": "ERROR",
-            "verification_reasoning": str(e),
+            "verification_status": "SKIPPED",
+            "verification_reasoning": f"Qualitative output error: {e}",
             "math_steps": [],
             "math_result": None,
             "status": {**state.get("status", {}), "output": "error"},
@@ -796,14 +786,19 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
     inputs = {
         "query": query,
         "ticker": ticker,
-        "query_type":       "numeric",
-        "retrieved_docs":  [],
-        "xbrl_facts":      [],
-        "polygon_data":    [],
-        "eval_route":      None,
-        "eval_confidence": None,
-        "eval_triggers":   None,
-        "lineage":         None,
+        "query_type":           "numeric",
+        "retrieved_docs":      [],
+        "xbrl_facts":          [],
+        "polygon_data":        [],
+        "math_result":         None,
+        "math_steps":          [],
+        "verification_status":  "",
+        "verification_reasoning": "",
+        "final_answer":        "",
+        "eval_route":          None,
+        "eval_confidence":     None,
+        "eval_triggers":       None,
+        "lineage":             None,
         "status": {
             "input":        "success",
             "retrieval":    "pending",

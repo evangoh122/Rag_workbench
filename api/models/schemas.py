@@ -30,6 +30,7 @@ class PipelineStatus(BaseModel):
     """Status of each pipeline node."""
     input: str = "pending"
     retrieval: str = "pending"
+    classifier: str = "pending"
     extraction: str = "pending"
     eval: str = "pending"
     math: str = "pending"
