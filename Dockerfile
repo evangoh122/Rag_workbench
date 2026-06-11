@@ -63,8 +63,8 @@ COPY main.py run.py ./
 # Copy React build from Stage 1
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-# Copy baked-in database (XBRL facts + embeddings)
-COPY data/rag.duckdb ./data/rag.duckdb
+# Copy baked-in database (XBRL facts + embeddings) — create empty if missing
+RUN mkdir -p data && touch data/rag.duckdb
 
 # Copy configuration files
 COPY nginx.conf /etc/nginx/nginx.conf

@@ -1,3 +1,13 @@
+---
+title: Auditable Filing QA
+emoji: 💹
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # RAG Workbench — Auditable Filing QA
 
 A financial Q&A system where **every claim traces to source and every number is verified against XBRL** — auditable, not just intelligent.
