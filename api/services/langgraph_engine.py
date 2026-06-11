@@ -723,7 +723,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                                     "gross_margin", "operating_margin", "net_margin",
                                     "gross_margin_growth", "free_cash_flow",
                                     "current_ratio", "debt_to_equity", "rd_intensity",
-                                    "yoy_growth", "revenue", "net_income",
+                                    "revenue_yoy_growth", "revenue", "net_income",
                                 ],
                                 "description": "The financial metric to calculate",
                             },
@@ -918,7 +918,7 @@ def _execute_tool(metric: str, state: GraphState) -> dict:
             if val is not None:
                 return {"value": val, "display": f"{metric}: ${val:,.0f}", "unit": "USD"}
 
-        elif metric == "yoy_growth" and prior:
+        elif metric == "revenue_yoy_growth" and prior:
             # Generic YoY growth on revenue by default; LLM can clarify in answer
             curr_val = extractor.get("revenues", period=latest)
             prev_val = extractor.get("revenues", period=prior)

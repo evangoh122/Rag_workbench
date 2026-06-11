@@ -287,6 +287,7 @@ function App() {
               onClick={() => {
                 setMessages([]);
                 setPipelineStatus({});
+                setFeedbackSent(new Set());
               }}
             >
               <RefreshCcw size={16} />
