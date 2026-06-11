@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from datetime import datetime, timezone
+from pydantic import BaseModel, Field
 import os
 from loguru import logger
 from api.services.chat_engine import chat_sql
@@ -264,9 +263,9 @@ async def chat_sec_analyzer_endpoint(req: ChatRequest, _=Depends(get_read_api_ke
 
 class FeedbackRequest(BaseModel):
     message_id: str = ""
-    query: str = ""
-    answer: str = ""
-    agrees: bool = True
+    query: str = Field(default="", max_length=1000)
+    answer: str = Field(default="", max_length=10000)
+    agrees: bool
 
 
 @router.post("/feedback", status_code=204)
@@ -275,7 +274,7 @@ async def chat_feedback_endpoint(req: FeedbackRequest, _=Depends(get_read_api_ke
     vid = str(uuid.uuid4())
     did = req.message_id or vid
     try:
-        conn = db_manager.get_connection()
+        conn = db_manager.get_review_connection()
         conn.execute("""
             INSERT INTO reviewer_verdicts (id, decision_id, reviewer_agrees, notes)
             VALUES (?, ?, ?, ?)

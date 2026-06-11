@@ -723,7 +723,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                                     "gross_margin", "operating_margin", "net_margin",
                                     "gross_margin_growth", "free_cash_flow",
                                     "current_ratio", "debt_to_equity", "rd_intensity",
-                                    "revenue", "net_income",
+                                    "revenue_yoy_growth", "revenue", "net_income",
                                 ],
                                 "description": "The financial metric to calculate",
                             },
@@ -841,6 +841,7 @@ def _execute_tool(metric: str, state: GraphState) -> dict:
     from api.services.financial_calc import (
         FactExtractor, gross_margin, gross_margin_growth, operating_margin,
         net_margin, free_cash_flow, current_ratio, debt_to_equity, rd_intensity,
+        yoy_growth,
     )
 
     facts_list = state.get("xbrl_facts", [])
@@ -917,6 +918,15 @@ def _execute_tool(metric: str, state: GraphState) -> dict:
             val = extractor.get(concept, period=latest)
             if val is not None:
                 return {"value": val, "display": f"{metric}: ${val:,.0f}", "unit": "USD"}
+
+        elif metric == "revenue_yoy_growth" and prior:
+            # Generic YoY growth on revenue by default; LLM can clarify in answer
+            curr_val = extractor.get("revenues", period=latest)
+            prev_val = extractor.get("revenues", period=prior)
+            if curr_val is not None and prev_val is not None:
+                r = yoy_growth(curr_val, prev_val, metric_name="Revenue",
+                               current_period=latest, prior_period=prior)
+                return {"value": r.value, "display": r.display(), "unit": r.unit}
 
         return {"error": f"Could not compute {metric} — missing data", "display": f"{metric}: data unavailable"}
 
