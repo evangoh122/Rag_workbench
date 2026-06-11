@@ -604,15 +604,42 @@ _NUMERIC_KEYWORDS = [
     "r&d", "research and development", "rd intensity",
     "revenue", "net sales", "total revenue",
     "net income", "net earnings",
-    "calculate", "compute", "how much",
+    "calculate", "compute",
     "percentage", "ratio", "growth rate", "yoy", "year over year",
+]
+
+# Strong qualitative signals — these override numeric classification
+_QUALITATIVE_SIGNALS = [
+    "risk", "risks", "risk factor",
+    "management discussion", "md&a", "highlighted by management",
+    "strategy", "outlook", "competitive", "threat", "challenge",
+    "opportunities", "strengths", "weaknesses",
+    "explain", "describe", "summarize", "discuss",
+    "mentioned", "stated", "noted", "warned", "cautioned",
+    "material weakness", "going concern", "contingency", "litigation",
+    "regulation", "regulatory", "compliance",
+    "acquisition", "merger", "divestiture",
+    "segment", "business model", "products", "services",
+    "customers", "competition", "market position",
+    "what did", "what are the", "how does", "why did",
 ]
 
 
 def _is_numeric_query(query: str) -> bool:
-    """Check if the query requires numeric computation."""
+    """Check if the query requires numeric computation.
+
+    Qualitative signals take priority — if the query contains strong
+    qualitative indicators (risks, strategy, management discussion, etc.)
+    it routes to the qualitative path even if numeric keywords are present.
+    """
     q = query.lower()
-    return any(kw in q for kw in _NUMERIC_KEYWORDS)
+    has_qualitative = any(kw in q for kw in _QUALITATIVE_SIGNALS)
+    has_numeric = any(kw in q for kw in _NUMERIC_KEYWORDS)
+
+    # Strong qualitative signals override numeric
+    if has_qualitative:
+        return False
+    return has_numeric
 
 
 def classifier_node(state: GraphState) -> Dict[str, Any]:

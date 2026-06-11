@@ -42,6 +42,7 @@ class CalcResult:
     def display(self) -> str:
         """One-line display string for the AI to cite verbatim."""
         val = f"{self.value:.1f}%" if self.unit == "%" else (
+              f"{self.value:+.1f}pp" if self.unit == "pp" else
               f"${self.value:,.0f}" if self.unit == "USD" else
               f"{self.value:.2f}x" if self.unit == "x" else
               f"{self.value:.4f}" )
@@ -146,7 +147,7 @@ def gross_margin_growth(
             "prior_revenue": prior_revenue, "prior_cogs": prior_cogs,
             "current_gross_margin_pct": current_gm, "prior_gross_margin_pct": prior_gm,
         },
-        unit="%",
+        unit="pp",
         period=period,
         notes="Change in gross margin percentage points year-over-year",
     )
