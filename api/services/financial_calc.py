@@ -120,6 +120,38 @@ def gross_margin(revenue: float, cogs: float, period: str = "") -> CalcResult:
     )
 
 
+def gross_margin_growth(
+    current_revenue: float,
+    current_cogs: float,
+    prior_revenue: float,
+    prior_cogs: float,
+    current_period: str = "",
+    prior_period: str = "",
+) -> CalcResult:
+    """Gross Margin Growth (percentage points) = Current Gross Margin - Prior Gross Margin."""
+    current_gm = _guard_div(current_revenue - current_cogs, current_revenue, "gross_margin_growth_current") * 100
+    prior_gm = _guard_div(prior_revenue - prior_cogs, prior_revenue, "gross_margin_growth_prior") * 100
+    delta = round(current_gm - prior_gm, 4)
+    period = f"{prior_period} -> {current_period}" if prior_period else current_period
+    return CalcResult(
+        metric="Gross Margin Growth",
+        value=delta,
+        formula=(
+            f"[({_fmt(current_revenue)} - {_fmt(current_cogs)}) / {_fmt(current_revenue)}] "
+            f"- [({_fmt(prior_revenue)} - {_fmt(prior_cogs)}) / {_fmt(prior_revenue)}] "
+            f"= {current_gm:.2f}% - {prior_gm:.2f}% = {delta:+.2f}pp"
+        ),
+        inputs={
+            "current_revenue": current_revenue, "current_cogs": current_cogs,
+            "prior_revenue": prior_revenue, "prior_cogs": prior_cogs,
+            "current_gross_margin_pct": current_gm, "prior_gross_margin_pct": prior_gm,
+        },
+        unit="%",
+        period=period,
+        notes="Change in gross margin percentage points year-over-year",
+    )
+
+
 def operating_margin(revenue: float, operating_income: float, period: str = "") -> CalcResult:
     """Operating Margin % = Operating Income / Revenue * 100"""
     pct = _guard_div(operating_income, revenue, "operating_margin") * 100

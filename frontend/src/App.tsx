@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, ShieldCheck, Activity, MessageSquare, BarChart3, Network, Server, Cpu, Presentation } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse, Source, XBRLFact } from './api/chat';
@@ -8,7 +8,6 @@ import MetricsDashboard from './pages/MetricsDashboard';
 import SystemDashboard from './pages/SystemDashboard';
 import Methodology from './pages/Methodology';
 import StocksList from './pages/StocksList';
-import GoogleSlides from './pages/GoogleSlides';
 import DriftAlert from './components/DriftAlert';
 import AuditTrail from './components/AuditTrail';
 import PipelineFlow from './components/PipelineFlow';
@@ -30,7 +29,7 @@ interface Message {
   triples?: Record<string, string>[];
 }
 
-type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'slides';
+type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks';
 
 type PipelineStatus = {
   input?: 'success' | 'error' | 'pending';
@@ -50,7 +49,7 @@ function getPosthog() {
 function App() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [mode, setMode] = useState<'sql' | 'rag' | 'auditable' | 'graph'>('auditable');
+  const [mode, _setMode] = useState<'sql' | 'rag' | 'auditable' | 'graph'>('auditable');
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<AppView>('chat');
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
@@ -254,73 +253,12 @@ function App() {
             <Cpu size={18} className={view === 'stocks' ? 'text-emerald-400' : 'text-gray-500'} />
             Stocks
           </button>
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
-              view === 'slides'
-                ? 'bg-pink-500/10 text-pink-400 border-pink-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
-            }`}
-            onClick={() => setView('slides')}
-          >
-            <Presentation size={18} className={view === 'slides' ? 'text-pink-400' : 'text-gray-500'} />
-            Presentation
-          </button>
         </nav>
 
         {/* Mode & Context (Only show if relevant) */}
         {(view === 'chat' || view === 'traceability') && (
           <div className="flex flex-col gap-2 mb-6">
-            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest px-2 mb-2">Configuration</div>
-            
-            {/* Engine Toggle */}
-            <div className="bg-[#161b24] p-1.5 rounded-xl flex flex-col gap-1 border border-[#202532]">
-              <button
-                className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
-                  mode === 'auditable'
-                    ? 'bg-[#202532] text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
-                }`}
-                onClick={() => setMode('auditable')}
-              >
-                <ShieldCheck size={16} />
-                Auditable RAG
-              </button>
-              <button
-                className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
-                  mode === 'sql'
-                    ? 'bg-[#202532] text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
-                }`}
-                onClick={() => setMode('sql')}
-              >
-                <Database size={16} />
-                SQL
-              </button>
-              <button
-                className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
-                  mode === 'rag'
-                    ? 'bg-[#202532] text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
-                }`}
-                onClick={() => setMode('rag')}
-              >
-                <BookOpen size={16} />
-                Basic RAG
-              </button>
-              <button
-                className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
-                  mode === 'graph'
-                    ? 'bg-[#202532] text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
-                }`}
-                onClick={() => setMode('graph')}
-              >
-                <Network size={16} />
-                Graph RAG
-              </button>
-            </div>
 
-            {/* Ticker Selector */}
             {(mode === 'auditable' || mode === 'graph') && (
               <div className="mt-4 px-2">
                 <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">Target Ticker</label>
@@ -389,13 +327,6 @@ function App() {
         {view === 'methodology' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
             <Methodology />
-          </div>
-        )}
-
-        {/* VIEW: SLIDES */}
-        {view === 'slides' && (
-          <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
-            <GoogleSlides />
           </div>
         )}
 

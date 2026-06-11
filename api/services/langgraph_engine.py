@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover
     _EVAL_AVAILABLE = False
 from api.services.financial_calc import (
     FactExtractor, CalcResult,
-    gross_margin, operating_margin, net_margin, rd_intensity, current_ratio, debt_to_equity, net_debt, free_cash_flow, check_balance_sheet,
+    gross_margin, gross_margin_growth, operating_margin, net_margin, rd_intensity, current_ratio, debt_to_equity, net_debt, free_cash_flow, check_balance_sheet,
 )
 
 
@@ -188,8 +188,24 @@ def math_node(state: GraphState) -> Dict[str, Any]:
 
         # ── Route by question intent ────────────────────────────────────────
         # Fix #2: all guards use explicit `is not None` to handle zero-valued facts
+        # Gross margin growth (must check before gross margin — substring match)
+        if any(k in query for k in ("gross margin growth", "gross margin change", "gross margin yoy")):
+            prior = periods[-2] if len(periods) >= 2 else None
+            if prior:
+                rev_cur  = extractor.get("revenues",      period=latest)
+                cogs_cur = extractor.get("costofrevenue",  period=latest)
+                rev_pri  = extractor.get("revenues",      period=prior)
+                cogs_pri = extractor.get("costofrevenue",  period=prior)
+                if all(v is not None for v in (rev_cur, cogs_cur, rev_pri, cogs_pri)):
+                    calc = gross_margin_growth(
+                        rev_cur, cogs_cur, rev_pri, cogs_pri,
+                        current_period=latest, prior_period=prior,
+                    )
+            else:
+                steps.append("Only one period available — cannot compute growth.")
+
         # Gross margin
-        if any(k in query for k in ("gross margin", "gross profit margin")):
+        elif any(k in query for k in ("gross margin", "gross profit margin")):
             rev  = extractor.get("revenues",      period=latest)
             cogs = extractor.get("costofrevenue",  period=latest)
             if rev is not None and cogs is not None:
@@ -578,7 +594,7 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 _NUMERIC_KEYWORDS = [
-    "gross margin", "gross profit margin",
+    "gross margin", "gross profit margin", "gross margin growth",
     "operating margin", "operating income margin",
     "net margin", "profit margin", "net income margin",
     "free cash flow", "fcf",
