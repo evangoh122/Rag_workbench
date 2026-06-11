@@ -88,10 +88,18 @@ class Config:
     def MIMO_API_KEY(self) -> str | None:
         return os.getenv("MIMO_API_KEY") or os.getenv("XIAOMI_API_KEY")
 
+    @property
+    def POLYGON_API_KEY(self) -> str | None:
+        return os.getenv("POLYGON_API_KEY") or None
+
     # Embedding Settings
     @property
     def EMBEDDING_MODEL(self) -> str:
         return os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+
+    @property
+    def EMBEDDING_QUERY_PREFIX(self) -> str:
+        return os.getenv("EMBEDDING_QUERY_PREFIX", "")
 
     @property
     def EMBEDDING_DIM(self) -> int:

@@ -5,14 +5,16 @@ Nodes: Retrieval -> XBRL Extraction -> Math Execution -> Verification -> Output
 Conditional edge on Verification failure: -> Abstention
 """
 import os
+from datetime import datetime, timezone
 from typing import TypedDict, List, Dict, Any, Optional, Union
 import polars as pl
 
 from langgraph.graph import StateGraph, END
 from langchain_core.documents import Document
 
+from api.config import Config
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
-from api.services.verifier import verify_entailment
+from api.services.verifier import verifier
 from api.services.rag_engine import DuckDBVectorRetriever, EDGAREmbeddingsRetriever
 from api.services.guardrails.retrieval_rails import filter_retrieval
 from loguru import logger
@@ -58,6 +60,8 @@ class GraphState(TypedDict):
     eval_route: Optional[str]           # AUTO | SAMPLED_REVIEW | ESCALATE
     eval_confidence: Optional[float]    # record-level confidence score
     eval_triggers: Optional[List[str]]  # always-escalate triggers that fired
+    # Audit lineage (populated by lineage_node, always present in output)
+    lineage: Optional[Dict[str, Any]]
 
 # ---------------------------------------------------------------------------
 # Node Functions
@@ -291,7 +295,7 @@ def verification_node(state: GraphState) -> Dict[str, Any]:
         claim = f"The value is {state['math_result']}"
         source = " ".join([d['chunk_text'] for d in state['retrieved_docs']])
         
-        status, reasoning = verify_entailment(claim, source)
+        status, reasoning = verifier.verify_entailment(claim, source)
         
         return {
             "verification_status": status,
@@ -396,6 +400,67 @@ def abstention_node(state: GraphState) -> Dict[str, Any]:
         "status": {**state.get('status', {}), "output": "success"}
     }
 
+
+def lineage_node(state: GraphState) -> Dict[str, Any]:
+    """
+    Lineage Node: Build the audit lineage record for every response.
+
+    Collects source document identifiers and chunk IDs from retrieved docs,
+    tags the model used, and auto-inserts a review queue entry when the eval
+    pipeline routes to SAMPLED_REVIEW or ESCALATE.
+    """
+    logger.info("--- LINEAGE ---")
+    import duckdb
+    from api.db.review_queue import init_review_tables, insert_decision
+
+    chunk_ids: List[str] = []
+    source_docs: List[str] = []
+    for doc in state.get("retrieved_docs", []):
+        meta = doc.get("metadata", {})
+        cid = meta.get("chunk_id") or meta.get("accession_number") or meta.get("chunk_index")
+        if cid is not None:
+            chunk_ids.append(str(cid))
+        src = str(meta.get("accession_number") or meta.get("source", ""))
+        if src and src not in source_docs:
+            source_docs.append(src)
+
+    cfg = Config.get_provider_config()
+    eval_route = state.get("eval_route")
+    review_id: Optional[str] = None
+
+    if eval_route in ("SAMPLED_REVIEW", "ESCALATE"):
+        try:
+            db_path = Config.REVIEW_DB_PATH
+            with duckdb.connect(db_path) as conn:
+                init_review_tables(conn)
+                review_id = insert_decision(conn, {
+                    "cik": state.get("ticker", ""),
+                    "accession": source_docs[0] if source_docs else "unknown",
+                    "form_type": "10-K",
+                    "route": eval_route,
+                    "confidence": state.get("eval_confidence") if state.get("eval_confidence") is not None else 0.0,
+                    "triggers_fired": state.get("eval_triggers") if state.get("eval_triggers") is not None else [],
+                })
+            logger.info(f"Review queue entry created: {review_id} (route={eval_route})")
+        except Exception as exc:
+            logger.warning(f"Review queue insert failed (non-fatal): {exc}")
+
+    lineage: Dict[str, Any] = {
+        "source_docs": source_docs,
+        "chunk_ids": chunk_ids,
+        "model": cfg["model"],
+        "confidence": state.get("eval_confidence"),
+        "eval_route": eval_route,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "review_id": review_id,
+    }
+
+    return {
+        "lineage": lineage,
+        "status": {**state.get("status", {}), "lineage": "success"},
+    }
+
+
 # ---------------------------------------------------------------------------
 # Graph Definition
 # ---------------------------------------------------------------------------
@@ -420,6 +485,7 @@ workflow.add_node("math", math_node)
 workflow.add_node("verification", verification_node)
 workflow.add_node("output", output_node)
 workflow.add_node("abstention", abstention_node)
+workflow.add_node("lineage", lineage_node)
 
 # Set entry point
 workflow.set_entry_point("retrieval")
@@ -441,9 +507,10 @@ workflow.add_conditional_edges(
     }
 )
 
-# End edges
-workflow.add_edge("output", END)
-workflow.add_edge("abstention", END)
+# Both terminal nodes funnel through lineage before END
+workflow.add_edge("output", "lineage")
+workflow.add_edge("abstention", "lineage")
+workflow.add_edge("lineage", END)
 
 _app = None
 
@@ -464,6 +531,7 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
         "eval_route":      None,
         "eval_confidence": None,
         "eval_triggers":   None,
+        "lineage":         None,
         "status": {
             "input":        "success",
             "retrieval":    "pending",
@@ -474,4 +542,5 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
             "output":       "pending",
         },
     }
+
     return app.invoke(inputs)

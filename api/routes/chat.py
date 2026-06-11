@@ -5,6 +5,8 @@ from api.services.chat_engine import chat_sql
 from api.services.rag_engine import ask_rag
 from api.services.langgraph_engine import run_auditable_rag
 from api.services.graph_rag_engine import run_graph_rag
+from api.services.sec_client import chunk_filing_sections
+from api.services.sec_analyzer import analyze_filing
 from api.middleware.auth import get_read_api_key
 from api.models.schemas import ChatRequest
 from api.services.guardrails.input_rails import check_input
@@ -102,11 +104,39 @@ async def chat_auditable_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_k
                 "reasoning": result["verification_reasoning"]
             },
             "math_steps": result["math_steps"],
-            "pipeline_status": result["status"]
+            "pipeline_status": result["status"],
+            "lineage": result.get("lineage"),
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("Chat route failed")
         _tracker.record_failure(str(e), context="chat/auditable-rag")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/sec-analyzer")
+async def chat_sec_analyzer_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
+    """
+    Structured signal extraction from SEC filing chunks for bank analysts.
+
+    Returns:
+      - named_entities : executives, auditors, subsidiaries
+      - risk_flags     : going concern, litigation, regulatory actions, restatement risk
+      - forward_looking: guidance statements with sentiment tag
+    """
+    try:
+        if not req.ticker:
+            raise HTTPException(status_code=400, detail="Ticker is required for SEC Analyzer")
+        chunks = chunk_filing_sections(req.ticker)
+        if not chunks:
+            raise HTTPException(status_code=404, detail=f"No filing data found for {req.ticker}")
+        chunk_texts = [c["chunk_text"] for c in chunks]
+        result = analyze_filing(chunk_texts, req.ticker)
+        _tracker.record_success()
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        _tracker.record_failure(str(e), context="chat/sec-analyzer")
         raise HTTPException(status_code=500, detail="Internal server error")
