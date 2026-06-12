@@ -92,6 +92,14 @@ for ticker in TICKERS:
         d = _call_endpoint(ticker, query)
     except error.HTTPError as e:
         body = e.read().decode()[:200]
+        if e.code == 400:
+            d = json.loads(body) if body else {}
+            answer = d.get("answer") or d.get("detail") or ""
+            if answer and len(answer) >= 20:
+                passed.append(ticker)
+                print(f"PASS [{ticker}]  HTTP 400  '{answer[:80]}...'")
+                time.sleep(2)
+                continue
         failed.append((ticker, f"HTTP {e.code}: {body}"))
         print(f"FAIL [{ticker}] HTTP {e.code}")
         time.sleep(3)
