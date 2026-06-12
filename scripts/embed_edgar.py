@@ -184,8 +184,56 @@ _20F_SECTIONS: Dict[str, str] = {
 }
 
 
+def _fetch_filing_with_edgartools(ticker: str, form_types: List[str] = None) -> tuple[str, str, str]:
+    """Download the latest filing using edgartools (uses SEC REST API, not blocked from cloud).
+    Returns (file_path, form_type, accession_number)."""
+    from edgar import Company
+    from api.services._edgar_identity import ensure_edgar_identity
+
+    ensure_edgar_identity()
+
+    if form_types is None:
+        form_types = ["10-K", "20-F", "10-Q"]
+
+    try:
+        company = Company(ticker)
+        for form_type in form_types:
+            try:
+                filings = company.get_filings(form=form_type)
+                if filings.empty:
+                    continue
+                filing = filings.latest(1)
+                if filing is None:
+                    continue
+            except Exception as e:
+                logger.debug(f"No {form_type} filing for {ticker}: {e}")
+                continue
+
+            accession = filing.accession_number.replace("-", "")
+            safe_dir = _DOWNLOAD_DIR / "sec-edgar-filings" / ticker / form_type / accession
+            safe_dir.mkdir(parents=True, exist_ok=True)
+
+            html_path = safe_dir / "primary-document.html"
+            if not html_path.exists():
+                try:
+                    full_text = filing.text()
+                    html_path.write_text(full_text, encoding="utf-8")
+                except Exception as e:
+                    logger.warning(f"Could not get full text for {ticker} {form_type}: {e}")
+                    continue
+
+            logger.info(f"Found {form_type} for {ticker} via edgartools")
+            return str(html_path), form_type, accession
+
+    except Exception as e:
+        logger.warning(f"edgartools failed for {ticker}: {e}")
+
+    return "", "", ""
+
+
 def _fetch_filing_with_downloader(ticker: str, form_types: List[str] = None) -> tuple[str, str]:
-    """Download the latest filing for the given form types. Returns (file_path, form_type)."""
+    """Download the latest filing for the given form types. Returns (file_path, form_type).
+    Falls back to edgartools if sec_edgar_downloader is blocked."""
     if form_types is None:
         form_types = ["10-K", "20-F", "10-Q"]
 
@@ -213,7 +261,10 @@ def _fetch_filing_with_downloader(ticker: str, form_types: List[str] = None) -> 
             logger.debug(f"Failed to download {form_type} for {ticker}: {e}")
             continue
 
-    return "", ""
+    # Fallback: try edgartools
+    logger.info(f"sec_edgar_downloader failed for {ticker}, trying edgartools...")
+    path, form, _ = _fetch_filing_with_edgartools(ticker, form_types)
+    return path, form
 
 
 def fetch_latest_10k_with_downloader(ticker: str) -> str:
