@@ -17,6 +17,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
           upload_secret() {
             local key=$1
@@ -24,7 +25,7 @@ jobs:
             if [ -n "$value" ]; then
               echo "Uploading secret: $key"
               curl -sf -X POST \
-                "https://huggingface.co/api/spaces/$HF_USERNAME/rag-workbench/secrets" \
+                "https://huggingface.co/api/spaces/$HF_USERNAME/$HF_SPACE_NAME/secrets" \
                 -H "Authorization: Bearer $HF_TOKEN" \
                 -H "Content-Type: application/json" \
                 -d "{\"key\": \"$key\", \"value\": \"$value\"}" \
@@ -45,7 +46,7 @@ jobs:
 
   deploy:
     needs: sync-secrets
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,8 +57,9 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
-          git remote add hf https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/rag-workbench
+          git remote add hf https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
           git push hf main --force
 
   keepalive:
@@ -67,9 +69,11 @@ jobs:
       - name: Ping HF Space health endpoint
         env:
           HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
+          HF_SPACE_SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
           STATUS=$(curl -sf --max-time 30 \
-            https://$HF_USERNAME-rag-workbench.hf.space/api/health \
+            https://$HF_USERNAME-$HF_SPACE_SLUG.hf.space/api/health \
             -o /dev/null -w "%{http_code}" || echo "000")
           echo "Health check HTTP status: $STATUS"
           [ "$STATUS" = "200" ] && echo "Space is alive" || echo "Space may be waking up"
@@ -81,12 +85,14 @@ jobs:
       - name: Refresh XBRL data from SEC EDGAR
         env:
           HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
           ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
         run: |
+          HF_SPACE_SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
           echo "Waiting for space to wake up..."
           for i in $(seq 1 10); do
             STATUS=$(curl -sf --max-time 30 \
-              https://$HF_USERNAME-rag-workbench.hf.space/api/health \
+              https://$HF_USERNAME-$HF_SPACE_SLUG.hf.space/api/health \
               -o /dev/null -w "%{http_code}" || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Space is awake"
@@ -98,8 +104,17 @@ jobs:
 
           echo "Triggering data refresh..."
           RESPONSE=$(curl -sf --max-time 600 -X POST \
-            https://$HF_USERNAME-rag-workbench.hf.space/api/admin/refresh-data \
+            https://$HF_USERNAME-$HF_SPACE_SLUG.hf.space/api/admin/refresh-data \
             -H "X-API-Key: $ADMIN_API_KEY" \
             -H "Content-Type: application/json")
           echo "$RESPONSE"
-          echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']=='ok', f'Refresh failed: {d}'"
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d['status'] in ('ok', 'partial'), f'Refresh failed: {d}'
+          skipped = d.get('skipped_tickers', [])
+          if skipped:
+              print(f'WARNING: {len(skipped)} ticker(s) skipped: {skipped}')
+          else:
+              print(f'Refresh complete — {d[\"tickers_processed\"]} tickers, {d[\"facts_loaded\"]} facts')
+          "
