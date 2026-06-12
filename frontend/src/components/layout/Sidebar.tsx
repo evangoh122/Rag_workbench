@@ -1,8 +1,8 @@
 import React from 'react';
-import { Database, BookOpen, RefreshCcw, Search, ShieldCheck, MessageSquare, BarChart3, Network, Server, Activity, Cpu } from 'lucide-react';
+import { Database, BookOpen, RefreshCcw, Search, ShieldCheck, MessageSquare, BarChart3, Network, Server, Activity, Cpu, ClipboardList } from 'lucide-react';
 import DriftAlert from '../DriftAlert';
 
-type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks';
+type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit';
 
 interface SidebarProps {
   view: AppView;
@@ -70,6 +70,18 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           <BarChart3 size={18} className={view === 'results' ? 'text-emerald-400' : 'text-gray-500'} />
           Results & Testing
+        </button>
+
+        <button
+          className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+            view === 'audit'
+              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+          }`}
+          onClick={() => setView('audit')}
+        >
+          <ClipboardList size={18} className={view === 'audit' ? 'text-amber-400' : 'text-gray-500'} />
+          Audit Log
         </button>
 
         <button

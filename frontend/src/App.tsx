@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse, Source, XBRLFact } from './api/chat';
@@ -9,6 +9,7 @@ import MetricsDashboard from './pages/MetricsDashboard';
 import SystemDashboard from './pages/SystemDashboard';
 import Methodology from './pages/Methodology';
 import StocksList from './pages/StocksList';
+import AuditLog from './pages/AuditLog';
 import DriftAlert from './components/DriftAlert';
 import AuditTrail from './components/AuditTrail';
 import PipelineFlow from './components/PipelineFlow';
@@ -30,7 +31,7 @@ interface Message {
   triples?: Record<string, string>[];
 }
 
-type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks';
+type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit';
 
 type PipelineStatus = {
   input?: 'success' | 'error' | 'pending';
@@ -222,6 +223,18 @@ function App() {
 
           <button
             className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+              view === 'audit'
+                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+            }`}
+            onClick={() => setView('audit')}
+          >
+            <ShieldCheck size={18} className={view === 'audit' ? 'text-amber-400' : 'text-gray-500'} />
+            Audit Log
+          </button>
+
+          <button
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
               view === 'metrics'
                 ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
@@ -305,6 +318,13 @@ function App() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full min-w-0 bg-[#0a0c10] relative">
         
+        {/* VIEW: AUDIT LOG */}
+        {view === 'audit' && (
+          <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300 overflow-hidden">
+            <AuditLog />
+          </div>
+        )}
+
         {/* VIEW: RESULTS */}
         {view === 'results' && (
           <div className="flex-1 overflow-hidden animate-in fade-in duration-300">
