@@ -117,10 +117,17 @@ jobs:
             echo "FORCE re-seed requested — will re-fetch all 31 tickers"
           fi
           echo "Seeding XBRL facts from SEC EDGAR..."
-          RESPONSE=$(curl -sf --max-time 600 -X POST \
-            "$SPACE_URL/api/admin/refresh-data${FORCE_PARAM}" \
-            -H "X-API-Key: $ADMIN_API_KEY" \
-            -H "Content-Type: application/json")
+          for i in $(seq 1 5); do
+            RESPONSE=$(curl -sf --max-time 600 -X POST \
+              "$SPACE_URL/api/admin/refresh-data${FORCE_PARAM}" \
+              -H "X-API-Key: $ADMIN_API_KEY" \
+              -H "Content-Type: application/json") && break
+            echo "Attempt $i/5 — curl failed (exit $?), retrying in 15s..."
+            sleep 15
+          done
+          if [ -z "$RESPONSE" ]; then
+            echo "ERROR: Could not reach admin endpoint after 5 attempts." && exit 1
+          fi
           echo "Response: $RESPONSE"
           echo "$RESPONSE" | python3 -c "
           import sys, json
