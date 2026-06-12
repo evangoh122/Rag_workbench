@@ -41,19 +41,19 @@ def rrf_fuse(
 
     RRF_score(d) = Σ 1 / (k + rank_i(d))
 
-    Args:
-        rankings: Each inner list is a ranked result set (best first).
-        k: Constant that reduces the impact of high-ranked documents (default 60).
-
-    Returns:
-        Fused and re-ranked list of unique Documents.
+    Uses (ticker, accession, text[:80]) as a stable content key so the same
+    chunk appearing in both BM25 and vector results is correctly deduplicated.
     """
-    scores: dict[str, float] = {}
-    doc_map: dict[str, Document] = {}
+    scores: dict[tuple, float] = {}
+    doc_map: dict[tuple, Document] = {}
 
     for ranked_list in rankings:
         for rank, doc in enumerate(ranked_list):
-            key = id(doc)  # Document identity by object
+            key = (
+                doc.metadata.get("ticker", ""),
+                doc.metadata.get("accession", ""),
+                doc.page_content[:80],
+            )
             doc_map[key] = doc
             scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
 
@@ -111,8 +111,8 @@ def _load_bm25_index() -> tuple[BM25Okapi, list[Document], list[list[str]]] | No
     return _bm25_index, _bm25_docs, _bm25_tokenised
 
 
-def bm25_search(query: str, top_k: int = 5) -> list[Document]:
-    """Run BM25 keyword search over edgar_embeddings."""
+def bm25_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document]:
+    """Run BM25 keyword search over edgar_embeddings, optionally filtered to one ticker."""
     result = _load_bm25_index()
     if result is None:
         return []
@@ -121,8 +121,10 @@ def bm25_search(query: str, top_k: int = 5) -> list[Document]:
     query_tokens = tokenize(query)
     scores = bm25.get_scores(query_tokens)
 
-    scored = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:top_k]
-    return [docs[idx] for idx, _ in scored]
+    scored = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
+    if ticker:
+        scored = [(idx, s) for idx, s in scored if docs[idx].metadata.get("ticker") == ticker]
+    return [docs[idx] for idx, _ in scored[:top_k]]
 
 
 def vector_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document]:
@@ -185,7 +187,7 @@ class EDGARHybridRetriever(BaseRetriever):
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
-        bm25_docs = bm25_search(query, top_k=self.top_k * 2)
+        bm25_docs = bm25_search(query, top_k=self.top_k * 2, ticker=self.ticker)
         vec_docs = vector_search(query, top_k=self.top_k * 2, ticker=self.ticker)
 
         # If only one method returned results, use it directly
