@@ -53,22 +53,11 @@ jobs:
     needs: sync-secrets
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    outputs:
-      space_url: ${{ steps.url.outputs.url }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           lfs: true
-
-      - name: Build Space URL
-        id: url
-        env:
-          HF_USERNAME:   ${{ secrets.HF_USERNAME }}
-          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
-        run: |
-          SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
-          echo "url=https://${HF_USERNAME}-${SLUG}.hf.space" >> "$GITHUB_OUTPUT"
 
       - name: Push to HF Space
         env:
@@ -84,22 +73,23 @@ jobs:
     needs: deploy
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    outputs:
-      space_url: ${{ needs.deploy.outputs.space_url }}
     steps:
-      - name: Poll health until 200 (5-minute budget)
+      - name: Poll health until 200 (10-minute budget)
         env:
-          SPACE_URL: ${{ needs.deploy.outputs.space_url }}
+          HF_USERNAME:   ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
+          SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
+          SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
           echo "Waiting for $SPACE_URL to come online..."
-          for i in $(seq 1 20); do
+          for i in $(seq 1 40); do
             STATUS=$(curl -sf --max-time 20 "$SPACE_URL/api/health" \
               -o /dev/null -w "%{http_code}" || echo "000")
-            echo "Attempt $i/20 — HTTP $STATUS"
+            echo "Attempt $i/40 — HTTP $STATUS"
             [ "$STATUS" = "200" ] && echo "Space is live." && exit 0
             sleep 15
           done
-          echo "ERROR: Space did not respond within 5 minutes." && exit 1
+          echo "ERROR: Space did not respond within 10 minutes." && exit 1
 
 # ── 4. Seed XBRL data from SEC EDGAR ────────────────────────────────────────
   seed-data:
@@ -109,9 +99,12 @@ jobs:
     steps:
       - name: Trigger incremental XBRL refresh (skips existing tickers)
         env:
-          SPACE_URL:     ${{ needs.await-space.outputs.space_url }}
+          HF_USERNAME:   ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
           ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
         run: |
+          SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
+          SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
           echo "Seeding XBRL facts from SEC EDGAR..."
           RESPONSE=$(curl -sf --max-time 600 -X POST \
             "$SPACE_URL/api/admin/refresh-data" \
@@ -145,8 +138,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: "RAG pipeline -- all 31 tickers (chunk -> hybrid BM25+vector -> rerank -> RRF)"
         env:
-          SPACE_URL: ${{ needs.await-space.outputs.space_url }}
-        run: python3 scripts/rag_pipeline_ci.py
+          HF_USERNAME:   ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
+        run: |
+          SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
+          export SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
+          python3 scripts/rag_pipeline_ci.py
 
 # ── Keepalive (every 20 min) ─────────────────────────────────────────────────
   keepalive:
