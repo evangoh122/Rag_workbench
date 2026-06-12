@@ -63,23 +63,30 @@ def main():
         logger.error(f"Startup seed error: {e}")
 
     # ── Step 2: Chunk + embed 10-K filings into edgar_embeddings ────────────
-    try:
-        logger.info("Triggering filing chunking + embedding job...")
-        r = requests.post(
-            f"{BASE_URL}/api/admin/embed-data",
-            headers={"X-API-Key": ADMIN_KEY, "Content-Type": "application/json"},
-            timeout=1800,
-        )
-        if r.status_code == 200:
-            d = r.json()
-            logger.info(
-                f"Embedding complete — {d.get('chunks_stored')} chunks, "
-                f"status={d.get('status')}"
+    max_embed_retries = 3
+    for attempt in range(1, max_embed_retries + 1):
+        try:
+            logger.info(f"Triggering filing chunking + embedding job (attempt {attempt}/{max_embed_retries})...")
+            r = requests.post(
+                f"{BASE_URL}/api/admin/embed-data",
+                headers={"X-API-Key": ADMIN_KEY, "Content-Type": "application/json"},
+                timeout=1800,
             )
-        else:
-            logger.error(f"Embedding failed: HTTP {r.status_code} — {r.text}")
-    except Exception as e:
-        logger.error(f"Embedding error: {e}")
+            if r.status_code == 200:
+                d = r.json()
+                chunks = d.get("chunks_stored", 0)
+                logger.info(f"Embedding complete — {chunks} chunks, status={d.get('status')}")
+                if chunks > 0:
+                    break
+                logger.warning(f"Embedding returned 0 chunks — retrying...")
+            else:
+                logger.error(f"Embedding failed: HTTP {r.status_code} — {r.text}")
+        except Exception as e:
+            logger.error(f"Embedding error (attempt {attempt}): {e}")
+        if attempt < max_embed_retries:
+            time.sleep(30)
+    else:
+        logger.error("Embedding step failed after all retries — Space will start without chunk embeddings")
 
 
 if __name__ == "__main__":

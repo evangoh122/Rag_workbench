@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from api.middleware.auth import get_admin_api_key
 from api.config import Config
+from scripts.embed_edgar import run_embed_edgar_etl
 
 router = APIRouter()
 
@@ -255,6 +256,18 @@ def refresh_data(
     finally:
         conn.close()
 
+    timestamp = datetime.now(timezone.utc).isoformat()
+    status: Literal["ok", "partial"] = "partial" if skipped else "ok"
+    logger.info(f"Refresh complete — {total_facts} facts, {tickers_processed} tickers, {len(skipped)} skipped")
+    return RefreshResponse(
+        status=status,
+        tickers_processed=tickers_processed,
+        facts_loaded=total_facts,
+        skipped_tickers=skipped,
+        timestamp=timestamp,
+    )
+
+
 class EmbedResponse(BaseModel):
     status: str
     chunks_stored: int
@@ -266,8 +279,6 @@ def embed_data(
     _: str = Depends(get_admin_api_key),
 ):
     """Chunk + embed 10-K filings for all tickers into edgar_embeddings."""
-    from scripts.embed_edgar import run_embed_edgar_etl
-
     tickers = list(TICKER_TO_CIK.keys())
     logger.info(f"Starting embed-edgar job for {len(tickers)} tickers")
     try:
@@ -279,4 +290,4 @@ def embed_data(
         )
     except Exception as e:
         logger.error(f"Embed job failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Embed job failed: {e}") from e
+        raise HTTPException(status_code=500, detail="Embed job failed — check server logs") from e
