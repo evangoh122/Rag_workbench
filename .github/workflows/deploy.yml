@@ -13,6 +13,11 @@ on:
         required: false
         type: boolean
         default: false
+      embed:
+        description: 'Run chunking + embedding of 10-K filings'
+        required: false
+        type: boolean
+        default: false
 
 # ── 1. Sync secrets ─────────────────────────────────────────────────────────
 jobs:
@@ -142,6 +147,39 @@ jobs:
               print(f'Seeded: {processed} tickers, {facts} facts loaded.')
           if skipped:
               print(f'WARNING — skipped {len(skipped)} ticker(s): {skipped}')
+          "
+
+# ── 4-b. Chunk + embed 10-K filings into edgar_embeddings ──────────────────
+  embed-data:
+    needs: [await-space, seed-data]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.embed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Embed 10-K filings — chunk → Gemini embedding → edgar_embeddings"
+        env:
+          HF_USERNAME:   ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+        run: |
+          SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
+          SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
+          echo "Triggering embed-data job on $SPACE_URL..."
+          for i in $(seq 1 5); do
+            RESPONSE=$(curl -sf --max-time 1800 -X POST \
+              "$SPACE_URL/api/admin/embed-data" \
+              -H "X-API-Key: $ADMIN_API_KEY" \
+              -H "Content-Type: application/json") && break
+            echo "Attempt $i/5 — curl failed (exit $?), retrying in 30s..."
+            sleep 30
+          done
+          if [ -z "$RESPONSE" ]; then
+            echo "ERROR: Could not reach embed endpoint after 5 attempts." && exit 1
+          fi
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          print(f'Embed status: {d.get(\"status\")}  chunks: {d.get(\"chunks_stored\", 0)}')
           "
 
 # ── 5. RAG pipeline smoke test — full coverage list (31 tickers) ─────────────
