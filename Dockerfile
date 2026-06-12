@@ -63,9 +63,6 @@ COPY main.py run.py ./
 # Copy React build from Stage 1
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-# Copy baked-in database (XBRL facts + embeddings) — create empty if missing
-RUN mkdir -p data && touch data/rag.duckdb
-
 # Copy configuration files
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
@@ -73,7 +70,7 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 # Remove Debian default site that conflicts on port 80
 RUN rm -f /etc/nginx/sites-enabled/default
 
-RUN mkdir -p /app/data && chown user:user /app/data
+RUN mkdir -p /app/data && chown -R user:user /app/data
 
 EXPOSE 7860
 
