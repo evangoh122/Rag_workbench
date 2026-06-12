@@ -26,8 +26,11 @@ class HFInferenceEmbeddings:
     def __init__(self, model_name: str, provider: str | None = None, api_key: str | None = None):
         from huggingface_hub import InferenceClient
         self._model = model_name
-        # Force HuggingFace default API — bypasses provider routing (e.g. scaleway)
-        self._client = InferenceClient(api_key=api_key or os.getenv("HF_TOKEN", ""))
+        self._client = InferenceClient(
+            provider="hf-inference",
+            api_key=api_key or os.getenv("HF_TOKEN", ""),
+        )
+        logger.info(f"HFInferenceEmbeddings ready — model={model_name}")
         logger.info(f"HFInferenceEmbeddings ready — model={model_name}")
 
     def _embed(self, text: str) -> list[float]:
