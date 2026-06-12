@@ -181,8 +181,8 @@ class EDGARFactsRetriever(BaseRetriever):
             if not found:
                 found = [
                     r[0] for r in conn.execute("""
-                        SELECT ticker, MAX(filed_date) AS last_filed
-                        FROM edgar_facts
+                        SELECT ticker, MAX(filed) AS last_filed
+                        FROM xbrl_facts
                         GROUP BY ticker
                         ORDER BY last_filed DESC
                         LIMIT ?
@@ -194,8 +194,8 @@ class EDGARFactsRetriever(BaseRetriever):
 
             ph   = ", ".join("?" * len(found))
             rows = conn.execute(f"""
-                SELECT ticker, label, value, unit, period_end, form_type
-                FROM edgar_facts
+                SELECT ticker, concept, value, unit, period_end, form_type
+                FROM xbrl_facts
                 WHERE ticker IN ({ph})
                   AND form_type IN ('10-K', '10-Q')
                   AND value IS NOT NULL
@@ -207,15 +207,15 @@ class EDGARFactsRetriever(BaseRetriever):
                 return []
 
             by_ticker: dict = {}
-            for ticker, label, value, unit, period_end, form_type in rows:
+            for ticker, concept, value, unit, period_end, form_type in rows:
                 by_ticker.setdefault(ticker, []).append(
-                    f"  {label}: {float(value):,.0f} {unit} ({period_end}, {form_type})"
+                    f"  {concept}: {float(value):,.0f} {unit} ({period_end}, {form_type})"
                 )
 
             return [
                 Document(
                     page_content=f"{ticker} EDGAR facts:\n" + "\n".join(lines),
-                    metadata={"source": "edgar_facts", "ticker": ticker},
+                    metadata={"source": "xbrl_facts", "ticker": ticker},
                 )
                 for ticker, lines in by_ticker.items()
             ]

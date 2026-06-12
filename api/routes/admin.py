@@ -122,6 +122,50 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
             sector VARCHAR, industry VARCHAR
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS edgar_embeddings (
+            ticker            VARCHAR NOT NULL,
+            accession         VARCHAR NOT NULL,
+            text              TEXT NOT NULL,
+            embedding         FLOAT[],
+            updated_at        VARCHAR,
+            cik               VARCHAR,
+            section_id        VARCHAR,
+            form_type         VARCHAR DEFAULT '10-K',
+            period_of_report  VARCHAR,
+            chunk_index       INTEGER,
+            section_type      VARCHAR DEFAULT 'narrative',
+            content_type      VARCHAR DEFAULT 'narrative'
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS polygon_tickers (
+            ticker              VARCHAR PRIMARY KEY,
+            name                VARCHAR,
+            market              VARCHAR,
+            primary_exchange    VARCHAR,
+            type                VARCHAR,
+            active              BOOLEAN,
+            currency_name       VARCHAR,
+            cik                 VARCHAR,
+            composite_figi      VARCHAR,
+            market_cap          DOUBLE,
+            phone_number        VARCHAR,
+            address             VARCHAR,
+            city                VARCHAR,
+            state               VARCHAR,
+            postal_code         VARCHAR,
+            description         VARCHAR,
+            sic_code            VARCHAR,
+            sic_description     VARCHAR,
+            homepage_url        VARCHAR,
+            total_employees     INTEGER,
+            list_date           VARCHAR,
+            shares_outstanding  DOUBLE,
+            weighted_shares_outstanding DOUBLE,
+            last_updated        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
 
 
 @router.post("/refresh-data", response_model=RefreshResponse)

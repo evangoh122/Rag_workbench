@@ -11,15 +11,15 @@ from api.services._edgar_identity import ensure_edgar_identity
 @lru_cache(maxsize=32)
 def get_latest_10k_facts(ticker: str) -> pl.DataFrame:
     """
-    Fetch the latest 10-K XBRL facts for a ticker from the edgar_facts DuckDB table.
-    Columns: concept, label, value, unit, period_end, form_type
+    Fetch the latest 10-K XBRL facts for a ticker from the xbrl_facts DuckDB table.
+    Columns: concept, value, unit, period_end, form_type
     """
     try:
         from api.db.database import db_manager
         conn = db_manager.get_connection()
         rows = conn.execute("""
-            SELECT concept, label, value, unit, period_end, form_type
-            FROM edgar_facts
+            SELECT concept, value, unit, period_end, form_type
+            FROM xbrl_facts
             WHERE ticker = ?
             ORDER BY period_end DESC
         """, [ticker]).fetchall()
@@ -29,7 +29,7 @@ def get_latest_10k_facts(ticker: str) -> pl.DataFrame:
 
         df = pl.DataFrame(
             rows,
-            schema=["concept", "label", "value", "unit", "period_end", "form_type"],
+            schema=["concept", "value", "unit", "period_end", "form_type"],
             orient="row",
         )
         return df

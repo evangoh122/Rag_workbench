@@ -23,7 +23,7 @@ Polygon historical data:
 
 SEC EDGAR financials:
 - edgar_filings(ticker, cik, form_type, filed_date, accession_number, primary_doc)
-- edgar_facts(ticker, cik, taxonomy, concept, label, unit, value, period_start, period_end, form_type, filed_date)
+- xbrl_facts(ticker, cik, concept, value, unit, period_end, period_start, form_type, accession, filed, fiscal_year, fiscal_period)
 
 Notes:
 - Use DuckDB SQL syntax.
