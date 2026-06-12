@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, CheckCircle, Database } from 'lucide-react';
 import type { Source, XBRLFact, PolygonData } from '../api/chat';
 
 interface VerificationResult {
@@ -10,6 +10,8 @@ interface VerificationResult {
 interface AuditTrailProps {
   sources?: Source[];
   xbrl_facts?: XBRLFact[];
+  relevant_xbrl?: XBRLFact[];
+  xbrl_badge?: string;
   polygon_data?: PolygonData[];
   verification?: VerificationResult;
   math_steps?: string[];
@@ -19,9 +21,10 @@ interface CollapsibleSectionProps {
   title: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  count?: number;
 }
 
-function CollapsibleSection({ title, children, defaultOpen = false }: CollapsibleSectionProps) {
+function CollapsibleSection({ title, children, defaultOpen = false, count }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
@@ -30,7 +33,7 @@ function CollapsibleSection({ title, children, defaultOpen = false }: Collapsibl
         className="w-full flex items-center justify-between px-3 py-2 bg-[#161b22] text-sm font-medium text-gray-300 hover:bg-[#1c2130] transition-colors cursor-pointer border-0"
         onClick={() => setOpen(prev => !prev)}
       >
-        <span>{title}</span>
+        <span className="flex items-center gap-2">{title}{count != null ? <span className="text-xs text-gray-500">({count})</span> : null}</span>
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
       </button>
       {open && (
@@ -73,14 +76,48 @@ function VerificationBadge({ verification }: { verification: VerificationResult 
   return null;
 }
 
-export default function AuditTrail({ sources, xbrl_facts, polygon_data, verification, math_steps }: AuditTrailProps) {
+function XBRLFactCard({ fact }: { fact: XBRLFact }) {
+  const fmt = (v: unknown) => {
+    if (v == null || typeof v !== 'number') return '—';
+    if (Math.abs(v) >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+    if (Math.abs(v) >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+    if (Math.abs(v) >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+    if (Number.isInteger(v)) return v.toLocaleString();
+    return v.toFixed(2);
+  };
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 bg-[#131926] border border-[#2a3246] rounded-md">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-300 font-medium truncate">{fact.label || fact.concept}</span>
+          {fact.is_verified && (
+            <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-green-400">
+              <CheckCircle size={10} /> verified
+            </span>
+          )}
+        </div>
+        {fact.period && (
+          <div className="text-[10px] text-gray-500 mt-0.5">{fact.period}</div>
+        )}
+      </div>
+      <div className="text-right shrink-0">
+        <div className="text-sm font-mono text-green-400 tabular-nums">{fmt(fact.value)}</div>
+        <div className="text-[10px] text-gray-500">{fact.unit || ''}</div>
+      </div>
+    </div>
+  );
+}
+
+export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_badge, polygon_data, verification, math_steps }: AuditTrailProps) {
   const hasSources = sources && sources.length > 0;
+  const hasRelevant = relevant_xbrl && relevant_xbrl.length > 0;
   const hasXBRL = xbrl_facts && xbrl_facts.length > 0;
   const hasPolygon = polygon_data && polygon_data.length > 0;
   const hasMath = math_steps && math_steps.length > 0;
   const hasVerification = verification && verification.status !== 'not_checked';
 
-  if (!hasSources && !hasXBRL && !hasPolygon && !hasMath && !hasVerification) return null;
+  if (!hasSources && !hasXBRL && !hasRelevant && !hasPolygon && !hasMath && !hasVerification) return null;
 
   return (
     <div className="mt-3 text-sm">
@@ -88,6 +125,27 @@ export default function AuditTrail({ sources, xbrl_facts, polygon_data, verifica
       {verification && (
         <div className="mb-2">
           <VerificationBadge verification={verification} />
+        </div>
+      )}
+
+      {/* XBRL Verified Badge */}
+      {hasRelevant && xbrl_badge && (
+        <div className="mb-2 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-950 text-green-300 border border-green-800">
+            <Database size={12} />
+            {xbrl_badge}
+          </span>
+        </div>
+      )}
+
+      {/* Relevant XBRL Facts — compact cards, always visible */}
+      {hasRelevant && (
+        <div className="mb-3">
+          <div className="flex flex-col gap-1.5">
+            {relevant_xbrl!.map((fact, idx) => (
+              <XBRLFactCard key={idx} fact={fact} />
+            ))}
+          </div>
         </div>
       )}
 
@@ -138,7 +196,7 @@ export default function AuditTrail({ sources, xbrl_facts, polygon_data, verifica
 
       {/* Sources section */}
       {hasSources && (
-        <CollapsibleSection title={`Sources (${sources!.length})`}>
+        <CollapsibleSection title="Sources" count={sources!.length}>
           <div className="flex flex-col gap-3">
             {sources!.map((src, idx) => (
               <div key={idx} className="border border-[#2a3246] rounded-md p-3 bg-[#131926]">
@@ -171,9 +229,9 @@ export default function AuditTrail({ sources, xbrl_facts, polygon_data, verifica
         </CollapsibleSection>
       )}
 
-      {/* XBRL Facts section */}
+      {/* Full XBRL Facts — collapsed by default */}
       {hasXBRL && (
-        <CollapsibleSection title={`XBRL Facts (${xbrl_facts!.length})`}>
+        <CollapsibleSection title="All XBRL Facts" count={xbrl_facts!.length} defaultOpen={!hasRelevant}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-collapse">
               <thead>

@@ -153,11 +153,13 @@ const ChatView: React.FC<ChatViewProps> = ({
                 </ReactMarkdown>
               </div>
 
-              {msg.role === 'assistant' && (msg.sources || msg.verification) && (
+              {msg.role === 'assistant' && (msg.sources || msg.verification || msg.relevant_xbrl?.length) && (
                 <div className="mt-4 pt-4 border-t border-[#202532]/50">
                   <AuditTrail
                     sources={msg.sources}
                     xbrl_facts={msg.xbrl_facts}
+                    relevant_xbrl={msg.relevant_xbrl}
+                    xbrl_badge={msg.xbrl_badge}
                     verification={msg.verification}
                     math_steps={msg.math_steps}
                   />

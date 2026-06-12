@@ -16,6 +16,7 @@ export interface XBRLFact {
   unit: string;
   period: string;
   ticker: string;
+  is_verified?: boolean;
 }
 
 export interface PolygonData {
@@ -42,6 +43,9 @@ export interface ChatResponse {
   data?: Record<string, unknown>[];
   sources?: Source[];
   xbrl_facts?: XBRLFact[];
+  relevant_xbrl?: XBRLFact[];
+  xbrl_badge?: string;
+  xbrl_group?: string;
   polygon_data?: PolygonData[];
   verification?: {
     status: string;

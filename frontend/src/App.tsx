@@ -22,6 +22,9 @@ interface Message {
   data?: Record<string, unknown>[];
   sources?: Source[];
   xbrl_facts?: XBRLFact[];
+  relevant_xbrl?: XBRLFact[];
+  xbrl_badge?: string;
+  xbrl_group?: string;
   verification?: {
     status: string;
     reasoning: string;
@@ -128,6 +131,8 @@ function App() {
         data: data.data,
         sources: data.sources,
         xbrl_facts: data.xbrl_facts,
+        relevant_xbrl: data.relevant_xbrl,
+        xbrl_badge: data.xbrl_badge,
         verification: data.verification,
         math_steps: data.math_steps,
         entities: data.entities,
@@ -532,11 +537,13 @@ function App() {
                       </ReactMarkdown>
                     </div>
 
-                    {msg.role === 'assistant' && (msg.sources || msg.verification || msg.xbrl_facts?.length || msg.math_steps?.length) && (
+                    {msg.role === 'assistant' && (msg.sources || msg.verification || msg.xbrl_facts?.length || msg.relevant_xbrl?.length || msg.xbrl_badge || msg.math_steps?.length) && (
                       <div className="mt-4 pt-4 border-t border-[#202532]/50">
                         <AuditTrail
                           sources={msg.sources}
                           xbrl_facts={msg.xbrl_facts}
+                          relevant_xbrl={msg.relevant_xbrl}
+                          xbrl_badge={msg.xbrl_badge}
                           verification={msg.verification}
                           math_steps={msg.math_steps}
                         />

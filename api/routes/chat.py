@@ -211,6 +211,9 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
             answer=answer,
             sources=sources,
             xbrl_facts=result["xbrl_facts"],
+            relevant_xbrl=result.get("relevant_xbrl", []),
+            xbrl_badge=result.get("xbrl_badge", ""),
+            xbrl_group=result.get("xbrl_group", ""),
             polygon_data=result.get("polygon_data", []),
             verification=VerificationResult(
                 status=result["verification_status"],

@@ -52,6 +52,9 @@ class ChatResponse(BaseModel):
 
     # Financial data
     xbrl_facts: List[Dict[str, Any]] = Field(default_factory=list)
+    relevant_xbrl: List[Dict[str, Any]] = Field(default_factory=list)
+    xbrl_badge: str = ""
+    xbrl_group: str = ""
     polygon_data: List[Dict[str, Any]] = Field(default_factory=list)
 
     # Verification

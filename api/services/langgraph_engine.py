@@ -33,6 +33,7 @@ from api.services.financial_calc import (
     FactExtractor, CalcResult,
     gross_margin, gross_margin_growth, operating_margin, net_margin, rd_intensity, current_ratio, debt_to_equity, net_debt, free_cash_flow, check_balance_sheet,
 )
+from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display
 
 
 # ---------------------------------------------------------------------------
@@ -642,9 +643,25 @@ def output_node(state: GraphState) -> Dict[str, Any]:
     if state.get("eval_route") == "ESCALATE" and state.get("eval_triggers"):
         answer += f"\n[Eval: ESCALATE — triggers: {', '.join(state['eval_triggers'])}]"
 
+    # Compute query-relevant XBRL facts for contextual display
+    all_facts = state.get("xbrl_facts", [])
+    try:
+        relevance = get_relevant_facts(state.get("query", ""), all_facts)
+        relevant_display = [format_fact_for_display(f) for f in relevance["relevant"]]
+        badge = relevance["badge_text"]
+        group = relevance["group"]
+    except Exception:
+        logger.warning("XBRL relevance filtering failed — falling back to empty", exc_info=True)
+        relevant_display = []
+        badge = ""
+        group = ""
+
     return {
         "final_answer": answer,
-        "status": {**state.get('status', {}), "output": "success"}
+        "status": {**state.get('status', {}), "output": "success"},
+        "relevant_xbrl": relevant_display,
+        "xbrl_badge": badge,
+        "xbrl_group": group,
     }
 
 def abstention_node(state: GraphState) -> Dict[str, Any]:
