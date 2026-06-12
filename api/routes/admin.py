@@ -166,6 +166,19 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
             last_updated        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS polygon_bars (
+            ticker   VARCHAR NOT NULL,
+            ts       TIMESTAMP NOT NULL,
+            close    DOUBLE,
+            volume   DOUBLE,
+            timespan VARCHAR
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_polygon_bars_ticker_ts
+        ON polygon_bars (ticker, ts)
+    """)
 
 
 @router.post("/refresh-data", response_model=RefreshResponse)

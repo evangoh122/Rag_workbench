@@ -53,7 +53,7 @@ def chunk_filing_sections(ticker: str, accession_number: Optional[str] = None) -
             
         # Get sections using edgartools
         # edgartools supports getting sections for 10-K
-        sections = filing.sections
+        sections = filing.sections()
         chunks = []
         
         for section_name in sections:

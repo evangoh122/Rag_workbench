@@ -11,6 +11,8 @@ from typing import Optional
 from functools import lru_cache
 from loguru import logger
 
+from api.routes.admin import TICKER_TO_CIK
+
 COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 _USER_AGENT = os.getenv("EDGAR_USER_AGENT", "RAG-Workbench research@example.com")
 _rate_lock = threading.Lock()
@@ -40,11 +42,15 @@ def _rate_limited_get(url: str) -> dict:
     return resp.json()
 
 @lru_cache(maxsize=64)
-def fetch_company_facts(cik: str) -> dict:
-    """Fetch all companyfacts for a CIK. Cached per process."""
-    if not cik.isdigit():
-        logger.warning("Invalid CIK (non-digit): {}", cik)
-        return {}
+def fetch_company_facts(cik_or_ticker: str) -> dict:
+    """Fetch all companyfacts for a CIK (or ticker). Cached per process."""
+    if not cik_or_ticker.isdigit():
+        cik = TICKER_TO_CIK.get(cik_or_ticker.upper(), "")
+        if not cik:
+            logger.warning("Invalid CIK/nonmapped ticker: {}", cik_or_ticker)
+            return {}
+    else:
+        cik = cik_or_ticker
     cik_padded = cik.zfill(10)
     url = COMPANYFACTS_URL.format(cik=cik_padded)
     logger.info("Fetching companyfacts for CIK {}", cik_padded)
