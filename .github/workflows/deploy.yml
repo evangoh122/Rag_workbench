@@ -6,7 +6,13 @@ on:
   schedule:
     - cron: '*/20 * * * *'   # keepalive ping
     - cron: '0 3 * * *'      # nightly full data refresh
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force-seed:
+        description: 'Force re-seed all 31 tickers from SEC EDGAR'
+        required: false
+        type: boolean
+        default: false
 
 # ── 1. Sync secrets ─────────────────────────────────────────────────────────
 jobs:
@@ -105,9 +111,14 @@ jobs:
         run: |
           SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
           SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
+          FORCE_PARAM=""
+          if [ "${{ github.event.inputs.force-seed }}" = "true" ]; then
+            FORCE_PARAM="?force=true"
+            echo "FORCE re-seed requested — will re-fetch all 31 tickers"
+          fi
           echo "Seeding XBRL facts from SEC EDGAR..."
           RESPONSE=$(curl -sf --max-time 600 -X POST \
-            "$SPACE_URL/api/admin/refresh-data" \
+            "$SPACE_URL/api/admin/refresh-data${FORCE_PARAM}" \
             -H "X-API-Key: $ADMIN_API_KEY" \
             -H "Content-Type: application/json")
           echo "Response: $RESPONSE"
