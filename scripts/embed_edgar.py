@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 from loguru import logger
 from sec_edgar_downloader import Downloader
 
-from scripts.embed_tickers import _get_embeddings as _get_model
+from api.services.embeddings import get_embeddings as _get_model
 from api.services.structure_chunker import StructureChunker
 
 from api.config import Config

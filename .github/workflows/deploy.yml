@@ -44,6 +44,9 @@ jobs:
           upload_secret "LANGSMITH_API_KEY"   "${{ secrets.LANGSMITH_API_KEY }}"
           upload_secret "ADMIN_API_KEY"       "${{ secrets.ADMIN_API_KEY }}"
           upload_secret "EDGAR_USER_AGENT"    "${{ secrets.EDGAR_USER_AGENT }}"
+          upload_secret "EMBEDDING_PROVIDER"  "huggingface"
+          upload_secret "HF_EMBEDDING_MODEL"  "Qwen/Qwen3-Embedding-8B"
+          upload_secret "HF_EMBED_PROVIDER"   "scaleway"
 
   deploy:
     needs: sync-secrets

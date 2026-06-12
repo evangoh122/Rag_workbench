@@ -120,8 +120,20 @@ class Config:
 
     # Embedding Settings
     @property
+    def EMBEDDING_PROVIDER(self) -> str:
+        return os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+
+    @property
     def EMBEDDING_MODEL(self) -> str:
         return os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+
+    @property
+    def HF_EMBEDDING_MODEL(self) -> str:
+        return os.getenv("HF_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-8B")
+
+    @property
+    def HF_EMBED_PROVIDER(self) -> str:
+        return os.getenv("HF_EMBED_PROVIDER", "scaleway")
 
     @property
     def EMBEDDING_QUERY_PREFIX(self) -> str:
@@ -129,7 +141,11 @@ class Config:
 
     @property
     def EMBEDDING_DIM(self) -> int:
-        return 768
+        # Qwen3-Embedding-8B = 4096, nomic-embed-text = 768
+        provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+        if provider == "huggingface":
+            return int(os.getenv("EMBEDDING_DIM", "4096"))
+        return int(os.getenv("EMBEDDING_DIM", "768"))
 
     def get_provider_config(self):
         providers = {
