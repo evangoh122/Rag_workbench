@@ -46,6 +46,9 @@ from api.middleware.auth import get_write_api_key
 async def get_review_conn(_=Depends(get_write_api_key)):
     return db_manager.get_review_connection()
 
+async def get_review_conn_public():
+    return db_manager.get_review_connection()
+
 
 router = APIRouter(prefix="/api/review", tags=["review"])
 
@@ -161,7 +164,7 @@ async def get_pipeline_metrics(conn=Depends(get_review_conn)):
 
 
 @router.get("/drift", response_model=DriftStatusOut)
-async def get_drift_status(conn=Depends(get_review_conn)):
+async def get_drift_status(conn=Depends(get_review_conn_public)):
     try:
         status: DriftStatus = check_drift(
             conn,
