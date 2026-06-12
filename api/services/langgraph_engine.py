@@ -650,8 +650,8 @@ def output_node(state: GraphState) -> Dict[str, Any]:
         relevant_display = [format_fact_for_display(f) for f in relevance["relevant"]]
         badge = relevance["badge_text"]
         group = relevance["group"]
-    except Exception:
-        logger.warning("XBRL relevance filtering failed — falling back to empty", exc_info=True)
+    except (KeyError, TypeError, ValueError) as e:
+        logger.warning(f"XBRL relevance filtering failed — falling back to empty ({e})")
         relevant_display = []
         badge = ""
         group = ""

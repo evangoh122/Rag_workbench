@@ -86,7 +86,7 @@ QUERY_KEYWORD_TO_GROUP: Dict[str, ConceptGroup] = {
     "margin": "profitability",
     "debt": "leverage",
     "leverage": "leverage",
-    "liabilit": "leverage",
+    "liability": "leverage",
     "equity": "leverage",
     "balance sheet": "leverage",
     "asset": "leverage",
