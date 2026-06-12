@@ -11,6 +11,7 @@ BM25 index is built lazily on first query and cached for the process lifetime.
 """
 from __future__ import annotations
 
+import hashlib
 import threading
 from typing import List, Optional
 
@@ -36,14 +37,25 @@ def tokenize(text: str) -> list[str]:
 def rrf_fuse(
     rankings: list[list[Document]],
     k: int = 60,
+    boost_ticker: str = "",
+    ticker_boost: float = 2.0,
 ) -> list[Document]:
     """Reciprocal Rank Fusion over multiple ranked lists.
 
     RRF_score(d) = Σ 1 / (k + rank_i(d))
 
-    Uses (ticker, accession, text[:80]) as a stable content key so the same
+    If boost_ticker is set, docs whose ticker matches get their contribution
+    multiplied by ticker_boost at fusion time, so they float to the top
+    without completely excluding cross-ticker context.
+
+    Uses (ticker, accession, content_hash) as a stable content key so the same
     chunk appearing in both BM25 and vector results is correctly deduplicated.
     """
+    if k < 1:
+        raise ValueError(f"rrf k must be >= 1, got {k}")
+    if ticker_boost < 1.0:
+        raise ValueError(f"ticker_boost must be >= 1.0, got {ticker_boost}")
+
     scores: dict[tuple, float] = {}
     doc_map: dict[tuple, Document] = {}
 
@@ -52,10 +64,13 @@ def rrf_fuse(
             key = (
                 doc.metadata.get("ticker", ""),
                 doc.metadata.get("accession", ""),
-                doc.page_content[:80],
+                hashlib.md5(doc.page_content.encode()).hexdigest()[:16],
             )
             doc_map[key] = doc
-            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+            base = 1.0 / (k + rank + 1)
+            if boost_ticker and doc.metadata.get("ticker") == boost_ticker:
+                base *= ticker_boost
+            scores[key] = scores.get(key, 0.0) + base
 
     sorted_keys = sorted(scores, key=lambda k_: scores[k_], reverse=True)
     return [doc_map[k_] for k_ in sorted_keys]
@@ -111,19 +126,35 @@ def _load_bm25_index() -> tuple[BM25Okapi, list[Document], list[list[str]]] | No
     return _bm25_index, _bm25_docs, _bm25_tokenised
 
 
-def bm25_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document]:
-    """Run BM25 keyword search over edgar_embeddings, optionally filtered to one ticker."""
+def bm25_search(
+    query: str,
+    top_k: int = 5,
+    ticker: str = "",
+    ticker_boost: float = 2.0,
+) -> list[Document]:
+    """Run BM25 keyword search over the full edgar_embeddings corpus.
+
+    When ticker is provided, raw BM25 scores for matching docs are multiplied
+    by ticker_boost before ranking — so they float to the top without hard-
+    excluding cross-ticker chunks that may be highly relevant.
+    """
     result = _load_bm25_index()
     if result is None:
         return []
 
     bm25, docs, _ = result
     query_tokens = tokenize(query)
-    scores = bm25.get_scores(query_tokens)
+    raw_scores = bm25.get_scores(query_tokens)
 
-    scored = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
     if ticker:
-        scored = [(idx, s) for idx, s in scored if docs[idx].metadata.get("ticker") == ticker]
+        boosted = [
+            (idx, s * ticker_boost if docs[idx].metadata.get("ticker") == ticker else s)
+            for idx, s in enumerate(raw_scores)
+        ]
+    else:
+        boosted = list(enumerate(raw_scores))
+
+    scored = sorted(boosted, key=lambda x: x[1], reverse=True)
     return [docs[idx] for idx, _ in scored[:top_k]]
 
 
@@ -183,12 +214,18 @@ class EDGARHybridRetriever(BaseRetriever):
     top_k: int = 5
     ticker: str = ""
     rrf_k: int = 60
+    ticker_boost: float = 2.0
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
-        bm25_docs = bm25_search(query, top_k=self.top_k * 2, ticker=self.ticker)
-        vec_docs = vector_search(query, top_k=self.top_k * 2, ticker=self.ticker)
+        # Both legs search the global corpus; ticker docs get a 2× score boost
+        # in BM25 (searches full corpus) so they dominate without hard-excluding
+        # cross-ticker context. Vector search is already ticker-filtered (cosine
+        # distance is semantic), so it doesn't need a BM25-style boost.
+        # At RRF fusion time, matching docs get an additional ticker_boost.
+        bm25_docs = bm25_search(query, top_k=self.top_k * 2, ticker=self.ticker, ticker_boost=self.ticker_boost)
+        vec_docs  = vector_search(query, top_k=self.top_k * 2, ticker=self.ticker)
 
         # If only one method returned results, use it directly
         if not bm25_docs and not vec_docs:
@@ -198,10 +235,11 @@ class EDGARHybridRetriever(BaseRetriever):
         if not vec_docs:
             return bm25_docs[:self.top_k]
 
-        # RRF fusion
-        fused = rrf_fuse([vec_docs, bm25_docs], k=self.rrf_k)
+        # RRF fusion with additional ticker boost at merge time
+        fused = rrf_fuse([vec_docs, bm25_docs], k=self.rrf_k,
+                         boost_ticker=self.ticker, ticker_boost=self.ticker_boost)
         logger.debug(
-            "Hybrid RRF: {} vector + {} BM25 -> {} fused (top_k={})",
-            len(vec_docs), len(bm25_docs), len(fused), self.top_k,
+            "Hybrid RRF: {} vector + {} BM25 -> {} fused (top_k={}, ticker_boost={})",
+            len(vec_docs), len(bm25_docs), len(fused), self.top_k, self.ticker_boost,
         )
         return fused[:self.top_k]
