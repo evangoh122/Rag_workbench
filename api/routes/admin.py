@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import os
 import time
+import traceback
 from datetime import datetime, timezone
 from typing import Literal
 
 import duckdb
 import requests
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 
@@ -22,17 +23,17 @@ EDGAR_USER_AGENT = os.getenv("EDGAR_USER_AGENT", "RAGWorkbench/1.0 (research@exa
 SEC_RATE_LIMIT_DELAY = 0.15
 
 TICKER_TO_CIK = {
-    "ADI": "0000006607", "AMD": "0000002488", "AVGO": "0001730168",
+    "ADI": "0000006281", "AMD": "0000002488", "AVGO": "0001730168",
     "INTC": "0000050863", "MU": "0000723125", "NVDA": "0001045810",
     "QCOM": "0000804328", "TXN": "0000097476", "TSM": "0001046179",
-    "MRVL": "0000721938", "NXPI": "0001109168", "MCHP": "0000831368",
-    "MPWR": "0001267902", "SWKS": "0000412700", "QRVO": "0001603872",
+    "MRVL": "0001835632", "NXPI": "0001413447", "MCHP": "0000827054",
+    "MPWR": "0001280452", "SWKS": "0000004127", "QRVO": "0001604778",
     "ON": "0001666635", "AMAT": "0000069515", "LRCX": "0000707549",
-    "KLAC": "0000799167", "TER": "0000097210", "ENTG": "0001170010",
-    "ONTO": "0001055605", "FORM": "0001003485", "PLAB": "0000867840",
-    "COHU": "0000021539", "KLIC": "0000031277", "ICHR": "0001680247",
-    "VECO": "0000707478", "AEHR": "0001049521", "ACLS": "0000897077",
-    "AMKR": "0001057887",
+    "KLAC": "0000319201", "TER": "0000097210", "ENTG": "0001101302",
+    "ONTO": "0000704532", "FORM": "0001039399", "PLAB": "0000810136",
+    "COHU": "0000021535", "KLIC": "0000056978", "ICHR": "0001652535",
+    "VECO": "0000103145", "AEHR": "0001040470", "ACLS": "0000897077",
+    "AMKR": "0001047127",
 }
 
 KEY_CONCEPTS = [
@@ -274,20 +275,31 @@ class EmbedResponse(BaseModel):
     timestamp: str
 
 
-@router.post("/embed-data", response_model=EmbedResponse)
-def embed_data(
-    _: str = Depends(get_admin_api_key),
-):
-    """Chunk + embed 10-K filings for all tickers into edgar_embeddings."""
-    tickers = list(TICKER_TO_CIK.keys())
-    logger.info(f"Starting embed-edgar job for {len(tickers)} tickers")
+class EmbedStartResponse(BaseModel):
+    status: str
+    message: str
+    timestamp: str
+
+
+def _run_embed_job(tickers: list[str]) -> None:
     try:
         n = run_embed_edgar_etl(tickers)
-        return EmbedResponse(
-            status="ok",
-            chunks_stored=n,
-            timestamp=datetime.now(timezone.utc).isoformat(),
-        )
-    except Exception as e:
-        logger.error(f"Embed job failed: {e}")
-        raise HTTPException(status_code=500, detail="Embed job failed — check server logs") from e
+        logger.info(f"Background embed job complete — {n} chunks stored")
+    except Exception:
+        logger.error(f"Background embed job failed:\n{traceback.format_exc()}")
+
+
+@router.post("/embed-data", response_model=EmbedStartResponse)
+def embed_data(
+    background_tasks: BackgroundTasks,
+    _: str = Depends(get_admin_api_key),
+):
+    """Chunk + embed 10-K filings for all tickers into edgar_embeddings (runs in background)."""
+    tickers = list(TICKER_TO_CIK.keys())
+    logger.info(f"Starting embed-edgar background job for {len(tickers)} tickers")
+    background_tasks.add_task(_run_embed_job, tickers)
+    return EmbedStartResponse(
+        status="started",
+        message=f"Embed job launched for {len(tickers)} tickers in the background",
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
