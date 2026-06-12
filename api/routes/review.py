@@ -59,7 +59,7 @@ async def list_review_queue(
     route: Optional[str] = None,
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    conn=Depends(get_review_conn),
+    conn=Depends(get_review_conn_public),
 ):
     if list_decisions is None:
         raise HTTPException(status_code=503, detail="Review queue module unavailable")
@@ -127,7 +127,7 @@ async def record_reviewer_verdict(
 
 
 @router.get("/metrics")
-async def get_pipeline_metrics(conn=Depends(get_review_conn)):
+async def get_pipeline_metrics(conn=Depends(get_review_conn_public)):
     try:
         agreement_rate = 0.0
         if compute_agreement_rate is not None:
