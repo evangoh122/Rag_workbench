@@ -565,7 +565,7 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
     logger.info("--- LINEAGE ---")
     import json
     import uuid
-    import duckdb
+    from api.db.database import db_manager
     from api.db.review_queue import init_review_tables, insert_decision
 
     chunk_ids: List[str] = []
@@ -585,17 +585,15 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
 
     if eval_route in ("SAMPLED_REVIEW", "ESCALATE"):
         try:
-            db_path = Config.REVIEW_DB_PATH
-            with duckdb.connect(db_path) as conn:
-                init_review_tables(conn)
-                review_id = insert_decision(conn, {
-                    "cik": state.get("ticker", ""),
-                    "accession": source_docs[0] if source_docs else "unknown",
-                    "form_type": "10-K",
-                    "route": eval_route,
-                    "confidence": state.get("eval_confidence") if state.get("eval_confidence") is not None else 0.0,
-                    "triggers_fired": state.get("eval_triggers") if state.get("eval_triggers") is not None else [],
-                })
+            review_conn = db_manager.get_review_connection()
+            review_id = insert_decision(review_conn, {
+                "cik": state.get("ticker", ""),
+                "accession": source_docs[0] if source_docs else "unknown",
+                "form_type": "10-K",
+                "route": eval_route,
+                "confidence": state.get("eval_confidence") if state.get("eval_confidence") is not None else 0.0,
+                "triggers_fired": state.get("eval_triggers") if state.get("eval_triggers") is not None else [],
+            })
             logger.info(f"Review queue entry created: {review_id} (route={eval_route})")
         except Exception as exc:
             logger.warning(f"Review queue insert failed (non-fatal): {exc}")
@@ -620,35 +618,38 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
             {"concept": f.get("concept"), "value": f.get("value"),
              "period_end": f.get("period_end"), "form_type": f.get("form_type")}
             for f in state.get("xbrl_facts", [])
+            if isinstance(f, dict)
         ]
         math_result = state.get("math_result")
-        with duckdb.connect(Config.DB_PATH) as conn:
-            _ensure_audit_table(conn)
-            conn.execute("""
-                INSERT INTO audit_runs (
-                    run_id, timestamp, ticker, question, query_type, answer,
-                    eval_route, confidence, verification_status, model_used,
-                    source_docs, chunk_ids, xbrl_facts_cited, math_result,
-                    math_steps, eval_triggers, review_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, [
-                run_id, ts,
-                state.get("ticker", ""),
-                state.get("query", ""),
-                state.get("query_type", ""),
-                state.get("final_answer", ""),
-                eval_route,
-                state.get("eval_confidence"),
-                state.get("verification_status", ""),
-                cfg["model"],
-                json.dumps(source_docs),
-                json.dumps(chunk_ids),
-                json.dumps(xbrl_cited),
-                str(math_result) if math_result is not None else None,
-                json.dumps(state.get("math_steps", [])),
-                json.dumps(state.get("eval_triggers") or []),
-                review_id,
-            ])
+        def _dumps(v):
+            return json.dumps(v, default=str)
+        conn = db_manager.get_connection()
+        _ensure_audit_table(conn)
+        conn.execute("""
+            INSERT INTO audit_runs (
+                run_id, timestamp, ticker, question, query_type, answer,
+                eval_route, confidence, verification_status, model_used,
+                source_docs, chunk_ids, xbrl_facts_cited, math_result,
+                math_steps, eval_triggers, review_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            run_id, ts,
+            state.get("ticker") or None,
+            state.get("query") or None,
+            state.get("query_type") or None,
+            state.get("final_answer") or None,
+            eval_route,
+            state.get("eval_confidence"),
+            state.get("verification_status") or None,
+            cfg.get("model", "unknown"),
+            _dumps(source_docs),
+            _dumps(chunk_ids),
+            _dumps(xbrl_cited),
+            str(math_result) if math_result is not None else None,
+            _dumps(state.get("math_steps", [])),
+            _dumps(state.get("eval_triggers") or []),
+            review_id,
+        ])
         logger.info(f"Audit run saved: {run_id}")
     except Exception as exc:
         logger.warning(f"Audit run write failed (non-fatal): {exc}")
