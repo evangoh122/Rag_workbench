@@ -56,32 +56,50 @@ QUERIES = {
 }
 
 passed, failed = [], []
+RETRY_CODES = {502, 503, 504}
+MAX_RETRIES = 3
 
-for ticker in TICKERS:
-    query = QUERIES[ticker]
+
+def _call_endpoint(ticker: str, query: str) -> dict:
     payload = json.dumps({"message": query, "ticker": ticker}).encode()
     headers = {"Content-Type": "application/json"}
     if ADMIN_API_KEY:
         headers["X-API-Key"] = ADMIN_API_KEY
-    req = request.Request(
-        ENDPOINT,
-        data=payload,
-        headers=headers,
-        method="POST",
-    )
+    for attempt in range(MAX_RETRIES):
+        try:
+            req = request.Request(ENDPOINT, data=payload, headers=headers, method="POST")
+            with request.urlopen(req, timeout=120) as resp:
+                return json.loads(resp.read())
+        except error.HTTPError as e:
+            if e.code in RETRY_CODES and attempt < MAX_RETRIES - 1:
+                wait = 5 * (attempt + 1)
+                print(f"  [{ticker}] HTTP {e.code} — retrying in {wait}s (attempt {attempt + 2}/{MAX_RETRIES})")
+                time.sleep(wait)
+                continue
+            raise
+        except Exception:
+            if attempt < MAX_RETRIES - 1:
+                wait = 5 * (attempt + 1)
+                print(f"  [{ticker}] connection error — retrying in {wait}s (attempt {attempt + 2}/{MAX_RETRIES})")
+                time.sleep(wait)
+                continue
+            raise
+
+
+for ticker in TICKERS:
+    query = QUERIES[ticker]
     try:
-        with request.urlopen(req, timeout=120) as resp:
-            d = json.loads(resp.read())
+        d = _call_endpoint(ticker, query)
     except error.HTTPError as e:
         body = e.read().decode()[:200]
         failed.append((ticker, f"HTTP {e.code}: {body}"))
         print(f"FAIL [{ticker}] HTTP {e.code}")
-        time.sleep(2)
+        time.sleep(3)
         continue
     except Exception as e:
         failed.append((ticker, str(e)))
         print(f"FAIL [{ticker}] {e}")
-        time.sleep(2)
+        time.sleep(3)
         continue
 
     answer = d.get("answer") or d.get("result") or ""
@@ -101,7 +119,7 @@ for ticker in TICKERS:
             f"  sources={len(sources)}  '{answer[:80]}...'"
         )
 
-    time.sleep(1)
+    time.sleep(2)
 
 print()
 print("=" * 60)
