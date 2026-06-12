@@ -96,7 +96,9 @@ def get_embeddings():
 
     if provider == "huggingface":
         model_name = os.getenv("HF_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-8B")
-        hf_provider = os.getenv("HF_EMBED_PROVIDER", "scaleway")
+        hf_provider = os.getenv("HF_EMBED_PROVIDER", "")
+        if hf_provider in ("", "huggingface", "auto"):
+            hf_provider = None  # use default HuggingFace routing
         try:
             _embeddings = HFInferenceEmbeddings(model_name, provider=hf_provider)
             return _embeddings

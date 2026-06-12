@@ -57,7 +57,7 @@ jobs:
           upload_secret "EDGAR_USER_AGENT"  "${{ secrets.EDGAR_USER_AGENT }}"
           upload_secret "EMBEDDING_PROVIDER" "huggingface"
           upload_secret "HF_EMBEDDING_MODEL" "Qwen/Qwen3-Embedding-8B"
-          upload_secret "HF_EMBED_PROVIDER"  "scaleway"
+          upload_secret "HF_EMBED_PROVIDER"  "huggingface"
 
 # ── 2. Deploy to HF Space ────────────────────────────────────────────────────
   deploy:
