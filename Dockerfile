@@ -77,3 +77,4 @@ EXPOSE 7860
 USER user
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# build: v2 — embedding provider bypass
