@@ -27,10 +27,9 @@ class HFInferenceEmbeddings:
         from huggingface_hub import InferenceClient
         self._model = model_name
         self._client = InferenceClient(
-            provider=provider or "auto",
             api_key=api_key or os.getenv("HF_TOKEN", ""),
         )
-        logger.info(f"HFInferenceEmbeddings ready — model={model_name} provider={provider or 'auto'}")
+        logger.info(f"HFInferenceEmbeddings ready — model={model_name}")
 
     def _embed(self, text: str) -> list[float]:
         result = self._client.feature_extraction(text, model=self._model)
@@ -96,11 +95,8 @@ def get_embeddings():
 
     if provider == "huggingface":
         model_name = os.getenv("HF_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-8B")
-        hf_provider = os.getenv("HF_EMBED_PROVIDER", "")
-        if hf_provider in ("", "huggingface", "auto"):
-            hf_provider = None  # use default HuggingFace routing
         try:
-            _embeddings = HFInferenceEmbeddings(model_name, provider=hf_provider)
+            _embeddings = HFInferenceEmbeddings(model_name, provider=None)
             return _embeddings
         except Exception as e:
             logger.error(f"Failed to init HuggingFace embeddings '{model_name}': {e}")
