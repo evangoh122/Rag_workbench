@@ -139,8 +139,14 @@ function App() {
         input: 'success',
         retrieval: 'error',
       });
-      const message =
-        err instanceof Error
+      const is400 =
+        err != null &&
+        typeof err === 'object' &&
+        'response' in err &&
+        (err as { response?: { status?: number } }).response?.status === 400;
+      const message = is400
+        ? 'This does not appear to be finance related, do you want to rephrase that question?'
+        : err instanceof Error
           ? err.message
           : 'An unexpected error occurred';
       if (import.meta.env.VITE_POSTHOG_KEY) {
@@ -150,7 +156,7 @@ function App() {
         ...prev,
         {
           role: 'assistant',
-          content: `Error: ${message}`,
+          content: is400 ? message : `Error: ${message}`,
           type: 'error',
         },
       ]);
