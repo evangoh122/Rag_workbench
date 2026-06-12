@@ -43,6 +43,7 @@ jobs:
           upload_secret "REVIEW_API_KEY"      "${{ secrets.REVIEW_API_KEY }}"
           upload_secret "LANGSMITH_API_KEY"   "${{ secrets.LANGSMITH_API_KEY }}"
           upload_secret "ADMIN_API_KEY"       "${{ secrets.ADMIN_API_KEY }}"
+          upload_secret "EDGAR_USER_AGENT"    "${{ secrets.EDGAR_USER_AGENT }}"
 
   deploy:
     needs: sync-secrets
