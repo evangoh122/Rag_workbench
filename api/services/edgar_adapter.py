@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-import polars as pl
+import pandas as pd
 from loguru import logger
 from tenacity import (
     retry,
@@ -46,22 +46,7 @@ def _set_edgar_identity() -> None:
     ensure_edgar_identity()
 
 
-def _to_polars(df) -> pl.DataFrame | None:
-    """Convert EdgarTools MultiDataFrame/pandas DataFrame to Polars."""
-    if df is None:
-        return None
-    if isinstance(df, pl.DataFrame):
-        return df
-    try:
-        return pl.from_pandas(df.to_pandas())
-    except Exception:
-        try:
-            return pl.from_pandas(df)
-        except Exception:
-            return None
-
-
-def _xbrl_dataframe_to_fields(df: pl.DataFrame, concept_col: str = "concept") -> list[ExtractedField]:
+def _xbrl_dataframe_to_fields(df: pd.DataFrame, concept_col: str = "concept") -> list[ExtractedField]:
     """Convert a single EdgarTools financials DataFrame into XBRL-tagged ExtractedFields.
 
     EdgarTools financials DataFrames (balance_sheet, income_statement,
@@ -71,7 +56,7 @@ def _xbrl_dataframe_to_fields(df: pl.DataFrame, concept_col: str = "concept") ->
 
     Returns an empty list if the DataFrame is None or empty.
     """
-    if df is None or df.is_empty():
+    if df is None or df.empty:
         return []
 
     fields: list[ExtractedField] = []
@@ -83,7 +68,7 @@ def _xbrl_dataframe_to_fields(df: pl.DataFrame, concept_col: str = "concept") ->
 
     value_col = "value" if "value" in df.columns else df.columns[-1]
 
-    for row in df.iter_rows(named=True):
+    for _, row in df.iterrows():
         raw_concept = str(row.get(concept_col, ""))
         raw_value   = row.get(value_col)
 
@@ -117,14 +102,14 @@ def _html_tables_to_fields(filing) -> list[ExtractedField]:  # type: ignore[type
         # as properties that may return DataFrames or None.
         # For form types without a structured obj(), we skip gracefully.
         for attr in ("income_statement", "balance_sheet", "cash_flow_statement"):
-            tbl = _to_polars(getattr(doc, attr, None))
-            if tbl is None or tbl.is_empty():
+            tbl: Optional[pd.DataFrame] = getattr(doc, attr, None)
+            if tbl is None or not isinstance(tbl, pd.DataFrame) or tbl.empty:
                 continue
 
             label_col = tbl.columns[0]
             value_col = tbl.columns[-1]
 
-            for row in tbl.iter_rows(named=True):
+            for _, row in tbl.iterrows():
                 label = str(row.get(label_col, ""))
                 value = row.get(value_col)
                 fields.append(
@@ -188,14 +173,12 @@ def fetch_filing(cik: str, accession: str) -> ExtractionResult:
     try:
         financials = filing.financials
         if financials is not None:
-            for raw_df in (
+            for df in (
                 financials.balance_sheet,
                 financials.income_statement,
                 financials.cash_flow_statement,
             ):
-                df = _to_polars(raw_df)
-                if df is not None:
-                    xbrl_fields.extend(_xbrl_dataframe_to_fields(df))
+                xbrl_fields.extend(_xbrl_dataframe_to_fields(df))
     except Exception:  # noqa: BLE001 — XBRL block may not exist for all form types
         logger.debug("XBRL extraction skipped (no structured facts for this filing)")
 
