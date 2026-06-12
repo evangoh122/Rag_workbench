@@ -70,32 +70,50 @@ def _row_to_run(row) -> AuditRunOut:
     )
 
 
-def _tables(conn) -> set[str]:
-    return {r[0] for r in conn.execute(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema='main'"
-    ).fetchall()}
+def _ensure_audit_table(conn) -> None:
+    """Idempotent — safe to call on every read; only creates the table if missing."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS audit_runs (
+            run_id              VARCHAR PRIMARY KEY,
+            timestamp           VARCHAR NOT NULL,
+            ticker              VARCHAR,
+            question            TEXT,
+            query_type          VARCHAR,
+            answer              TEXT,
+            eval_route          VARCHAR,
+            confidence          DOUBLE,
+            verification_status VARCHAR,
+            model_used          VARCHAR,
+            source_docs         JSON,
+            chunk_ids           JSON,
+            xbrl_facts_cited    JSON,
+            math_result         VARCHAR,
+            math_steps          JSON,
+            eval_triggers       JSON,
+            review_id           VARCHAR
+        )
+    """)
 
 
-# NOTE: /summary/stats must be declared BEFORE /{run_id} so FastAPI's static
-# route takes precedence over the parameterised one.
+# NOTE: /summary/stats MUST be declared before /{run_id} so FastAPI's static
+# path takes precedence over the parameterised one.
 @router.get("/summary/stats")
 def audit_summary():
     """Aggregate stats over all runs — useful for a regulator dashboard."""
     try:
         conn = db_manager.get_connection()
-        if "audit_runs" not in _tables(conn):
-            return {"total_runs": 0}
+        _ensure_audit_table(conn)
 
         stats = conn.execute("""
             SELECT
-                COUNT(*)                                    AS total_runs,
-                COUNT(DISTINCT ticker)                      AS unique_tickers,
-                AVG(confidence)                             AS avg_confidence,
-                SUM(CASE WHEN eval_route = 'ESCALATE' THEN 1 ELSE 0 END)       AS escalated,
+                COUNT(*)                                                        AS total_runs,
+                COUNT(DISTINCT ticker)                                          AS unique_tickers,
+                AVG(confidence)                                                 AS avg_confidence,
+                SUM(CASE WHEN eval_route = 'ESCALATE'      THEN 1 ELSE 0 END) AS escalated,
                 SUM(CASE WHEN eval_route = 'SAMPLED_REVIEW' THEN 1 ELSE 0 END) AS sampled_review,
-                SUM(CASE WHEN eval_route = 'AUTO' THEN 1 ELSE 0 END)           AS auto_approved,
-                MIN(timestamp)                              AS first_run,
-                MAX(timestamp)                              AS last_run
+                SUM(CASE WHEN eval_route = 'AUTO'           THEN 1 ELSE 0 END) AS auto_approved,
+                MIN(timestamp)                                                  AS first_run,
+                MAX(timestamp)                                                  AS last_run
             FROM audit_runs
         """).fetchone()
 
@@ -122,7 +140,6 @@ def list_audit_runs(
     offset: int = Query(default=0, ge=0),
 ):
     """List pipeline runs. Filter by ticker or eval_route (AUTO/SAMPLED_REVIEW/ESCALATE)."""
-    # Validate inputs before they touch SQL
     if ticker:
         ticker = ticker.upper()
         if not _VALID_TICKER.match(ticker):
@@ -130,36 +147,61 @@ def list_audit_runs(
     if eval_route:
         eval_route = eval_route.upper()
         if eval_route not in _VALID_ROUTES:
-            raise HTTPException(status_code=422, detail=f"eval_route must be one of {_VALID_ROUTES}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"eval_route must be one of {sorted(_VALID_ROUTES)}",
+            )
 
     try:
         conn = db_manager.get_connection()
-        if "audit_runs" not in _tables(conn):
-            return []
+        _ensure_audit_table(conn)
 
-        where_parts: list[str] = []
-        params: list[Any] = []
-        if ticker:
-            where_parts.append("ticker = ?")
-            params.append(ticker)
-        if eval_route:
-            where_parts.append("eval_route = ?")
-            params.append(eval_route)
+        # Build query with explicit branches — no f-string interpolation of user input
+        if ticker and eval_route:
+            sql = """
+                SELECT run_id, timestamp, ticker, question, query_type, answer,
+                       eval_route, confidence, verification_status, model_used,
+                       source_docs, chunk_ids, xbrl_facts_cited, math_result,
+                       math_steps, eval_triggers, review_id
+                FROM audit_runs
+                WHERE ticker = ? AND eval_route = ?
+                ORDER BY timestamp DESC LIMIT ? OFFSET ?
+            """
+            params: list[Any] = [ticker, eval_route, limit, offset]
+        elif ticker:
+            sql = """
+                SELECT run_id, timestamp, ticker, question, query_type, answer,
+                       eval_route, confidence, verification_status, model_used,
+                       source_docs, chunk_ids, xbrl_facts_cited, math_result,
+                       math_steps, eval_triggers, review_id
+                FROM audit_runs
+                WHERE ticker = ?
+                ORDER BY timestamp DESC LIMIT ? OFFSET ?
+            """
+            params = [ticker, limit, offset]
+        elif eval_route:
+            sql = """
+                SELECT run_id, timestamp, ticker, question, query_type, answer,
+                       eval_route, confidence, verification_status, model_used,
+                       source_docs, chunk_ids, xbrl_facts_cited, math_result,
+                       math_steps, eval_triggers, review_id
+                FROM audit_runs
+                WHERE eval_route = ?
+                ORDER BY timestamp DESC LIMIT ? OFFSET ?
+            """
+            params = [eval_route, limit, offset]
+        else:
+            sql = """
+                SELECT run_id, timestamp, ticker, question, query_type, answer,
+                       eval_route, confidence, verification_status, model_used,
+                       source_docs, chunk_ids, xbrl_facts_cited, math_result,
+                       math_steps, eval_triggers, review_id
+                FROM audit_runs
+                ORDER BY timestamp DESC LIMIT ? OFFSET ?
+            """
+            params = [limit, offset]
 
-        where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
-        params += [limit, offset]
-
-        rows = conn.execute(f"""
-            SELECT run_id, timestamp, ticker, question, query_type, answer,
-                   eval_route, confidence, verification_status, model_used,
-                   source_docs, chunk_ids, xbrl_facts_cited, math_result,
-                   math_steps, eval_triggers, review_id
-            FROM audit_runs
-            {where_sql}
-            ORDER BY timestamp DESC
-            LIMIT ? OFFSET ?
-        """, params).fetchall()
-
+        rows = conn.execute(sql, params).fetchall()
         return [_row_to_run(r) for r in rows]
     except HTTPException:
         raise
@@ -173,8 +215,7 @@ def get_audit_run(run_id: str):
     """Fetch a single run by ID."""
     try:
         conn = db_manager.get_connection()
-        if "audit_runs" not in _tables(conn):
-            raise HTTPException(status_code=404, detail="Run not found")
+        _ensure_audit_table(conn)
 
         rows = conn.execute("""
             SELECT run_id, timestamp, ticker, question, query_type, answer,

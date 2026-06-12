@@ -621,8 +621,8 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
             if isinstance(f, dict)
         ]
         math_result = state.get("math_result")
-        # Use default=str so datetime/Decimal/custom objects never break the dump
-        _dumps = lambda v: json.dumps(v, default=str)
+        def _dumps(v):
+            return json.dumps(v, default=str)
         conn = db_manager.get_connection()
         _ensure_audit_table(conn)
         conn.execute("""
