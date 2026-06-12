@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime, timezone
+from typing import Literal
 
 import duckdb
 import requests
@@ -51,6 +52,7 @@ class RefreshResponse(BaseModel):
     tickers_processed: int
     facts_loaded: int
     timestamp: str
+    skipped_tickers: list[str] = []
 
 
 def _fetch_company_facts(cik: str) -> dict | None:
@@ -123,22 +125,46 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
 
 
 @router.post("/refresh-data", response_model=RefreshResponse)
-def refresh_data(_: str = Depends(get_admin_api_key)):
-    """Refresh XBRL facts from SEC EDGAR into the local DuckDB database."""
+def refresh_data(
+    force: bool = False,
+    _: str = Depends(get_admin_api_key),
+):
+    """Load XBRL facts from SEC EDGAR. Skips tickers already in DB unless force=true."""
     db_path = Config.DB_PATH
     os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
 
-    logger.info("Admin data refresh started")
     conn = duckdb.connect(db_path)
     _ensure_tables(conn)
 
+    # Find which tickers already have data so we can skip them
+    try:
+        existing = {
+            row[0]
+            for row in conn.execute(
+                "SELECT DISTINCT ticker FROM xbrl_facts"
+            ).fetchall()
+        }
+    except Exception:
+        existing = set()
+
+    new_tickers = {t: c for t, c in TICKER_TO_CIK.items() if force or t not in existing}
+
+    if not new_tickers:
+        conn.close()
+        logger.info("All tickers already loaded — nothing to do (use force=true to re-fetch)")
+        return RefreshResponse(status="ok", tickers_processed=0, facts_loaded=0, timestamp=datetime.now(timezone.utc).isoformat())
+
+    logger.info(f"Refreshing {len(new_tickers)} tickers (force={force}, existing={len(existing)})")
+
     total_facts = 0
     tickers_processed = 0
+    skipped: list[str] = []
 
     try:
-        for ticker, cik in TICKER_TO_CIK.items():
+        for ticker, cik in new_tickers.items():
             data = _fetch_company_facts(cik)
             if data is None:
+                skipped.append(ticker)
                 continue
 
             facts = _extract_facts(data, ticker, cik)
@@ -161,8 +187,9 @@ def refresh_data(_: str = Depends(get_admin_api_key)):
 
             company_name = data.get("entityName", ticker)
             conn.execute("""
-                INSERT OR REPLACE INTO ticker_embeddings (ticker, description, sector, industry)
+                INSERT INTO ticker_embeddings (ticker, description, sector, industry)
                 VALUES (?, ?, ?, ?)
+                ON CONFLICT (ticker) DO UPDATE SET description = excluded.description
             """, [ticker, company_name, "", ""])
             tickers_processed += 1
     except Exception as e:
@@ -172,10 +199,12 @@ def refresh_data(_: str = Depends(get_admin_api_key)):
         conn.close()
 
     timestamp = datetime.now(timezone.utc).isoformat()
-    logger.info(f"Admin data refresh complete — {total_facts} facts from {tickers_processed} tickers")
+    status: Literal["ok", "partial"] = "partial" if skipped else "ok"
+    logger.info(f"Refresh complete — {total_facts} facts, {tickers_processed} tickers, {len(skipped)} skipped")
     return RefreshResponse(
-        status="ok",
+        status=status,
         tickers_processed=tickers_processed,
         facts_loaded=total_facts,
+        skipped_tickers=skipped,
         timestamp=timestamp,
     )

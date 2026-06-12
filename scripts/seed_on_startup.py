@@ -41,11 +41,9 @@ def main():
         logger.error("App did not start in time — skipping XBRL seed")
         return
 
-    if xbrl_count() > 0:
-        logger.info("XBRL facts already loaded — skipping seed")
-        return
-
-    logger.info("DB is empty — triggering XBRL refresh from SEC EDGAR...")
+    count = xbrl_count()
+    logger.info(f"Current XBRL facts in DB: {count} — triggering incremental refresh...")
+    # Always call refresh (incremental mode skips tickers already present, only fetches new ones)
     try:
         r = requests.post(
             f"{BASE_URL}/api/admin/refresh-data",
