@@ -970,7 +970,7 @@ workflow.add_node("verification", verification_node)
 workflow.add_node("output", output_node)
 workflow.add_node("qualitative_output", qualitative_output_node)
 workflow.add_node("abstention", abstention_node)
-workflow.add_node("lineage", lineage_node)
+workflow.add_node("build_lineage", lineage_node)
 
 # Set entry point
 workflow.set_entry_point("retrieval")
@@ -1005,11 +1005,11 @@ workflow.add_conditional_edges(
     }
 )
 
-# Both terminal nodes funnel through lineage before END
-workflow.add_edge("output", "lineage")
-workflow.add_edge("qualitative_output", "lineage")
-workflow.add_edge("abstention", "lineage")
-workflow.add_edge("lineage", END)
+# Both terminal nodes funnel through build_lineage before END
+workflow.add_edge("output", "build_lineage")
+workflow.add_edge("qualitative_output", "build_lineage")
+workflow.add_edge("abstention", "build_lineage")
+workflow.add_edge("build_lineage", END)
 
 _app = None
 
