@@ -255,13 +255,28 @@ def refresh_data(
     finally:
         conn.close()
 
-    timestamp = datetime.now(timezone.utc).isoformat()
-    status: Literal["ok", "partial"] = "partial" if skipped else "ok"
-    logger.info(f"Refresh complete — {total_facts} facts, {tickers_processed} tickers, {len(skipped)} skipped")
-    return RefreshResponse(
-        status=status,
-        tickers_processed=tickers_processed,
-        facts_loaded=total_facts,
-        skipped_tickers=skipped,
-        timestamp=timestamp,
-    )
+class EmbedResponse(BaseModel):
+    status: str
+    chunks_stored: int
+    timestamp: str
+
+
+@router.post("/embed-data", response_model=EmbedResponse)
+def embed_data(
+    _: str = Depends(get_admin_api_key),
+):
+    """Chunk + embed 10-K filings for all tickers into edgar_embeddings."""
+    from scripts.embed_edgar import run_embed_edgar_etl
+
+    tickers = list(TICKER_TO_CIK.keys())
+    logger.info(f"Starting embed-edgar job for {len(tickers)} tickers")
+    try:
+        n = run_embed_edgar_etl(tickers)
+        return EmbedResponse(
+            status="ok",
+            chunks_stored=n,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+    except Exception as e:
+        logger.error(f"Embed job failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Embed job failed: {e}") from e

@@ -1,6 +1,7 @@
 """
 seed_on_startup.py — Runs at container startup.
-Waits for uvicorn to be ready, then triggers XBRL refresh if the DB is empty.
+Waits for uvicorn to be ready, then triggers XBRL refresh if the DB is empty,
+followed by chunking+embedding of 10-K filings into edgar_embeddings.
 """
 import os
 import time
@@ -60,6 +61,25 @@ def main():
             logger.error(f"Startup seed failed: HTTP {r.status_code} — {r.text}")
     except Exception as e:
         logger.error(f"Startup seed error: {e}")
+
+    # ── Step 2: Chunk + embed 10-K filings into edgar_embeddings ────────────
+    try:
+        logger.info("Triggering filing chunking + embedding job...")
+        r = requests.post(
+            f"{BASE_URL}/api/admin/embed-data",
+            headers={"X-API-Key": ADMIN_KEY, "Content-Type": "application/json"},
+            timeout=1800,
+        )
+        if r.status_code == 200:
+            d = r.json()
+            logger.info(
+                f"Embedding complete — {d.get('chunks_stored')} chunks, "
+                f"status={d.get('status')}"
+            )
+        else:
+            logger.error(f"Embedding failed: HTTP {r.status_code} — {r.text}")
+    except Exception as e:
+        logger.error(f"Embedding error: {e}")
 
 
 if __name__ == "__main__":
