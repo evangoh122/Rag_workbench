@@ -214,7 +214,7 @@ export default function AuditLog() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white flex items-center gap-3">
             <ShieldCheck className="text-amber-400" />
@@ -231,7 +231,7 @@ export default function AuditLog() {
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-4 lg:py-6">
 
         {/* Stats bar */}
         {stats && (
@@ -287,22 +287,24 @@ export default function AuditLog() {
           </div>
         ) : (
           <div className="bg-[#0f1219] border border-[#202532] rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-[#13171f] border-b border-[#202532]">
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Run ID</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Timestamp</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Ticker</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Question</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Route</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Confidence</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Verification</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map(run => <RunRow key={run.run_id} run={run} />)}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-[#13171f] border-b border-[#202532]">
+                    <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Run ID</th>
+                    <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Timestamp</th>
+                    <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Ticker</th>
+                    <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Question</th>
+                    <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Route</th>
+                    <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Confidence</th>
+                    <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Verification</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.map(run => <RunRow key={run.run_id} run={run} />)}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

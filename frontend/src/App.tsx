@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck, Menu, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse, Source, XBRLFact } from './api/chat';
@@ -56,6 +56,7 @@ function App() {
   const [view, setView] = useState<AppView>('chat');
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
   const [ticker, setTicker] = useState('MU');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<Set<number>>(new Set());
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -167,14 +168,34 @@ function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0a0c10] text-gray-200 font-sans selection:bg-blue-500/30">
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar Navigation */}
-      <aside className="w-72 flex-shrink-0 bg-[#0f1219] border-r border-[#202532] flex flex-col p-5 shadow-[4px_0_24px_rgba(0,0,0,0.2)] z-10 relative">
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-72 bg-[#0f1219] border-r border-[#202532] flex flex-col p-5 shadow-[4px_0_24px_rgba(0,0,0,0.2)] 
+        transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
         {/* Logo */}
-        <div className="flex items-center gap-3 mb-8 px-1">
-          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
-            <Search size={22} className="text-white" />
+        <div className="flex items-center justify-between mb-8 px-1">
+          <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
+              <Search size={22} className="text-white" />
+            </div>
+            <h2 className="m-0 text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-100 to-gray-400 tracking-tight">RAG Workbench</h2>
           </div>
-          <h2 className="m-0 text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-100 to-gray-400 tracking-tight">RAG Workbench</h2>
+          <button 
+            className="lg:hidden p-2 text-gray-500 hover:text-white bg-transparent border-0 cursor-pointer"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <X size={20} />
+          </button>
         </div>
 
         {/* Main Navigation */}
@@ -186,7 +207,7 @@ function App() {
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => setView('stocks')}
+            onClick={() => { setView('stocks'); setSidebarOpen(false); }}
           >
             <Cpu size={18} className={view === 'stocks' ? 'text-emerald-400' : 'text-gray-500'} />
             Coverage List
@@ -197,7 +218,7 @@ function App() {
                 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => setView('chat')}
+            onClick={() => { setView('chat'); setSidebarOpen(false); }}
           >
             <MessageSquare size={18} className={view === 'chat' ? 'text-blue-400' : 'text-gray-500'} />
             Testing Chat
@@ -209,7 +230,7 @@ function App() {
                 ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => setView('traceability')}
+            onClick={() => { setView('traceability'); setSidebarOpen(false); }}
           >
             <Activity size={18} className={view === 'traceability' ? 'text-purple-400' : 'text-gray-500'} />
             Pipeline Traceability
@@ -221,7 +242,7 @@ function App() {
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => setView('results')}
+            onClick={() => { setView('results'); setSidebarOpen(false); }}
           >
             <BarChart3 size={18} className={view === 'results' ? 'text-emerald-400' : 'text-gray-500'} />
             Results & Testing
@@ -233,7 +254,7 @@ function App() {
                 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => setView('audit')}
+            onClick={() => { setView('audit'); setSidebarOpen(false); }}
           >
             <ShieldCheck size={18} className={view === 'audit' ? 'text-amber-400' : 'text-gray-500'} />
             Audit Log
@@ -245,7 +266,7 @@ function App() {
                 ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => setView('metrics')}
+            onClick={() => { setView('metrics'); setSidebarOpen(false); }}
           >
             <Activity size={18} className={view === 'metrics' ? 'text-cyan-400' : 'text-gray-500'} />
             Metrics Dashboard
@@ -257,7 +278,7 @@ function App() {
                 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => setView('system')}
+            onClick={() => { setView('system'); setSidebarOpen(false); }}
           >
             <Server size={18} className={view === 'system' ? 'text-orange-400' : 'text-gray-500'} />
             System Overview
@@ -269,34 +290,12 @@ function App() {
                 ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => setView('methodology')}
+            onClick={() => { setView('methodology'); setSidebarOpen(false); }}
           >
             <BookOpen size={18} className={view === 'methodology' ? 'text-indigo-400' : 'text-gray-500'} />
             Methodology
           </button>
         </nav>
-
-        {/* Mode & Context (Only show if relevant) */}
-        {(view === 'chat' || view === 'traceability') && (
-          <div className="flex flex-col gap-2 mb-6">
-
-            {(mode === 'auditable' || mode === 'graph') && (
-              <div className="mt-4 px-2">
-                <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">Target Ticker</label>
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input 
-                    type="text" 
-                    value={ticker} 
-                    onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                    className="w-full bg-[#161b24] border border-[#202532] rounded-xl pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-gray-600"
-                    placeholder="e.g. MU"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Clear chat button */}
         {(view === 'chat' || view === 'traceability') && (
@@ -323,6 +322,21 @@ function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full min-w-0 bg-[#0a0c10] relative">
+        {/* Mobile Header Toggle */}
+        <div className="lg:hidden flex items-center px-4 py-4 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-md sticky top-0 z-30 flex-shrink-0">
+          <button 
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 -ml-2 text-gray-400 hover:text-white bg-transparent border-0 cursor-pointer"
+          >
+            <Menu size={24} />
+          </button>
+          <div className="ml-4 flex items-center gap-2">
+            <div className="bg-blue-600 p-1.5 rounded-lg shadow-lg">
+              <Search size={16} className="text-white" />
+            </div>
+            <span className="font-bold text-lg tracking-tight">RAG Workbench</span>
+          </div>
+        </div>
         
         {/* VIEW: AUDIT LOG */}
         {view === 'audit' && (
@@ -362,7 +376,7 @@ function App() {
         {/* VIEW: STOCKS */}
         {view === 'stocks' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300 overflow-y-auto">
-            <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
+            <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
               <h1 className="text-xl font-semibold text-white flex items-center gap-3">
                 <Cpu className="text-emerald-400" />
                 Coverage List
@@ -375,7 +389,7 @@ function App() {
         {/* VIEW: TRACEABILITY */}
         {view === 'traceability' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
-            <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
+            <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
               <h1 className="text-xl font-semibold text-white flex items-center gap-3">
                 <Activity className="text-purple-400" />
                 Pipeline Traceability
@@ -386,7 +400,7 @@ function App() {
               <PipelineFlow status={pipelineStatus} />
             </div>
             {/* Input allowed in Traceability view too */}
-            <div className="px-8 py-6 bg-gradient-to-t from-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+            <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
               <form
                 onSubmit={handleSubmit}
                 className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 pointer-events-auto"
@@ -413,20 +427,25 @@ function App() {
         {/* VIEW: CHAT */}
         {view === 'chat' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
-            {/* Header */}
-            <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between">
+            <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between">
               <div>
-                <h1 className="text-xl font-semibold text-white flex items-center gap-3">
-                  <MessageSquare className="text-blue-400" />
+                <h1 className="text-lg lg:text-xl font-semibold text-white flex items-center gap-3">
+                  <MessageSquare className="text-blue-400" size={20} />
                   Testing Interface
                 </h1>
-                <div className="text-sm text-gray-400 mt-1 flex items-center gap-2">
-                  Engine: <span className="text-gray-200 font-medium px-2 py-0.5 bg-[#161b24] rounded-md border border-[#202532]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
+                <div className="text-xs lg:text-sm text-gray-400 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="hidden sm:inline">Engine:</span> <span className="text-gray-200 font-medium px-2 py-0.5 bg-[#161b24] rounded-md border border-[#202532]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-blue-400/80 font-medium">
+                    <ShieldCheck size={14} />
+                    <span>Coverage List Only</span>
+                  </div>
                 </div>
               </div>
               {/* Mini Pipeline Status Indicator */}
-              <div className="flex items-center gap-2 bg-[#161b24] px-4 py-2 rounded-xl border border-[#202532] shadow-sm">
-                 <div className="text-xs font-semibold text-gray-400 uppercase mr-2">Pipeline</div>
+              <div className="flex items-center gap-1.5 lg:gap-2 bg-[#161b24] px-3 lg:px-4 py-2 rounded-xl border border-[#202532] shadow-sm">
+                 <div className="text-[10px] lg:text-xs font-semibold text-gray-400 uppercase mr-1 lg:mr-2 hidden xs:block">Pipeline</div>
                  {['input', 'retrieval', 'extraction', 'math', 'verification', 'output'].map(step => {
                    const s = pipelineStatus[step as keyof PipelineStatus];
                    return (
@@ -441,7 +460,7 @@ function App() {
             </header>
 
             {/* Chat area */}
-            <div className="flex-1 overflow-y-auto px-8 py-8 flex flex-col gap-8 scroll-smooth pb-32">
+            <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-8 flex flex-col gap-8 scroll-smooth pb-32">
               {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto">
                   <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(59,130,246,0.15)] border border-blue-500/20">
@@ -452,29 +471,29 @@ function App() {
                   </h3>
                   <p className="text-gray-400 text-base leading-relaxed mb-8">
                     {mode === 'auditable' 
-                      ? `Ask questions about ${ticker}'s SEC filings. The system will retrieve relevant excerpts, extract XBRL facts, and verify the math.`
+                      ? `Ask questions about SEC filings. The system currently only supports stocks listed in the **Coverage List**. It will retrieve relevant excerpts, extract XBRL facts, and verify the math.`
                       : mode === 'graph'
-                      ? `Ask about ${ticker}'s knowledge graph. The system will identify entities, query the knowledge graph, and synthesize insights.`
+                      ? `Ask about the knowledge graph for companies in our **Coverage List**. The system will identify entities, query the knowledge graph, and synthesize insights.`
                       : 'Test the basic retrieval or SQL capabilities of the platform.'}
                   </p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
                      {mode === 'graph' ? (
                        <>
-                         <button onClick={() => setInput(`What are the key relationships for ${ticker} in the knowledge graph?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
-                           "What are {ticker}'s key relationships?"
+                         <button onClick={() => setInput(`What are the key relationships for Micron (MU) in the knowledge graph?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                           "What are Micron's key relationships?"
                          </button>
-                         <button onClick={() => setInput(`Show me the suppliers and partners of ${ticker}`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
-                           "Show me {ticker}'s suppliers and partners"
+                         <button onClick={() => setInput(`Show me the suppliers and partners of NVIDIA (NVDA)`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                           "Show me NVIDIA's suppliers and partners"
                          </button>
                        </>
                      ) : (
                        <>
-                     <button onClick={() => setInput(`What was ${ticker}'s total revenue in the last fiscal year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
-                        "What was {ticker}'s total revenue?"
+                     <button onClick={() => setInput(`What was NVIDIA (NVDA)'s total revenue in the last fiscal year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                        "What was NVIDIA's total revenue?"
                      </button>
-                     <button onClick={() => setInput(`Did ${ticker}'s gross margin improve year-over-year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
-                        "Did {ticker}'s gross margin improve?"
+                     <button onClick={() => setInput(`Did Micron (MU)'s gross margin improve year-over-year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                        "Did Micron's gross margin improve?"
                      </button>
                        </>
                      )}
@@ -685,7 +704,7 @@ function App() {
             </div>
 
             {/* Input bar */}
-            <div className="px-8 py-6 bg-gradient-to-t from-[#0a0c10] via-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+            <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-[#0a0c10] via-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
               <form
                 onSubmit={handleSubmit}
                 className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 pointer-events-auto"
@@ -700,8 +719,8 @@ function App() {
                       : mode === 'rag' 
                       ? 'Ask a Knowledge Base question...'
                       : mode === 'graph'
-                      ? `Ask about ${ticker}'s knowledge graph...`
-                      : `Ask about ${ticker}'s SEC filing...`
+                      ? 'Ask about the knowledge graph...'
+                      : 'Ask about an SEC filing...'
                   }
                   disabled={loading}
                 />

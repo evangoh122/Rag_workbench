@@ -266,7 +266,7 @@ export default function ReviewQueue() {
       </div>
 
       {/* Header */}
-      <header className="px-6 py-4 border-b border-[#2a3246] flex items-center gap-4 flex-shrink-0">
+      <header className="px-4 lg:px-8 py-4 border-b border-[#2a3246] flex items-center gap-4 flex-shrink-0">
         <div className="flex items-center gap-3">
           <ClipboardList size={22} className="text-blue-400" />
           <h1 className="text-lg font-semibold text-white">Review Queue</h1>
@@ -299,7 +299,7 @@ export default function ReviewQueue() {
       </header>
 
       {/* Filter tabs */}
-      <div className="px-6 pt-4 flex items-center gap-1 border-b border-[#2a3246] pb-0 flex-shrink-0">
+      <div className="px-4 lg:px-8 pt-4 flex items-center gap-1 border-b border-[#2a3246] pb-0 flex-shrink-0">
         {tabs.map((tab) => {
           const count =
             tab.value === 'all'
@@ -333,7 +333,7 @@ export default function ReviewQueue() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-4 lg:py-6">
         {error && (
           <div className="flex items-center gap-3 px-4 py-3 mb-6 rounded-lg bg-red-950 border border-red-800 text-red-300 text-sm">
             <AlertTriangle size={16} className="flex-shrink-0" />

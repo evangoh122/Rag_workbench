@@ -185,40 +185,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
           </div>
 
-          {/* Ticker Selector */}
-          {(mode === 'auditable' || mode === 'graph') && (
-            <div className="mt-4 px-2">
-              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">Target Ticker</label>
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-                <select
-                  value={ticker}
-                  onChange={(e) => setTicker(e.target.value)}
-                  className="w-full bg-[#161b24] border border-[#202532] rounded-xl pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all appearance-none cursor-pointer"
-                >
-                  <option value="MU">MU — Micron Technology</option>
-                  <option value="NVDA">NVDA — NVIDIA</option>
-                  <option value="AMD">AMD — Advanced Micro Devices</option>
-                  <option value="AVGO">AVGO — Broadcom</option>
-                  <option value="INTC">INTC — Intel</option>
-                  <option value="QCOM">QCOM — Qualcomm</option>
-                  <option value="TXN">TXN — Texas Instruments</option>
-                  <option value="LRCX">LRCX — Lam Research</option>
-                  <option value="KLAC">KLAC — KLA Corporation</option>
-                  <option value="ACLS">ACLS — Axcelis Technologies</option>
-                  <option value="AEHR">AEHR — Aehr Test Systems</option>
-                  <option value="ENTG">ENTG — Entegris</option>
-                  <option value="ICHR">ICHR — Ichor Holdings</option>
-                  <option value="KLIC">KLIC — Kulicke & Soffa</option>
-                  <option value="PLAB">PLAB — Photronics</option>
-                  <option value="TER">TER — Teradyne</option>
-                </select>
-              </div>
-              <p className="text-[10px] text-gray-600 mt-2 leading-relaxed">
-                Universe covers semiconductor equities only. SEC filings are sourced from EDGAR for the tickers listed above.
-              </p>
-            </div>
-          )}
+          {/* Ticker Selector - Removed for mobile optimization/cleaner UI */}
         </div>
       )}
 

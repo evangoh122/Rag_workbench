@@ -28,7 +28,7 @@ const SEMICONDUCTOR_STOCKS: SemiconductorStock[] = [
 
 function StocksList() {
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="p-4 lg:p-6 max-w-4xl mx-auto space-y-4 lg:space-y-6">
       <div>
         <h2 className="text-lg font-bold text-white">Semiconductor Coverage</h2>
         <p className="text-sm text-gray-400 mt-1">

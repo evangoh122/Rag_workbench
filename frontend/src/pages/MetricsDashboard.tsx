@@ -82,7 +82,7 @@ export default function MetricsDashboard() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto">
-      <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
         <h1 className="text-xl font-semibold text-white flex items-center gap-3">
           <BarChart3 className="text-emerald-400" />
           Metrics Dashboard
@@ -92,7 +92,7 @@ export default function MetricsDashboard() {
         </p>
       </header>
 
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 lg:p-8">
         {/* Status bar */}
         <div className={`mb-8 px-6 py-4 rounded-xl border flex items-center gap-3 ${
           hasDriftAlert

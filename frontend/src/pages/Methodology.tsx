@@ -68,7 +68,7 @@ function Table({ rows }: { rows: [string, string][] }) {
 export default function Methodology() {
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto">
-      <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm flex-shrink-0">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm flex-shrink-0">
         <h1 className="text-xl font-semibold text-white flex items-center gap-3">
           <BookOpen className="text-indigo-400" />
           Methodology

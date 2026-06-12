@@ -55,7 +55,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
       {/* Header */}
-      <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white flex items-center gap-3">
             <MessageSquare className="text-blue-400" />
@@ -82,7 +82,7 @@ const ChatView: React.FC<ChatViewProps> = ({
       </header>
 
       {/* Chat area */}
-      <div className="flex-1 overflow-y-auto px-8 py-8 flex flex-col gap-8 scroll-smooth pb-32">
+      <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-8 flex flex-col gap-8 scroll-smooth pb-32">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto">
             <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(59,130,246,0.15)] border border-blue-500/20">
@@ -274,7 +274,7 @@ const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Input bar */}
-      <div className="px-8 py-6 bg-gradient-to-t from-[#0a0c10] via-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+      <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-[#0a0c10] via-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
         <form
           onSubmit={handleSubmit}
           className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 pointer-events-auto"

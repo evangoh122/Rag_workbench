@@ -2,7 +2,7 @@
 <!-- SEC Filing Eval & HITL Framework — project memory -->
 <!-- Updated by Claude at the end of each work session. -->
 
-Last updated: 2026-06-07
+Last updated: 2026-06-12
 
 ---
 
@@ -18,13 +18,12 @@ Last updated: 2026-06-07
 
 ## Current Position
 
-**Current phase**: Phase 1 — Data Structures & Reader Adapter
-**Current plan**: 01-PLAN-01 (Wave 1), 01-PLAN-02 (Wave 2)
-**Status**: Ready to execute
-**Open questions blocking start**: Resolved — planning complete from spec
+**Current phase**: Phase 11 — GraphRAG Frontend Integration (Gemini)
+**Status**: Frontend responsiveness and ticker constraints implemented.
+**Open questions blocking start**: Resolved.
 
 ```
-Progress: [●●......] 1/8 phases complete (Phase 1 executed and verified)
+Progress: [●●●●●●●●] 11/15 phases complete
 ```
 
 ---

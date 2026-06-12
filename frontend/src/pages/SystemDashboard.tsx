@@ -118,7 +118,7 @@ export default function SystemDashboard() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto">
-      <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white flex items-center gap-3">
             <Server className="text-orange-400" />
@@ -144,7 +144,7 @@ export default function SystemDashboard() {
         </div>
       </header>
 
-      <div className="flex-1 p-8 space-y-8">
+      <div className="flex-1 p-4 lg:p-8 space-y-4 lg:space-y-8">
 
         {/* ── Status bar ── */}
         <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl border border-[#202532] bg-[#0f1219] text-sm">
@@ -164,7 +164,7 @@ export default function SystemDashboard() {
         </div>
 
         {/* ── Stat cards ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             label="Companies Loaded"
             value={fmt(stats?.data.companies_with_chunks)}

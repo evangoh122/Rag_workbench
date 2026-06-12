@@ -28,7 +28,7 @@ const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 }) => {
   return (
     <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
-      <header className="px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
         <h1 className="text-xl font-semibold text-white flex items-center gap-3">
           <Activity className="text-purple-400" />
           Pipeline Traceability
@@ -39,7 +39,7 @@ const TraceabilityView: React.FC<TraceabilityViewProps> = ({
         <PipelineFlow status={pipelineStatus} />
       </div>
       {/* Input allowed in Traceability view too */}
-      <div className="px-8 py-6 bg-gradient-to-t from-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+      <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
         <form
           onSubmit={handleSubmit}
           className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 pointer-events-auto"
