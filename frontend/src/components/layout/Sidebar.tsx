@@ -19,8 +19,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   setView, 
   mode, 
   setMode, 
-  ticker, 
-  setTicker, 
+  ticker: _ticker, 
+  setTicker: _setTicker, 
   onReset 
 }) => {
   return (

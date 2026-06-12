@@ -47,7 +47,6 @@ const ChatView: React.FC<ChatViewProps> = ({
   setInput,
   loading,
   mode,
-  ticker,
   pipelineStatus,
   handleSubmit,
   chatEndRef,
@@ -93,29 +92,29 @@ const ChatView: React.FC<ChatViewProps> = ({
             </h3>
             <p className="text-gray-400 text-base leading-relaxed mb-8">
               {mode === 'auditable' 
-                ? `Ask questions about ${ticker}'s SEC filings. The system will retrieve relevant excerpts, extract XBRL facts, and verify the math.`
+                ? `Ask questions about SEC filings. The system will retrieve relevant excerpts, extract XBRL facts, and verify the math.`
                 : mode === 'graph'
-                ? `Ask about ${ticker}'s knowledge graph. The system will identify entities, query the knowledge graph, and synthesize insights.`
+                ? `Ask about the knowledge graph. The system will identify entities, query the knowledge graph, and synthesize insights.`
                 : 'Test the basic retrieval or SQL capabilities of the platform.'}
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
                {mode === 'graph' ? (
-                 <>
-                   <button onClick={() => setInput(`What are the key relationships for ${ticker} in the knowledge graph?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
-                     "What are {ticker}'s key relationships?"
-                   </button>
-                   <button onClick={() => setInput(`Show me the suppliers and partners of ${ticker}`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
-                     "Show me {ticker}'s suppliers and partners"
-                   </button>
-                 </>
-               ) : (
-                 <>
-               <button onClick={() => setInput(`What was ${ticker}'s total revenue in the last fiscal year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
-                  "What was {ticker}'s total revenue?"
+                  <>
+                    <button onClick={() => setInput(`What are the key relationships in the knowledge graph?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                      "What are the key relationships?"
+                    </button>
+                    <button onClick={() => setInput(`Show me the suppliers and partners of a company`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                      "Show me suppliers and partners"
+                    </button>
+                  </>
+                ) : (
+                  <>
+               <button onClick={() => setInput(`What was the total revenue in the last fiscal year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                  "What was total revenue?"
                </button>
-               <button onClick={() => setInput(`Did ${ticker}'s gross margin improve year-over-year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
-                  "Did {ticker}'s gross margin improve?"
+               <button onClick={() => setInput(`Did the gross margin improve year-over-year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                  "Did gross margin improve?"
                </button>
                  </>
                )}
@@ -289,8 +288,8 @@ const ChatView: React.FC<ChatViewProps> = ({
                 : mode === 'rag' 
                 ? 'Ask a Knowledge Base question...'
                 : mode === 'graph'
-                ? `Ask about ${ticker}'s knowledge graph...`
-                : `Ask about ${ticker}'s SEC filing...`
+                ? 'Ask about the knowledge graph...'
+                : 'Ask about an SEC filing...'
             }
             disabled={loading}
           />

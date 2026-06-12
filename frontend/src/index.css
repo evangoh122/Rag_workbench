@@ -1,1 +1,21 @@
 @import "tailwindcss";
+
+@layer base {
+  @media (max-width: 767px) {
+    html {
+      font-size: 15px;
+    }
+    body {
+      -webkit-tap-highlight-color: transparent;
+    }
+    button,
+    [role="button"],
+    a[role="button"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    input {
+      font-size: 16px;
+    }
+  }
+}

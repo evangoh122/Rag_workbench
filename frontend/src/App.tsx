@@ -55,7 +55,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<AppView>('chat');
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
-  const [ticker, setTicker] = useState('MU');
+  const [ticker, _setTicker] = useState('MU');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<Set<number>>(new Set());
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -323,7 +323,7 @@ function App() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full min-w-0 bg-[#0a0c10] relative">
         {/* Mobile Header Toggle */}
-        <div className="lg:hidden flex items-center px-4 py-4 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-md sticky top-0 z-30 flex-shrink-0">
+          <div className="lg:hidden flex items-center px-3 py-3 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-md sticky top-0 z-30 flex-shrink-0">
           <button 
             onClick={() => setSidebarOpen(true)}
             className="p-2 -ml-2 text-gray-400 hover:text-white bg-transparent border-0 cursor-pointer"
@@ -376,12 +376,12 @@ function App() {
         {/* VIEW: STOCKS */}
         {view === 'stocks' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300 overflow-y-auto">
-            <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
-              <h1 className="text-xl font-semibold text-white flex items-center gap-3">
-                <Cpu className="text-emerald-400" />
-                Coverage List
-              </h1>
-            </header>
+              <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
+                <h1 className="text-base md:text-xl font-semibold text-white flex items-center gap-3">
+                  <Cpu className="text-emerald-400" />
+                  Coverage List
+                </h1>
+              </header>
             <StocksList />
           </div>
         )}
@@ -389,48 +389,48 @@ function App() {
         {/* VIEW: TRACEABILITY */}
         {view === 'traceability' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
-            <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
-              <h1 className="text-xl font-semibold text-white flex items-center gap-3">
-                <Activity className="text-purple-400" />
-                Pipeline Traceability
-              </h1>
-              <p className="text-sm text-gray-400 mt-1">Live visualization of the execution steps for your last query.</p>
-            </header>
+              <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
+                <h1 className="text-base md:text-xl font-semibold text-white flex items-center gap-3">
+                  <Activity className="text-purple-400" />
+                  Pipeline Traceability
+                </h1>
+                <p className="text-xs md:text-sm text-gray-400 mt-1">Live visualization of the execution steps for your last query.</p>
+              </header>
             <div className="flex-1 relative bg-[#0a0c10]">
               <PipelineFlow status={pipelineStatus} />
             </div>
             {/* Input allowed in Traceability view too */}
-            <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
-              <form
-                onSubmit={handleSubmit}
-                className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 pointer-events-auto"
-              >
-                <input
-                  className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-4 py-3 text-base outline-none w-full"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Test a query to trace its execution..."
-                  disabled={loading}
-                />
-                <button
-                  type="submit"
-                  disabled={loading || !input.trim()}
-                  className="flex items-center justify-center px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl border-0 cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 ml-2"
+              <div className="px-3 md:px-4 lg:px-8 py-3 md:py-6 bg-gradient-to-t from-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+                <form
+                  onSubmit={handleSubmit}
+                  className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-1.5 md:p-2 shadow-2xl transition-all duration-300 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 pointer-events-auto"
                 >
-                  Trace <Send size={16} />
-                </button>
-              </form>
-            </div>
+                  <input
+                    className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-3 md:px-4 py-3 text-base outline-none w-full min-w-0"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Test a query to trace its execution..."
+                    disabled={loading}
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading || !input.trim()}
+                    className="flex items-center justify-center px-4 md:px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl border-0 cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-1.5 md:gap-2 ml-1.5 md:ml-2 shrink-0"
+                  >
+                    Trace <Send size={16} />
+                  </button>
+                </form>
+              </div>
           </div>
         )}
 
         {/* VIEW: CHAT */}
         {view === 'chat' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
-            <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between">
+              <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between gap-2">
               <div>
-                <h1 className="text-lg lg:text-xl font-semibold text-white flex items-center gap-3">
-                  <MessageSquare className="text-blue-400" size={20} />
+                <h1 className="text-base md:text-lg lg:text-xl font-semibold text-white flex items-center gap-2 md:gap-3">
+                  <MessageSquare className="text-blue-400" size={18} />
                   Testing Interface
                 </h1>
                 <div className="text-xs lg:text-sm text-gray-400 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -444,8 +444,8 @@ function App() {
                 </div>
               </div>
               {/* Mini Pipeline Status Indicator */}
-              <div className="flex items-center gap-1.5 lg:gap-2 bg-[#161b24] px-3 lg:px-4 py-2 rounded-xl border border-[#202532] shadow-sm">
-                 <div className="text-[10px] lg:text-xs font-semibold text-gray-400 uppercase mr-1 lg:mr-2 hidden xs:block">Pipeline</div>
+              <div className="flex items-center gap-1 md:gap-1.5 lg:gap-2 bg-[#161b24] px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-xl border border-[#202532] shadow-sm shrink-0">
+                 <div className="text-[9px] md:text-[10px] lg:text-xs font-semibold text-gray-400 uppercase mr-0.5 md:mr-1 lg:mr-2 hidden xs:block">Pipeline</div>
                  {['input', 'retrieval', 'extraction', 'math', 'verification', 'output'].map(step => {
                    const s = pipelineStatus[step as keyof PipelineStatus];
                    return (
@@ -460,7 +460,7 @@ function App() {
             </header>
 
             {/* Chat area */}
-            <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-8 flex flex-col gap-8 scroll-smooth pb-32">
+            <div className="flex-1 overflow-y-auto px-3 md:px-4 lg:px-8 py-6 md:py-8 flex flex-col gap-6 md:gap-8 scroll-smooth pb-28 md:pb-32">
               {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto">
                   <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(59,130,246,0.15)] border border-blue-500/20">
@@ -504,7 +504,7 @@ function App() {
               {messages.map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`flex gap-5 max-w-[90%] ${
+                  className={`flex gap-3 md:gap-5 max-w-full md:max-w-[90%] ${
                     msg.role === 'user' ? 'self-end flex-row-reverse' : 'self-start'
                   }`}
                 >
@@ -704,13 +704,13 @@ function App() {
             </div>
 
             {/* Input bar */}
-            <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-[#0a0c10] via-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+            <div className="px-3 md:px-4 lg:px-8 py-3 md:py-6 bg-gradient-to-t from-[#0a0c10] via-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
               <form
                 onSubmit={handleSubmit}
-                className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 pointer-events-auto"
+                className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-1.5 md:p-2 shadow-2xl transition-all duration-300 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 pointer-events-auto"
               >
                 <input
-                  className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-4 py-3 text-base outline-none w-full"
+                  className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-3 md:px-4 py-3 text-base outline-none w-full min-w-0"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={
@@ -727,7 +727,7 @@ function App() {
                 <button
                   type="submit"
                   disabled={loading || !input.trim()}
-                  className="flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl border-0 cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 ml-2"
+                  className="flex items-center justify-center px-4 md:px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl border-0 cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-1.5 md:gap-2 ml-1.5 md:ml-2 shrink-0"
                 >
                   Send <Send size={16} />
                 </button>
