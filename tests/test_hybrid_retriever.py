@@ -3,6 +3,7 @@ tests/test_hybrid_retriever.py — Unit tests for BM25 + Vector hybrid retriever
 """
 from __future__ import annotations
 
+import pytest
 from unittest.mock import patch
 from langchain_core.documents import Document
 
@@ -11,6 +12,7 @@ from api.services.hybrid_retriever import (
     rrf_fuse,
     bm25_search,
     vector_search,
+    resolve_ticker_from_query,
     EDGARHybridRetriever,
 )
 
@@ -192,3 +194,54 @@ class TestEDGARHybridRetriever:
         retriever.invoke("test query")
 
         mock_vec.assert_called_once_with("test query", top_k=10, ticker="AAPL")
+
+
+class TestResolveTickerFromQuery:
+    # ── caller-provided ticker takes priority ────────────────────────────────
+    def test_caller_ticker_returned_unchanged(self):
+        assert resolve_ticker_from_query("What is Micron's revenue?", ticker="NVDA") == "NVDA"
+
+    def test_caller_ticker_not_overridden_by_query(self):
+        assert resolve_ticker_from_query("nvidia gross margin", ticker="MU") == "MU"
+
+    # ── correct resolutions ──────────────────────────────────────────────────
+    @pytest.mark.parametrize("query,expected", [
+        ("What is Micron Technology's gross margin?", "MU"),
+        ("micron revenue last year",                  "MU"),
+        ("NVIDIA's total revenue in 10-K",            "NVDA"),
+        ("nvidia gross margin",                       "NVDA"),
+        ("What did Intel report in 2023?",            "INTC"),
+        ("on semiconductor operating income",         "ON"),
+        ("onsemi free cash flow",                     "ON"),
+        ("lam research capital expenditure",          "LRCX"),
+        ("kla corporation earnings",                  "KLAC"),
+        ("micron technology vs advanced micro devices", "AMD"),  # "advanced micro devices" (22) > "micron technology" (17)
+    ])
+    def test_correct_resolution(self, query, expected):
+        assert resolve_ticker_from_query(query) == expected
+
+    # ── false-positive guard (MiMo issue #1) ────────────────────────────────
+    @pytest.mark.parametrize("query", [
+        "revenue on Q3 was strong",           # "on" as preposition
+        "the amended filing shows growth",    # not "amd"
+        "blacklisted vendor removed",         # not "kla"
+        "compare Q1 to Q2 performance",       # no company name
+        "what is the operating margin?",      # generic query
+        "show me the income statement",       # generic query
+    ])
+    def test_no_false_positive(self, query):
+        assert resolve_ticker_from_query(query) == ""
+
+    # ── edge cases ───────────────────────────────────────────────────────────
+    def test_none_query_returns_empty(self):
+        assert resolve_ticker_from_query(None) == ""   # type: ignore[arg-type]
+
+    def test_empty_string_returns_empty(self):
+        assert resolve_ticker_from_query("") == ""
+
+    def test_no_match_returns_empty(self):
+        assert resolve_ticker_from_query("What is the weather today?") == ""
+
+    def test_case_insensitive(self):
+        assert resolve_ticker_from_query("MICRON Technology revenue") == "MU"
+        assert resolve_ticker_from_query("Nvidia gross profit") == "NVDA"

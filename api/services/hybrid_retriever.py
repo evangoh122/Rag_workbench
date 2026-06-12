@@ -12,6 +12,7 @@ BM25 index is built lazily on first query and cached for the process lifetime.
 from __future__ import annotations
 
 import hashlib
+import re
 import threading
 from typing import List, Optional
 
@@ -202,6 +203,85 @@ def vector_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document
         return []
 
 
+# ── Company name → ticker resolver ───────────────────────────────────────────
+
+# Maps lowercase company name / unambiguous alias → ticker symbol.
+# Rules for inclusion:
+#   - Multi-word phrases are always safe (word-boundary regex handles them).
+#   - Single words must be >= 5 chars AND not common English words.
+#     Short ambiguous forms ("amd", "kla", "on") are intentionally excluded;
+#     only their unambiguous long-form names are kept.
+_COMPANY_ALIASES: dict[str, str] = {
+    # Multi-word first (also matched first due to longest-key sort)
+    "analog devices": "ADI",
+    "advanced micro devices": "AMD",
+    "taiwan semiconductor": "TSM",
+    "nxp semiconductors": "NXPI",
+    "microchip technology": "MCHP",
+    "monolithic power": "MPWR",
+    "on semiconductor": "ON",
+    "applied materials": "AMAT",
+    "lam research": "LRCX",
+    "kla corporation": "KLAC",
+    "onto innovation": "ONTO",
+    "kulicke & soffa": "KLIC",
+    "ichor holdings": "ICHR",
+    "aehr test systems": "AEHR",
+    "texas instruments": "TXN",
+    "micron technology": "MU",
+    # Single-word aliases — unambiguous, >= 5 chars, not common English words
+    "broadcom": "AVGO",
+    "intel": "INTC",
+    "micron": "MU",
+    "nvidia": "NVDA",
+    "qualcomm": "QCOM",
+    "tsmc": "TSM",
+    "marvell": "MRVL",
+    "microchip": "MCHP",
+    "skyworks": "SWKS",
+    "qorvo": "QRVO",
+    "onsemi": "ON",
+    "teradyne": "TER",
+    "entegris": "ENTG",
+    "formfactor": "FORM",
+    "photronics": "PLAB",
+    "kulicke": "KLIC",
+    "ichor": "ICHR",
+    "veeco": "VECO",
+    "axcelis": "ACLS",
+    "amkor": "AMKR",
+    "cohu": "COHU",
+    "aehr": "AEHR",
+}
+
+# Pre-compile regex patterns sorted longest-first so multi-word phrases match
+# before their single-word substrings (e.g. "micron technology" before "micron").
+_ALIAS_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"\b" + re.escape(alias) + r"\b", re.IGNORECASE), ticker)
+    for alias, ticker in sorted(_COMPANY_ALIASES.items(), key=lambda x: len(x[0]), reverse=True)
+]
+
+
+def resolve_ticker_from_query(query: str, ticker: str = "") -> str:
+    """Return the ticker to use for retrieval.
+
+    If ticker is already set by the caller, return it unchanged.
+    Otherwise scan the query for a known company name (whole-word match,
+    longest alias wins) and return the mapped ticker.
+
+    Returns "" if no match — callers must treat that as "no ticker filter".
+    """
+    if ticker:
+        return ticker
+    if not query:
+        return ""
+    for pattern, resolved in _ALIAS_PATTERNS:
+        if pattern.search(query):
+            logger.info(f"Auto-resolved ticker {resolved!r} from query text")
+            return resolved
+    return ""
+
+
 # ── Hybrid Retriever ──────────────────────────────────────────────────────────
 
 class EDGARHybridRetriever(BaseRetriever):
@@ -219,13 +299,12 @@ class EDGARHybridRetriever(BaseRetriever):
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
-        # Both legs search the global corpus; ticker docs get a 2× score boost
-        # in BM25 (searches full corpus) so they dominate without hard-excluding
-        # cross-ticker context. Vector search is already ticker-filtered (cosine
-        # distance is semantic), so it doesn't need a BM25-style boost.
-        # At RRF fusion time, matching docs get an additional ticker_boost.
-        bm25_docs = bm25_search(query, top_k=self.top_k * 2, ticker=self.ticker, ticker_boost=self.ticker_boost)
-        vec_docs  = vector_search(query, top_k=self.top_k * 2, ticker=self.ticker)
+        # Resolve ticker from query if caller didn't set one explicitly
+        # ("Micron's revenue" → MU, "NVIDIA gross margin" → NVDA, etc.)
+        effective_ticker = resolve_ticker_from_query(query, self.ticker)
+
+        bm25_docs = bm25_search(query, top_k=self.top_k * 2, ticker=effective_ticker, ticker_boost=self.ticker_boost)
+        vec_docs  = vector_search(query, top_k=self.top_k * 2, ticker=effective_ticker)
 
         # If only one method returned results, use it directly
         if not bm25_docs and not vec_docs:
@@ -237,9 +316,9 @@ class EDGARHybridRetriever(BaseRetriever):
 
         # RRF fusion with additional ticker boost at merge time
         fused = rrf_fuse([vec_docs, bm25_docs], k=self.rrf_k,
-                         boost_ticker=self.ticker, ticker_boost=self.ticker_boost)
+                         boost_ticker=effective_ticker, ticker_boost=self.ticker_boost)
         logger.debug(
-            "Hybrid RRF: {} vector + {} BM25 -> {} fused (top_k={}, ticker_boost={})",
-            len(vec_docs), len(bm25_docs), len(fused), self.top_k, self.ticker_boost,
+            "Hybrid RRF: {} vector + {} BM25 -> {} fused (top_k={}, ticker={}, boost={}×)",
+            len(vec_docs), len(bm25_docs), len(fused), self.top_k, effective_ticker, self.ticker_boost,
         )
         return fused[:self.top_k]
