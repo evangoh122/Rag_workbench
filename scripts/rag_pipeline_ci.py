@@ -1,7 +1,7 @@
 """
 CI validation script — full 31-ticker RAG pipeline smoke test.
 Called by .github/workflows/deploy.yml after data is seeded.
-Reads SPACE_URL from environment.
+Reads SPACE_URL and optional ADMIN_API_KEY from environment.
 """
 import json
 import os
@@ -10,6 +10,7 @@ import time
 from urllib import error, request
 
 SPACE_URL = os.environ["SPACE_URL"]
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
 ENDPOINT = f"{SPACE_URL}/api/chat/auditable-rag"
 
 # Full semiconductor coverage list (mirrors TICKER_TO_CIK in admin.py)
@@ -59,10 +60,13 @@ passed, failed = [], []
 for ticker in TICKERS:
     query = QUERIES[ticker]
     payload = json.dumps({"message": query, "ticker": ticker}).encode()
+    headers = {"Content-Type": "application/json"}
+    if ADMIN_API_KEY:
+        headers["X-API-Key"] = ADMIN_API_KEY
     req = request.Request(
         ENDPOINT,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     try:

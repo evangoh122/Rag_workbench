@@ -138,8 +138,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: "RAG pipeline -- all 31 tickers (chunk -> hybrid BM25+vector -> rerank -> RRF)"
         env:
-          HF_USERNAME:   ${{ secrets.HF_USERNAME }}
-          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
+          HF_USERNAME:    ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME:  ${{ secrets.HF_SPACE_NAME }}
+          ADMIN_API_KEY:  ${{ secrets.ADMIN_API_KEY }}
         run: |
           SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
           export SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
