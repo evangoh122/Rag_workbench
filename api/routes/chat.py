@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 import os
 from loguru import logger
@@ -8,7 +8,6 @@ from api.services.langgraph_engine import run_auditable_rag
 from api.services.graph_rag_engine import run_graph_rag
 from api.services.sec_client import chunk_filing_sections
 from api.services.sec_analyzer import analyze_filing
-from api.middleware.auth import get_read_api_key
 from api.models.schemas import (
     ChatRequest, ChatResponse, SourceItem,
     VerificationResult, PipelineStatus,
@@ -100,7 +99,7 @@ def _conversational_llm_call(message: str) -> str:
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/sql", response_model=ChatResponse)
-async def chat_sql_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
+async def chat_sql_endpoint(req: ChatRequest):
     _apply_input_rails(req.message)
     try:
         result = chat_sql(req.message, req.history)
@@ -121,7 +120,7 @@ async def chat_sql_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
 
 
 @router.post("/rag", response_model=ChatResponse)
-async def chat_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
+async def chat_rag_endpoint(req: ChatRequest):
     _apply_input_rails(req.message)
     try:
         answer = ask_rag(req.message)
@@ -143,7 +142,7 @@ async def chat_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
 
 
 @router.post("/graph-rag", response_model=ChatResponse)
-async def chat_graph_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
+async def chat_graph_rag_endpoint(req: ChatRequest):
     _apply_input_rails(req.message)
     try:
         if not req.ticker:
@@ -169,7 +168,7 @@ async def chat_graph_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key))
 
 
 @router.post("/auditable-rag", response_model=ChatResponse)
-async def chat_auditable_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
+async def chat_auditable_rag_endpoint(req: ChatRequest):
     _apply_input_rails(req.message)
     try:
         # Fast path: conversational messages bypass the full RAG pipeline
@@ -232,7 +231,7 @@ async def chat_auditable_rag_endpoint(req: ChatRequest, _=Depends(get_read_api_k
 
 
 @router.post("/sec-analyzer")
-async def chat_sec_analyzer_endpoint(req: ChatRequest, _=Depends(get_read_api_key)):
+async def chat_sec_analyzer_endpoint(req: ChatRequest):
     """
     Structured signal extraction from SEC filing chunks for bank analysts.
     """
@@ -269,7 +268,7 @@ class FeedbackRequest(BaseModel):
 
 
 @router.post("/feedback", status_code=204)
-async def chat_feedback_endpoint(req: FeedbackRequest, _=Depends(get_read_api_key)):
+async def chat_feedback_endpoint(req: FeedbackRequest):
     import uuid
     vid = str(uuid.uuid4())
     did = req.message_id or vid
