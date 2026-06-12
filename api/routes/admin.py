@@ -272,34 +272,33 @@ def refresh_data(
 class EmbedResponse(BaseModel):
     status: str
     chunks_stored: int
+    tickers_processed: int
+    error: str = ""
     timestamp: str
 
 
-class EmbedStartResponse(BaseModel):
-    status: str
-    message: str
-    timestamp: str
-
-
-def _run_embed_job(tickers: list[str]) -> None:
-    try:
-        n = run_embed_edgar_etl(tickers)
-        logger.info(f"Background embed job complete — {n} chunks stored")
-    except Exception:
-        logger.error(f"Background embed job failed:\n{traceback.format_exc()}")
-
-
-@router.post("/embed-data", response_model=EmbedStartResponse)
+@router.post("/embed-data", response_model=EmbedResponse)
 def embed_data(
-    background_tasks: BackgroundTasks,
     _: str = Depends(get_admin_api_key),
 ):
-    """Chunk + embed 10-K filings for all tickers into edgar_embeddings (runs in background)."""
+    """Chunk + embed 10-K filings for all tickers into edgar_embeddings (synchronous)."""
     tickers = list(TICKER_TO_CIK.keys())
-    logger.info(f"Starting embed-edgar background job for {len(tickers)} tickers")
-    background_tasks.add_task(_run_embed_job, tickers)
-    return EmbedStartResponse(
-        status="started",
-        message=f"Embed job launched for {len(tickers)} tickers in the background",
-        timestamp=datetime.now(timezone.utc).isoformat(),
-    )
+    logger.info(f"Starting embed-edgar job for {len(tickers)} tickers")
+    try:
+        n = run_embed_edgar_etl(tickers)
+        return EmbedResponse(
+            status="ok",
+            chunks_stored=n,
+            tickers_processed=len(tickers),
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"Embed job failed:\n{tb}")
+        return EmbedResponse(
+            status="error",
+            chunks_stored=0,
+            tickers_processed=0,
+            error=str(e)[:500],
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
