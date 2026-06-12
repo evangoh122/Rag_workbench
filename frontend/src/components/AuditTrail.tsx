@@ -12,6 +12,7 @@ interface AuditTrailProps {
   xbrl_facts?: XBRLFact[];
   relevant_xbrl?: XBRLFact[];
   xbrl_badge?: string;
+  xbrl_group?: string;
   polygon_data?: PolygonData[];
   verification?: VerificationResult;
   math_steps?: string[];
@@ -109,7 +110,7 @@ function XBRLFactCard({ fact }: { fact: XBRLFact }) {
   );
 }
 
-export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_badge, polygon_data, verification, math_steps }: AuditTrailProps) {
+export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_badge, xbrl_group, polygon_data, verification, math_steps }: AuditTrailProps) {
   const hasSources = sources && sources.length > 0;
   const hasRelevant = relevant_xbrl && relevant_xbrl.length > 0;
   const hasXBRL = xbrl_facts && xbrl_facts.length > 0;
@@ -130,11 +131,14 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
 
       {/* XBRL Verified Badge */}
       {hasRelevant && xbrl_badge && (
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-950 text-green-300 border border-green-800">
             <Database size={12} />
             {xbrl_badge}
           </span>
+          {xbrl_group && xbrl_group !== 'none' && (
+            <span className="text-[10px] uppercase text-gray-500 tracking-wide">{xbrl_group}</span>
+          )}
         </div>
       )}
 

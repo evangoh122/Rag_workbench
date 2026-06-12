@@ -544,6 +544,7 @@ function App() {
                           xbrl_facts={msg.xbrl_facts}
                           relevant_xbrl={msg.relevant_xbrl}
                           xbrl_badge={msg.xbrl_badge}
+                          xbrl_group={msg.xbrl_group}
                           verification={msg.verification}
                           math_steps={msg.math_steps}
                         />

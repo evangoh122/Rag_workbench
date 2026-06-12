@@ -5,10 +5,21 @@ relevant facts by query intent. Returns max 8 facts for contextual display.
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional, Tuple
+from collections import Counter
+from typing import Any, Dict, List, Optional, Tuple
 
 ConceptGroup = str
 ConceptName = str
+
+
+def _to_float(value: Any) -> float | None:
+    """Safely cast an XBRL value to float, returning None on failure."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 CONCEPT_GROUP_MAP: Dict[ConceptName, ConceptGroup] = {
     "Revenues": "revenue",
@@ -123,13 +134,17 @@ _DISPLAY_NAMES: Dict[str, str] = {
 
 
 def _classify_query(query: str) -> ConceptGroup:
-    """Map a natural-language query to a concept group via keyword matching."""
+    """Map a natural-language query to a concept group via keyword matching.
+    Accumulates all matched groups and picks the most-represented one."""
     q = query.lower()
+    groups: list[ConceptGroup] = []
     for keyword, group in sorted(QUERY_KEYWORD_TO_GROUP.items(),
                                  key=lambda x: -len(x[0])):
         if re.search(r"\b" + re.escape(keyword) + r"\b", q, re.IGNORECASE):
-            return group
-    return "profitability"
+            groups.append(group)
+    if not groups:
+        return "profitability"
+    return Counter(groups).most_common(1)[0][0]
 
 
 def _rank_facts(facts: List[Dict], primary_group: ConceptGroup, top_n: int = 8) -> List[Dict]:
@@ -164,12 +179,12 @@ def _rank_facts(facts: List[Dict], primary_group: ConceptGroup, top_n: int = 8) 
             rank += 50
         ranked.append((rank, f))
 
-    ranked.sort(key=lambda x: (x[0], -abs(float(x[1].get("value") or x[1].get("val") or 0))))
+    ranked.sort(key=lambda x: (x[0], -(abs(_to_float(x[1].get("value") or x[1].get("val")) or 0))))
     return [f for _, f in ranked[:top_n]]
 
 
-def get_relevant_facts(query: str, all_facts: List[Dict],
-                       max_facts: int = 8) -> Dict[str, any]:
+def get_relevant_facts(query: str, all_facts: List[Dict[str, Any]],
+                       max_facts: int = 8) -> Dict[str, Any]:
     """
     Return a structured summary of the most relevant XBRL facts for a query.
 
@@ -204,18 +219,14 @@ def get_relevant_facts(query: str, all_facts: List[Dict],
     }
 
 
-def format_fact_for_display(fact: Dict) -> Dict[str, any]:
+def format_fact_for_display(fact: Dict[str, Any]) -> Dict[str, Any]:
     """Normalise a fact dict for frontend consumption."""
     concept = fact.get("concept", "") or fact.get("label", "")
     value = fact.get("value") or fact.get("val")
     unit = fact.get("unit", "")
     period = fact.get("period_end", "") or fact.get("period", "")
     label = fact.get("label", "") or _DISPLAY_NAMES.get(concept, concept)
-
-    try:
-        num = float(value) if value is not None else None
-    except (TypeError, ValueError):
-        num = None
+    num = _to_float(value)
 
     return {
         "concept": concept,
