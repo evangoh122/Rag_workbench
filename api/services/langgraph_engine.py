@@ -533,11 +533,38 @@ def abstention_node(state: GraphState) -> Dict[str, Any]:
     }
 
 
+def _ensure_audit_table(conn) -> None:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS audit_runs (
+            run_id            VARCHAR PRIMARY KEY,
+            timestamp         VARCHAR NOT NULL,
+            ticker            VARCHAR,
+            question          TEXT,
+            query_type        VARCHAR,
+            answer            TEXT,
+            eval_route        VARCHAR,
+            confidence        DOUBLE,
+            verification_status VARCHAR,
+            model_used        VARCHAR,
+            source_docs       JSON,
+            chunk_ids         JSON,
+            xbrl_facts_cited  JSON,
+            math_result       VARCHAR,
+            math_steps        JSON,
+            eval_triggers     JSON,
+            review_id         VARCHAR
+        )
+    """)
+
+
 def lineage_node(state: GraphState) -> Dict[str, Any]:
     """
-    Lineage Node: Build the audit lineage record for every response.
+    Lineage Node: Build the audit lineage record for every response,
+    and persist it to audit_runs in rag.duckdb for regulatory review.
     """
     logger.info("--- LINEAGE ---")
+    import json
+    import uuid
     import duckdb
     from api.db.review_queue import init_review_tables, insert_decision
 
@@ -573,15 +600,58 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
         except Exception as exc:
             logger.warning(f"Review queue insert failed (non-fatal): {exc}")
 
+    ts = datetime.now(timezone.utc).isoformat()
+    run_id = str(uuid.uuid4())
+
     lineage: Dict[str, Any] = {
+        "run_id": run_id,
         "source_docs": source_docs,
         "chunk_ids": chunk_ids,
         "model": cfg["model"],
         "confidence": state.get("eval_confidence"),
         "eval_route": eval_route,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": ts,
         "review_id": review_id,
     }
+
+    # Persist full run to audit_runs for regulatory record-keeping
+    try:
+        xbrl_cited = [
+            {"concept": f.get("concept"), "value": f.get("value"),
+             "period_end": f.get("period_end"), "form_type": f.get("form_type")}
+            for f in state.get("xbrl_facts", [])
+        ]
+        math_result = state.get("math_result")
+        with duckdb.connect(Config.DB_PATH) as conn:
+            _ensure_audit_table(conn)
+            conn.execute("""
+                INSERT INTO audit_runs (
+                    run_id, timestamp, ticker, question, query_type, answer,
+                    eval_route, confidence, verification_status, model_used,
+                    source_docs, chunk_ids, xbrl_facts_cited, math_result,
+                    math_steps, eval_triggers, review_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, [
+                run_id, ts,
+                state.get("ticker", ""),
+                state.get("query", ""),
+                state.get("query_type", ""),
+                state.get("final_answer", ""),
+                eval_route,
+                state.get("eval_confidence"),
+                state.get("verification_status", ""),
+                cfg["model"],
+                json.dumps(source_docs),
+                json.dumps(chunk_ids),
+                json.dumps(xbrl_cited),
+                str(math_result) if math_result is not None else None,
+                json.dumps(state.get("math_steps", [])),
+                json.dumps(state.get("eval_triggers") or []),
+                review_id,
+            ])
+        logger.info(f"Audit run saved: {run_id}")
+    except Exception as exc:
+        logger.warning(f"Audit run write failed (non-fatal): {exc}")
 
     return {
         "lineage": lineage,
