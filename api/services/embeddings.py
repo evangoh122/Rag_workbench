@@ -15,30 +15,25 @@ class PrefixedOllamaEmbeddings(OllamaEmbeddings):
 
 class HFInferenceEmbeddings:
     """
-    LangChain-compatible embeddings via HuggingFace Serverless Inference API.
-    Uses InferenceClient.feature_extraction — no local model download needed.
-
-    Env vars:
-      HF_TOKEN           — HuggingFace token (required)
-      HF_EMBEDDING_MODEL — model ID (default: Qwen/Qwen3-Embedding-8B)
-      HF_EMBED_PROVIDER  — routed provider slug (default: auto, e.g. "scaleway")
+    Embeddings via HuggingFace Inference API (direct HTTP — no InferenceClient routing).
     """
     def __init__(self, model_name: str, provider: str | None = None, api_key: str | None = None):
-        from huggingface_hub import InferenceClient
         self._model = model_name
-        self._client = InferenceClient(
-            provider="hf-inference",
-            api_key=api_key or os.getenv("HF_TOKEN", ""),
-        )
-        logger.info(f"HFInferenceEmbeddings ready — model={model_name}")
+        self._api_key = api_key or os.getenv("HF_TOKEN", "")
+        self._url = f"https://api-inference.huggingface.co/models/{model_name}"
         logger.info(f"HFInferenceEmbeddings ready — model={model_name}")
 
     def _embed(self, text: str) -> list[float]:
-        result = self._client.feature_extraction(text, model=self._model)
-        # result may be a numpy array or nested list
-        import numpy as np
+        import requests, numpy as np
+        resp = requests.post(
+            self._url,
+            headers={"Authorization": f"Bearer {self._api_key}"},
+            json={"inputs": text},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        result = resp.json()
         arr = np.array(result)
-        # Some models return (1, dim) or (seq_len, dim) — take mean over sequence if needed
         if arr.ndim == 2:
             arr = arr.mean(axis=0)
         elif arr.ndim == 1:
