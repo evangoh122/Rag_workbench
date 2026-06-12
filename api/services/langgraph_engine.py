@@ -45,6 +45,7 @@ class GraphState(TypedDict):
     query: str
     ticker: str
     query_type: str              # "numeric" | "qualitative"
+    query_intent: str            # "latest" | "comparison" | "general"
     retrieved_docs: List[Dict[str, Any]]
     xbrl_facts: List[Dict[str, Any]]
     polygon_data: List[Dict[str, Any]]
@@ -77,9 +78,13 @@ def retrieval_node(state: GraphState) -> Dict[str, Any]:
         ticker = state['ticker']
 
         # 1. Retrieve SEC Filing Chunks (BM25 + Vector hybrid with RRF)
+        # top_k scales with intent: latest=1, general=3, comparison=8
+        intent = state.get("query_intent", "general")
+        top_k = {"latest": 1, "general": 3, "comparison": 8}.get(intent, 3)
+
         docs = []
         try:
-            hybrid_retriever = EDGARHybridRetriever(top_k=5, ticker=ticker)
+            hybrid_retriever = EDGARHybridRetriever(top_k=top_k, ticker=ticker)
             docs = hybrid_retriever.invoke(query)
         except Exception as e:
             logger.warning("Hybrid retrieval failed, falling back to keyword: {}", e)
@@ -698,6 +703,35 @@ _QUALITATIVE_SIGNALS = [
 ]
 
 
+_COMPARISON_SIGNALS = [
+    "compare", "comparison", "versus", " vs ", " vs.",
+    "over the years", "year over year", "yoy", "trend", "historically",
+    "history", "last 3 years", "last 5 years", "last two years", "last three years",
+    "how has", "changed over", "change over", "growth over",
+    "quarter over quarter", "qoq", "multi-year", "multiyear",
+]
+
+_LATEST_SIGNALS = [
+    "latest", "most recent", "current", "most recently",
+    "last quarter", "last fiscal", "this year", "this quarter",
+]
+
+
+def _detect_intent(query: str) -> str:
+    """Classify query intent as 'comparison', 'latest', or 'general'.
+
+    comparison → multiple sources needed, LLM should produce a comparison table.
+    latest     → single most-recent source is sufficient.
+    general    → balanced retrieval (2-3 sources).
+    """
+    q = query.lower()
+    if any(s in q for s in _COMPARISON_SIGNALS):
+        return "comparison"
+    if any(s in q for s in _LATEST_SIGNALS):
+        return "latest"
+    return "general"
+
+
 def _is_numeric_query(query: str) -> bool:
     """Check if the query requires numeric computation.
 
@@ -716,12 +750,14 @@ def _is_numeric_query(query: str) -> bool:
 
 
 def classifier_node(state: GraphState) -> Dict[str, Any]:
-    """Classify query as numeric or qualitative to route the pipeline."""
+    """Classify query as numeric/qualitative and detect comparison vs latest intent."""
     query = state["query"]
-    qtype = "numeric" if _is_numeric_query(query) else "qualitative"
-    logger.info(f"--- CLASSIFIER: {qtype} ---")
+    qtype  = "numeric" if _is_numeric_query(query) else "qualitative"
+    intent = _detect_intent(query)
+    logger.info(f"--- CLASSIFIER: {qtype} | intent={intent} ---")
     return {
-        "query_type": qtype,
+        "query_type":   qtype,
+        "query_intent": intent,
         "status": {**state.get("status", {}), "classifier": "success"},
     }
 
@@ -778,6 +814,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                 facts_text = "\n\nAvailable XBRL facts:\n" + "\n".join(facts_lines)
 
         ticker = state.get("ticker", "")
+        intent = state.get("query_intent", "general")
 
         tools = [
             {
@@ -805,6 +842,24 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
             },
         ]
 
+        if intent == "comparison":
+            intent_instruction = (
+                "The user is asking for a COMPARISON across multiple periods or years. "
+                "You MUST structure your answer as a comparison: present the values for each "
+                "available period side-by-side (e.g. a table or year-by-year breakdown). "
+                "Highlight the trend, direction of change, and percentage growth where possible. "
+                "Do not summarise into a single figure — show each period explicitly."
+            )
+        elif intent == "latest":
+            intent_instruction = (
+                "The user wants the MOST RECENT figure only. "
+                "Use the latest available period from the context. State the period date clearly."
+            )
+        else:
+            intent_instruction = (
+                "Answer using the most relevant data available in the context."
+            )
+
         messages = [
             {
                 "role": "system",
@@ -814,9 +869,8 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                     "Cite specific sections, risks, or statements from the filing. "
                     "If the question involves a financial metric or number, call the "
                     "calculate_financial_metric tool to compute it precisely. "
-                    "Use Polars, never Pandas for any data operations. "
                     "Do not fabricate numbers, statistics, or claims not present in the context. "
-                    "If the context is insufficient, say so clearly."
+                    f"If the context is insufficient, say so clearly. {intent_instruction}"
                 ),
             },
             {
@@ -1099,6 +1153,7 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
         "query": query,
         "ticker": ticker,
         "query_type":           "numeric",
+        "query_intent":         "general",
         "retrieved_docs":      [],
         "xbrl_facts":          [],
         "polygon_data":        [],
