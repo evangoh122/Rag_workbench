@@ -163,6 +163,8 @@ jobs:
         run: |
           SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
           SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
+          echo "Waiting 300s for Space rebuild to complete..."
+          sleep 300
           echo "Triggering embed-data job on $SPACE_URL..."
           for i in $(seq 1 10); do
             RESPONSE=$(curl -sf --max-time 1800 -X POST \
