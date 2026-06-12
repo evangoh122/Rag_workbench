@@ -4,7 +4,8 @@ langgraph_engine.py — Deterministic RAG DAG for SEC filings.
 Nodes: Retrieval -> XBRL Extraction -> Math Execution -> Verification -> Output
 Conditional edge on Verification failure: -> Abstention
 """
-from datetime import datetime, timezone
+import re
+from datetime import date as _date, datetime, timezone
 from typing import TypedDict, List, Dict, Any, Optional, Union
 import polars as pl
 
@@ -80,7 +81,8 @@ def retrieval_node(state: GraphState) -> Dict[str, Any]:
         # 1. Retrieve SEC Filing Chunks (BM25 + Vector hybrid with RRF)
         # top_k scales with intent: latest=1, general=3, comparison=8
         intent = state.get("query_intent", "general")
-        top_k = {"latest": 1, "general": 3, "comparison": 8}.get(intent, 3)
+        # latest uses 2 not 1 — single bad chunk leaves no fallback
+        top_k = {"latest": 2, "general": 3, "comparison": 8}.get(intent, 3)
 
         docs = []
         try:
@@ -507,21 +509,139 @@ def eval_node(state: GraphState) -> Dict[str, Any]:
         return {"status": {**state.get('status', {}), "eval": "error"}}
 
 
+def _safe_numeric(value) -> float | None:
+    """Return float(value) or None — never raises on non-numeric XBRL values.
+    nan/inf are excluded because they produce unreadable display strings.
+    """
+    import math
+    try:
+        f = float(value)
+        return None if math.isnan(f) or math.isinf(f) else f
+    except (TypeError, ValueError):
+        return None
+
+
+# Maps query keywords → XBRL concept substrings to surface in comparisons.
+# Each entry is a list so multiple query signals map to the same concept set.
+_CONCEPT_MAP: list[tuple[tuple[str, ...], list[str]]] = [
+    (("gross margin", "gross profit"),             ["GrossProfit", "Revenues", "CostOfGoodsAndServicesSold"]),
+    (("revenue", "sales", "net sales"),            ["Revenues"]),
+    (("operating income", "operating margin"),     ["OperatingIncomeLoss"]),
+    (("net income", "earnings", "net earnings"),   ["NetIncomeLoss"]),
+    (("r&d", "research and development"),          ["ResearchAndDevelopmentExpense"]),
+    # FCF = operating cash flow − CapEx; surface both so caller can derive it
+    (("free cash", "fcf"),                         ["NetCashProvidedByUsedInOperatingActivities",
+                                                    "PaymentsToAcquirePropertyPlantAndEquipment"]),
+    (("long[- ]?term debt", "debt"),                 ["LongTermDebt"]),
+    (("assets",),                                  ["Assets"]),
+]
+
+_DEFAULT_CONCEPTS = ["Revenues", "NetIncomeLoss", "OperatingIncomeLoss"]
+
+
+def _pick_concepts(query_lower: str) -> list[str]:
+    """Return the XBRL concept substrings most relevant to the query.
+
+    All matching keyword groups contribute (not just the first), so
+    'operating revenue and net income' returns concepts for both.
+    Falls back to a default set instead of an empty list.
+    """
+    matched: list[str] = []
+    for keywords, concepts in _CONCEPT_MAP:
+        if any(re.search(r"\b(?:" + kw + r")\b", query_lower) for kw in keywords):
+            for c in concepts:
+                if c not in matched:
+                    matched.append(c)
+    return matched if matched else _DEFAULT_CONCEPTS
+
+
+def _period_sort_key(period: str) -> tuple:
+    """Stable sort key for XBRL period strings.
+
+    ISO dates (YYYY-MM-DD) sort correctly as strings but quarter labels like
+    FY2023-Q10 sort before FY2023-Q2 lexicographically — normalize them.
+    """
+    try:
+        return (0, _date.fromisoformat(period).isoformat())
+    except (ValueError, TypeError):
+        m = re.match(r"(\d{4})[^0-9]?Q(\d+)", period, re.IGNORECASE)
+        if m:
+            return (0, f"{m.group(1)}-Q{int(m.group(2)):02d}")
+        return (1, period)
+
+
+def _fmt_num(num: float) -> str:
+    """Format a number for human display, preserving meaningful decimals."""
+    if abs(num) < 10:
+        return f"{num:,.4f}"
+    if abs(num) < 1_000:
+        return f"{num:,.2f}"
+    return f"{num:,.0f}"
+
+
 def output_node(state: GraphState) -> Dict[str, Any]:
     """
     Final Node: Format the successful answer.
+    For comparison intent, surfaces multi-period XBRL data instead of a single value.
     """
     logger.info("--- OUTPUT ---")
-    answer = f"Based on the SEC filing for {state['ticker']}, the answer is {state['math_result']}."
-    if state['verification_status'] == "PASS":
-        answer += f" (Verified: {state['verification_reasoning']})"
-    elif state['verification_status'] == "SKIPPED":
-        answer += " (Note: NLI verification was skipped — model not available)"
-    # Surface eval routing decision in the answer when escalation is triggered.
+
+    # Constrain intent to safe literals (mirrors qualitative_output_node guard)
+    intent = state.get("query_intent", "general")
+    if intent not in ("latest", "comparison", "general"):
+        intent = "general"
+
+    ticker = state["ticker"]
+
+    if intent == "comparison":
+        facts = state.get("xbrl_facts", [])
+        if isinstance(facts, list) and facts:
+            query_lower = state.get("query", "").lower()
+            concept_priority = _pick_concepts(query_lower)
+
+            rows: list[tuple[str, str, float]] = []
+            for f in facts:
+                concept = f.get("concept", "")
+                if not any(c.lower() in concept.lower() for c in concept_priority):
+                    continue
+                period = f.get("period_end", "")
+                # fix: value=0 is valid — must not use `or` (falsy)
+                raw = f.get("value") if f.get("value") is not None else f.get("val")
+                num = _safe_numeric(raw)
+                if period and num is not None:
+                    rows.append((period, concept, num))
+
+            rows.sort(key=lambda x: _period_sort_key(x[0]))
+
+            MAX_PERIODS = 6
+            if len(rows) > MAX_PERIODS:
+                logger.info(f"output_node: truncating {len(rows)} rows to last {MAX_PERIODS} periods")
+                rows = rows[-MAX_PERIODS:]
+
+            if rows:
+                lines = [f"Multi-period comparison for {ticker} (values in reported units):\n"]
+                for period, concept, num in rows:
+                    lines.append(f"  {period}  {concept}: {_fmt_num(num)}")
+                math_result = state.get("math_result")
+                if math_result is not None:
+                    lines.append(f"\nLatest calculated metric: {math_result}")
+                answer = "\n".join(lines)
+            else:
+                math_result = state.get("math_result")
+                answer = f"Comparison requested but no matching periods found. Latest: {math_result}"
+        else:
+            answer = f"Based on the SEC filing for {ticker}, the answer is {state.get('math_result')}."
+    else:
+        answer = f"Based on the SEC filing for {ticker}, the answer is {state.get('math_result')}."
+
+    if state["verification_status"] == "PASS":
+        answer += f"\n(Verified: {state['verification_reasoning']})"
+    elif state["verification_status"] == "SKIPPED":
+        answer += "\n(Note: NLI verification was skipped — model not available)"
+
     if state.get("eval_route") == "ESCALATE" and state.get("eval_triggers"):
-        answer += (
-            f" [Eval: ESCALATE — triggers: {', '.join(state['eval_triggers'])}]"
-        )
+        answer += f"\n[Eval: ESCALATE — triggers: {', '.join(state['eval_triggers'])}]"
+
     return {
         "final_answer": answer,
         "status": {**state.get('status', {}), "output": "success"}
@@ -814,7 +934,10 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                 facts_text = "\n\nAvailable XBRL facts:\n" + "\n".join(facts_lines)
 
         ticker = state.get("ticker", "")
+        # Constrain to safe literals before interpolating into system prompt
         intent = state.get("query_intent", "general")
+        if intent not in ("latest", "comparison", "general"):
+            intent = "general"
 
         tools = [
             {
@@ -869,6 +992,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                     "Cite specific sections, risks, or statements from the filing. "
                     "If the question involves a financial metric or number, call the "
                     "calculate_financial_metric tool to compute it precisely. "
+                    "Use Polars, never Pandas for any data operations. "
                     "Do not fabricate numbers, statistics, or claims not present in the context. "
                     f"If the context is insufficient, say so clearly. {intent_instruction}"
                 ),
