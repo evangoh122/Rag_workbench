@@ -1,6 +1,6 @@
 import re
 from typing import Optional, List, Dict, Any
-import pandas as pd
+import polars as pl
 from openai import OpenAI
 from langsmith import traceable
 from api.config import Config
@@ -102,16 +102,16 @@ def validate_read_only_sql(sql: str) -> Optional[str]:
     return None
 
 @traceable(name="chat_summarise_results")
-def summarise_results(question: str, df: pd.DataFrame) -> str:
-    if df.empty:
+def summarise_results(question: str, df: pl.DataFrame) -> str:
+    if df.is_empty():
         return "The query returned no results."
     
     cfg = Config.get_provider_config()
     client = OpenAI(api_key=cfg["api_key"] or "local", base_url=cfg["base_url"])
     
     # Simple column selection to avoid token limits
-    cols = df.columns[:8] 
-    preview = df[cols].head(5).to_markdown(index=False)
+    cols = df.columns[:8]
+    preview = df.select(cols).head(5).to_pandas().to_markdown(index=False)
     
     try:
         resp = client.chat.completions.create(
@@ -169,14 +169,14 @@ def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> D
         conn.execute("SET memory_limit TO '256MB'")
         df = conn.execute(
             f"SELECT * FROM ({sql}) AS chat_result LIMIT ?", [100]
-        ).df()
+        ).pl()
         conn.execute("RESET memory_limit")
         conn.execute("RESET threads")
         answer = summarise_results(question, df)
         return {
             "type": "table",
             "sql": sql,
-            "data": df.to_dict(orient="records"),
+            "data": df.to_dicts(),
             "answer": answer
         }
     except Exception:
