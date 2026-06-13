@@ -1,0 +1,46 @@
+name: Keep HF Space Awake
+
+# Free Hugging Face Spaces sleep after a period of inactivity. This pings the
+# Space's health endpoint once a day so it stays warm. A sleeping Space takes
+# ~1-2 min to wake, so we retry a few times before failing.
+#
+# NOTE: scheduled workflows only run from the repository's DEFAULT branch, so
+# this must be on `main` to actually fire. GitHub also disables scheduled
+# workflows after ~60 days with no repo activity, and 00:00 UTC is a busy slot
+# so the run may be delayed by GitHub — fine for a keep-warm ping.
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # daily at 00:00 UTC
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+# Allow only one keep-awake run at a time.
+concurrency:
+  group: keep-awake
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Ping Space health endpoint
+        env:
+          # Override in repo Settings → Variables if the Space URL changes.
+          SPACE_URL: ${{ vars.SPACE_URL || 'https://egoh33-auditable-filing-qa.hf.space/api/health' }}
+        run: |
+          echo "Pinging $SPACE_URL"
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sS -o /tmp/resp -w "%{http_code}" -m 90 "$SPACE_URL" || echo "000")
+            echo "Attempt $i -> HTTP $code"
+            head -c 500 /tmp/resp 2>/dev/null || true
+            echo
+            if [ "$code" = "200" ]; then
+              echo "Space is awake."
+              exit 0
+            fi
+            echo "Not ready (a sleeping Space takes ~1-2 min to wake); retrying in 30s..."
+            sleep 30
+          done
+          echo "::error::Space did not return HTTP 200 after retries."
+          exit 1
