@@ -45,6 +45,22 @@ async def get_stats():
             data["embedding_dim_min"] = None
             data["embedding_dim_max"] = None
             data["embedding_dim_variants"] = 0
+        try:
+            row = conn.execute(
+                """SELECT MIN(len(embedding)), MAX(len(embedding)),
+                          COUNT(DISTINCT len(embedding)), COUNT(embedding)
+                   FROM ticker_embeddings
+                   WHERE embedding IS NOT NULL"""
+            ).fetchone()
+            data["ticker_embedding_dim_min"] = int(row[0]) if row and row[0] is not None else None
+            data["ticker_embedding_dim_max"] = int(row[1]) if row and row[1] is not None else None
+            data["ticker_embedding_dim_variants"] = int(row[2]) if row and row[2] is not None else 0
+            data["ticker_embeddings_with_vectors"] = int(row[3]) if row and row[3] is not None else 0
+        except Exception:
+            data["ticker_embedding_dim_min"] = None
+            data["ticker_embedding_dim_max"] = None
+            data["ticker_embedding_dim_variants"] = 0
+            data["ticker_embeddings_with_vectors"] = 0
         # ticker coverage list
         try:
             rows = conn.execute(

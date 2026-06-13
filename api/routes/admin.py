@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from api.middleware.auth import get_admin_api_key
 from api.config import Config
 from scripts.embed_edgar import run_embed_edgar_etl
+from scripts.embed_tickers import run_embed_tickers_etl
 
 router = APIRouter()
 
@@ -282,6 +283,7 @@ class EmbedResponse(BaseModel):
     status: str
     chunks_stored: int
     tickers_processed: int
+    ticker_embeddings_stored: int = 0
     error: str = ""
     timestamp: str
 
@@ -290,15 +292,17 @@ class EmbedResponse(BaseModel):
 def embed_data(
     _: str = Depends(get_admin_api_key),
 ):
-    """Chunk + embed 10-K filings for all tickers into edgar_embeddings (synchronous)."""
+    """Rebuild filing chunks and company-description embeddings (synchronous)."""
     tickers = list(TICKER_TO_CIK.keys())
     logger.info(f"Starting embed-edgar job for {len(tickers)} tickers")
     try:
         n = run_embed_edgar_etl(tickers)
+        ticker_count = run_embed_tickers_etl()
         return EmbedResponse(
             status="ok",
             chunks_stored=n,
             tickers_processed=len(tickers),
+            ticker_embeddings_stored=ticker_count,
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
     except Exception as e:

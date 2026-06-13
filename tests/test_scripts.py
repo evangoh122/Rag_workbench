@@ -7,12 +7,16 @@ for mod in ["sec_edgar_downloader", "langchain_text_splitters", "bs4", "edgar"]:
 
 # Fix broken import in scripts/embed_edgar.py
 import scripts.embed_tickers
-scripts.embed_tickers._get_embeddings = MagicMock()
+scripts.embed_tickers.get_embeddings = MagicMock()
 
 from unittest.mock import patch, mock_open
 
 # Now we can import the scripts
 from scripts.embed_edgar import _reset_incompatible_embeddings, run_embed_edgar_etl
+from scripts.embed_tickers import (
+    _load_ticker_rows,
+    _reset_incompatible_embeddings as _reset_incompatible_ticker_embeddings,
+)
 from scripts.init_graph_triples import init_graph_triples
 from scripts.run_shadow import load_extractions, main as shadow_main
 
@@ -38,6 +42,39 @@ def test_reset_incompatible_embeddings_keeps_matching_corpus():
 
     assert _reset_incompatible_embeddings(conn, expected_dim=3) is False
     assert conn.execute("SELECT COUNT(*) FROM edgar_embeddings").fetchone()[0] == 2
+
+
+def test_reset_incompatible_ticker_embeddings_preserves_metadata():
+    import duckdb
+
+    conn = duckdb.connect(":memory:")
+    conn.execute("""
+        CREATE TABLE ticker_embeddings (
+            ticker VARCHAR, description VARCHAR, text VARCHAR,
+            embedding FLOAT[], updated_at VARCHAR
+        )
+    """)
+    conn.execute("INSERT INTO ticker_embeddings VALUES ('AMD', 'Advanced Micro Devices', 'old', [1, 2], 'old')")
+
+    assert _reset_incompatible_ticker_embeddings(conn, expected_dim=3) is True
+    row = conn.execute(
+        "SELECT ticker, description, text, embedding, updated_at FROM ticker_embeddings"
+    ).fetchone()
+    assert row == ("AMD", "Advanced Micro Devices", None, None, None)
+
+
+def test_load_ticker_rows_without_polygon_table():
+    import duckdb
+
+    conn = duckdb.connect(":memory:")
+    conn.execute("CREATE TABLE ticker_embeddings (ticker VARCHAR, description VARCHAR)")
+    conn.execute("INSERT INTO ticker_embeddings VALUES ('AMD', 'Advanced Micro Devices'), ('EMPTY', '')")
+
+    assert _load_ticker_rows(conn) == [{
+        "ticker": "AMD",
+        "name": "Advanced Micro Devices",
+        "description": "Advanced Micro Devices",
+    }]
 
 @patch("scripts.embed_edgar.Downloader")
 @patch("scripts.embed_edgar.duckdb.connect")

@@ -223,13 +223,20 @@ jobs:
           dim_min = data.get('embedding_dim_min')
           dim_max = data.get('embedding_dim_max')
           dim_variants = data.get('embedding_dim_variants') or 0
+          ticker_dim_min = data.get('ticker_embedding_dim_min')
+          ticker_dim_max = data.get('ticker_embedding_dim_max')
+          ticker_dim_variants = data.get('ticker_embedding_dim_variants') or 0
+          ticker_vectors = data.get('ticker_embeddings_with_vectors') or 0
           companies = data.get('companies_with_chunks') or 0
           exp_model = os.environ['EXPECTED_MODEL']
           exp_dim = int(os.environ['EXPECTED_DIM'])
           target = int(os.environ['TARGET'])
-          print(f'status=model={model} cfg_dim={cfg_dim} dim_min={dim_min} dim_max={dim_max} dim_variants={dim_variants} companies={companies}')
+          print(f'status=model={model} cfg_dim={cfg_dim} dim_min={dim_min} dim_max={dim_max} dim_variants={dim_variants} ticker_dim_min={ticker_dim_min} ticker_dim_max={ticker_dim_max} ticker_dim_variants={ticker_dim_variants} ticker_vectors={ticker_vectors} companies={companies}')
           if (model == exp_model and cfg_dim == exp_dim and dim_min == exp_dim
-                  and dim_max == exp_dim and dim_variants == 1 and companies >= target):
+                  and dim_max == exp_dim and dim_variants == 1
+                  and ticker_dim_min == exp_dim and ticker_dim_max == exp_dim
+                  and ticker_dim_variants == 1 and ticker_vectors >= target
+                  and companies >= target):
               print('READY')
           ")
             echo "Attempt $i/45 — $(echo "$RESULT" | grep '^status=' | sed 's/^status=//')"
