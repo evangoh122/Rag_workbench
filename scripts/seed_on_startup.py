@@ -11,6 +11,12 @@ from loguru import logger
 ADMIN_KEY = os.getenv("ADMIN_API_KEY", "")
 BASE_URL = "http://127.0.0.1:8000"
 
+# The DB is restored from the HF dataset at boot (fetch_db_from_dataset.py).
+# EDGAR re-seeding is OFF by default so the Space does not re-download/re-embed
+# filings on every restart — set SEED_FROM_EDGAR=true only to (re)build from
+# scratch when there is no dataset to restore from.
+SEED_FROM_EDGAR = os.getenv("SEED_FROM_EDGAR", "false").lower() in ("1", "true", "yes")
+
 
 def wait_for_app(retries: int = 30, delay: float = 2.0) -> bool:
     for i in range(retries):
@@ -61,6 +67,16 @@ def main():
         logger.info(
             f"DB already populated from dataset (xbrl_facts={s.get('xbrl_facts')}, "
             f"companies_with_chunks={s.get('companies_with_chunks')}) — skipping EDGAR re-seed"
+        )
+        return
+
+    # DB is empty (dataset restore failed or absent). Do NOT re-download from
+    # EDGAR unless explicitly opted in — the dataset is the source of truth.
+    if not SEED_FROM_EDGAR:
+        logger.warning(
+            "DB is empty and SEED_FROM_EDGAR is off — skipping EDGAR download. "
+            "The Space relies on the dataset restore (check HF_TOKEN / DB_DATASET_REPO). "
+            "Set SEED_FROM_EDGAR=true to rebuild from EDGAR."
         )
         return
 

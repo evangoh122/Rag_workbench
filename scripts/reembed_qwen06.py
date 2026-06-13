@@ -19,6 +19,12 @@ import argparse
 import os
 import time
 
+# Use all CPU cores for the embedding matmuls (torch/MKL otherwise default to a
+# fraction of logical CPUs). Must be set before torch/numpy are imported.
+_NCPU = str(os.cpu_count() or 4)
+os.environ.setdefault("OMP_NUM_THREADS", _NCPU)
+os.environ.setdefault("MKL_NUM_THREADS", _NCPU)
+
 import duckdb
 
 MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
@@ -34,8 +40,14 @@ def main() -> None:
 
     os.environ.setdefault("EMBEDDING_MAX_SEQ_LEN", "512")
 
+    import torch
     from sentence_transformers import SentenceTransformer
 
+    try:
+        torch.set_num_threads(int(_NCPU))
+    except Exception:
+        pass
+    print(f"[reembed] torch threads={torch.get_num_threads()}", flush=True)
     print(f"[reembed] loading {MODEL_NAME} ...", flush=True)
     model = SentenceTransformer(MODEL_NAME)
     try:
