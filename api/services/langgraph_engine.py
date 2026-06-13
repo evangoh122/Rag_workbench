@@ -494,7 +494,7 @@ def eval_node(state: GraphState) -> Dict[str, Any]:
         decision      = score_and_route(extraction, ticker=ticker)
 
         logger.info(
-            "Eval: route=%s conf=%.2f triggers=%s schema_valid=%s",
+            "Eval: route={} conf={:.2f} triggers={} schema_valid={}",
             decision.route.value, decision.confidence,
             decision.triggers_fired, schema_result.is_valid,
         )

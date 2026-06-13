@@ -15,24 +15,23 @@ class PrefixedOllamaEmbeddings(OllamaEmbeddings):
 
 class HFInferenceEmbeddings:
     """
-    Embeddings via HuggingFace Inference API (direct HTTP — no InferenceClient routing).
+    Embeddings via HuggingFace InferenceClient (feature_extraction).
+    Supports provider routing via HF_EMBED_PROVIDER.
     """
     def __init__(self, model_name: str, provider: str | None = None, api_key: str | None = None):
         self._model = model_name
         self._api_key = api_key or os.getenv("HF_TOKEN", "")
-        self._url = f"https://api-inference.huggingface.co/models/{model_name}"
-        logger.info(f"HFInferenceEmbeddings ready — model={model_name}")
+        self._provider = provider or os.getenv("HF_EMBED_PROVIDER", "")
+        logger.info(f"HFInferenceEmbeddings ready — model={model_name} provider={self._provider or 'auto'}")
+
+    def _init_client(self):
+        from huggingface_hub import InferenceClient
+        return InferenceClient(token=self._api_key)
 
     def _embed(self, text: str) -> list[float]:
-        import requests, numpy as np
-        resp = requests.post(
-            self._url,
-            headers={"Authorization": f"Bearer {self._api_key}"},
-            json={"inputs": text},
-            timeout=60,
-        )
-        resp.raise_for_status()
-        result = resp.json()
+        import numpy as np
+        client = self._init_client()
+        result = client.feature_extraction(text, model=self._model)
         arr = np.array(result)
         if arr.ndim == 2:
             arr = arr.mean(axis=0)

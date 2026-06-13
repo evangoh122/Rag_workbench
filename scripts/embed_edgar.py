@@ -429,6 +429,9 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
     )
 
     model = _get_model()
+    if model is None:
+        logger.error("No embedding model available — cannot generate vectors. Ensure EMBEDDING_PROVIDER and HF_TOKEN are set.")
+        return 0
     total_chunks_stored = 0
 
     with duckdb.connect(DB_PATH) as conn:
