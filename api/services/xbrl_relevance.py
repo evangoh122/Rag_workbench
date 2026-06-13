@@ -21,6 +21,19 @@ def _to_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
 
+
+def _pick_value(fact: Dict[str, Any]) -> Any:
+    """Return the fact's numeric value, preferring 'value' then 'val'.
+
+    Uses an explicit None check, NOT truthiness — a legitimate 0 (e.g. zero
+    long-term debt, zero R&D) must survive and be treated as a real value,
+    not fall through to the alternate key or be dropped.
+    """
+    v = fact.get("value")
+    if v is None:
+        v = fact.get("val")
+    return v
+
 CONCEPT_GROUP_MAP: Dict[ConceptName, ConceptGroup] = {
     "Revenues": "revenue",
     "RevenueFromContractWithCustomerExcludingAssessedTax": "revenue",
@@ -173,13 +186,13 @@ def _rank_facts(facts: List[Dict], primary_group: ConceptGroup, top_n: int = 8) 
         concept = f.get("concept", "") or f.get("label", "")
         group = CONCEPT_GROUP_MAP.get(concept, "other")
         rank = group_rank.get(group, 99)
-        value = f.get("value") or f.get("val")
+        value = _pick_value(f)
         has_value = value is not None and str(value).strip() != ""
         if not has_value:
             rank += 50
         ranked.append((rank, f))
 
-    ranked.sort(key=lambda x: (x[0], -(abs(_to_float(x[1].get("value") or x[1].get("val")) or 0))))
+    ranked.sort(key=lambda x: (x[0], -(abs(_to_float(_pick_value(x[1])) or 0))))
     return [f for _, f in ranked[:top_n]]
 
 
@@ -222,7 +235,7 @@ def get_relevant_facts(query: str, all_facts: List[Dict[str, Any]],
 def format_fact_for_display(fact: Dict[str, Any]) -> Dict[str, Any]:
     """Normalise a fact dict for frontend consumption."""
     concept = fact.get("concept", "") or fact.get("label", "")
-    value = fact.get("value") or fact.get("val")
+    value = _pick_value(fact)
     unit = fact.get("unit", "")
     period = fact.get("period_end", "") or fact.get("period", "")
     label = fact.get("label", "") or _DISPLAY_NAMES.get(concept, concept)

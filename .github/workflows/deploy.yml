@@ -182,36 +182,36 @@ jobs:
     needs: await-space
     runs-on: ubuntu-latest
     steps:
-      - name: "Embed 10-K filings — chunk → Gemini embedding → edgar_embeddings"
+      - name: "Verify edgar_embeddings populated (poll /api/stats)"
         env:
           HF_USERNAME:   ${{ secrets.HF_USERNAME }}
           HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
-          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
         run: |
           SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
           SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
-          echo "Waiting 300s for Space rebuild to complete..."
-          sleep 300
-          echo "Triggering embed-data job on $SPACE_URL..."
-          for i in $(seq 1 10); do
-            RESPONSE=$(curl -sf --max-time 1800 -X POST \
-              "$SPACE_URL/api/admin/embed-data" \
-              -H "X-API-Key: $ADMIN_API_KEY" \
-              -H "Content-Type: application/json") && break
-            echo "Attempt $i/10 — curl failed (exit $?), retrying in 30s..."
-            sleep 30
+          # The in-container startup seed (seed_on_startup.py) embeds via localhost
+          # on every container start — no HF gateway, so it actually completes.
+          # (The old external POST to /api/admin/embed-data always 504'd at the
+          # gateway because the synchronous 31-filing embed exceeds the request
+          # timeout — a false negative that skipped the rag-pipeline gate.)
+          # We only POLL here; triggering a second embed job would collide with
+          # the startup seed on DuckDB's single-writer lock.
+          TARGET=25   # of 31 tickers — allows a few SEC-fetch misses
+          echo "Polling $SPACE_URL/api/stats for embedding coverage (target >= $TARGET companies)..."
+          COMPANIES=0; CHUNKS=0
+          for i in $(seq 1 45); do   # 45 * 40s = 30 min budget
+            STATS=$(curl -sf --max-time 30 "$SPACE_URL/api/stats" || echo '{}')
+            COMPANIES=$(echo "$STATS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('companies_with_chunks',0) or 0)" 2>/dev/null || echo 0)
+            CHUNKS=$(echo "$STATS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('filing_chunks',0) or 0)" 2>/dev/null || echo 0)
+            echo "Attempt $i/45 — companies_with_chunks=$COMPANIES, filing_chunks=$CHUNKS"
+            if [ "$COMPANIES" -ge "$TARGET" ] 2>/dev/null; then
+              echo "Embedding coverage reached ($COMPANIES companies, $CHUNKS chunks)."
+              exit 0
+            fi
+            sleep 40
           done
-          if [ -z "$RESPONSE" ]; then
-            echo "ERROR: Could not reach embed endpoint after 5 attempts." && exit 1
-          fi
-          echo "Response: $RESPONSE"
-          echo "$RESPONSE" | python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          chunks = d.get('chunks_stored', 0)
-          print(f'Embed status: {d.get(\"status\")}  chunks: {chunks}')
-          assert chunks > 0, f'Embed produced 0 chunks — edgar_embeddings is empty!'
-          "
+          echo "ERROR: embedding coverage below $TARGET after 30 min (last: $COMPANIES companies, $CHUNKS chunks)."
+          exit 1
 
 # ── 5. RAG pipeline smoke test — full coverage list (31 tickers) ─────────────
 #  Pipeline under test: chunk → BM25+vector hybrid retrieval → rerank → RRF
