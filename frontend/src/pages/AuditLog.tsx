@@ -1,6 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ShieldCheck, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 
+let _posthog: Promise<typeof import('posthog-js').default> | null = null
+function getPosthog() {
+  if (!_posthog) _posthog = import('posthog-js').then(m => m.default)
+  return _posthog
+}
+
 interface AuditRun {
   run_id: string;
   timestamp: string;
@@ -210,6 +216,12 @@ export default function AuditLog() {
   }, [tickerFilter, routeFilter]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_POSTHOG_KEY) {
+      getPosthog().then(p => p.capture('$pageview', { view: 'audit_log' }))
+    }
+  }, []);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

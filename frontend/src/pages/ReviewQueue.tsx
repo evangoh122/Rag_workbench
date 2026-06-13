@@ -7,6 +7,12 @@ import {
 } from '../api/review';
 import type { ReviewDecision } from '../api/review';
 
+let _posthog: Promise<typeof import('posthog-js').default> | null = null
+function getPosthog() {
+  if (!_posthog) _posthog = import('posthog-js').then(m => m.default)
+  return _posthog
+}
+
 type FilterTab = 'all' | 'ESCALATE' | 'SAMPLED_REVIEW';
 
 interface Toast {
@@ -207,6 +213,15 @@ export default function ReviewQueue() {
         d.id === id ? { ...d, status: 'reviewed' as const } : d,
       ),
     );
+    if (import.meta.env.VITE_POSTHOG_KEY) {
+      const decision = decisions.find(d => d.id === id);
+      getPosthog().then(p => p.capture('review_verdict', { 
+        agrees, 
+        decision_id: id, 
+        route: decision?.route,
+        form_type: decision?.form_type
+      }));
+    }
     try {
       await submitVerdict({ decision_id: id, reviewer_agrees: agrees });
     } catch (err: unknown) {
@@ -223,6 +238,9 @@ export default function ReviewQueue() {
 
   const handleCalibration = async () => {
     setCalibrating(true);
+    if (import.meta.env.VITE_POSTHOG_KEY) {
+      getPosthog().then(p => p.capture('calibration_trigger', {}));
+    }
     try {
       const result = await triggerCalibration();
       addToast(result.message ?? 'Calibration triggered', 'success');
@@ -278,7 +296,12 @@ export default function ReviewQueue() {
         </div>
         <div className="ml-auto flex items-center gap-3">
           <button
-            onClick={() => void fetchQueue()}
+            onClick={() => {
+              if (import.meta.env.VITE_POSTHOG_KEY) {
+                getPosthog().then(p => p.capture('review_refresh', {}));
+              }
+              void fetchQueue();
+            }}
             disabled={loading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-gray-200 bg-transparent border border-[#2a3246] hover:border-[#3d4f6e] cursor-pointer transition-all duration-200 disabled:opacity-50"
           >
@@ -308,7 +331,12 @@ export default function ReviewQueue() {
           return (
             <button
               key={tab.value}
-              onClick={() => setActiveTab(tab.value)}
+              onClick={() => {
+                setActiveTab(tab.value);
+                if (import.meta.env.VITE_POSTHOG_KEY) {
+                  getPosthog().then(p => p.capture('review_filter', { filter: tab.value }));
+                }
+              }}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors duration-200 cursor-pointer bg-transparent border-l-0 border-r-0 border-t-0 ${
                 activeTab === tab.value
                   ? 'border-b-blue-500 text-blue-400'
@@ -339,7 +367,12 @@ export default function ReviewQueue() {
             <AlertTriangle size={16} className="flex-shrink-0" />
             <span>{error}</span>
             <button
-              onClick={() => void fetchQueue()}
+              onClick={() => {
+                if (import.meta.env.VITE_POSTHOG_KEY) {
+                  getPosthog().then(p => p.capture('review_retry', {}));
+                }
+                void fetchQueue();
+              }}
               className="ml-auto text-red-400 hover:text-red-200 underline bg-transparent border-0 cursor-pointer text-sm"
             >
               Retry

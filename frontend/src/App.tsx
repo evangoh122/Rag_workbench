@@ -93,7 +93,7 @@ function App() {
     setLoading(true);
 
     if (import.meta.env.VITE_POSTHOG_KEY) {
-      getPosthog().then(p => p.capture('chat_send', { mode, query_length: currentInput.length }))
+      getPosthog().then(p => p.capture('chat_send', { mode, query_length: currentInput.length, view }))
     }
 
     try {
@@ -212,7 +212,13 @@ function App() {
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => { setView('stocks'); setSidebarOpen(false); }}
+            onClick={() => { 
+              setView('stocks'); 
+              setSidebarOpen(false); 
+              if (import.meta.env.VITE_POSTHOG_KEY) {
+                getPosthog().then(p => p.capture('nav_click', { destination: 'stocks', source: 'sidebar' }));
+              }
+            }}
           >
             <Cpu size={18} className={view === 'stocks' ? 'text-emerald-400' : 'text-gray-500'} />
             Coverage List
@@ -223,7 +229,13 @@ function App() {
                 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => { setView('chat'); setSidebarOpen(false); }}
+            onClick={() => { 
+              setView('chat'); 
+              setSidebarOpen(false); 
+              if (import.meta.env.VITE_POSTHOG_KEY) {
+                getPosthog().then(p => p.capture('nav_click', { destination: 'chat', source: 'sidebar' }));
+              }
+            }}
           >
             <MessageSquare size={18} className={view === 'chat' ? 'text-blue-400' : 'text-gray-500'} />
             Testing Chat
@@ -235,7 +247,13 @@ function App() {
                 ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => { setView('traceability'); setSidebarOpen(false); }}
+            onClick={() => { 
+              setView('traceability'); 
+              setSidebarOpen(false); 
+              if (import.meta.env.VITE_POSTHOG_KEY) {
+                getPosthog().then(p => p.capture('nav_click', { destination: 'traceability', source: 'sidebar' }));
+              }
+            }}
           >
             <Activity size={18} className={view === 'traceability' ? 'text-purple-400' : 'text-gray-500'} />
             Pipeline Traceability
@@ -247,7 +265,13 @@ function App() {
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => { setView('results'); setSidebarOpen(false); }}
+            onClick={() => { 
+              setView('results'); 
+              setSidebarOpen(false); 
+              if (import.meta.env.VITE_POSTHOG_KEY) {
+                getPosthog().then(p => p.capture('nav_click', { destination: 'results', source: 'sidebar' }));
+              }
+            }}
           >
             <BarChart3 size={18} className={view === 'results' ? 'text-emerald-400' : 'text-gray-500'} />
             Results & Testing
@@ -259,7 +283,13 @@ function App() {
                 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => { setView('audit'); setSidebarOpen(false); }}
+            onClick={() => { 
+              setView('audit'); 
+              setSidebarOpen(false); 
+              if (import.meta.env.VITE_POSTHOG_KEY) {
+                getPosthog().then(p => p.capture('nav_click', { destination: 'audit', source: 'sidebar' }));
+              }
+            }}
           >
             <ShieldCheck size={18} className={view === 'audit' ? 'text-amber-400' : 'text-gray-500'} />
             Audit Log
@@ -271,7 +301,13 @@ function App() {
                 ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => { setView('metrics'); setSidebarOpen(false); }}
+            onClick={() => { 
+              setView('metrics'); 
+              setSidebarOpen(false); 
+              if (import.meta.env.VITE_POSTHOG_KEY) {
+                getPosthog().then(p => p.capture('nav_click', { destination: 'metrics', source: 'sidebar' }));
+              }
+            }}
           >
             <Activity size={18} className={view === 'metrics' ? 'text-cyan-400' : 'text-gray-500'} />
             Metrics Dashboard
@@ -283,7 +319,13 @@ function App() {
                 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => { setView('system'); setSidebarOpen(false); }}
+            onClick={() => { 
+              setView('system'); 
+              setSidebarOpen(false); 
+              if (import.meta.env.VITE_POSTHOG_KEY) {
+                getPosthog().then(p => p.capture('nav_click', { destination: 'system', source: 'sidebar' }));
+              }
+            }}
           >
             <Server size={18} className={view === 'system' ? 'text-orange-400' : 'text-gray-500'} />
             System Overview
@@ -295,7 +337,13 @@ function App() {
                 ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
             }`}
-            onClick={() => { setView('methodology'); setSidebarOpen(false); }}
+            onClick={() => { 
+              setView('methodology'); 
+              setSidebarOpen(false); 
+              if (import.meta.env.VITE_POSTHOG_KEY) {
+                getPosthog().then(p => p.capture('nav_click', { destination: 'methodology', source: 'sidebar' }));
+              }
+            }}
           >
             <BookOpen size={18} className={view === 'methodology' ? 'text-indigo-400' : 'text-gray-500'} />
             Methodology
@@ -308,6 +356,9 @@ function App() {
             <button
               className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium text-gray-400 hover:text-red-400 bg-transparent border border-[#202532] hover:border-red-900/50 hover:bg-red-500/5 cursor-pointer transition-all duration-300"
               onClick={() => {
+                if (import.meta.env.VITE_POSTHOG_KEY) {
+                  getPosthog().then(p => p.capture('session_reset', { message_count: messages.length, view }));
+                }
                 setMessages([]);
                 setPipelineStatus({});
                 setFeedbackSent(new Set());
@@ -529,19 +580,39 @@ function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
                      {mode === 'graph' ? (
                        <>
-                         <button onClick={() => setInput(`What are the key relationships for Micron (MU) in the knowledge graph?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                         <button onClick={() => {
+                           setInput(`What are the key relationships for Micron (MU) in the knowledge graph?`);
+                           if (import.meta.env.VITE_POSTHOG_KEY) {
+                             getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'micron_relationships', mode }));
+                           }
+                         }} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
                            "What are Micron's key relationships?"
                          </button>
-                         <button onClick={() => setInput(`Show me the suppliers and partners of NVIDIA (NVDA)`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                         <button onClick={() => {
+                           setInput(`Show me the suppliers and partners of NVIDIA (NVDA)`);
+                           if (import.meta.env.VITE_POSTHOG_KEY) {
+                             getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'nvidia_suppliers', mode }));
+                           }
+                         }} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
                            "Show me NVIDIA's suppliers and partners"
                          </button>
                        </>
                      ) : (
                        <>
-                     <button onClick={() => setInput(`What was NVIDIA (NVDA)'s total revenue in the last fiscal year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                     <button onClick={() => {
+                       setInput(`What was NVIDIA (NVDA)'s total revenue in the last fiscal year?`);
+                       if (import.meta.env.VITE_POSTHOG_KEY) {
+                         getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'nvidia_revenue', mode }));
+                       }
+                     }} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
                         "What was NVIDIA's total revenue?"
                      </button>
-                     <button onClick={() => setInput(`Did Micron (MU)'s gross margin improve year-over-year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                     <button onClick={() => {
+                       setInput(`Did Micron (MU)'s gross margin improve year-over-year?`);
+                       if (import.meta.env.VITE_POSTHOG_KEY) {
+                         getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'micron_margin', mode }));
+                       }
+                     }} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
                         "Did Micron's gross margin improve?"
                      </button>
                        </>
@@ -688,6 +759,9 @@ function App() {
                           disabled={feedbackSent.has(idx)}
                           onClick={async () => {
                             setFeedbackSent(prev => new Set(prev).add(idx));
+                            if (import.meta.env.VITE_POSTHOG_KEY) {
+                              getPosthog().then(p => p.capture('chat_feedback', { sentiment: 'positive', message_index: idx, mode }))
+                            }
                             try {
                               await submitChatFeedback(
                                 messages[idx - 1]?.content ?? '',
@@ -711,6 +785,9 @@ function App() {
                           disabled={feedbackSent.has(idx)}
                           onClick={async () => {
                             setFeedbackSent(prev => new Set(prev).add(idx));
+                            if (import.meta.env.VITE_POSTHOG_KEY) {
+                              getPosthog().then(p => p.capture('chat_feedback', { sentiment: 'negative', message_index: idx, mode }))
+                            }
                             try {
                               await submitChatFeedback(
                                 messages[idx - 1]?.content ?? '',
