@@ -15,23 +15,25 @@ class PrefixedOllamaEmbeddings(OllamaEmbeddings):
 
 class HFInferenceEmbeddings:
     """
-    Embeddings via HuggingFace InferenceClient (feature_extraction).
-    Supports provider routing via HF_EMBED_PROVIDER.
+    Embeddings via HuggingFace Inference API (direct HTTP).
+    Uses api-inference.huggingface.co — resolves on HF Spaces infrastructure.
     """
-    def __init__(self, model_name: str, provider: str | None = None, api_key: str | None = None):
+    def __init__(self, model_name: str):
         self._model = model_name
-        self._api_key = api_key or os.getenv("HF_TOKEN", "")
-        self._provider = provider or os.getenv("HF_EMBED_PROVIDER", "")
-        logger.info(f"HFInferenceEmbeddings ready — model={model_name} provider={self._provider or 'auto'}")
-
-    def _init_client(self):
-        from huggingface_hub import InferenceClient
-        return InferenceClient(token=self._api_key)
+        self._api_key = os.getenv("HF_TOKEN", "")
+        self._url = f"https://api-inference.huggingface.co/models/{model_name}"
+        logger.info(f"HFInferenceEmbeddings ready — model={model_name}")
 
     def _embed(self, text: str) -> list[float]:
-        import numpy as np
-        client = self._init_client()
-        result = client.feature_extraction(text, model=self._model)
+        import requests, numpy as np
+        resp = requests.post(
+            self._url,
+            headers={"Authorization": f"Bearer {self._api_key}"},
+            json={"inputs": text},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        result = resp.json()
         arr = np.array(result)
         if arr.ndim == 2:
             arr = arr.mean(axis=0)
@@ -80,8 +82,8 @@ def get_embeddings():
     Return the configured embeddings instance.
 
     EMBEDDING_PROVIDER controls which backend is used:
-      - "ollama"       (default) — local Ollama, model from OLLAMA_EMBED_MODEL
-      - "huggingface"  — sentence-transformers, model from HF_EMBEDDING_MODEL
+      - \"huggingface\" — HF Inference API (direct HTTP), model from HF_EMBEDDING_MODEL
+      - \"ollama\"       (default) — local Ollama, model from OLLAMA_EMBED_MODEL
     """
     global _embeddings
     if _embeddings is not None:
@@ -92,7 +94,7 @@ def get_embeddings():
     if provider == "huggingface":
         model_name = os.getenv("HF_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-8B")
         try:
-            _embeddings = HFInferenceEmbeddings(model_name, provider=None)
+            _embeddings = HFInferenceEmbeddings(model_name)
             return _embeddings
         except Exception as e:
             logger.error(f"Failed to init HuggingFace embeddings '{model_name}': {e}")

@@ -141,7 +141,6 @@ class Config:
 
     @property
     def EMBEDDING_DIM(self) -> int:
-        # Qwen3-Embedding-8B = 4096, nomic-embed-text = 768
         provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
         if provider == "huggingface":
             return int(os.getenv("EMBEDDING_DIM", "4096"))
