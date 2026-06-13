@@ -2,6 +2,7 @@ import React from 'react';
 import { Send, Database, Search, MessageSquare, Network } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import AuditTrail from '../components/AuditTrail';
+import FinancialChart from '../components/FinancialChart';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -155,6 +156,10 @@ const ChatView: React.FC<ChatViewProps> = ({
                   {msg.content}
                 </ReactMarkdown>
               </div>
+
+              {msg.role === 'assistant' && (
+                <FinancialChart facts={msg.relevant_xbrl?.length ? msg.relevant_xbrl : msg.xbrl_facts} />
+              )}
 
               {msg.role === 'assistant' && (msg.sources || msg.verification || msg.relevant_xbrl?.length) && (
                 <div className="mt-4 pt-4 border-t border-[#202532]/50">
