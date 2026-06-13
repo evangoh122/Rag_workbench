@@ -8,7 +8,11 @@ from api.services.langgraph_engine import run_auditable_rag
 from api.services.graph_rag_engine import run_graph_rag
 from api.services.sec_client import chunk_filing_sections
 from api.services.sec_analyzer import analyze_filing
-from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display
+from api.services.xbrl_relevance import (
+    filter_facts_for_query,
+    format_fact_for_display,
+    get_relevant_facts,
+)
 from api.models.schemas import (
     ChatRequest, ChatResponse, SourceItem,
     VerificationResult, PipelineStatus,
@@ -200,15 +204,16 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
         # relevant subset. Normalise it here, at the single response chokepoint,
         # so every query path (numeric / qualitative / comparison) shows a
         # deduped, query-relevant, properly-labelled fact set.
-        raw_facts = result.get("xbrl_facts") or []
+        raw_facts = filter_facts_for_query(req.message, result.get("xbrl_facts") or [])
         seen: set = set()
         deduped_facts = []
         for f in raw_facts:
-            key = (f.get("concept"), f.get("value", f.get("val")), f.get("period_end"))
+            normalised = format_fact_for_display(f)
+            key = (normalised["concept"], normalised["value"], normalised["period"])
             if key in seen:
                 continue
             seen.add(key)
-            deduped_facts.append(f)
+            deduped_facts.append(normalised)
 
         relevant_xbrl = result.get("relevant_xbrl") or []
         xbrl_badge = result.get("xbrl_badge", "")
@@ -221,7 +226,7 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
 
         # Full list (collapsed in the UI) shows the deduped, normalised facts —
         # not 180+ raw rows with blank Period/Label.
-        display_facts = [format_fact_for_display(f) for f in deduped_facts]
+        display_facts = deduped_facts
 
         # Map retrieved docs to flat SourceItem matching frontend expectations
         sources = []

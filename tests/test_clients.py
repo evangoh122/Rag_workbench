@@ -51,6 +51,21 @@ def test_get_fact(mock_fetch):
 
 # ── SEC Client Tests ─────────────────────────────────────────────────────────
 
+@patch("api.db.database.db_manager.get_connection")
+def test_get_latest_10k_facts_preserves_period_metadata(mock_get_connection):
+    conn = MagicMock()
+    conn.execute.return_value.fetchall.return_value = [
+        ("Revenues", 1000, "USD", None, "10-K", 2025, "FY", "2026-02-01")
+    ]
+    mock_get_connection.return_value = conn
+    get_latest_10k_facts.cache_clear()
+
+    df = get_latest_10k_facts("NVDA")
+
+    assert df["fiscal_year"][0] == 2025
+    assert df["fiscal_period"][0] == "FY"
+    assert df["filed"][0] == "2026-02-01"
+
 @patch("api.services.sec_client.Company")
 @patch("api.services.sec_client.ensure_edgar_identity")
 def test_get_latest_10k_facts(mock_ensure, mock_company_cls):

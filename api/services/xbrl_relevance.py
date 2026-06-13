@@ -11,6 +11,14 @@ from typing import Any, Dict, List, Optional, Tuple
 ConceptGroup = str
 ConceptName = str
 
+_LATEST_QUERY_TERMS = (
+    "latest",
+    "most recent",
+    "current",
+    "newest",
+    "last reported",
+)
+
 
 def _to_float(value: Any) -> float | None:
     """Safely cast an XBRL value to float, returning None on failure."""
@@ -33,6 +41,51 @@ def _pick_value(fact: Dict[str, Any]) -> Any:
     if v is None:
         v = fact.get("val")
     return v
+
+
+def get_fact_period(fact: Dict[str, Any]) -> str:
+    """Return the best available display period for an XBRL fact."""
+    for key in ("period_end", "period", "end"):
+        value = fact.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+
+    fiscal_year = fact.get("fiscal_year")
+    if fiscal_year is not None and str(fiscal_year).strip():
+        fiscal_period = str(fact.get("fiscal_period") or "").strip()
+        if fiscal_period.upper() == "FY":
+            fiscal_period = ""
+        return f"FY{fiscal_year} {fiscal_period}".strip()
+
+    filed = fact.get("filed")
+    return str(filed) if filed is not None and str(filed).strip() else ""
+
+
+def _fact_year(fact: Dict[str, Any]) -> int | None:
+    """Return the fiscal year, falling back to a year parsed from the period."""
+    fiscal_year = fact.get("fiscal_year")
+    if fiscal_year is not None:
+        match = re.search(r"\b(19|20)\d{2}\b", str(fiscal_year))
+        if match:
+            return int(match.group(0))
+
+    match = re.search(r"\b(19|20)\d{2}\b", get_fact_period(fact))
+    return int(match.group(0)) if match else None
+
+
+def filter_facts_for_query(query: str, facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """For explicit latest queries, keep facts from the newest available year."""
+    if not facts:
+        return []
+    query_lower = query.lower()
+    if not any(term in query_lower for term in _LATEST_QUERY_TERMS):
+        return facts
+
+    years = [year for fact in facts if (year := _fact_year(fact)) is not None]
+    if not years:
+        return facts
+    latest_year = max(years)
+    return [fact for fact in facts if _fact_year(fact) == latest_year]
 
 CONCEPT_GROUP_MAP: Dict[ConceptName, ConceptGroup] = {
     "Revenues": "revenue",
@@ -218,7 +271,8 @@ def get_relevant_facts(query: str, all_facts: List[Dict[str, Any]],
         }
 
     group = _classify_query(query)
-    relevant = _rank_facts(all_facts, group, max_facts)
+    candidate_facts = filter_facts_for_query(query, all_facts)
+    relevant = _rank_facts(candidate_facts, group, max_facts)
 
     badge_text = f"XBRL verified • {len(all_facts)} facts"
     if len(relevant) < len(all_facts):
@@ -237,7 +291,7 @@ def format_fact_for_display(fact: Dict[str, Any]) -> Dict[str, Any]:
     concept = fact.get("concept", "") or fact.get("label", "")
     value = _pick_value(fact)
     unit = fact.get("unit", "")
-    period = fact.get("period_end", "") or fact.get("period", "")
+    period = get_fact_period(fact)
     label = fact.get("label", "") or _DISPLAY_NAMES.get(concept, concept)
     num = _to_float(value)
 

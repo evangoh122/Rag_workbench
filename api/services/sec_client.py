@@ -12,7 +12,7 @@ from api.services._edgar_identity import ensure_edgar_identity
 def get_latest_10k_facts(ticker: str, concepts: Optional[tuple] = None) -> pl.DataFrame:
     """
     Fetch the latest 10-K XBRL facts for a ticker from the xbrl_facts DuckDB table.
-    Columns: concept, value, unit, period_end, form_type
+    Columns include concept, value, unit, period metadata, and form type.
 
     If `concepts` is provided, only facts whose concept contains any of the
     given substrings are returned.  This avoids dragging all 50-200+ facts
@@ -25,7 +25,8 @@ def get_latest_10k_facts(ticker: str, concepts: Optional[tuple] = None) -> pl.Da
         if concepts:
             clauses = " OR ".join(["concept LIKE ?" for _ in concepts])
             sql = f"""
-                SELECT concept, value, unit, period_end, form_type
+                SELECT concept, value, unit, period_end, form_type,
+                       fiscal_year, fiscal_period, filed
                 FROM xbrl_facts
                 WHERE ticker = ?
                   AND ({clauses})
@@ -35,7 +36,8 @@ def get_latest_10k_facts(ticker: str, concepts: Optional[tuple] = None) -> pl.Da
             rows = conn.execute(sql, params).fetchall()
         else:
             rows = conn.execute("""
-                SELECT concept, value, unit, period_end, form_type
+                SELECT concept, value, unit, period_end, form_type,
+                       fiscal_year, fiscal_period, filed
                 FROM xbrl_facts
                 WHERE ticker = ?
                 ORDER BY period_end DESC
@@ -46,7 +48,10 @@ def get_latest_10k_facts(ticker: str, concepts: Optional[tuple] = None) -> pl.Da
 
         df = pl.DataFrame(
             rows,
-            schema=["concept", "value", "unit", "period_end", "form_type"],
+            schema=[
+                "concept", "value", "unit", "period_end", "form_type",
+                "fiscal_year", "fiscal_period", "filed",
+            ],
             orient="row",
         )
         return df

@@ -7,6 +7,8 @@ truthiness fallback (`fact.get("value") or fact.get("val")`), rendering as "—"
 and being marked unverified, and getting demoted in ranking.
 """
 from api.services.xbrl_relevance import (
+    filter_facts_for_query,
+    get_fact_period,
     _pick_value,
     _rank_facts,
     format_fact_for_display,
@@ -59,6 +61,26 @@ def test_format_missing_value_is_unverified():
     assert out["is_verified"] is False
 
 
+def test_period_falls_back_to_fiscal_year_when_period_end_is_empty():
+    fact = {"fiscal_year": 2025, "fiscal_period": "FY"}
+    assert get_fact_period(fact) == "FY2025"
+    assert format_fact_for_display(fact)["period"] == "FY2025"
+
+
+def test_period_prefers_period_end_over_filing_date_and_fiscal_year():
+    fact = {
+        "period_end": "2025-01-31",
+        "filed": "2025-03-10",
+        "fiscal_year": 2025,
+    }
+    assert get_fact_period(fact) == "2025-01-31"
+
+
+def test_period_prefers_fiscal_year_over_later_filing_date():
+    fact = {"period_end": None, "fiscal_year": 2025, "fiscal_period": "FY", "filed": "2026-02-01"}
+    assert get_fact_period(fact) == "FY2025"
+
+
 # ── _rank_facts / get_relevant_facts ───────────────────────────────────────────
 
 def test_rank_does_not_demote_zero_valued_fact_below_missing():
@@ -85,3 +107,32 @@ def test_get_relevant_facts_empty():
     assert result["relevant"] == []
     assert result["total"] == 0
     assert result["group"] == "none"
+
+
+def test_latest_query_keeps_only_facts_from_latest_fiscal_year():
+    facts = [
+        {"concept": "Revenues", "value": 100, "period_end": "2023-12-31", "fiscal_year": 2023},
+        {"concept": "Revenues", "value": 120, "period_end": "2024-12-31", "fiscal_year": 2024},
+        {"concept": "NetIncomeLoss", "value": 20, "period_end": "2024-12-31", "fiscal_year": 2024},
+    ]
+    filtered = filter_facts_for_query("What is the latest revenue?", facts)
+    assert len(filtered) == 2
+    assert {fact["fiscal_year"] for fact in filtered} == {2024}
+
+
+def test_latest_query_uses_period_year_when_fiscal_year_is_missing():
+    facts = [
+        {"concept": "Revenues", "value": 100, "period_end": "2023-12-31"},
+        {"concept": "Revenues", "value": 120, "period_end": "2024-12-31"},
+    ]
+    result = get_relevant_facts("most recent revenue", facts)
+    assert len(result["relevant"]) == 1
+    assert result["relevant"][0]["period_end"] == "2024-12-31"
+
+
+def test_general_query_preserves_multiple_years():
+    facts = [
+        {"concept": "Revenues", "value": 100, "period_end": "2023-12-31"},
+        {"concept": "Revenues", "value": 120, "period_end": "2024-12-31"},
+    ]
+    assert filter_facts_for_query("Show revenue history", facts) == facts
