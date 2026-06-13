@@ -149,10 +149,9 @@ jobs:
               print(f'WARNING — skipped {len(skipped)} ticker(s): {skipped}')
           "
 
-# ── 4-b. Chunk + embed 10-K filings into edgar_embeddings ──────────────────
+# ── 4-b. Chunk + embed 10-K filings into edgar_embeddings (every push) ─────
   embed-data:
     needs: await-space
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.embed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: "Embed 10-K filings — chunk → Gemini embedding → edgar_embeddings"
@@ -181,7 +180,9 @@ jobs:
           echo "$RESPONSE" | python3 -c "
           import sys, json
           d = json.load(sys.stdin)
-          print(f'Embed status: {d.get(\"status\")}  chunks: {d.get(\"chunks_stored\", 0)}')
+          chunks = d.get('chunks_stored', 0)
+          print(f'Embed status: {d.get(\"status\")}  chunks: {chunks}')
+          assert chunks > 0, f'Embed produced 0 chunks — edgar_embeddings is empty!'
           "
 
 # ── 5. RAG pipeline smoke test — full coverage list (31 tickers) ─────────────
@@ -189,7 +190,7 @@ jobs:
 #  Runs sequentially to avoid hammering the HF Space; collects all failures
 #  before exiting so you see the full pass/fail table in one run.
   rag-pipeline:
-    needs: [await-space, seed-data]
+    needs: [await-space, seed-data, embed-data]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
