@@ -72,10 +72,22 @@ def test_chat_auditable_rag_success():
             "verification_status": "verified",
             "verification_reasoning": "all good",
             "math_steps": [],
-            "status": "completed"
+            "status": {
+                "input": "success",
+                "retrieval": "success",
+                "classifier": "success",
+                "extraction": "success",
+                "eval": "success",
+                "math": "success",
+                "verification": "success",
+                "output": "success",
+            },
         }
         
-        response = client.post("/api/chat/auditable-rag", json={"message": "check this", "ticker": "TSLA"})
+        response = client.post(
+            "/api/chat/auditable-rag",
+            json={"message": "Check TSLA revenue", "ticker": "TSLA"},
+        )
         assert response.status_code == 200
         assert response.json()["answer"] == "Audit answer"
         assert response.json()["verification"]["status"] == "verified"

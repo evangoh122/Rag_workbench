@@ -81,6 +81,10 @@ def test_period_prefers_fiscal_year_over_later_filing_date():
     assert get_fact_period(fact) == "FY2025"
 
 
+def test_period_normalises_datetime_to_date_for_stable_deduplication():
+    assert get_fact_period({"period_end": "2025-01-31T00:00:00"}) == "2025-01-31"
+
+
 # ── _rank_facts / get_relevant_facts ───────────────────────────────────────────
 
 def test_rank_does_not_demote_zero_valued_fact_below_missing():
@@ -136,3 +140,25 @@ def test_general_query_preserves_multiple_years():
         {"concept": "Revenues", "value": 120, "period_end": "2024-12-31"},
     ]
     assert filter_facts_for_query("Show revenue history", facts) == facts
+
+
+def test_current_requires_a_complete_word():
+    facts = [
+        {"concept": "Revenues", "value": 100, "period_end": "2023-12-31"},
+        {"concept": "Revenues", "value": 120, "period_end": "2024-12-31"},
+    ]
+    assert filter_facts_for_query("What currency is revenue reported in?", facts) == facts
+    assert len(filter_facts_for_query("What is current revenue?", facts)) == 1
+
+
+def test_relevance_can_skip_period_filter_when_caller_already_applied_it():
+    facts = [
+        {"concept": "Revenues", "value": 100, "period_end": "2023-12-31"},
+        {"concept": "Revenues", "value": 120, "period_end": "2024-12-31"},
+    ]
+    result = get_relevant_facts(
+        "latest revenue",
+        facts,
+        filter_by_period=False,
+    )
+    assert len(result["relevant"]) == 2

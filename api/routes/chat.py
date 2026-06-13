@@ -219,7 +219,11 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
         xbrl_badge = result.get("xbrl_badge", "")
         xbrl_group = result.get("xbrl_group", "")
         if not relevant_xbrl and deduped_facts:
-            rel = get_relevant_facts(req.message, deduped_facts)
+            rel = get_relevant_facts(
+                req.message,
+                deduped_facts,
+                filter_by_period=False,
+            )
             relevant_xbrl = [format_fact_for_display(f) for f in rel["relevant"]]
             xbrl_badge = rel["badge_text"]
             xbrl_group = rel["group"]

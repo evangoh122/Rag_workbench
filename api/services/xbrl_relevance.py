@@ -18,6 +18,10 @@ _LATEST_QUERY_TERMS = (
     "newest",
     "last reported",
 )
+_LATEST_QUERY_PATTERN = re.compile(
+    r"\b(?:" + "|".join(re.escape(term) for term in _LATEST_QUERY_TERMS) + r")\b",
+    re.IGNORECASE,
+)
 
 
 def _to_float(value: Any) -> float | None:
@@ -48,7 +52,9 @@ def get_fact_period(fact: Dict[str, Any]) -> str:
     for key in ("period_end", "period", "end"):
         value = fact.get(key)
         if value is not None and str(value).strip():
-            return str(value)
+            period = str(value).strip()
+            date_match = re.match(r"^(\d{4}-\d{2}-\d{2})(?:[T\s].*)?$", period)
+            return date_match.group(1) if date_match else period
 
     fiscal_year = fact.get("fiscal_year")
     if fiscal_year is not None and str(fiscal_year).strip():
@@ -77,15 +83,15 @@ def filter_facts_for_query(query: str, facts: List[Dict[str, Any]]) -> List[Dict
     """For explicit latest queries, keep facts from the newest available year."""
     if not facts:
         return []
-    query_lower = query.lower()
-    if not any(term in query_lower for term in _LATEST_QUERY_TERMS):
+    if not _LATEST_QUERY_PATTERN.search(query):
         return facts
 
-    years = [year for fact in facts if (year := _fact_year(fact)) is not None]
+    facts_with_years = [(fact, _fact_year(fact)) for fact in facts]
+    years = [year for _, year in facts_with_years if year is not None]
     if not years:
         return facts
     latest_year = max(years)
-    return [fact for fact in facts if _fact_year(fact) == latest_year]
+    return [fact for fact, year in facts_with_years if year == latest_year]
 
 CONCEPT_GROUP_MAP: Dict[ConceptName, ConceptGroup] = {
     "Revenues": "revenue",
@@ -250,7 +256,8 @@ def _rank_facts(facts: List[Dict], primary_group: ConceptGroup, top_n: int = 8) 
 
 
 def get_relevant_facts(query: str, all_facts: List[Dict[str, Any]],
-                       max_facts: int = 8) -> Dict[str, Any]:
+                       max_facts: int = 8,
+                       filter_by_period: bool = True) -> Dict[str, Any]:
     """
     Return a structured summary of the most relevant XBRL facts for a query.
 
@@ -271,7 +278,10 @@ def get_relevant_facts(query: str, all_facts: List[Dict[str, Any]],
         }
 
     group = _classify_query(query)
-    candidate_facts = filter_facts_for_query(query, all_facts)
+    candidate_facts = (
+        filter_facts_for_query(query, all_facts)
+        if filter_by_period else all_facts
+    )
     relevant = _rank_facts(candidate_facts, group, max_facts)
 
     badge_text = f"XBRL verified • {len(all_facts)} facts"
