@@ -1,14 +1,15 @@
 import React from 'react';
-import { Cpu, Database, Zap, Wifi, Radio, HardDrive, CircuitBoard, Microscope, Cog } from 'lucide-react';
+import { Cpu, Database, Zap, Wifi, Radio, HardDrive, CircuitBoard, Microscope, Cog, Rocket } from 'lucide-react';
 
-interface SemiconductorStock {
+interface CoveredStock {
   ticker: string;
   name: string;
   segment: string;
   icon: React.ReactNode;
 }
 
-const SEMICONDUCTOR_STOCKS: SemiconductorStock[] = [
+const COVERED_STOCKS: CoveredStock[] = [
+  { ticker: 'SPCX', name: 'Space Exploration Technologies (SpaceX)', segment: 'Aerospace & Launch — IPO prospectus (S-1 / 424B4)', icon: <Rocket size={14} /> },
   { ticker: 'MU',   name: 'Micron Technology',        segment: 'Memory (DRAM / NAND Flash)',        icon: <HardDrive size={14} /> },
   { ticker: 'NVDA', name: 'NVIDIA',                   segment: 'AI GPUs & Data Center',             icon: <Cpu size={14} /> },
   { ticker: 'AMD',  name: 'Advanced Micro Devices',    segment: 'CPUs, GPUs & Accelerators',         icon: <Cpu size={14} /> },
@@ -30,14 +31,15 @@ function StocksList() {
   return (
     <div className="p-4 lg:p-6 max-w-4xl mx-auto space-y-4 lg:space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-white">Semiconductor Coverage</h2>
+        <h2 className="text-lg font-bold text-white">Company Coverage</h2>
         <p className="text-sm text-gray-400 mt-1">
-          {SEMICONDUCTOR_STOCKS.length} stocks tracked across memory, logic, analog, and equipment segments.
+          {COVERED_STOCKS.length} companies tracked — semiconductor memory, logic, analog, and
+          equipment segments, plus SpaceX's IPO prospectus.
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-2">
-        {SEMICONDUCTOR_STOCKS.map((stock) => (
+        {COVERED_STOCKS.map((stock) => (
           <div
             key={stock.ticker}
             className="flex items-center gap-4 px-4 py-3 bg-[#0f1219] border border-[#202532] rounded-xl hover:border-blue-500/30 transition-colors"

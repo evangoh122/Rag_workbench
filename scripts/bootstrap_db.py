@@ -31,8 +31,10 @@ load_dotenv()
 EDGAR_USER_AGENT = os.getenv("EDGAR_USER_AGENT", "RAGWorkbench/1.0 (research@example.com)")
 SEC_RATE_LIMIT_DELAY = 0.15  # 10 req/s max -> 100ms + margin
 
-# CIK lookup for semiconductor tickers
+# CIK lookup for covered tickers
 TICKER_TO_CIK = {
+    # Aerospace / Launch (IPO 2026 — S-1/424B4 prospectus, no XBRL companyfacts yet)
+    "SPCX": "0001181412",  # Space Exploration Technologies (SpaceX)
     # Semiconductor Design & IP
     "ADI": "0000006607",   # Analog Devices
     "AMD": "0000002488",   # Advanced Micro Devices
