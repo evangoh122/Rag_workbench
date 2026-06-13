@@ -119,6 +119,12 @@ for ticker in TICKERS:
         reason = f"answer too short ({len(answer)} chars): {answer!r}"
         failed.append((ticker, reason))
         print(f"FAIL [{ticker}] {reason}")
+    elif "I cannot answer" in answer or "I don't have enough" in answer:
+        failed.append((ticker, f"abstention ({len(sources)} sources): {answer[:80]!r}"))
+        print(f"FAIL [{ticker}] abstention — sources={len(sources)}")
+    elif len(sources) == 0 and answer:
+        failed.append((ticker, f"zero sources ({len(sources)}): {answer[:80]!r}"))
+        print(f"FAIL [{ticker}] zero sources (edgar_embeddings may be empty)")
     else:
         passed.append(ticker)
         conf_str = f"{confidence:.2%}" if confidence is not None else "n/a"
