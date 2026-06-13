@@ -132,15 +132,28 @@ class Config:
         return os.getenv("HF_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-8B")
 
     @property
+    def ST_EMBEDDING_MODEL(self) -> str:
+        # Local sentence-transformers model (runs in-process, no inference API).
+        # bge-base-en-v1.5 is 768-dim — better quality than bge-small, still
+        # small enough to run in-process on the Space without OOM.
+        return os.getenv("ST_EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
+
+    @property
     def EMBEDDING_QUERY_PREFIX(self) -> str:
         return os.getenv("EMBEDDING_QUERY_PREFIX", "")
 
     @property
     def EMBEDDING_DIM(self) -> int:
+        # Explicit override always wins; otherwise default per provider.
+        explicit = os.getenv("EMBEDDING_DIM")
+        if explicit:
+            return int(explicit)
         provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+        if provider in ("sentence-transformers", "sentence_transformers", "local", "st"):
+            return 768   # BAAI/bge-base-en-v1.5
         if provider == "huggingface":
-            return int(os.getenv("EMBEDDING_DIM", "4096"))
-        return int(os.getenv("EMBEDDING_DIM", "768"))
+            return 4096  # Qwen/Qwen3-Embedding-8B
+        return 768       # nomic-embed-text (ollama)
 
     def get_provider_config(self):
         providers = {

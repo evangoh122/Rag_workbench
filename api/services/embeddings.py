@@ -76,6 +76,42 @@ class HFInferenceEmbeddings:
         return self._embed(text)
 
 
+class LocalSTEmbeddings:
+    """
+    Embeddings via a local sentence-transformers model (runs in-process, no
+    network inference API). Chosen for the HF Space because the serverless
+    Inference API is unreliable for large models (403 routing / 404 / 503) and
+    8B models OOM the worker. A small model (e.g. BAAI/bge-small-en-v1.5, 384d)
+    loads once and embeds locally with no external call.
+
+    The model is lazy-loaded on first use so import stays cheap.
+    """
+    def __init__(self, model_name: str):
+        self._model_name = model_name
+        self._model = None
+        logger.info(f"LocalSTEmbeddings ready — model={model_name} (lazy-load)")
+
+    def _get_model(self):
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+            logger.info(f"Loading local embedding model: {self._model_name}")
+            self._model = SentenceTransformer(self._model_name)
+        return self._model
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        model = self._get_model()
+        vecs = model.encode(texts, normalize_embeddings=True, convert_to_numpy=True)
+        return [v.tolist() for v in vecs]
+
+    def embed_query(self, text: str) -> list[float]:
+        prefix = Config.EMBEDDING_QUERY_PREFIX
+        if prefix:
+            text = f"{prefix}{text}"
+        model = self._get_model()
+        vec = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)[0]
+        return vec.tolist()
+
+
 _embeddings = None
 _ollama_available = None  # None = not checked, True/False = checked
 
@@ -104,6 +140,8 @@ def get_embeddings():
     Return the configured embeddings instance.
 
     EMBEDDING_PROVIDER controls which backend is used:
+      - \"sentence-transformers\" / \"local\" — in-process ST model, no network
+        inference call (model from ST_EMBEDDING_MODEL). Used on the HF Space.
       - \"huggingface\" — HF Inference API (direct HTTP), model from HF_EMBEDDING_MODEL
       - \"ollama\"       (default) — local Ollama, model from OLLAMA_EMBED_MODEL
     """
@@ -112,6 +150,15 @@ def get_embeddings():
         return _embeddings
 
     provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+
+    if provider in ("sentence-transformers", "sentence_transformers", "local", "st"):
+        model_name = Config.ST_EMBEDDING_MODEL
+        try:
+            _embeddings = LocalSTEmbeddings(model_name)
+            return _embeddings
+        except Exception as e:
+            logger.error(f"Failed to init local sentence-transformers embeddings '{model_name}': {e}")
+            return None
 
     if provider == "huggingface":
         model_name = os.getenv("HF_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-8B")

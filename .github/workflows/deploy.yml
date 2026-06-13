@@ -55,9 +55,12 @@ jobs:
           upload_secret "LANGSMITH_API_KEY" "${{ secrets.LANGSMITH_API_KEY }}"
           upload_secret "ADMIN_API_KEY"     "${{ secrets.ADMIN_API_KEY }}"
           upload_secret "EDGAR_USER_AGENT"  "${{ secrets.EDGAR_USER_AGENT }}"
-          upload_secret "EMBEDDING_PROVIDER" "huggingface"
-          upload_secret "HF_EMBEDDING_MODEL" "Qwen/Qwen3-Embedding-8B"
-          upload_secret "HF_EMBED_PROVIDER"  "huggingface"
+          # Local in-process embeddings (sentence-transformers) — no HF Inference
+          # API call, so no scaleway-routing 403s and no 8B-model OOM on the Space.
+          upload_secret "EMBEDDING_PROVIDER" "sentence-transformers"
+          upload_secret "ST_EMBEDDING_MODEL" "BAAI/bge-base-en-v1.5"
+          upload_secret "EMBEDDING_DIM"      "768"
+          upload_secret "EMBEDDING_QUERY_PREFIX" "Represent this sentence for searching relevant passages: "
 
 # ── 2. Deploy to HF Space ────────────────────────────────────────────────────
   deploy:
