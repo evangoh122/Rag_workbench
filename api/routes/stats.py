@@ -64,9 +64,10 @@ async def get_stats():
             "recent_errors":  llm.get("recent_errors", [])[-5:],
         },
         "config": {
-            "provider":        Config.CHAT_PROVIDER,
-            "embedding_model": Config.EMBEDDING_MODEL,
-            "embedding_dim":   Config.EMBEDDING_DIM,
+            "provider":          Config.CHAT_PROVIDER,
+            "embedding_provider": Config.EMBEDDING_PROVIDER,
+            "embedding_model":   Config.ACTIVE_EMBEDDING_MODEL,
+            "embedding_dim":     Config.EMBEDDING_DIM,
         },
         "database": {
             "main_connected":   db_main_ok,

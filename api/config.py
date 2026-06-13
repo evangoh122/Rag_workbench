@@ -134,9 +134,21 @@ class Config:
     @property
     def ST_EMBEDDING_MODEL(self) -> str:
         # Local sentence-transformers model (runs in-process, no inference API).
-        # bge-base-en-v1.5 is 768-dim — better quality than bge-small, still
-        # small enough to run in-process on the Space without OOM.
-        return os.getenv("ST_EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
+        # Qwen3-Embedding-0.6B is 1024-dim — strong retrieval quality, ~1.2GB,
+        # small enough to run in-process on the Space (the 8B variant OOMs).
+        return os.getenv("ST_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-0.6B")
+
+    @property
+    def ACTIVE_EMBEDDING_MODEL(self) -> str:
+        """The embedding model actually in use, per the configured provider.
+        (EMBEDDING_MODEL always returns the Ollama var, which is misleading
+        when a different provider is active — use this for display/telemetry.)"""
+        provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+        if provider in ("sentence-transformers", "sentence_transformers", "local", "st"):
+            return self.ST_EMBEDDING_MODEL
+        if provider == "huggingface":
+            return self.HF_EMBEDDING_MODEL
+        return self.EMBEDDING_MODEL
 
     @property
     def EMBEDDING_QUERY_PREFIX(self) -> str:
@@ -150,7 +162,7 @@ class Config:
             return int(explicit)
         provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
         if provider in ("sentence-transformers", "sentence_transformers", "local", "st"):
-            return 768   # BAAI/bge-base-en-v1.5
+            return 1024  # Qwen/Qwen3-Embedding-0.6B
         if provider == "huggingface":
             return 4096  # Qwen/Qwen3-Embedding-8B
         return 768       # nomic-embed-text (ollama)

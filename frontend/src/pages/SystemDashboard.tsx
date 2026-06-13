@@ -208,15 +208,15 @@ export default function SystemDashboard() {
             <div className="flex items-center gap-2 flex-wrap">
               <PipelineNode label="SEC EDGAR" sub="10-K filings" color="border-blue-500/30 bg-blue-500/5 text-blue-300" />
               <Arrow />
-              <PipelineNode label="Downloader" sub="sec-edgar-dl" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="Downloader" sub="edgartools" color="border-[#202532] bg-[#161b24] text-gray-300" />
               <Arrow />
               <PipelineNode label="HTML Parser" sub="BeautifulSoup" color="border-[#202532] bg-[#161b24] text-gray-300" />
               <Arrow />
-              <PipelineNode label="Text Splitter" sub="LangChain" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="Structure Chunker" sub="tables + semantic" color="border-[#202532] bg-[#161b24] text-gray-300" />
               <Arrow />
-              <PipelineNode label="Ollama Embed" sub={stats?.config.embedding_model ?? 'nomic-embed-text'} color="border-purple-500/30 bg-purple-500/5 text-purple-300" />
+              <PipelineNode label="Embeddings" sub={stats?.config.embedding_model ?? 'Qwen3-Embedding-0.6B'} color="border-purple-500/30 bg-purple-500/5 text-purple-300" />
               <Arrow />
-              <PipelineNode label="DuckDB" sub="edgar_chunks" color="border-emerald-500/30 bg-emerald-500/5 text-emerald-300" />
+              <PipelineNode label="DuckDB" sub="edgar_embeddings" color="border-emerald-500/30 bg-emerald-500/5 text-emerald-300" />
             </div>
           </div>
 
@@ -228,9 +228,11 @@ export default function SystemDashboard() {
             <div className="flex items-center gap-2 flex-wrap">
               <PipelineNode label="User Query" sub="natural language" color="border-blue-500/30 bg-blue-500/5 text-blue-300" />
               <Arrow />
-              <PipelineNode label="Embed Query" sub="Ollama" color="border-purple-500/30 bg-purple-500/5 text-purple-300" />
+              <PipelineNode label="Embed Query" sub={stats?.config.embedding_model ?? 'Qwen3-Embedding-0.6B'} color="border-purple-500/30 bg-purple-500/5 text-purple-300" />
               <Arrow />
-              <PipelineNode label="Vector Search" sub="VSS cosine" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="Hybrid Search" sub="BM25 + vector → RRF" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <Arrow />
+              <PipelineNode label="Reranker" sub="cross-encoder" color="border-[#202532] bg-[#161b24] text-gray-300" />
               <Arrow />
               <PipelineNode label="XBRL Lookup" sub="exact match" color="border-[#202532] bg-[#161b24] text-gray-300" />
               <Arrow />
@@ -250,7 +252,7 @@ export default function SystemDashboard() {
               <Arrow />
               <PipelineNode label="Graph Triples" sub="DuckDB" color="border-indigo-500/30 bg-indigo-500/5 text-indigo-300" />
               <Arrow />
-              <PipelineNode label="Subgraph" sub="BFS/DFS" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="Subgraph" sub="ILIKE match" color="border-[#202532] bg-[#161b24] text-gray-300" />
               <Arrow />
               <PipelineNode label="LLM Synthesis" sub="with graph ctx" color="border-orange-500/30 bg-orange-500/5 text-orange-300" />
             </div>

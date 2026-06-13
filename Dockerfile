@@ -4,12 +4,17 @@ FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 ARG VITE_API_BASE="/api"
-ARG VITE_API_BASE="/api"
 ARG VITE_DRIFT_AGREEMENT_FLOOR=0.95
 ARG VITE_DRIFT_CONCEPT_SPIKE_THRESHOLD=50
+# PostHog product analytics — baked in at build time (Vite inlines VITE_* vars).
+# Empty by default → analytics stays disabled (the app guards on this being set).
+ARG VITE_POSTHOG_KEY=""
+ARG VITE_POSTHOG_HOST="https://us.i.posthog.com"
 ENV VITE_API_BASE=$VITE_API_BASE
 ENV VITE_DRIFT_AGREEMENT_FLOOR=$VITE_DRIFT_AGREEMENT_FLOOR
 ENV VITE_DRIFT_CONCEPT_SPIKE_THRESHOLD=$VITE_DRIFT_CONCEPT_SPIKE_THRESHOLD
+ENV VITE_POSTHOG_KEY=$VITE_POSTHOG_KEY
+ENV VITE_POSTHOG_HOST=$VITE_POSTHOG_HOST
 
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm install

@@ -45,6 +45,24 @@ jobs:
               echo "Skipping $key (not set)"
             fi
           }
+          # Space VARIABLES (not secrets) are passed to the Docker build as
+          # --build-arg, which is required for Vite to inline VITE_* vars into
+          # the frontend bundle. The PostHog project key is client-public, so a
+          # variable (not a secret) is the correct classification.
+          upload_variable() {
+            local key=$1 value=$2
+            if [ -n "$value" ]; then
+              echo "Uploading variable: $key"
+              curl -sf -X POST \
+                "https://huggingface.co/api/spaces/$HF_USERNAME/$HF_SPACE_NAME/variables" \
+                -H "Authorization: Bearer $HF_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{\"key\": \"$key\", \"value\": \"$value\"}" \
+                -o /dev/null -w "  -> HTTP %{http_code}\n" || echo "  -> FAILED"
+            else
+              echo "Skipping $key (not set)"
+            fi
+          }
           upload_secret "GEMINI_API_KEY"    "${{ secrets.GEMINI_API_KEY }}"
           upload_secret "GOOGLE_API_KEY"    "${{ secrets.GOOGLE_API_KEY }}"
           upload_secret "DEEPSEEK_API_KEY"  "${{ secrets.DEEPSEEK_API_KEY }}"
@@ -58,9 +76,16 @@ jobs:
           # Local in-process embeddings (sentence-transformers) — no HF Inference
           # API call, so no scaleway-routing 403s and no 8B-model OOM on the Space.
           upload_secret "EMBEDDING_PROVIDER" "sentence-transformers"
-          upload_secret "ST_EMBEDDING_MODEL" "BAAI/bge-base-en-v1.5"
-          upload_secret "EMBEDDING_DIM"      "768"
-          upload_secret "EMBEDDING_QUERY_PREFIX" "Represent this sentence for searching relevant passages: "
+          upload_secret "ST_EMBEDDING_MODEL" "Qwen/Qwen3-Embedding-0.6B"
+          upload_secret "EMBEDDING_DIM"      "1024"
+          # Qwen3-Embedding uses an instruction prefix on the QUERY side only
+          # (documents are embedded as-is). Applied via EMBEDDING_QUERY_PREFIX.
+          upload_secret "EMBEDDING_QUERY_PREFIX" "Instruct: Given a financial question, retrieve relevant SEC filing passages that answer it.\nQuery: "
+          # PostHog product analytics — build-time variables for the frontend.
+          # Set the GitHub secret VITE_POSTHOG_KEY to activate; leaving it unset
+          # keeps analytics disabled (the app no-ops when the key is empty).
+          upload_variable "VITE_POSTHOG_KEY"  "${{ secrets.VITE_POSTHOG_KEY }}"
+          upload_variable "VITE_POSTHOG_HOST" "${{ secrets.VITE_POSTHOG_HOST }}"
 
 # ── 2. Deploy to HF Space ────────────────────────────────────────────────────
   deploy:

@@ -70,9 +70,10 @@ curl -s "$SPACE_URL/api/stats" | python -m json.tool
 
 ## Chosen Remediation (this change)
 
-Swap to a small embedding model run **locally in-process** via `sentence-transformers` (no HF inference API), and set `EMBEDDING_DIM` consistently end-to-end.
+Swap to an embedding model run **locally in-process** via `sentence-transformers` (no HF inference API), and set `EMBEDDING_DIM` consistently end-to-end.
 
-- Model: `BAAI/bge-small-en-v1.5` (384-dim) — small enough to run on the Space without OOM, no external inference call.
-- `config.py`: add a `sentence-transformers` local provider; make `EMBEDDING_DIM` default track the provider/model.
-- `embeddings.py`: add a `LocalSentenceTransformerEmbeddings` backend.
-- `deploy.yml`: set `EMBEDDING_PROVIDER`, `HF_EMBEDDING_MODEL`/model name, and `EMBEDDING_DIM` consistently.
+- Model: `Qwen/Qwen3-Embedding-0.6B` (1024-dim) — runs in-process on the Space without OOM (the 8B variant OOMs; HF serverless is unreliable for large models), no external inference call. Uses a query-side instruction prefix; documents embedded as-is.
+- `config.py`: add a `sentence-transformers` local provider; `EMBEDDING_DIM` defaults per provider (local=1024); add `ACTIVE_EMBEDDING_MODEL` for truthful telemetry.
+- `embeddings.py`: add a `LocalSTEmbeddings` backend.
+- `requirements.txt`: pin `transformers>=4.51.0` (Qwen3 architecture support).
+- `deploy.yml`: sync `EMBEDDING_PROVIDER` / `ST_EMBEDDING_MODEL` / `EMBEDDING_DIM` / `EMBEDDING_QUERY_PREFIX` consistently.
