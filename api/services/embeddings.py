@@ -15,8 +15,8 @@ class PrefixedOllamaEmbeddings(OllamaEmbeddings):
 
 class HFInferenceEmbeddings:
     """
-    Embeddings via HuggingFace Inference API (direct HTTP).
-    Uses api-inference.huggingface.co — resolves on HF Spaces infrastructure.
+    Embeddings via HuggingFace InferenceClient (feature_extraction).
+    Uses direct HTTP to api-inference.huggingface.co as fallback.
     """
     def __init__(self, model_name: str):
         self._model = model_name
@@ -25,15 +25,21 @@ class HFInferenceEmbeddings:
         logger.info(f"HFInferenceEmbeddings ready — model={model_name}")
 
     def _embed(self, text: str) -> list[float]:
-        import requests, numpy as np
-        resp = requests.post(
-            self._url,
-            headers={"Authorization": f"Bearer {self._api_key}"},
-            json={"inputs": text},
-            timeout=60,
-        )
-        resp.raise_for_status()
-        result = resp.json()
+        import numpy as np
+        try:
+            from huggingface_hub import InferenceClient
+            client = InferenceClient(token=self._api_key)
+            result = client.feature_extraction(text, model=self._model)
+        except Exception:
+            import requests
+            resp = requests.post(
+                self._url,
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                json={"inputs": text},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            result = resp.json()
         arr = np.array(result)
         if arr.ndim == 2:
             arr = arr.mean(axis=0)
