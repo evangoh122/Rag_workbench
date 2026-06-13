@@ -12,11 +12,32 @@ scripts.embed_tickers._get_embeddings = MagicMock()
 from unittest.mock import patch, mock_open
 
 # Now we can import the scripts
-from scripts.embed_edgar import run_embed_edgar_etl
+from scripts.embed_edgar import _reset_incompatible_embeddings, run_embed_edgar_etl
 from scripts.init_graph_triples import init_graph_triples
 from scripts.run_shadow import load_extractions, main as shadow_main
 
 # ── Embed Edgar Script Tests ─────────────────────────────────────────────────
+
+def test_reset_incompatible_embeddings_clears_mixed_dimensions():
+    import duckdb
+
+    conn = duckdb.connect(":memory:")
+    conn.execute("CREATE TABLE edgar_embeddings (embedding FLOAT[])")
+    conn.execute("INSERT INTO edgar_embeddings VALUES ([1, 2]), ([1, 2, 3])")
+
+    assert _reset_incompatible_embeddings(conn, expected_dim=3) is True
+    assert conn.execute("SELECT COUNT(*) FROM edgar_embeddings").fetchone()[0] == 0
+
+
+def test_reset_incompatible_embeddings_keeps_matching_corpus():
+    import duckdb
+
+    conn = duckdb.connect(":memory:")
+    conn.execute("CREATE TABLE edgar_embeddings (embedding FLOAT[])")
+    conn.execute("INSERT INTO edgar_embeddings VALUES ([1, 2, 3]), ([4, 5, 6])")
+
+    assert _reset_incompatible_embeddings(conn, expected_dim=3) is False
+    assert conn.execute("SELECT COUNT(*) FROM edgar_embeddings").fetchone()[0] == 2
 
 @patch("scripts.embed_edgar.Downloader")
 @patch("scripts.embed_edgar.duckdb.connect")
