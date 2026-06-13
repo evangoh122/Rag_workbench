@@ -10,6 +10,7 @@ Structure-aware chunking:
 - Narrative text is split by topic similarity (semantic chunking), not fixed size
 - Each chunk is tagged with section_type (balance_sheet, income_statement, md_and_a, etc.)
 """
+import gc
 import os
 import re
 import shutil
@@ -433,11 +434,15 @@ def _reset_incompatible_embeddings(conn, expected_dim: int) -> bool:
     return True
 
 
-def run_embed_edgar_etl(tickers: List[str] = None) -> int:
+def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
     """
     Main ETL job: use sec-edgar-downloader to fetch 10-K/20-F/10-Q, chunk, embed, and store in DuckDB.
     Defaults to DEMO_TICKERS if no tickers provided.
+    
+    Processes tickers in batches with explicit memory cleanup to stay within HF Space limits.
     """
+    import gc
+    
     if tickers is None:
         tickers = DEMO_TICKERS
 
@@ -471,90 +476,102 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
 
         for ticker in tickers:
             logger.info(f"Processing filings for {ticker}...")
+            # Pre-bind so the finally's `del` is always safe even if a ticker
+            # fails before these are assigned (e.g. download/parse error).
+            text = raw_html = sections = all_chunks = None
 
-            file_path, form_type = _fetch_filing_with_downloader(ticker, ["10-K", "20-F", "10-Q"])
+            try:
+                file_path, form_type = _fetch_filing_with_downloader(ticker, ["10-K", "20-F", "10-Q"])
 
-            if not file_path:
-                logger.warning(f"No filings downloaded for {ticker}.")
+                if not file_path:
+                    logger.warning(f"No filings downloaded for {ticker}.")
+                    continue
+
+                text, raw_html = parse_html_file(file_path)
+
+                if not text:
+                    continue
+
+                # Extract period_of_report from HTML or accession dir name
+                accession_dir_name = Path(file_path).parent.name
+                period_of_report = _extract_period_of_report(raw_html, accession_dir_name)
+                accession = accession_dir_name
+
+                cik = _TICKER_CIK.get(ticker.upper(), "")
+
+                # Use section-aware chunking to preserve provenance
+                sections = _extract_sections_with_labels(
+                    _clean_text(
+                        BeautifulSoup(raw_html, "lxml").get_text(separator="\n", strip=True)
+                        if raw_html else text
+                    )
+                )
+
+                # Build chunks with structure-aware chunking
+                all_chunks = []  # list of Chunk objects
+                for section_label, section_text in sections:
+                    provenance_header = (
+                        f"[TICKER:{ticker.upper()} | SECTION:{section_label} | "
+                        f"PERIOD:{period_of_report} | FORM:{form_type}]\n"
+                    )
+                    section_chunks = chunker.chunk(
+                        section_text,
+                        section_label=section_label,
+                        ticker=ticker.upper(),
+                        period=period_of_report,
+                        form_type=form_type,
+                        provenance_header=provenance_header,
+                    )
+                    all_chunks.extend(section_chunks)
+
+                logger.debug(
+                    f"{ticker}: Split into {len(all_chunks)} chunks across {len(sections)} sections "
+                    f"({sum(1 for c in all_chunks if c.metadata.content_type == 'table')} tables, "
+                    f"{sum(1 for c in all_chunks if c.metadata.content_type == 'narrative')} narrative)"
+                )
+
+                ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+                # Delete existing records for this ticker+accession
+                conn.execute(
+                    "DELETE FROM edgar_embeddings WHERE ticker = ? AND accession = ?",
+                    [ticker, accession]
+                )
+
+                for i in range(0, len(all_chunks), batch_size):
+                    batch = all_chunks[i: i + batch_size]
+                    batch_texts = [c.text for c in batch]
+                    vecs = model.embed_documents(batch_texts)
+
+                    for j, chunk in enumerate(batch):
+                        conn.execute("""
+                            INSERT INTO edgar_embeddings
+                                (ticker, accession, text, embedding, updated_at,
+                                 cik, section_id, form_type, period_of_report, chunk_index,
+                                 section_type, content_type)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, [
+                            ticker, accession, chunk.text, vecs[j], ts,
+                            cik,
+                            chunk.metadata.section_label,
+                            form_type,
+                            period_of_report,
+                            chunk.metadata.chunk_index,
+                            chunk.metadata.section_type,
+                            chunk.metadata.content_type,
+                        ])
+
+                    total_chunks_stored += len(batch)
+                conn.commit()
+            except Exception as e:
+                logger.error(f"Failed to process {ticker}: {e}")
                 continue
-
-            text, raw_html = parse_html_file(file_path)
-
-            if not text:
-                continue
-
-            # Extract period_of_report from HTML or accession dir name
-            accession_dir_name = Path(file_path).parent.name
-            period_of_report = _extract_period_of_report(raw_html, accession_dir_name)
-            accession = accession_dir_name
-
-            cik = _TICKER_CIK.get(ticker.upper(), "")
-
-            # Use section-aware chunking to preserve provenance
-            sections = _extract_sections_with_labels(
-                _clean_text(
-                    BeautifulSoup(raw_html, "lxml").get_text(separator="\n", strip=True)
-                    if raw_html else text
-                )
-            )
-
-            # Build chunks with structure-aware chunking
-            all_chunks = []  # list of Chunk objects
-            for section_label, section_text in sections:
-                provenance_header = (
-                    f"[TICKER:{ticker.upper()} | SECTION:{section_label} | "
-                    f"PERIOD:{period_of_report} | FORM:{form_type}]\n"
-                )
-                section_chunks = chunker.chunk(
-                    section_text,
-                    section_label=section_label,
-                    ticker=ticker.upper(),
-                    period=period_of_report,
-                    form_type=form_type,
-                    provenance_header=provenance_header,
-                )
-                all_chunks.extend(section_chunks)
-
-            logger.debug(
-                f"{ticker}: Split into {len(all_chunks)} chunks across {len(sections)} sections "
-                f"({sum(1 for c in all_chunks if c.metadata.content_type == 'table')} tables, "
-                f"{sum(1 for c in all_chunks if c.metadata.content_type == 'narrative')} narrative)"
-            )
-
-            batch_size = 8
-            ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-            # Delete existing records for this ticker+accession
-            conn.execute(
-                "DELETE FROM edgar_embeddings WHERE ticker = ? AND accession = ?",
-                [ticker, accession]
-            )
-
-            for i in range(0, len(all_chunks), batch_size):
-                batch = all_chunks[i: i + batch_size]
-                batch_texts = [c.text for c in batch]
-                vecs = model.embed_documents(batch_texts)
-
-                for j, chunk in enumerate(batch):
-                    conn.execute("""
-                        INSERT INTO edgar_embeddings
-                            (ticker, accession, text, embedding, updated_at,
-                             cik, section_id, form_type, period_of_report, chunk_index,
-                             section_type, content_type)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, [
-                        ticker, accession, chunk.text, vecs[j], ts,
-                        cik,
-                        chunk.metadata.section_label,
-                        form_type,
-                        period_of_report,
-                        chunk.metadata.chunk_index,
-                        chunk.metadata.section_type,
-                        chunk.metadata.content_type,
-                    ])
-
-                total_chunks_stored += len(batch)
-            conn.commit()
+            finally:
+                # Release this filing's memory before the next ticker — the raw
+                # HTML (10-50MB), parsed tree, and chunk objects otherwise pile
+                # up across all 31 tickers and OOM the 16Gi Space.
+                del text, raw_html, sections, all_chunks
+                gc.collect()
 
     if _DOWNLOAD_DIR.exists():
         shutil.rmtree(_DOWNLOAD_DIR, ignore_errors=True)

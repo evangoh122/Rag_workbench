@@ -1298,10 +1298,46 @@ def get_app():
         _app = workflow.compile()
     return _app
 
+def _resolve_query_ticker(query: str, fallback: str) -> str:
+    """Prefer the ticker the user actually named in the query over the caller's
+    default. The UI ships a fixed default ticker, so without this a question
+    about "NVDA" would be answered with the default company's (e.g. Micron's)
+    XBRL data. Company name wins first, then an explicit ticker symbol; if the
+    query names neither, the caller's ticker is kept.
+    """
+    if not query:
+        return fallback
+    # 1. Company name in the query ("NVIDIA" -> NVDA, "Micron" -> MU)
+    try:
+        from api.services.hybrid_retriever import resolve_ticker_from_query
+        by_name = resolve_ticker_from_query(query, "")
+        if by_name:
+            return by_name
+    except Exception:
+        pass
+    # 2. Explicit ticker symbol in the query ("NVDA", "AVGO"). Length >= 3 with a
+    #    word boundary avoids prose false-matches on short/ambiguous symbols.
+    try:
+        from api.routes.admin import TICKER_TO_CIK
+        for sym in TICKER_TO_CIK:
+            if len(sym) >= 3 and re.search(r"\b" + re.escape(sym) + r"\b", query, re.IGNORECASE):
+                logger.info(f"Resolved ticker {sym!r} from explicit symbol in query")
+                return sym
+    except Exception:
+        pass
+    return fallback
+
+
 def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
     """
     Run the LangGraph DAG for a given query and ticker.
     """
+    # Ground the pipeline on the ticker named in the question, not just the
+    # UI's default selector — prevents "NVDA revenue" returning Micron's data.
+    resolved = _resolve_query_ticker(query, ticker)
+    if resolved != ticker:
+        logger.info(f"Ticker override: query resolved to {resolved!r} (caller passed {ticker!r})")
+    ticker = resolved
     app = get_app()
     inputs = {
         "query": query,

@@ -96,11 +96,30 @@ class LocalSTEmbeddings:
             from sentence_transformers import SentenceTransformer
             logger.info(f"Loading local embedding model: {self._model_name}")
             self._model = SentenceTransformer(self._model_name)
+            # Cap sequence length. Qwen3-Embedding supports up to 32K tokens; a
+            # single intact table chunk can tokenize to thousands of tokens, and
+            # processing that at full length blows activation memory past the
+            # Space's 16Gi limit (OOM). Filing chunks only need ~512 tokens.
+            try:
+                self._model.max_seq_length = int(os.getenv("EMBEDDING_MAX_SEQ_LEN", "512"))
+            except Exception:
+                pass
         return self._model
+
+    @property
+    def _batch_size(self) -> int:
+        # Small batch caps peak activation memory during the in-process embed.
+        try:
+            return int(os.getenv("EMBEDDING_BATCH_SIZE", "4"))
+        except (TypeError, ValueError):
+            return 4
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         model = self._get_model()
-        vecs = model.encode(texts, normalize_embeddings=True, convert_to_numpy=True)
+        vecs = model.encode(
+            texts, normalize_embeddings=True, convert_to_numpy=True,
+            batch_size=self._batch_size,
+        )
         return [v.tolist() for v in vecs]
 
     def embed_query(self, text: str) -> list[float]:
@@ -108,7 +127,9 @@ class LocalSTEmbeddings:
         if prefix:
             text = f"{prefix}{text}"
         model = self._get_model()
-        vec = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)[0]
+        vec = model.encode(
+            [text], normalize_embeddings=True, convert_to_numpy=True, batch_size=1,
+        )[0]
         return vec.tolist()
 
 
