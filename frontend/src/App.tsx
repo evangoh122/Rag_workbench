@@ -467,21 +467,65 @@ function App() {
             {/* Chat area */}
             <div className="flex-1 overflow-y-auto px-3 md:px-4 lg:px-8 py-6 md:py-8 flex flex-col gap-6 md:gap-8 scroll-smooth pb-28 md:pb-32">
               {messages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto">
+                <div className="flex flex-col items-center justify-center min-h-full text-center max-w-4xl mx-auto py-4">
                   <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(59,130,246,0.15)] border border-blue-500/20">
                     <MessageSquare size={32} className="text-blue-400" />
                   </div>
                   <h3 className="text-2xl font-semibold text-white mb-3">
-                    Start a Testing Session
+                    Financial research with an audit trail
                   </h3>
-                  <p className="text-gray-400 text-base leading-relaxed mb-8">
+                  <p className="text-gray-400 text-base leading-relaxed max-w-2xl mb-6">
                     {mode === 'auditable' 
-                      ? `Ask questions about SEC filings. The system currently only supports stocks listed in the **Coverage List**. It will retrieve relevant excerpts, extract XBRL facts, and verify the math.`
+                      ? 'RAG Workbench helps analysts question SEC filings in plain English. Each answer connects filing excerpts, structured XBRL facts, deterministic calculations, and verification results so you can inspect the evidence instead of trusting a black-box response.'
                       : mode === 'graph'
-                      ? `Ask about the knowledge graph for companies in our **Coverage List**. The system will identify entities, query the knowledge graph, and synthesize insights.`
+                      ? 'Explore company relationships through a knowledge graph built from financial filing data. The system identifies relevant entities and shows the graph evidence used to synthesize each answer.'
                       : 'Test the basic retrieval or SQL capabilities of the platform.'}
                   </p>
-                  
+
+                  {mode === 'auditable' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full mb-6 text-left">
+                      <div className="rounded-xl border border-[#202532] bg-[#0f1219] p-4">
+                        <div className="flex items-center gap-2 text-blue-300 font-semibold text-sm mb-2">
+                          <Search size={16} />
+                          Retrieve evidence
+                        </div>
+                        <p className="text-xs leading-relaxed text-gray-500">
+                          Finds relevant passages using hybrid semantic and keyword search across supported SEC filings.
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-[#202532] bg-[#0f1219] p-4">
+                        <div className="flex items-center gap-2 text-purple-300 font-semibold text-sm mb-2">
+                          <Database size={16} />
+                          Ground the numbers
+                        </div>
+                        <p className="text-xs leading-relaxed text-gray-500">
+                          Uses structured XBRL facts and deterministic math for financial metrics and period comparisons.
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-[#202532] bg-[#0f1219] p-4">
+                        <div className="flex items-center gap-2 text-emerald-300 font-semibold text-sm mb-2">
+                          <ShieldCheck size={16} />
+                          Verify the answer
+                        </div>
+                        <p className="text-xs leading-relaxed text-gray-500">
+                          Returns sources, calculations, confidence signals, and verification status for review.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-center gap-3 mb-6 text-xs text-gray-500">
+                    <span>Designed for research and testing, not investment advice.</span>
+                    <button
+                      type="button"
+                      onClick={() => setView('methodology')}
+                      className="inline-flex items-center gap-1.5 text-indigo-300 hover:text-indigo-200 bg-transparent border-0 p-0 cursor-pointer font-medium"
+                    >
+                      <BookOpen size={14} />
+                      Read the methodology
+                    </button>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
                      {mode === 'graph' ? (
                        <>
