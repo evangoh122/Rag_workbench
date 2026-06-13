@@ -8,6 +8,7 @@ from api.services.langgraph_engine import run_auditable_rag
 from api.services.graph_rag_engine import run_graph_rag
 from api.services.sec_client import chunk_filing_sections
 from api.services.sec_analyzer import analyze_filing
+from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display
 from api.models.schemas import (
     ChatRequest, ChatResponse, SourceItem,
     VerificationResult, PipelineStatus,
@@ -193,6 +194,35 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
         answer = _apply_output_rails(result["final_answer"])
         _tracker.record_success()
 
+        # ── Reduce XBRL facts to what's relevant for THIS question ──────────────
+        # The raw xbrl_facts list (a) repeats the same concept across multiple
+        # XBRL frames/contexts and (b) only some terminal nodes populate the
+        # relevant subset. Normalise it here, at the single response chokepoint,
+        # so every query path (numeric / qualitative / comparison) shows a
+        # deduped, query-relevant, properly-labelled fact set.
+        raw_facts = result.get("xbrl_facts") or []
+        seen: set = set()
+        deduped_facts = []
+        for f in raw_facts:
+            key = (f.get("concept"), f.get("value", f.get("val")), f.get("period_end"))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped_facts.append(f)
+
+        relevant_xbrl = result.get("relevant_xbrl") or []
+        xbrl_badge = result.get("xbrl_badge", "")
+        xbrl_group = result.get("xbrl_group", "")
+        if not relevant_xbrl and deduped_facts:
+            rel = get_relevant_facts(req.message, deduped_facts)
+            relevant_xbrl = [format_fact_for_display(f) for f in rel["relevant"]]
+            xbrl_badge = rel["badge_text"]
+            xbrl_group = rel["group"]
+
+        # Full list (collapsed in the UI) shows the deduped, normalised facts —
+        # not 180+ raw rows with blank Period/Label.
+        display_facts = [format_fact_for_display(f) for f in deduped_facts]
+
         # Map retrieved docs to flat SourceItem matching frontend expectations
         sources = []
         for d in result["retrieved_docs"]:
@@ -210,10 +240,10 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
             type="text",
             answer=answer,
             sources=sources,
-            xbrl_facts=result["xbrl_facts"],
-            relevant_xbrl=result.get("relevant_xbrl", []),
-            xbrl_badge=result.get("xbrl_badge", ""),
-            xbrl_group=result.get("xbrl_group", ""),
+            xbrl_facts=display_facts,
+            relevant_xbrl=relevant_xbrl,
+            xbrl_badge=xbrl_badge,
+            xbrl_group=xbrl_group,
             polygon_data=result.get("polygon_data", []),
             verification=VerificationResult(
                 status=result["verification_status"],
