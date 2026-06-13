@@ -182,7 +182,7 @@ jobs:
     needs: await-space
     runs-on: ubuntu-latest
     steps:
-      - name: "Verify edgar_embeddings populated (poll /api/stats)"
+      - name: "Verify new deployment re-embedded (poll /api/stats)"
         env:
           HF_USERNAME:   ${{ secrets.HF_USERNAME }}
           HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
@@ -196,21 +196,48 @@ jobs:
           # timeout — a false negative that skipped the rag-pipeline gate.)
           # We only POLL here; triggering a second embed job would collide with
           # the startup seed on DuckDB's single-writer lock.
+          #
+          # The gate verifies the NEW deployment, not just row count:
+          #   - active model == expected (defeats config drift)
+          #   - STORED vector dim == expected (defeats stale 768-dim rows AND the
+          #     old container that keeps serving during HF's rebuild swap — its
+          #     stored vectors are still the previous dimension until the new
+          #     container re-embeds)
+          #   - coverage >= TARGET companies
+          EXPECTED_MODEL="Qwen/Qwen3-Embedding-0.6B"
+          EXPECTED_DIM=1024
           TARGET=25   # of 31 tickers — allows a few SEC-fetch misses
-          echo "Polling $SPACE_URL/api/stats for embedding coverage (target >= $TARGET companies)..."
-          COMPANIES=0; CHUNKS=0
+          echo "Polling $SPACE_URL/api/stats — require model=$EXPECTED_MODEL, stored dim=$EXPECTED_DIM, >=$TARGET companies..."
           for i in $(seq 1 45); do   # 45 * 40s = 30 min budget
             STATS=$(curl -sf --max-time 30 "$SPACE_URL/api/stats" || echo '{}')
-            COMPANIES=$(echo "$STATS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('companies_with_chunks',0) or 0)" 2>/dev/null || echo 0)
-            CHUNKS=$(echo "$STATS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('filing_chunks',0) or 0)" 2>/dev/null || echo 0)
-            echo "Attempt $i/45 — companies_with_chunks=$COMPANIES, filing_chunks=$CHUNKS"
-            if [ "$COMPANIES" -ge "$TARGET" ] 2>/dev/null; then
-              echo "Embedding coverage reached ($COMPANIES companies, $CHUNKS chunks)."
+            RESULT=$(echo "$STATS" | EXPECTED_MODEL="$EXPECTED_MODEL" EXPECTED_DIM="$EXPECTED_DIM" TARGET="$TARGET" python3 -c "
+          import sys, json, os
+          try:
+              d = json.load(sys.stdin)
+          except Exception:
+              print('status=parse-error'); sys.exit()
+          data = d.get('data', {}) or {}
+          cfg = d.get('config', {}) or {}
+          model = cfg.get('embedding_model')
+          cfg_dim = cfg.get('embedding_dim')
+          stored_dim = data.get('embedding_dim_stored')
+          companies = data.get('companies_with_chunks') or 0
+          exp_model = os.environ['EXPECTED_MODEL']
+          exp_dim = int(os.environ['EXPECTED_DIM'])
+          target = int(os.environ['TARGET'])
+          print(f'status=model={model} cfg_dim={cfg_dim} stored_dim={stored_dim} companies={companies}')
+          if model == exp_model and cfg_dim == exp_dim and stored_dim == exp_dim and companies >= target:
+              print('READY')
+          ")
+            echo "Attempt $i/45 — $(echo "$RESULT" | grep '^status=' | sed 's/^status=//')"
+            if echo "$RESULT" | grep -q '^READY$'; then
+              echo "New deployment verified (model + stored dim + coverage)."
               exit 0
             fi
             sleep 40
           done
-          echo "ERROR: embedding coverage below $TARGET after 30 min (last: $COMPANIES companies, $CHUNKS chunks)."
+          echo "ERROR: new deployment not confirmed after 30 min (model=$EXPECTED_MODEL, stored dim=$EXPECTED_DIM, >=$TARGET companies)."
+          echo "Last stats: $RESULT"
           exit 1
 
 # ── 5. RAG pipeline smoke test — full coverage list (31 tickers) ─────────────

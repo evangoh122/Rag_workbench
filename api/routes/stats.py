@@ -29,6 +29,16 @@ async def get_stats():
         data["companies_with_xbrl"]   = _count(conn, "SELECT COUNT(DISTINCT ticker) FROM xbrl_facts")
         data["graph_triples"]         = _count(conn, "SELECT COUNT(*) FROM graph_triples")
         data["ticker_embeddings"]     = _count(conn, "SELECT COUNT(*) FROM ticker_embeddings")
+        # Actual stored vector dimension (from the data, not config) — lets CI
+        # confirm the corpus was re-embedded with the expected model and isn't
+        # stale rows from a previous embedder at a different dimension.
+        try:
+            row = conn.execute(
+                "SELECT len(embedding) FROM edgar_embeddings WHERE embedding IS NOT NULL LIMIT 1"
+            ).fetchone()
+            data["embedding_dim_stored"] = int(row[0]) if row and row[0] is not None else None
+        except Exception:
+            data["embedding_dim_stored"] = None
         # ticker coverage list
         try:
             rows = conn.execute(
