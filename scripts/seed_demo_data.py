@@ -101,6 +101,15 @@ def seed(db_path: str) -> None:
             industry    VARCHAR
         )
     """)
+    for col, col_type in [
+        ("text",       "TEXT"),
+        ("embedding",  "FLOAT[]"),
+        ("updated_at", "VARCHAR"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE ticker_embeddings ADD COLUMN IF NOT EXISTS {col} {col_type}")
+        except Exception:
+            pass
     conn.execute("""
         CREATE TABLE IF NOT EXISTS filing_chunks (
             id          INTEGER PRIMARY KEY DEFAULT(nextval('filing_chunks_seq')),
@@ -143,8 +152,9 @@ def seed(db_path: str) -> None:
     ]
     for ticker, name, sector, industry in semis:
         conn.execute("""
-            INSERT OR REPLACE INTO ticker_embeddings (ticker, description, sector, industry)
+            INSERT INTO ticker_embeddings (ticker, description, sector, industry)
             VALUES (?, ?, ?, ?)
+            ON CONFLICT (ticker) DO UPDATE SET description = excluded.description
         """, [ticker, name, sector, industry])
 
     count = conn.execute("SELECT COUNT(*) FROM xbrl_facts").fetchone()[0]

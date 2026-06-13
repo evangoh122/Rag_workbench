@@ -90,7 +90,7 @@ class DuckDBVectorRetriever(BaseRetriever):
     ) -> List[Document]:
         try:
             conn = db_manager.get_connection()
-            count = conn.execute("SELECT COUNT(*) FROM ticker_embeddings").fetchone()[0]
+            count = conn.execute("SELECT COUNT(*) FROM ticker_embeddings WHERE embedding IS NOT NULL").fetchone()[0]
 
             if count > 0:
                 embeddings = get_embeddings()
@@ -103,6 +103,7 @@ class DuckDBVectorRetriever(BaseRetriever):
                     SELECT ticker, text,
                            array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
                     FROM ticker_embeddings
+                    WHERE embedding IS NOT NULL
                     ORDER BY dist ASC
                     LIMIT ?
                 """, [qvec, self.top_k]).fetchall()

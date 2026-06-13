@@ -197,6 +197,15 @@ def create_tables(conn: duckdb.DuckDBPyConnection) -> None:
             industry    VARCHAR
         )
     """)
+    for col, col_type in [
+        ("text",       "TEXT"),
+        ("embedding",  "FLOAT[]"),
+        ("updated_at", "VARCHAR"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE ticker_embeddings ADD COLUMN IF NOT EXISTS {col} {col_type}")
+        except Exception:
+            pass
     # graph_triples already created by database.py init
     conn.execute("""
         CREATE TABLE IF NOT EXISTS graph_triples (
@@ -256,8 +265,9 @@ def bootstrap(tickers: list[str], db_path: str) -> None:
         # Insert ticker metadata
         company_name = data.get("entityName", ticker)
         conn.execute("""
-            INSERT OR REPLACE INTO ticker_embeddings (ticker, description, sector, industry)
+            INSERT INTO ticker_embeddings (ticker, description, sector, industry)
             VALUES (?, ?, ?, ?)
+            ON CONFLICT (ticker) DO UPDATE SET description = excluded.description
         """, [ticker, company_name, "", ""])
 
     conn.close()

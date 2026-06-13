@@ -64,9 +64,13 @@ def run_embed_tickers_etl(batch_size: int = 100) -> int:
 
                 for j, row in enumerate(batch):
                     conn.execute("""
-                        INSERT OR REPLACE INTO ticker_embeddings
-                            (ticker, source, text, embedding, updated_at)
-                        VALUES (?, 'polygon_desc', ?, ?, ?)
+                        INSERT INTO ticker_embeddings
+                            (ticker, text, embedding, updated_at)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT (ticker) DO UPDATE SET
+                            text = excluded.text,
+                            embedding = excluded.embedding,
+                            updated_at = excluded.updated_at
                     """, [row["ticker"], texts[j], vecs[j], ts])
 
                 total += len(batch)

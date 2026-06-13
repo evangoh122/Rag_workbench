@@ -124,6 +124,15 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
             sector VARCHAR, industry VARCHAR
         )
     """)
+    for col, col_type in [
+        ("text",       "TEXT"),
+        ("embedding",  "FLOAT[]"),
+        ("updated_at", "VARCHAR"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE ticker_embeddings ADD COLUMN IF NOT EXISTS {col} {col_type}")
+        except Exception:
+            pass
     conn.execute("""
         CREATE TABLE IF NOT EXISTS edgar_embeddings (
             ticker            VARCHAR NOT NULL,
