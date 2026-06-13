@@ -69,9 +69,19 @@ def main() -> None:
         conn.close()
         return
 
+    # Use a STABLE surrogate key, not rowid. DuckDB rowids can drift across
+    # commits (especially after DELETEs), which silently makes UPDATE..WHERE
+    # rowid=? match nothing — leaving rows NULL while the loop counts them done.
+    conn.execute("ALTER TABLE edgar_embeddings ADD COLUMN IF NOT EXISTS reembed_id BIGINT")
+    conn.execute("CREATE SEQUENCE IF NOT EXISTS reembed_id_seq")
+    conn.execute(
+        "UPDATE edgar_embeddings SET reembed_id = nextval('reembed_id_seq') WHERE reembed_id IS NULL"
+    )
+    conn.commit()
+
     rows = conn.execute(
-        "SELECT rowid, text FROM edgar_embeddings "
-        "WHERE embedding IS NULL OR len(embedding) <> ? ORDER BY rowid", [TARGET_DIM]
+        "SELECT reembed_id, text FROM edgar_embeddings "
+        "WHERE embedding IS NULL OR len(embedding) <> ? ORDER BY reembed_id", [TARGET_DIM]
     ).fetchall()
 
     done = 0
@@ -87,7 +97,7 @@ def main() -> None:
         )
         ts = time.strftime("%Y-%m-%dT%H:%M:%S")
         conn.executemany(
-            "UPDATE edgar_embeddings SET embedding = ?, updated_at = ? WHERE rowid = ?",
+            "UPDATE edgar_embeddings SET embedding = ?, updated_at = ? WHERE reembed_id = ?",
             [(vecs[j].tolist(), ts, ids[j]) for j in range(len(ids))],
         )
         done += len(chunk)
@@ -99,12 +109,20 @@ def main() -> None:
             print(f"[reembed] {done}/{todo}  ({rate:.1f}/s, eta {eta/60:.1f} min)", flush=True)
 
     conn.commit()
-    # verify
+    # verify + clean up the surrogate key once the corpus is fully 1024-dim
+    remaining = conn.execute(
+        "SELECT COUNT(*) FROM edgar_embeddings WHERE embedding IS NULL OR len(embedding) <> ?",
+        [TARGET_DIM],
+    ).fetchone()[0]
+    if remaining == 0:
+        conn.execute("ALTER TABLE edgar_embeddings DROP COLUMN IF EXISTS reembed_id")
+        conn.execute("DROP SEQUENCE IF EXISTS reembed_id_seq")
+        conn.commit()
     dims = [r[0] for r in conn.execute(
         "SELECT DISTINCT len(embedding) FROM edgar_embeddings WHERE embedding IS NOT NULL"
     ).fetchall()]
-    print(f"[reembed] DONE — {done} re-embedded in {(time.time()-t0)/60:.1f} min. "
-          f"vector dims now: {sorted(dims)}", flush=True)
+    print(f"[reembed] DONE — {done} processed in {(time.time()-t0)/60:.1f} min. "
+          f"remaining NULL/non-{TARGET_DIM}: {remaining}. vector dims now: {sorted(dims)}", flush=True)
     conn.close()
 
 
