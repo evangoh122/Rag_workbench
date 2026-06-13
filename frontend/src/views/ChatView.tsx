@@ -11,6 +11,9 @@ interface Message {
   data?: Record<string, unknown>[];
   sources?: any[];
   xbrl_facts?: any[];
+  relevant_xbrl?: any[];
+  xbrl_badge?: string;
+  xbrl_group?: string;
   verification?: {
     status: string;
     reasoning: string;
