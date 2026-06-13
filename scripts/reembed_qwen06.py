@@ -29,7 +29,7 @@ import duckdb
 
 MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
 TARGET_DIM = 1024
-COMMIT_EVERY = 20  # batches
+COMMIT_EVERY = 5  # batches (frequent commits = better progress visibility + resumability)
 
 
 def main() -> None:
