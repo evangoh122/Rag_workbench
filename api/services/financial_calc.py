@@ -107,17 +107,45 @@ def normalize_to_usd(value: float, unit: str) -> float:
 # Income Statement Calculators
 # ---------------------------------------------------------------------------
 
-def gross_margin(revenue: float, cogs: float, period: str = "") -> CalcResult:
-    """Gross Margin % = (Revenue - COGS) / Revenue * 100"""
-    gross_profit = revenue - cogs
-    pct = _guard_div(gross_profit, revenue, "gross_margin") * 100
+def gross_margin(
+    revenue: float,
+    cogs: Optional[float] = None,
+    period: str = "",
+    *,
+    gross_profit: Optional[float] = None,
+) -> CalcResult:
+    """Gross Margin % = Gross Profit / Revenue * 100.
+
+    Prefers a directly-filed ``gross_profit`` (the company's own XBRL GrossProfit
+    tag) when provided — most faithful to the filing. Otherwise derives gross
+    profit as Revenue - COGS. Exactly one of ``cogs`` or ``gross_profit`` is
+    required; the formula string reflects which path was taken so the audit
+    trail shows the real numerator and denominator.
+    """
+    if gross_profit is None:
+        if cogs is None:
+            raise ValueError("gross_margin: provide either gross_profit or cogs")
+        gross_profit = revenue - cogs
+        pct = _guard_div(gross_profit, revenue, "gross_margin") * 100
+        formula = f"({_fmt(revenue)} - {_fmt(cogs)}) / {_fmt(revenue)} = {pct:.2f}%"
+        notes = ""
+    else:
+        pct = _guard_div(gross_profit, revenue, "gross_margin") * 100
+        formula = f"{_fmt(gross_profit)} / {_fmt(revenue)} = {pct:.2f}%"
+        notes = "Gross profit taken directly from the filed XBRL GrossProfit tag"
+
+    inputs: dict[str, float] = {"revenue": revenue, "gross_profit": gross_profit}
+    if cogs is not None:
+        inputs["cogs"] = cogs
+
     return CalcResult(
         metric="Gross Margin",
         value=round(pct, 4),
-        formula=f"({_fmt(revenue)} - {_fmt(cogs)}) / {_fmt(revenue)} = {pct:.2f}%",
-        inputs={"revenue": revenue, "cogs": cogs, "gross_profit": gross_profit},
+        formula=formula,
+        inputs=inputs,
         unit="%",
         period=period,
+        notes=notes,
     )
 
 
@@ -625,7 +653,9 @@ def compute_margins(df: pl.DataFrame) -> pl.DataFrame:
 # Canonical XBRL concept → common aliases (all lower-case, no hyphens)
 _CONCEPT_ALIASES: dict[str, list[str]] = {
     "revenues":                  ["revenues", "revenue", "netsales", "totalrevenues",
-                                  "revenuesfromcontractswithcustomers", "salesrevenuenet"],
+                                  "revenuesfromcontractswithcustomers", "salesrevenuenet",
+                                  "revenuefromcontractwithcustomerexcludingassessedtax",
+                                  "revenuefromcontractwithcustomerincludingassessedtax"],
     "costofrevenue":             ["costofrevenue", "costofgoodsandservices", "costofgoodsandservicessold", "costofsales"],
     "grossprofit":               ["grossprofit"],
     "operatingincomeloss":       ["operatingincomeloss", "operatingincome",
