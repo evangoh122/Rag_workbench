@@ -35,12 +35,14 @@ jobs:
             local key=$1 value=$2
             if [ -n "$value" ]; then
               echo "Uploading secret: $key"
-              curl -sf -X POST \
+              local json_body
+              json_body=$(jq -nc --arg k "$key" --arg v "$value" '{"key": $k, "value": $v}')
+              curl -sS -f -X POST \
                 "https://huggingface.co/api/spaces/$HF_USERNAME/$HF_SPACE_NAME/secrets" \
                 -H "Authorization: Bearer $HF_TOKEN" \
                 -H "Content-Type: application/json" \
-                -d "{\"key\": \"$key\", \"value\": \"$value\"}" \
-                -o /dev/null -w "  -> HTTP %{http_code}\n" || echo "  -> FAILED"
+                -d "$json_body" \
+                -o /dev/null -w "  -> HTTP %{http_code}\n" || { echo "  -> FAILED"; return 1; }
             else
               echo "Skipping $key (not set)"
             fi
@@ -53,12 +55,14 @@ jobs:
             local key=$1 value=$2
             if [ -n "$value" ]; then
               echo "Uploading variable: $key"
-              curl -sf -X POST \
+              local json_body
+              json_body=$(jq -nc --arg k "$key" --arg v "$value" '{"key": $k, "value": $v}')
+              curl -sS -f -X POST \
                 "https://huggingface.co/api/spaces/$HF_USERNAME/$HF_SPACE_NAME/variables" \
                 -H "Authorization: Bearer $HF_TOKEN" \
                 -H "Content-Type: application/json" \
-                -d "{\"key\": \"$key\", \"value\": \"$value\"}" \
-                -o /dev/null -w "  -> HTTP %{http_code}\n" || echo "  -> FAILED"
+                -d "$json_body" \
+                -o /dev/null -w "  -> HTTP %{http_code}\n" || { echo "  -> FAILED"; return 1; }
             else
               echo "Skipping $key (not set)"
             fi
@@ -207,15 +211,22 @@ jobs:
           EXPECTED_MODEL="Qwen/Qwen3-Embedding-0.6B"
           EXPECTED_DIM=1024
           TARGET=25   # of 31 tickers — allows a few SEC-fetch misses
+          echo "Waiting 60s for Space to begin startup seed..."
+          sleep 60
           echo "Polling $SPACE_URL/api/stats — require model=$EXPECTED_MODEL, all stored dims=$EXPECTED_DIM, >=$TARGET companies..."
           for i in $(seq 1 45); do   # 45 * 40s = 30 min budget
-            STATS=$(curl -sf --max-time 30 "$SPACE_URL/api/stats" || echo '{}')
+            STATS=$(curl -sS --max-time 30 "$SPACE_URL/api/stats" || echo '{"error": "curl failed"}')
             RESULT=$(echo "$STATS" | EXPECTED_MODEL="$EXPECTED_MODEL" EXPECTED_DIM="$EXPECTED_DIM" TARGET="$TARGET" python3 -c "
           import sys, json, os
           try:
-              d = json.load(sys.stdin)
-          except Exception:
-              print('status=parse-error'); sys.exit()
+              line = sys.stdin.read().strip()
+              if not line:
+                  print('status=empty-response'); sys.exit(1)
+              d = json.loads(line)
+          except Exception as e:
+              print(f'status=parse-error: {e}'); sys.exit(1)
+          if 'error' in d:
+              print(f'status=api-error: {d[\"error\"]}'); sys.exit(0)
           data = d.get('data', {}) or {}
           cfg = d.get('config', {}) or {}
           model = cfg.get('embedding_model')
@@ -228,10 +239,15 @@ jobs:
           ticker_dim_variants = data.get('ticker_embedding_dim_variants') or 0
           ticker_vectors = data.get('ticker_embeddings_with_vectors') or 0
           companies = data.get('companies_with_chunks') or 0
-          exp_model = os.environ['EXPECTED_MODEL']
-          exp_dim = int(os.environ['EXPECTED_DIM'])
-          target = int(os.environ['TARGET'])
+          try:
+              exp_model = os.environ['EXPECTED_MODEL']
+              exp_dim = int(os.environ['EXPECTED_DIM'])
+              target = int(os.environ['TARGET'])
+          except KeyError as e:
+              print(f'status=env-error: missing {e}'); sys.exit(1)
+          
           print(f'status=model={model} cfg_dim={cfg_dim} dim_min={dim_min} dim_max={dim_max} dim_variants={dim_variants} ticker_dim_min={ticker_dim_min} ticker_dim_max={ticker_dim_max} ticker_dim_variants={ticker_dim_variants} ticker_vectors={ticker_vectors} companies={companies}')
+          
           if (model == exp_model and cfg_dim == exp_dim and dim_min == exp_dim
                   and dim_max == exp_dim and dim_variants == 1
                   and ticker_dim_min == exp_dim and ticker_dim_max == exp_dim
@@ -315,9 +331,13 @@ jobs:
           echo "$RESPONSE"
           echo "$RESPONSE" | python3 -c "
           import sys, json
-          d = json.load(sys.stdin)
-          assert d['status'] in ('ok', 'partial'), f'Refresh failed: {d}'
+          try:
+              d = json.load(sys.stdin)
+          except Exception:
+              print('Refresh failed: non-JSON response (likely an error page)'); sys.exit(1)
+          status = d.get('status')
+          assert status in ('ok', 'partial'), f'Refresh failed: {d}'
           skipped = d.get('skipped_tickers', [])
-          print(f'Refresh: {d[\"tickers_processed\"]} tickers, {d[\"facts_loaded\"]} facts')
+          print(f'Refresh: {d.get(\"tickers_processed\", 0)} tickers, {d.get(\"facts_loaded\", 0)} facts')
           if skipped: print(f'Skipped: {skipped}')
           "

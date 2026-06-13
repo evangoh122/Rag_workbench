@@ -6,12 +6,7 @@ import {
   triggerCalibration,
 } from '../api/review';
 import type { ReviewDecision } from '../api/review';
-
-let _posthog: Promise<typeof import('posthog-js').default> | null = null
-function getPosthog() {
-  if (!_posthog) _posthog = import('posthog-js').then(m => m.default)
-  return _posthog
-}
+import { getPosthog } from '../utils/posthog';
 
 type FilterTab = 'all' | 'ESCALATE' | 'SAMPLED_REVIEW';
 

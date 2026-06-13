@@ -1,11 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ShieldCheck, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 
-let _posthog: Promise<typeof import('posthog-js').default> | null = null
-function getPosthog() {
-  if (!_posthog) _posthog = import('posthog-js').then(m => m.default)
-  return _posthog
-}
+import { getPosthog } from '../utils/posthog'
 
 interface AuditRun {
   run_id: string;
