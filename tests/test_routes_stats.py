@@ -48,11 +48,11 @@ def test_get_stats_success(mock_db, mock_llm_tracker):
     # api/routes/stats.py doesn't have Depends(get_read_api_key)
     
     # We need to make sure _count side effects are correct for the calls in stats.py
-    # data: 6 counts + 1 stored-dim fetchone + 1 fetchall
+    # data: 6 counts + 1 stored-dimension aggregate fetchone + 1 fetchall
     # review: 4 counts
     mock_db.execute.return_value.fetchone.side_effect = [
         (100,), (10,), (50,), (5,), (200,), (150,), # data counts
-        (1024,),                                     # embedding_dim_stored
+        (1024, 1024, 1),                             # stored dimension aggregate
         (20,), (15,), (5,), (2,) # review
     ]
     mock_db.execute.return_value.fetchall.side_effect = [
@@ -64,7 +64,9 @@ def test_get_stats_success(mock_db, mock_llm_tracker):
     res_data = response.json()
 
     assert res_data["data"]["filing_chunks"] == 100
-    assert res_data["data"]["embedding_dim_stored"] == 1024
+    assert res_data["data"]["embedding_dim_min"] == 1024
+    assert res_data["data"]["embedding_dim_max"] == 1024
+    assert res_data["data"]["embedding_dim_variants"] == 1
     assert res_data["data"]["tickers_embedded"] == ["AAPL", "MSFT"]
     assert res_data["review"]["total_decisions"] == 20
     assert res_data["llm"]["total_calls"] == 100

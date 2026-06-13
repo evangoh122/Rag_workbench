@@ -199,7 +199,7 @@ jobs:
           #
           # The gate verifies the NEW deployment, not just row count:
           #   - active model == expected (defeats config drift)
-          #   - STORED vector dim == expected (defeats stale 768-dim rows AND the
+          #   - ALL stored vector dims == expected (defeats stale 768-dim rows AND the
           #     old container that keeps serving during HF's rebuild swap — its
           #     stored vectors are still the previous dimension until the new
           #     container re-embeds)
@@ -207,7 +207,7 @@ jobs:
           EXPECTED_MODEL="Qwen/Qwen3-Embedding-0.6B"
           EXPECTED_DIM=1024
           TARGET=25   # of 31 tickers — allows a few SEC-fetch misses
-          echo "Polling $SPACE_URL/api/stats — require model=$EXPECTED_MODEL, stored dim=$EXPECTED_DIM, >=$TARGET companies..."
+          echo "Polling $SPACE_URL/api/stats — require model=$EXPECTED_MODEL, all stored dims=$EXPECTED_DIM, >=$TARGET companies..."
           for i in $(seq 1 45); do   # 45 * 40s = 30 min budget
             STATS=$(curl -sf --max-time 30 "$SPACE_URL/api/stats" || echo '{}')
             RESULT=$(echo "$STATS" | EXPECTED_MODEL="$EXPECTED_MODEL" EXPECTED_DIM="$EXPECTED_DIM" TARGET="$TARGET" python3 -c "
@@ -220,13 +220,16 @@ jobs:
           cfg = d.get('config', {}) or {}
           model = cfg.get('embedding_model')
           cfg_dim = cfg.get('embedding_dim')
-          stored_dim = data.get('embedding_dim_stored')
+          dim_min = data.get('embedding_dim_min')
+          dim_max = data.get('embedding_dim_max')
+          dim_variants = data.get('embedding_dim_variants') or 0
           companies = data.get('companies_with_chunks') or 0
           exp_model = os.environ['EXPECTED_MODEL']
           exp_dim = int(os.environ['EXPECTED_DIM'])
           target = int(os.environ['TARGET'])
-          print(f'status=model={model} cfg_dim={cfg_dim} stored_dim={stored_dim} companies={companies}')
-          if model == exp_model and cfg_dim == exp_dim and stored_dim == exp_dim and companies >= target:
+          print(f'status=model={model} cfg_dim={cfg_dim} dim_min={dim_min} dim_max={dim_max} dim_variants={dim_variants} companies={companies}')
+          if (model == exp_model and cfg_dim == exp_dim and dim_min == exp_dim
+                  and dim_max == exp_dim and dim_variants == 1 and companies >= target):
               print('READY')
           ")
             echo "Attempt $i/45 — $(echo "$RESULT" | grep '^status=' | sed 's/^status=//')"
@@ -236,7 +239,7 @@ jobs:
             fi
             sleep 40
           done
-          echo "ERROR: new deployment not confirmed after 30 min (model=$EXPECTED_MODEL, stored dim=$EXPECTED_DIM, >=$TARGET companies)."
+          echo "ERROR: new deployment not confirmed after 30 min (model=$EXPECTED_MODEL, all stored dims=$EXPECTED_DIM, >=$TARGET companies)."
           echo "Last stats: $RESULT"
           exit 1
 

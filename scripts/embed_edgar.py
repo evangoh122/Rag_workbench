@@ -412,6 +412,27 @@ def _ensure_schema(conn) -> None:
             logger.debug(f"Schema alter skipped (may already exist): {e}")
 
 
+def _reset_incompatible_embeddings(conn, expected_dim: int) -> bool:
+    """Clear stored vectors when their dimensions do not match the active model."""
+    stored_dims = {
+        int(row[0])
+        for row in conn.execute(
+            "SELECT DISTINCT len(embedding) FROM edgar_embeddings WHERE embedding IS NOT NULL"
+        ).fetchall()
+        if row[0] is not None
+    }
+    if not stored_dims or stored_dims == {expected_dim}:
+        return False
+
+    logger.warning(
+        "Stored embedding dimensions {} do not match configured dimension {}; rebuilding corpus",
+        sorted(stored_dims), expected_dim,
+    )
+    conn.execute("DELETE FROM edgar_embeddings")
+    conn.commit()
+    return True
+
+
 def run_embed_edgar_etl(tickers: List[str] = None) -> int:
     """
     Main ETL job: use sec-edgar-downloader to fetch 10-K/20-F/10-Q, chunk, embed, and store in DuckDB.
@@ -442,6 +463,11 @@ def run_embed_edgar_etl(tickers: List[str] = None) -> int:
 
         # Ensure schema is up to date
         _ensure_schema(conn)
+
+        # Embeddings from different models cannot coexist safely: DuckDB vector
+        # distance requires every stored vector to match the query dimension.
+        # Clear an incompatible corpus before rebuilding ticker by ticker.
+        _reset_incompatible_embeddings(conn, Config.EMBEDDING_DIM)
 
         for ticker in tickers:
             logger.info(f"Processing filings for {ticker}...")
