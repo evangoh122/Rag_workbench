@@ -84,7 +84,9 @@ jobs:
           upload_secret "EMBEDDING_DIM"      "1024"
           # Qwen3-Embedding uses an instruction prefix on the QUERY side only
           # (documents are embedded as-is). Applied via EMBEDDING_QUERY_PREFIX.
-          upload_secret "EMBEDDING_QUERY_PREFIX" "Instruct: Given a financial question, retrieve relevant SEC filing passages that answer it.\nQuery: "
+          # printf renders the \n as a real newline (Qwen's "Instruct: …\nQuery: …"
+          # format); jq then JSON-encodes that newline so the Space env var is correct.
+          upload_secret "EMBEDDING_QUERY_PREFIX" "$(printf 'Instruct: Given a financial question, retrieve relevant SEC filing passages that answer it.\nQuery: ')"
           # PostHog product analytics — build-time variables for the frontend.
           # Set the GitHub secret VITE_POSTHOG_KEY to activate; leaving it unset
           # keeps analytics disabled (the app no-ops when the key is empty).
