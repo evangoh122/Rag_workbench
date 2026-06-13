@@ -24,12 +24,23 @@ def wait_for_app(retries: int = 30, delay: float = 2.0) -> bool:
     return False
 
 
-def xbrl_count() -> int:
+def _stats() -> dict:
     try:
         r = requests.get(f"{BASE_URL}/api/stats", timeout=10)
-        return r.json().get("data", {}).get("xbrl_facts") or 0
+        return r.json().get("data", {}) or {}
     except Exception:
-        return 0
+        return {}
+
+
+def xbrl_count() -> int:
+    return _stats().get("xbrl_facts") or 0
+
+
+def already_populated() -> bool:
+    """True if the DB already has facts AND chunk embeddings — i.e. it was
+    restored from the HF dataset at boot, so the EDGAR re-seed is unnecessary."""
+    s = _stats()
+    return (s.get("xbrl_facts") or 0) > 0 and (s.get("companies_with_chunks") or 0) > 0
 
 
 def main():
@@ -40,6 +51,17 @@ def main():
     logger.info("Waiting for uvicorn to be ready...")
     if not wait_for_app():
         logger.error("App did not start in time — skipping XBRL seed")
+        return
+
+    # The DB is normally restored from the HF dataset at boot (see
+    # fetch_db_from_dataset.py / Dockerfile). If it already has facts + chunk
+    # embeddings, the expensive EDGAR re-seed is redundant — skip it.
+    if already_populated():
+        s = _stats()
+        logger.info(
+            f"DB already populated from dataset (xbrl_facts={s.get('xbrl_facts')}, "
+            f"companies_with_chunks={s.get('companies_with_chunks')}) — skipping EDGAR re-seed"
+        )
         return
 
     count = xbrl_count()
@@ -63,6 +85,7 @@ def main():
         logger.error(f"Startup seed error: {e}")
 
     # ── Step 2: Chunk + embed 10-K filings into edgar_embeddings ────────────
+    # Process in smaller batches to stay within HF Space 16GB memory limit
     max_embed_retries = 3
     for attempt in range(1, max_embed_retries + 1):
         try:
