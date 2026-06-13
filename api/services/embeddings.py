@@ -16,21 +16,37 @@ class PrefixedOllamaEmbeddings(OllamaEmbeddings):
 class HFInferenceEmbeddings:
     """
     Embeddings via HuggingFace InferenceClient (feature_extraction).
-    Uses direct HTTP to api-inference.huggingface.co as fallback.
+    Falls back to direct HTTP on routing errors (e.g. scaleway 403 on HF Spaces).
     """
     def __init__(self, model_name: str):
         self._model = model_name
         self._api_key = os.getenv("HF_TOKEN", "")
         self._url = f"https://api-inference.huggingface.co/models/{model_name}"
+        self._client = None
+        self._use_http_fallback = False
         logger.info(f"HFInferenceEmbeddings ready — model={model_name}")
+
+    def _get_client(self):
+        if self._client is None and not self._use_http_fallback:
+            try:
+                from huggingface_hub import InferenceClient
+                self._client = InferenceClient(token=self._api_key)
+            except ImportError:
+                self._use_http_fallback = True
+        return self._client
 
     def _embed(self, text: str) -> list[float]:
         import numpy as np
-        try:
-            from huggingface_hub import InferenceClient
-            client = InferenceClient(token=self._api_key)
-            result = client.feature_extraction(text, model=self._model)
-        except Exception:
+        client = self._get_client()
+        if client is not None:
+            try:
+                result = client.feature_extraction(text, model=self._model)
+            except Exception as e:
+                logger.warning("InferenceClient failed ({}: {}) — falling back to direct HTTP", type(e).__name__, e)
+                self._client = None
+                self._use_http_fallback = True
+                client = None
+        if client is None:
             import requests
             resp = requests.post(
                 self._url,

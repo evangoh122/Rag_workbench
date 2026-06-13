@@ -132,10 +132,6 @@ class Config:
         return os.getenv("HF_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-8B")
 
     @property
-    def HF_EMBED_PROVIDER(self) -> str:
-        return os.getenv("HF_EMBED_PROVIDER", "scaleway")
-
-    @property
     def EMBEDDING_QUERY_PREFIX(self) -> str:
         return os.getenv("EMBEDDING_QUERY_PREFIX", "")
 
