@@ -33,7 +33,10 @@ SEC_RATE_LIMIT_DELAY = 0.15  # 10 req/s max -> 100ms + margin
 
 # CIK lookup for covered tickers
 TICKER_TO_CIK = {
-    # Aerospace / Launch (IPO 2026 — S-1/424B4 prospectus, no XBRL companyfacts yet)
+    # Aerospace / Launch. SpaceX has filed only an S-1/424B4 IPO prospectus — no
+    # 10-K and no XBRL companyfacts yet — so today this registers company metadata
+    # only (ticker_embeddings); XBRL facts auto-populate once it files its first
+    # 10-K. Prospectus *text* is ingested separately via embed_edgar.py.
     "SPCX": "0001181412",  # Space Exploration Technologies (SpaceX)
     # Semiconductor Design & IP
     "ADI": "0000006607",   # Analog Devices
