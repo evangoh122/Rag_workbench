@@ -9,20 +9,37 @@ from loguru import logger
 from api.services._edgar_identity import ensure_edgar_identity
 
 @lru_cache(maxsize=32)
-def get_latest_10k_facts(ticker: str) -> pl.DataFrame:
+def get_latest_10k_facts(ticker: str, concepts: Optional[tuple] = None) -> pl.DataFrame:
     """
     Fetch the latest 10-K XBRL facts for a ticker from the xbrl_facts DuckDB table.
     Columns: concept, value, unit, period_end, form_type
+
+    If `concepts` is provided, only facts whose concept contains any of the
+    given substrings are returned.  This avoids dragging all 50-200+ facts
+    through the pipeline when the user only asked about 2-4 metrics.
     """
     try:
         from api.db.database import db_manager
         conn = db_manager.get_connection()
-        rows = conn.execute("""
-            SELECT concept, value, unit, period_end, form_type
-            FROM xbrl_facts
-            WHERE ticker = ?
-            ORDER BY period_end DESC
-        """, [ticker]).fetchall()
+
+        if concepts:
+            clauses = " OR ".join(["concept LIKE ?" for _ in concepts])
+            sql = f"""
+                SELECT concept, value, unit, period_end, form_type
+                FROM xbrl_facts
+                WHERE ticker = ?
+                  AND ({clauses})
+                ORDER BY period_end DESC
+            """
+            params = [ticker] + [f"%{c}%" for c in concepts]
+            rows = conn.execute(sql, params).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT concept, value, unit, period_end, form_type
+                FROM xbrl_facts
+                WHERE ticker = ?
+                ORDER BY period_end DESC
+            """, [ticker]).fetchall()
 
         if not rows:
             return pl.DataFrame()

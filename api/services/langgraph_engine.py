@@ -141,19 +141,27 @@ def retrieval_node(state: GraphState) -> Dict[str, Any]:
 
 def extraction_node(state: GraphState) -> Dict[str, Any]:
     """
-    Node 2: Extract structured XBRL facts using Polars.
+    Node 2: Extract structured XBRL facts using Polars — filtered to query-relevant concepts.
     """
     logger.info(f"--- EXTRACTION: {state['ticker']} ---")
     try:
-        df = get_latest_10k_facts(state['ticker'])
+        query    = state.get("query", "")
+        raw      = _pick_concepts(query.lower()) if query else None
+        if raw and set(raw) == set(_DEFAULT_CONCEPTS):
+            logger.debug("No query-concept match — falling back to full fetch")
+            concepts = None
+        else:
+            concepts = tuple(raw) if raw else None
+        df       = get_latest_10k_facts(state['ticker'], concepts=concepts)
         if df.is_empty():
             return {
                 "xbrl_facts": [],
                 "status": {**state.get('status', {}), "extraction": "success"}
             }
-        
+
         # Convert Polars DF to list of dicts for the state
         facts = df.to_dicts()
+        logger.info(f"Extraction: {len(facts)} facts for {state['ticker']} (concepts={concepts})")
         return {
             "xbrl_facts": facts,
             "status": {**state.get('status', {}), "extraction": "success"}
@@ -344,11 +352,16 @@ def verification_node(state: GraphState) -> Dict[str, Any]:
         numeric_reasoning = ""
         math_steps = state.get('math_steps', [])
         math_steps_text = " ".join(math_steps)
+        query = state.get("query", "")
+        relevant_concepts = _pick_concepts(query.lower()) if query else []
 
         if isinstance(math_result, (int, float)):
-            # Direct match: raw XBRL values (revenue, net income, etc.)
+            # Direct match: raw XBRL values — only check concepts relevant to the query
             if xbrl_facts:
                 for fact in xbrl_facts:
+                    concept = str(fact.get("concept", ""))
+                    if relevant_concepts and not any(c in concept for c in relevant_concepts):
+                        continue
                     fact_value = fact.get("value") or fact.get("val")
                     if fact_value is None:
                         continue
@@ -358,7 +371,7 @@ def verification_node(state: GraphState) -> Dict[str, Any]:
                         continue
                     if verifier.verify_numeric(math_result, fact_value, tolerance=0.01):
                         numeric_pass = True
-                        label = fact.get("label", fact.get("concept", ""))
+                        label = fact.get("label", concept)
                         numeric_reasoning = (
                             f"Numeric match: math result {math_result:,.0f} matches "
                             f"XBRL fact '{label}' = {fact_value:,.0f} (within 1% tolerance)"
