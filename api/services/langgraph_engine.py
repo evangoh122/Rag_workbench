@@ -146,7 +146,12 @@ def extraction_node(state: GraphState) -> Dict[str, Any]:
     logger.info(f"--- EXTRACTION: {state['ticker']} ---")
     try:
         query    = state.get("query", "")
-        concepts = _pick_concepts(query.lower()) if query else None
+        raw      = _pick_concepts(query.lower()) if query else None
+        if raw and set(raw) == set(_DEFAULT_CONCEPTS):
+            logger.debug("No query-concept match — falling back to full fetch")
+            concepts = None
+        else:
+            concepts = tuple(raw) if raw else None
         df       = get_latest_10k_facts(state['ticker'], concepts=concepts)
         if df.is_empty():
             return {

@@ -9,7 +9,7 @@ from loguru import logger
 from api.services._edgar_identity import ensure_edgar_identity
 
 @lru_cache(maxsize=32)
-def get_latest_10k_facts(ticker: str, concepts: Optional[List[str]] = None) -> pl.DataFrame:
+def get_latest_10k_facts(ticker: str, concepts: Optional[tuple] = None) -> pl.DataFrame:
     """
     Fetch the latest 10-K XBRL facts for a ticker from the xbrl_facts DuckDB table.
     Columns: concept, value, unit, period_end, form_type
