@@ -5,14 +5,23 @@ from dotenv import load_dotenv
 
 
 def _validate_db_path(path: str) -> str:
-    """Validate DB_PATH is within the project directory (prevent path traversal)."""
+    """Validate DB_PATH against an allowlist of roots (prevents path traversal).
+
+    Allowed: anywhere under the project root, or under the persistent-storage
+    mount (PERSIST_DIR, default /data on HF Spaces) so the DB can live on a
+    volume that survives restarts.
+    """
     if not path or not path.strip():
         logger.warning("DB_PATH is empty, falling back to default.")
         return str(Path(__file__).parent.parent / "data" / "rag.duckdb")
     resolved = Path(path).resolve()
     project_root = Path(__file__).parent.parent.resolve()
-    if not str(resolved).startswith(str(project_root)):
-        logger.warning(f"DB_PATH '{path}' is outside project root. Falling back to default.")
+    allowed_roots = [str(project_root)]
+    persist_dir = os.getenv("PERSIST_DIR", "/data").strip()
+    if persist_dir:
+        allowed_roots.append(str(Path(persist_dir).resolve()))
+    if not any(str(resolved).startswith(root) for root in allowed_roots):
+        logger.warning(f"DB_PATH '{path}' is outside allowed roots {allowed_roots}. Falling back to default.")
         return str(project_root / "data" / "rag.duckdb")
     return str(resolved)
 

@@ -84,5 +84,5 @@ USER user
 # Restore the prebuilt DuckDB (Qwen embeddings + XBRL + graph_triples) from the
 # HF dataset BEFORE uvicorn opens the DB connection. Falls through (|| true) to
 # the startup seed if the fetch fails (no token / network / repo missing).
-CMD ["sh", "-c", "python /app/scripts/fetch_db_from_dataset.py || true; exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"]
-# build: v4 — restore DB from HF dataset on boot
+CMD ["sh", "-c", "cd /app && PYTHONPATH=/app python -m scripts.fetch_db_from_dataset || true; exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"]
+# build: v5 — fetch runs as a module so `import api` resolves; honours DB_PATH (persistent /data)
