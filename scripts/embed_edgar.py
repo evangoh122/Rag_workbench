@@ -40,6 +40,8 @@ _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 
 # CIK lookup for well-known tickers
 _TICKER_CIK: dict[str, str] = {
+    # ── Aerospace / Launch ──
+    "SPCX": "0001181412",  # Space Exploration Technologies (SpaceX) — IPO'd 2026, S-1 / 424B4 prospectus
     # ── Semiconductor Design & IP ──
     "ADI":  "0000006281",  # Analog Devices
     "AIP":  "0001861842",  # Arteris
@@ -141,8 +143,10 @@ _TICKER_CIK: dict[str, str] = {
     "VECO": "0000103145",  # Veeco Instruments
 }
 
-# All semiconductor tickers for ingestion
+# All tickers for ingestion
 DEMO_TICKERS: List[str] = [
+    # Aerospace / Launch (IPO prospectus, not a 10-K filer yet)
+    "SPCX",
     # Semiconductor Design & IP
     "ADI", "AIP", "ALAB", "ALGM", "ALMU", "AMD", "AOSL", "ARM", "ASX",
     "AVGO", "CBRS", "CEVA", "CRDO", "CRUS", "DIOD", "GCTS", "GFS", "GSIT",
@@ -185,6 +189,75 @@ _20F_SECTIONS: Dict[str, str] = {
 }
 
 
+# S-1 / 424B4 IPO prospectus sections. Unlike 10-K "Item N" headings, a
+# prospectus uses titled sections, so these are matched as standalone header
+# lines (see _extract_prospectus_sections) rather than item-bounded regexes.
+_S1_SECTIONS: Dict[str, str] = {
+    "prospectus_summary": r"prospectus\s+summary",
+    "risk_factors":       r"risk\s+factors",
+    "use_of_proceeds":    r"use\s+of\s+proceeds",
+    "capitalization":     r"capitalization",
+    "dilution":           r"dilution",
+    "md_and_a":           r"management['’]?s\s+discussion\s+and\s+analysis",
+    "business":           r"business(?:\s+overview)?",
+}
+
+# Forms whose text is a prospectus (titled sections), not a 10-K-style report.
+_PROSPECTUS_FORMS = {"S-1", "S-1/A", "424B4", "424B3", "424B1", "F-1", "F-1/A"}
+
+# Default form fetch order: periodic reports first (existing filers get their
+# 10-K), then IPO prospectus forms as a fallback for newly-public companies that
+# have no periodic report yet (e.g. SPCX). 424B4 = final prospectus, then the
+# latest amendment, then the original S-1.
+_DEFAULT_FORM_TYPES = ["10-K", "20-F", "10-Q", "424B4", "S-1/A", "S-1"]
+
+
+def _extract_prospectus_sections(text: str, section_map: Dict[str, str]) -> List[tuple[str, str]]:
+    """
+    Extract titled sections from an IPO prospectus (S-1 / 424B4).
+
+    Prospectus documents have no "Item N" boundaries, so we locate every section
+    header as a standalone line, sort the hits by position, and slice the body of
+    each section up to the next header. A document's table of contents lists the
+    same headers, but those slices are tiny (just the TOC line), so for each label
+    we keep only the longest slice — which is the real section body, not the TOC
+    entry. Falls back to the full text if no headers match.
+    """
+    matches: List[tuple[int, str]] = []
+    for label, pat in section_map.items():
+        # Header must START the line and the line must END within a short distance
+        # of the match (real headers like "MANAGEMENT'S DISCUSSION AND ANALYSIS OF
+        # FINANCIAL CONDITION..." carry trailing words; body paragraphs are long
+        # single lines and so won't satisfy the end-of-line anchor).
+        header_re = re.compile(r"(?im)^[ \t]*" + pat + r"[^\n]{0,80}$")
+        for m in header_re.finditer(text):
+            matches.append((m.start(), label))
+
+    if not matches:
+        return [("full_text", text)]
+
+    matches.sort()
+    longest: Dict[str, str] = {}
+    for i, (pos, label) in enumerate(matches):
+        end = matches[i + 1][0] if i + 1 < len(matches) else len(text)
+        segment = text[pos:end].strip()
+        if len(segment) > len(longest.get(label, "")):
+            longest[label] = segment
+
+    # Preserve section_map order; drop short slices (TOC remnants / stray headers).
+    # 200-char floor matches the sibling _extract_sections_with_labels threshold.
+    extracted = [
+        (label, longest[label])
+        for label in section_map
+        if label in longest and len(longest[label]) > 200
+    ]
+    if not extracted:
+        return [("full_text", text)]
+
+    logger.debug(f"Extracted {len(extracted)} prospectus sections")
+    return extracted
+
+
 def _fetch_filing_with_edgartools(ticker: str, form_types: List[str] = None) -> tuple[str, str, str]:
     """Download the latest filing using edgartools (uses SEC REST API, not blocked from cloud).
     Returns (file_path, form_type, accession_number)."""
@@ -194,7 +267,7 @@ def _fetch_filing_with_edgartools(ticker: str, form_types: List[str] = None) -> 
     ensure_edgar_identity()
 
     if form_types is None:
-        form_types = ["10-K", "20-F", "10-Q"]
+        form_types = _DEFAULT_FORM_TYPES
 
     try:
         company = Company(ticker)
@@ -236,7 +309,7 @@ def _fetch_filing_with_downloader(ticker: str, form_types: List[str] = None) -> 
     """Download the latest filing for the given form types. Returns (file_path, form_type).
     Falls back to edgartools if sec_edgar_downloader is blocked."""
     if form_types is None:
-        form_types = ["10-K", "20-F", "10-Q"]
+        form_types = _DEFAULT_FORM_TYPES
 
     dl = Downloader(_COMPANY, _EMAIL, _DOWNLOAD_DIR)
 
@@ -330,23 +403,6 @@ def _extract_sections_with_labels(text: str) -> List[tuple[str, str]]:
     return extracted
 
 
-def _extract_sections(text: str) -> str:
-    """
-    Extract target 10-K sections from plain text by matching Item headers.
-
-    Finds each target section's start via regex, then reads until the next
-    Item header appears. Falls back to the full text if no sections are found.
-    """
-    sections = _extract_sections_with_labels(text)
-    if len(sections) == 1 and sections[0][0] == "full_text":
-        return sections[0][1]
-
-    parts = [f"=== {label.upper().replace('_', ' ')} ===\n{text}" for label, text in sections]
-    combined = "\n\n".join(parts)
-    logger.debug(f"Extracted {len(sections)} sections ({len(combined):,} chars)")
-    return combined
-
-
 def _clean_text(text: str) -> str:
     """Remove excessive whitespace and repeated blank lines left by get_text()."""
     text = re.sub(r"[ \t]{2,}", " ", text)
@@ -356,8 +412,10 @@ def _clean_text(text: str) -> str:
 
 def parse_html_file(file_path: str) -> tuple[str, str]:
     """
-    Parse HTML, strip tags, extract target sections, clean whitespace.
-    Returns (extracted_text, raw_html_content) so caller can extract period_of_report.
+    Parse HTML once: strip script/style/iXBRL tags, extract visible text, clean
+    whitespace. Returns (clean_full_text, raw_html_content). Section splitting is
+    left to the caller (it is form-aware), and period_of_report is read from the
+    raw HTML — so we deliberately do NOT pre-extract sections here.
     """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -369,9 +427,8 @@ def parse_html_file(file_path: str) -> tuple[str, str]:
         for tag in soup(["script", "style", "ix:nonnumeric", "ix:nonfraction", "ix:header"]):
             tag.decompose()
 
-        raw = soup.get_text(separator="\n", strip=True)
-        clean = _clean_text(raw)
-        return _extract_sections(clean), content
+        clean = _clean_text(soup.get_text(separator="\n", strip=True))
+        return clean, content
     except Exception as e:
         logger.warning(f"Failed to parse {file_path}: {e}")
         return "", ""
@@ -481,7 +538,7 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
             text = raw_html = sections = all_chunks = None
 
             try:
-                file_path, form_type = _fetch_filing_with_downloader(ticker, ["10-K", "20-F", "10-Q"])
+                file_path, form_type = _fetch_filing_with_downloader(ticker, _DEFAULT_FORM_TYPES)
 
                 if not file_path:
                     logger.warning(f"No filings downloaded for {ticker}.")
@@ -499,13 +556,14 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
 
                 cik = _TICKER_CIK.get(ticker.upper(), "")
 
-                # Use section-aware chunking to preserve provenance
-                sections = _extract_sections_with_labels(
-                    _clean_text(
-                        BeautifulSoup(raw_html, "lxml").get_text(separator="\n", strip=True)
-                        if raw_html else text
-                    )
-                )
+                # Section-aware chunking to preserve provenance. parse_html_file
+                # already returns the cleaned full text, so split it directly. IPO
+                # prospectus forms (S-1 / 424B4) use titled sections, not 10-K
+                # "Item N" headings, so route them through the prospectus splitter.
+                if form_type.upper() in _PROSPECTUS_FORMS:
+                    sections = _extract_prospectus_sections(text, _S1_SECTIONS)
+                else:
+                    sections = _extract_sections_with_labels(text)
 
                 # Build chunks with structure-aware chunking
                 all_chunks = []  # list of Chunk objects
