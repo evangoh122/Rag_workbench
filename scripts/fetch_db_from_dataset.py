@@ -43,18 +43,15 @@ def main() -> None:
         )
         return
 
-    token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
-    if not token:
-        logger.warning(
-            "HF_TOKEN not set — cannot fetch private dataset {}. "
-            "Falling back to startup seed.", REPO,
-        )
-        return
+    # Token is optional: a public dataset downloads without auth. A private one
+    # needs HF_TOKEN (or HUGGING_FACE_HUB_TOKEN) set as a Space secret.
+    token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN") or None
 
     try:
         from huggingface_hub import hf_hub_download
 
-        logger.info("Fetching {} from dataset {} ...", FILENAME, REPO)
+        logger.info("Fetching {} from dataset {} (token={}) ...",
+                    FILENAME, REPO, "yes" if token else "none/public")
         cached = hf_hub_download(
             repo_id=REPO, filename=FILENAME, repo_type="dataset", token=token,
         )
