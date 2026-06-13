@@ -31,7 +31,7 @@ except ImportError:  # pragma: no cover
     _EVAL_AVAILABLE = False
 from api.services.financial_calc import (
     FactExtractor, CalcResult,
-    gross_margin, gross_margin_growth, operating_margin, net_margin, rd_intensity, current_ratio, debt_to_equity, net_debt, free_cash_flow, check_balance_sheet,
+    gross_margin, gross_margin_growth, operating_margin, net_margin, rd_intensity, current_ratio, debt_to_equity, net_debt, free_cash_flow, check_balance_sheet, check_gross_profit,
 )
 from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display
 
@@ -220,11 +220,23 @@ def math_node(state: GraphState) -> Dict[str, Any]:
             else:
                 steps.append("Only one period available — cannot compute growth.")
 
-        # Gross margin
+        # Gross margin. Prefer the company's filed GrossProfit tag (faithful to
+        # the filing) over deriving it from Revenue - COGS, and cross-check the
+        # two so the audit trail shows the real numerator/denominator.
         elif any(k in query for k in ("gross margin", "gross profit margin")):
             rev  = extractor.get("revenues",      period=latest)
+            gp   = extractor.get("grossprofit",    period=latest)
             cogs = extractor.get("costofrevenue",  period=latest)
-            if rev is not None and cogs is not None:
+            if rev is not None and gp is not None:
+                calc = gross_margin(rev, cogs, period=latest, gross_profit=gp)
+                if cogs is not None:
+                    gp_check = check_gross_profit(rev, cogs, gp, period=latest)
+                    steps.append(
+                        f"GrossProfit identity ({latest}): {gp_check.verdict} — "
+                        f"filed GrossProfit vs (Revenue - COGS) within {gp_check.delta_pct:.2f}%"
+                    )
+            elif rev is not None and cogs is not None:
+                # No filed GrossProfit tag — derive from Revenue - COGS.
                 calc = gross_margin(rev, cogs, period=latest)
 
         # Operating margin
@@ -538,8 +550,8 @@ def _safe_numeric(value) -> float | None:
 # Maps query keywords → XBRL concept substrings to surface in comparisons.
 # Each entry is a list so multiple query signals map to the same concept set.
 _CONCEPT_MAP: list[tuple[tuple[str, ...], list[str]]] = [
-    (("gross margin", "gross profit"),             ["GrossProfit", "Revenues", "CostOfGoodsAndServicesSold"]),
-    (("revenue", "sales", "net sales"),            ["Revenues"]),
+    (("gross margin", "gross profit"),             ["GrossProfit", "Revenues", "RevenueFromContractWithCustomer", "CostOfGoodsAndServicesSold", "CostOfRevenue"]),
+    (("revenue", "sales", "net sales"),            ["Revenues", "RevenueFromContractWithCustomer"]),
     (("operating income", "operating margin"),     ["OperatingIncomeLoss"]),
     (("net income", "earnings", "net earnings"),   ["NetIncomeLoss"]),
     (("r&d", "research and development"),          ["ResearchAndDevelopmentExpense"]),
@@ -1136,7 +1148,12 @@ def _execute_tool(metric: str, state: GraphState) -> dict:
     try:
         if metric == "gross_margin":
             rev = extractor.get("revenues", period=latest)
+            gp = extractor.get("grossprofit", period=latest)
             cogs = extractor.get("costofrevenue", period=latest)
+            if rev is not None and gp is not None:
+                # Prefer the filed GrossProfit tag (GrossProfit / Revenue).
+                r = gross_margin(rev, cogs, period=latest, gross_profit=gp)
+                return {"value": r.value, "display": r.display(), "unit": r.unit}
             if rev is not None and cogs is not None:
                 r = gross_margin(rev, cogs, period=latest)
                 return {"value": r.value, "display": r.display(), "unit": r.unit}

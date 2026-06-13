@@ -21,6 +21,18 @@ class TestFinancialCalculators:
         assert res.unit == "%"
         assert "40.00%" in res.formula
 
+    def test_gross_margin_prefers_filed_gross_profit(self):
+        # When a filed GrossProfit is supplied, margin = GrossProfit / Revenue
+        # (not derived from COGS), and the formula shows that numerator.
+        res = gross_margin(100.0, 60.0, period="2023", gross_profit=45.0)
+        assert res.value == 45.0
+        assert res.inputs["gross_profit"] == 45.0
+        assert "filed" in res.notes.lower()
+
+    def test_gross_margin_requires_cogs_or_gross_profit(self):
+        with pytest.raises(ValueError, match="gross_profit or cogs"):
+            gross_margin(100.0)
+
     def test_operating_margin(self):
         res = operating_margin(100.0, 20.0, period="2023")
         assert res.value == 20.0
