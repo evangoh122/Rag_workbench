@@ -2,7 +2,7 @@ import React from 'react';
 import { Database, BookOpen, RefreshCcw, Search, ShieldCheck, MessageSquare, BarChart3, Network, Server, Activity, Cpu, ClipboardList } from 'lucide-react';
 import DriftAlert from '../DriftAlert';
 
-type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit';
+type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
 
 interface SidebarProps {
   view: AppView;
