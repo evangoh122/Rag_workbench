@@ -275,17 +275,6 @@ export default function Landing({ onEnter }: { onEnter: () => void }) {
         </div>
       </section>
 
-      {/* QUOTE */}
-      <section className="quote-sec">
-        <div className="wrap reveal">
-          <p className="quote">&ldquo;I stopped re-reading 10-Ks to check a single figure. I <span className="hl">click the citation</span> and the source is right there.&rdquo;</p>
-          <div className="attrib">
-            <span className="who">Priya Raghunathan</span>
-            <span className="what">Equity Research Analyst, Stillwater Capital</span>
-          </div>
-        </div>
-      </section>
-
       {/* FINAL CTA */}
       <section id="try" style={{ paddingTop: 24 }}>
         <div className="wrap">
