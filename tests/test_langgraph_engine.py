@@ -243,6 +243,12 @@ class TestQueryClassification:
             "segment revenue composition",
             "revenue by geography",
             "data center segment revenue",
+            # "Where does the revenue come from" follow-ups want the breakdown,
+            # not the top-line total.
+            "What were the main sources of this revenue, such as data center or gaming?",
+            "What are NVIDIA's sources of revenue?",
+            "Where does the revenue come from?",
+            "What is its revenue driven by?",
         ]:
             assert _is_numeric_query(q) is False, q
 

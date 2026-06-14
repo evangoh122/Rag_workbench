@@ -162,3 +162,46 @@ def test_relevance_can_skip_period_filter_when_caller_already_applied_it():
         filter_by_period=False,
     )
     assert len(result["relevant"]) == 2
+
+
+def test_default_caps_relevant_facts_at_three():
+    """The contextual display should stay terse — at most 3 facts, not 8."""
+    facts = [
+        {"concept": c, "value": v, "period_end": "2024-12-31"}
+        for c, v in [
+            ("Revenues", 100), ("GrossProfit", 40), ("OperatingIncomeLoss", 30),
+            ("NetIncomeLoss", 20), ("ResearchAndDevelopmentExpense", 10),
+            ("OperatingExpenses", 15), ("InterestExpense", 5),
+        ]
+    ]
+    result = get_relevant_facts("How profitable is the company?", facts)
+    assert len(result["relevant"]) <= 3
+
+
+def test_gross_margin_surfaces_revenue_and_gross_profit():
+    """A gross-margin question should show its components (revenue + gross
+    profit), not a broad dump of profitability facts."""
+    facts = [
+        {"concept": "Revenues", "value": 100, "period_end": "2024-12-31", "fiscal_year": 2024},
+        {"concept": "GrossProfit", "value": 40, "period_end": "2024-12-31", "fiscal_year": 2024},
+        {"concept": "NetIncomeLoss", "value": 20, "period_end": "2024-12-31", "fiscal_year": 2024},
+        {"concept": "OperatingExpenses", "value": 15, "period_end": "2024-12-31", "fiscal_year": 2024},
+        {"concept": "ResearchAndDevelopmentExpense", "value": 10, "period_end": "2024-12-31", "fiscal_year": 2024},
+    ]
+    result = get_relevant_facts("What is the gross margin?", facts, filter_by_period=False)
+    concepts = {f["concept"] for f in result["relevant"]}
+    assert concepts == {"Revenues", "GrossProfit"}
+
+
+def test_gross_margin_collapses_repeated_concepts_to_latest():
+    """With multiple years present, the metric components dedupe to one each."""
+    facts = [
+        {"concept": "Revenues", "value": 90, "period_end": "2023-12-31", "fiscal_year": 2023},
+        {"concept": "Revenues", "value": 100, "period_end": "2024-12-31", "fiscal_year": 2024},
+        {"concept": "GrossProfit", "value": 35, "period_end": "2023-12-31", "fiscal_year": 2023},
+        {"concept": "GrossProfit", "value": 40, "period_end": "2024-12-31", "fiscal_year": 2024},
+    ]
+    result = get_relevant_facts("gross margin", facts, filter_by_period=False)
+    assert len(result["relevant"]) == 2
+    by_concept = {f["concept"]: f["value"] for f in result["relevant"]}
+    assert by_concept == {"Revenues": 100, "GrossProfit": 40}

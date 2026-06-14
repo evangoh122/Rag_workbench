@@ -876,6 +876,11 @@ _QUALITATIVE_SIGNALS = [
     "by product", "by category", "by geography", "by region", "by end market",
     "by business", "by division", "by line of business",
     "composition", "split by", "split between", "product mix", "revenue mix",
+    # "Where does the revenue come from" style — these want the segment/product
+    # breakdown, not the top-line total.
+    "sources of revenue", "source of revenue", "revenue sources", "revenue source",
+    "main sources", "where does the revenue", "where did the revenue",
+    "come from", "made up of", "driven by", "data center", "gaming",
 ]
 
 

@@ -205,6 +205,65 @@ _DISPLAY_NAMES: Dict[str, str] = {
 }
 
 
+_REVENUE_CONCEPTS = [
+    "Revenues",
+    "RevenueFromContractWithCustomerExcludingAssessedTax",
+    "SalesRevenueNet",
+    "SalesRevenueGoodsNet",
+    "RevenueFromContractWithCustomerIncludingAssessedTax",
+]
+
+# Specific metric intents → the exact XBRL concepts that explain them, in
+# display order. A margin is numerator/denominator, so we surface both
+# components (e.g. gross margin = gross profit / revenue) rather than a wall
+# of loosely-related profitability facts.
+_INTENT_PRIORITY_CONCEPTS: List[Tuple[str, List[str]]] = [
+    ("gross margin",     ["Revenues", "GrossProfit"]),
+    ("gross profit",     ["Revenues", "GrossProfit"]),
+    ("operating margin", ["Revenues", "OperatingIncomeLoss"]),
+    ("operating income", ["Revenues", "OperatingIncomeLoss"]),
+    ("net margin",       ["Revenues", "NetIncomeLoss"]),
+    ("profit margin",    ["Revenues", "NetIncomeLoss"]),
+    ("net income",       ["Revenues", "NetIncomeLoss"]),
+]
+
+
+def _priority_concepts_for_query(query: str) -> List[str]:
+    """Return the ordered concepts that directly explain a specific metric
+    intent (e.g. a margin's numerator + denominator), or [] if none match.
+
+    Revenue concepts are expanded to all known aliases so the lookup matches
+    whichever revenue tag a given filer uses.
+    """
+    q = query.lower()
+    for phrase, concepts in _INTENT_PRIORITY_CONCEPTS:
+        if phrase in q:
+            expanded: List[str] = []
+            for c in concepts:
+                expanded.extend(_REVENUE_CONCEPTS if c == "Revenues" else [c])
+            return expanded
+    return []
+
+
+def _dedupe_latest_per_concept(facts: List[Dict]) -> List[Dict]:
+    """Collapse facts to one-per-concept, keeping the most recent period.
+
+    Showing the same concept across several years reads as noise when the user
+    just wants the headline figures; the trend lives in the comparison view.
+    """
+    best: Dict[str, Tuple[int, Dict]] = {}
+    order: List[str] = []
+    for f in facts:
+        concept = f.get("concept", "") or f.get("label", "")
+        year = _fact_year(f) or -1
+        if concept not in best:
+            order.append(concept)
+            best[concept] = (year, f)
+        elif year > best[concept][0]:
+            best[concept] = (year, f)
+    return [best[c][1] for c in order]
+
+
 def _classify_query(query: str) -> ConceptGroup:
     """Map a natural-language query to a concept group via keyword matching.
     Accumulates all matched groups and picks the most-represented one."""
@@ -219,14 +278,21 @@ def _classify_query(query: str) -> ConceptGroup:
     return Counter(groups).most_common(1)[0][0]
 
 
-def _rank_facts(facts: List[Dict], primary_group: ConceptGroup, top_n: int = 8) -> List[Dict]:
+def _rank_facts(facts: List[Dict], primary_group: ConceptGroup, top_n: int = 3,
+                priority_concepts: Optional[List[str]] = None) -> List[Dict]:
     """
     Rank and filter XBRL facts to a maximum of top_n records.
-    Facts matching the primary concept group get priority,
-    followed by complementary groups (liquidity / leverage / profitability).
+
+    When ``priority_concepts`` is given (a specific metric intent like gross
+    margin), those exact concepts are surfaced first in the given order so the
+    user sees the metric's components (e.g. revenue + gross profit) rather than
+    a broad group dump. Otherwise facts matching the primary concept group get
+    priority, followed by complementary groups.
     """
     if not facts:
         return []
+
+    priority_rank = {c: i for i, c in enumerate(priority_concepts or [])}
 
     ranked: List[Tuple[int, Dict]] = []
     secondary_order = {
@@ -243,8 +309,14 @@ def _rank_facts(facts: List[Dict], primary_group: ConceptGroup, top_n: int = 8) 
 
     for f in facts:
         concept = f.get("concept", "") or f.get("label", "")
-        group = CONCEPT_GROUP_MAP.get(concept, "other")
-        rank = group_rank.get(group, 99)
+        if priority_rank:
+            # Explicit metric intent: keep only the components, ordered as given.
+            if concept not in priority_rank:
+                continue
+            rank = priority_rank[concept]
+        else:
+            group = CONCEPT_GROUP_MAP.get(concept, "other")
+            rank = group_rank.get(group, 99)
         value = _pick_value(f)
         has_value = value is not None and str(value).strip() != ""
         if not has_value:
@@ -252,11 +324,17 @@ def _rank_facts(facts: List[Dict], primary_group: ConceptGroup, top_n: int = 8) 
         ranked.append((rank, f))
 
     ranked.sort(key=lambda x: (x[0], -(abs(_to_float(_pick_value(x[1])) or 0))))
-    return [f for _, f in ranked[:top_n]]
+    ordered = [f for _, f in ranked]
+    # For an explicit metric intent (e.g. gross margin), collapse to one fact
+    # per concept (latest period) so the display shows the distinct components
+    # — revenue + gross profit — not the same concept repeated across years.
+    if priority_rank:
+        ordered = _dedupe_latest_per_concept(ordered)
+    return ordered[:top_n]
 
 
 def get_relevant_facts(query: str, all_facts: List[Dict[str, Any]],
-                       max_facts: int = 8,
+                       max_facts: int = 3,
                        filter_by_period: bool = True) -> Dict[str, Any]:
     """
     Return a structured summary of the most relevant XBRL facts for a query.
@@ -278,11 +356,13 @@ def get_relevant_facts(query: str, all_facts: List[Dict[str, Any]],
         }
 
     group = _classify_query(query)
+    priority_concepts = _priority_concepts_for_query(query)
     candidate_facts = (
         filter_facts_for_query(query, all_facts)
         if filter_by_period else all_facts
     )
-    relevant = _rank_facts(candidate_facts, group, max_facts)
+    relevant = _rank_facts(candidate_facts, group, max_facts,
+                           priority_concepts=priority_concepts)
 
     badge_text = f"XBRL verified • {len(all_facts)} facts"
     if len(relevant) < len(all_facts):
