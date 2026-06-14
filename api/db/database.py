@@ -49,6 +49,17 @@ class DatabaseManager:
                     CREATE INDEX IF NOT EXISTS idx_gt_ticker_subj
                     ON graph_triples (ticker, subject)
                 """)
+                # Phase B: typed nodes + source-ref columns for the Evidence Graph.
+                # Idempotent migration so existing DBs expose them to Phase C.
+                for _stmt in (
+                    "ALTER TABLE graph_triples ADD COLUMN IF NOT EXISTS subject_type VARCHAR",
+                    "ALTER TABLE graph_triples ADD COLUMN IF NOT EXISTS object_type  VARCHAR",
+                    "ALTER TABLE graph_triples ADD COLUMN IF NOT EXISTS chunk_id     VARCHAR",
+                ):
+                    try:
+                        self._conn.execute(_stmt)
+                    except Exception:
+                        pass
             return self._conn
 
     def get_review_connection(self):

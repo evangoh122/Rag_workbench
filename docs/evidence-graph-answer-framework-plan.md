@@ -118,7 +118,20 @@ follow_ups: List[str] = Field(default_factory=list)
 **Tests:** extend `tests/` — assert `run_auditable_rag` populates the 3 fields on a normal answer and leaves them empty on an abstention/refusal; assert `_generate_educational_layers` returns `{}` for a refusal string and parses valid JSON otherwise (mock the client).
 
 ## Phase B — Real Filing-Derived Triples *(foundation, ~L)*
+> Status: **code-complete (2026-06-14)** — `scripts/extract_graph_triples.py` + schema migration + tests landed. The extraction *run* is deferred until the embed ETL finishes (single-writer DuckDB + cost), then triples ship in the dataset rebuild.
+
 **Goal:** replace the code-graph triples with Company/Segment/Risk/Executive/Metric/XBRL triples extracted from filings, each carrying source refs.
+
+**As built:**
+- `scripts/extract_graph_triples.py::run_extract_graph_triples(tickers, db_path=, client=, model=)` — reads narrative chunks from `edgar_embeddings` (skips `content_type='table'`, longest-first, capped `MAX_CHUNKS_PER_FILING`), LLM-extracts strict-JSON typed triples, validates against `NODE_TYPES` (Company/Segment/Risk/Executive/Metric/XBRL/Product/Geography), normalises predicates to `UPPER_SNAKE`, floors at `MIN_CONFIDENCE` (0.5), caps `MAX_TRIPLES_PER_CHUNK` (8). Best-effort per chunk (failure → 0 triples, never raises). Knobs via env (`GRAPH_MIN_CONFIDENCE`, `GRAPH_MAX_TRIPLES_PER_CHUNK`, `GRAPH_MAX_CHUNKS_PER_FILING`).
+- **Idempotent:** `triple_id = sha1(ticker, subject, predicate, object, chunk_id)` (case-insensitive) + `INSERT OR IGNORE` → re-runs are no-ops.
+- **chunk_id** = `f"{ticker}:{accession}:{chunk_index}"` (stable; Phase C's evidence route parses it back, since `edgar_embeddings` has no surrogate key). Stored alongside `source_file` (accession) and `source_loc` (section_id).
+- **XBRL linking:** `link_xbrl_metrics()` adds `Metric -VERIFIED_BY-> XBRL` edges by matching extracted Metric labels to `xbrl_facts.concept` (alphanumeric-stem substring), confidence 1.0.
+- **Schema:** `subject_type`/`object_type`/`chunk_id` added to `graph_triples` via idempotent `ALTER ... IF NOT EXISTS` — both in the script's `ensure_schema()` and in `api/db/database.py` (so the running app/Phase C see the columns on existing DBs).
+- **CLI:** `python -m scripts.extract_graph_triples --tickers NVDA,MU` or `EXTRACT_TICKERS=...`.
+- **Tests:** `tests/test_extract_graph_triples.py` (18 passing) — helpers, vocab gate, confidence floor, cap, fence tolerance, idempotency, XBRL linking, end-to-end orchestrator with mocked client.
+
+**Still to wire (carried into Phase C / dataset run):** retrieval-side filtering of triples by ticker + cited chunks (so the graph reflects *this* answer's evidence).
 
 | Area | Change |
 |---|---|
