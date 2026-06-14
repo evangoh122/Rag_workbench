@@ -141,6 +141,12 @@ function App() {
         data = await sendAuditableRagMessage(currentInput, ticker);
       }
 
+      // Persist the company the backend resolved to, so a follow-up that names
+      // no company stays grounded on it instead of falling back to the default.
+      if (data.ticker) {
+        _setTicker(data.ticker);
+      }
+
       if (data.pipeline_status) {
         setPipelineStatus(data.pipeline_status);
       } else if (mode !== 'auditable') {

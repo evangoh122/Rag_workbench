@@ -47,6 +47,11 @@ class ChatResponse(BaseModel):
     type: str = "text"  # "text", "table", "error"
     answer: str = ""
 
+    # The company the query actually resolved to (may differ from the requested
+    # ticker when the question names a different company). The UI persists this
+    # so follow-ups stay grounded on the same company.
+    ticker: str = ""
+
     # Retrieval sources
     sources: List[SourceItem] = Field(default_factory=list)
 

@@ -248,6 +248,7 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
         return ChatResponse(
             type="text",
             answer=answer,
+            ticker=result.get("resolved_ticker", req.ticker or ""),
             sources=sources,
             xbrl_facts=display_facts,
             relevant_xbrl=relevant_xbrl,

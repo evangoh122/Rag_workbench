@@ -38,6 +38,9 @@ export interface Verification {
 export interface ChatResponse {
   answer?: string;
   detail?: string;
+  // Company the query resolved to; the UI persists this so follow-ups that
+  // name no company stay grounded on the same ticker.
+  ticker?: string;
   type?: 'text' | 'table' | 'error';
   sql?: string;
   data?: Record<string, unknown>[];

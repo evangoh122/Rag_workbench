@@ -1623,6 +1623,12 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
 
     result = app.invoke(inputs)
 
+    # Surface the ticker the query actually resolved to so the caller (and the
+    # UI) can persist the active company across turns. Without this a follow-up
+    # that names no company falls back to the UI's default ticker (e.g. a
+    # follow-up to an NVDA question would be answered with Micron's data).
+    result["resolved_ticker"] = ticker
+
     # Standard Response Framework sections 3–5: additive educational layers
     # generated from the finished answer (never alters the audited answer).
     layers = _generate_educational_layers(query, result.get("final_answer", ""), ticker)

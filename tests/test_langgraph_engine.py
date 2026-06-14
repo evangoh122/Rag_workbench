@@ -142,6 +142,40 @@ class TestLangGraphFullFlow:
         assert result["what_it_means"] == "It earned 37.4B."
         assert result["follow_ups"] == ["How did it grow?"]
 
+    @patch("api.services.langgraph_engine._generate_educational_layers", return_value={})
+    @patch("api.services.langgraph_engine.get_app")
+    def test_resolved_ticker_overrides_when_company_named(self, mock_get_app, _layers):
+        """A question naming a company resolves to it, not the UI default — and
+        this is generic across the covered universe, not just NVDA/MU."""
+        mock_app = MagicMock()
+        mock_get_app.return_value = mock_app
+        mock_app.invoke.return_value = {"final_answer": "ok"}
+
+        # caller passes the stale UI default; the named company must win.
+        for query, expected in [
+            ("What was NVIDIA's revenue?", "NVDA"),
+            ("Tell me about Broadcom margins", "AVGO"),
+            ("Intel risk factors?", "INTC"),
+            ("Texas Instruments gross profit", "TXN"),
+        ]:
+            result = run_auditable_rag(query, "MU")
+            assert result["resolved_ticker"] == expected, query
+            assert mock_app.invoke.call_args[0][0]["ticker"] == expected
+
+    @patch("api.services.langgraph_engine._generate_educational_layers", return_value={})
+    @patch("api.services.langgraph_engine.get_app")
+    def test_resolved_ticker_persists_on_generic_followup(self, mock_get_app, _layers):
+        """A follow-up naming no company stays on the persisted ticker the UI
+        sends — for any company, so follow-ups don't fall back to the default."""
+        mock_app = MagicMock()
+        mock_get_app.return_value = mock_app
+        mock_app.invoke.return_value = {"final_answer": "ok"}
+
+        for persisted in ["AVGO", "INTC", "AMD", "TXN"]:
+            result = run_auditable_rag("What about its gross margin?", persisted)
+            assert result["resolved_ticker"] == persisted
+            assert mock_app.invoke.call_args[0][0]["ticker"] == persisted
+
 
 class TestEducationalLayers:
     """Sections 3–5 of the Standard Response Framework (additive, best-effort)."""
