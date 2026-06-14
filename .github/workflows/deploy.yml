@@ -34,18 +34,35 @@ jobs:
           HF_USERNAME:    ${{ secrets.HF_USERNAME }}
           HF_SPACE_NAME:  ${{ secrets.HF_SPACE_NAME }}
         run: |
+          # POST with retry/backoff — HF's API rate-limits (HTTP 429) when many
+          # keys are pushed in quick succession (several deploys in a row).
+          # Retry 429/5xx/transport errors with linear backoff so a transient
+          # throttle doesn't fail the whole deploy.
+          post_with_retry() {
+            local url=$1 json_body=$2 code
+            for attempt in 1 2 3 4 5; do
+              code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$url" \
+                -H "Authorization: Bearer $HF_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "$json_body") || code="000"
+              if [ "$code" -ge 200 ] 2>/dev/null && [ "$code" -lt 300 ] 2>/dev/null; then
+                echo "  -> HTTP $code"; return 0
+              fi
+              echo "  -> HTTP $code (attempt $attempt/5)"
+              case "$code" in
+                429|5*|000) sleep $((attempt * 10)) ;;
+                *) echo "  -> non-retryable"; return 1 ;;
+              esac
+            done
+            echo "  -> FAILED after retries"; return 1
+          }
           upload_secret() {
             local key=$1 value=$2
             if [ -n "$value" ]; then
               echo "Uploading secret: $key"
-              local json_body
-              json_body=$(jq -nc --arg k "$key" --arg v "$value" '{"key": $k, "value": $v}')
-              curl -sS -f -X POST \
+              post_with_retry \
                 "https://huggingface.co/api/spaces/$HF_USERNAME/$HF_SPACE_NAME/secrets" \
-                -H "Authorization: Bearer $HF_TOKEN" \
-                -H "Content-Type: application/json" \
-                -d "$json_body" \
-                -o /dev/null -w "  -> HTTP %{http_code}\n" || { echo "  -> FAILED"; return 1; }
+                "$(jq -nc --arg k "$key" --arg v "$value" '{"key": $k, "value": $v}')"
             else
               echo "Skipping $key (not set)"
             fi
@@ -58,14 +75,9 @@ jobs:
             local key=$1 value=$2
             if [ -n "$value" ]; then
               echo "Uploading variable: $key"
-              local json_body
-              json_body=$(jq -nc --arg k "$key" --arg v "$value" '{"key": $k, "value": $v}')
-              curl -sS -f -X POST \
+              post_with_retry \
                 "https://huggingface.co/api/spaces/$HF_USERNAME/$HF_SPACE_NAME/variables" \
-                -H "Authorization: Bearer $HF_TOKEN" \
-                -H "Content-Type: application/json" \
-                -d "$json_body" \
-                -o /dev/null -w "  -> HTTP %{http_code}\n" || { echo "  -> FAILED"; return 1; }
+                "$(jq -nc --arg k "$key" --arg v "$value" '{"key": $k, "value": $v}')"
             else
               echo "Skipping $key (not set)"
             fi
