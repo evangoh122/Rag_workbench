@@ -867,6 +867,15 @@ _QUALITATIVE_SIGNALS = [
     "regulation", "regulatory", "compliance",
     "acquisition", "merger", "divestiture",
     "business model", "market position", "competitive advantage",
+    # Revenue/segment composition — these want a BREAKDOWN, which lives in the
+    # filing narrative (segment footnote / MD&A), not in a single top-line XBRL
+    # concept. Routing them numeric returns the total instead of the breakdown.
+    "segment", "segments", "by segment", "reportable segment", "operating segment",
+    "business segment", "product segment",
+    "break down", "breakdown", "broken down",
+    "by product", "by category", "by geography", "by region", "by end market",
+    "by business", "by division", "by line of business",
+    "composition", "split by", "split between", "product mix", "revenue mix",
 ]
 
 

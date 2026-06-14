@@ -227,3 +227,32 @@ class TestEducationalLayers:
              patch("openai.OpenAI", return_value=mock_client):
             out = eng._generate_educational_layers("q", "Revenue was $37.4B.", "MU")
         assert out == {}
+
+
+class TestQueryClassification:
+    """Numeric vs qualitative routing — segment/breakdown questions must NOT be
+    answered with a single top-line XBRL number (the breakdown lives in the
+    filing narrative, only the qualitative path reads it)."""
+
+    def test_breakdown_questions_route_qualitative(self):
+        from api.services.langgraph_engine import _is_numeric_query
+        for q in [
+            "How does Micron's revenue break down by product segment, such as memory chips or storage?",
+            "What is the revenue breakdown by segment?",
+            "Revenue by product category",
+            "segment revenue composition",
+            "revenue by geography",
+            "data center segment revenue",
+        ]:
+            assert _is_numeric_query(q) is False, q
+
+    def test_plain_numeric_questions_stay_numeric(self):
+        from api.services.langgraph_engine import _is_numeric_query
+        for q in [
+            "What was total revenue in 2023?",
+            "What is the gross margin?",
+            "net income last year",
+            "free cash flow",
+            "revenue year over year growth",
+        ]:
+            assert _is_numeric_query(q) is True, q
