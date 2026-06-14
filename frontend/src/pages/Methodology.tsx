@@ -10,9 +10,9 @@ interface Section {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
-    <div className="bg-[#0f1219] border border-[#202532] rounded-2xl overflow-hidden">
+    <div className="bg-[#121212] border border-[#2A2A2A] rounded-2xl overflow-hidden">
       <button
-        className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-[#161b24] transition-colors cursor-pointer border-0 bg-transparent"
+        className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-[#1A1A1A] transition-colors cursor-pointer border-0 bg-transparent"
         onClick={() => setOpen(o => !o)}
       >
         <span className="text-sm font-semibold text-white">{title}</span>
@@ -21,7 +21,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
           : <ChevronRight size={16} className="text-gray-500" />}
       </button>
       {open && (
-        <div className="px-6 pb-6 border-t border-[#202532]">
+        <div className="px-6 pb-6 border-t border-[#2A2A2A]">
           {children}
         </div>
       )}
@@ -54,9 +54,9 @@ function Tag({ children, color = 'blue' }: { children: React.ReactNode; color?: 
 
 function Table({ rows }: { rows: [string, string][] }) {
   return (
-    <div className="mt-4 border border-[#202532] rounded-xl overflow-hidden">
+    <div className="mt-4 border border-[#2A2A2A] rounded-xl overflow-hidden">
       {rows.map(([k, v], i) => (
-        <div key={i} className={`flex items-start gap-4 px-4 py-3 text-sm ${i % 2 === 0 ? 'bg-[#0a0c10]' : ''} ${i > 0 ? 'border-t border-[#202532]/50' : ''}`}>
+        <div key={i} className={`flex items-start gap-4 px-4 py-3 text-sm ${i % 2 === 0 ? 'bg-[#0A0A0A]' : ''} ${i > 0 ? 'border-t border-[#2A2A2A]/50' : ''}`}>
           <span className="text-gray-400 font-medium w-40 flex-shrink-0">{k}</span>
           <span className="text-gray-300">{v}</span>
         </div>
@@ -68,7 +68,7 @@ function Table({ rows }: { rows: [string, string][] }) {
 export default function Methodology() {
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto">
-      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm flex-shrink-0">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-sm flex-shrink-0">
         <h1 className="text-xl font-semibold text-white flex items-center gap-3">
           <BookOpen className="text-indigo-400" />
           Methodology

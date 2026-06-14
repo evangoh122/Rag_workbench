@@ -82,7 +82,7 @@ export default function MetricsDashboard() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto">
-      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-sm z-10 flex-shrink-0">
         <h1 className="text-xl font-semibold text-white flex items-center gap-3">
           <BarChart3 className="text-emerald-400" />
           Metrics Dashboard
@@ -155,7 +155,7 @@ export default function MetricsDashboard() {
         </div>
 
         {/* Routing distribution */}
-        <div className="bg-[#0f1219] border border-[#202532] rounded-2xl p-6 mb-8">
+        <div className="bg-[#121212] border border-[#2A2A2A] rounded-2xl p-6 mb-8">
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
             Routing Distribution
           </h3>
@@ -165,7 +165,7 @@ export default function MetricsDashboard() {
                 <span className="text-emerald-400">AUTO</span>
                 <span className="text-gray-400">{autoPct.toFixed(1)}%</span>
               </div>
-              <div className="h-2 bg-[#161b24] rounded-full overflow-hidden">
+              <div className="h-2 bg-[#1A1A1A] rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${autoPct}%` }} />
               </div>
             </div>
@@ -176,7 +176,7 @@ export default function MetricsDashboard() {
                 <span className="text-blue-400">SAMPLED REVIEW</span>
                 <span className="text-gray-400">{sampledPct.toFixed(1)}%</span>
               </div>
-              <div className="h-2 bg-[#161b24] rounded-full overflow-hidden">
+              <div className="h-2 bg-[#1A1A1A] rounded-full overflow-hidden">
                 <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${sampledPct}%` }} />
               </div>
             </div>
@@ -187,7 +187,7 @@ export default function MetricsDashboard() {
                 <span className="text-red-400">ESCALATE</span>
                 <span className="text-gray-400">{escalatePct.toFixed(1)}%</span>
               </div>
-              <div className="h-2 bg-[#161b24] rounded-full overflow-hidden">
+              <div className="h-2 bg-[#1A1A1A] rounded-full overflow-hidden">
                 <div className="h-full bg-red-500 rounded-full transition-all duration-500" style={{ width: `${escalatePct}%` }} />
               </div>
             </div>
@@ -195,7 +195,7 @@ export default function MetricsDashboard() {
         </div>
 
         {/* Agreement gauge */}
-        <div className="bg-[#0f1219] border border-[#202532] rounded-2xl p-6">
+        <div className="bg-[#121212] border border-[#2A2A2A] rounded-2xl p-6">
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
             AUTO Tier Certification
           </h3>
@@ -205,7 +205,7 @@ export default function MetricsDashboard() {
                 <circle
                   cx="50" cy="50" r="40"
                   fill="none"
-                  stroke="#202532"
+                  stroke="#2A2A2A"
                   strokeWidth="8"
                 />
                 <circle
@@ -229,7 +229,7 @@ export default function MetricsDashboard() {
                 <span className="text-gray-500 text-xs">{`${80}%`}</span>
                 <span className="text-emerald-400 font-semibold">{`${95}%`} <span className="text-xs text-gray-500">CERTIFIED</span></span>
               </div>
-              <div className="h-3 bg-[#161b24] rounded-full overflow-hidden">
+              <div className="h-3 bg-[#1A1A1A] rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
                     isCertified ? 'bg-emerald-500' : agreementPct >= 80 ? 'bg-yellow-500' : 'bg-red-500'
@@ -259,8 +259,8 @@ function MetricCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className={`bg-[#0f1219] border rounded-2xl p-5 transition-all ${
-      alert ? 'border-red-500/30 bg-red-500/5' : 'border-[#202532]'
+    <div className={`bg-[#121212] border rounded-2xl p-5 transition-all ${
+      alert ? 'border-red-500/30 bg-red-500/5' : 'border-[#2A2A2A]'
     }`}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</span>

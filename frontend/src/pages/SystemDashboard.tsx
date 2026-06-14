@@ -63,7 +63,7 @@ function StatCard({
   };
   const c = alert ? colors.red : (colors[accent] ?? colors.blue);
   return (
-    <div className={`bg-[#0f1219] border rounded-2xl p-5 ${alert ? 'border-red-500/30' : 'border-[#202532]'}`}>
+    <div className={`bg-[#121212] border rounded-2xl p-5 ${alert ? 'border-red-500/30' : 'border-[#2A2A2A]'}`}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</span>
         <span className={`p-1.5 rounded-lg border ${c}`}>{icon}</span>
@@ -118,7 +118,7 @@ export default function SystemDashboard() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto">
-      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white flex items-center gap-3">
             <Server className="text-orange-400" />
@@ -136,7 +136,7 @@ export default function SystemDashboard() {
           )}
           <button
             onClick={fetchStats}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white border border-[#202532] hover:border-[#2a3040] bg-transparent hover:bg-[#161b24] transition-all cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white border border-[#2A2A2A] hover:border-[#2A2A2A] bg-transparent hover:bg-[#1A1A1A] transition-all cursor-pointer"
           >
             <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -147,7 +147,7 @@ export default function SystemDashboard() {
       <div className="flex-1 p-4 lg:p-8 space-y-4 lg:space-y-8">
 
         {/* ── Status bar ── */}
-        <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl border border-[#202532] bg-[#0f1219] text-sm">
+        <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl border border-[#2A2A2A] bg-[#121212] text-sm">
           <div className={`w-2 h-2 rounded-full ${mainOk ? 'bg-emerald-500' : 'bg-red-500'}`} />
           <span className={mainOk ? 'text-emerald-400' : 'text-red-400'}>Main DB</span>
           <span className="text-gray-700">·</span>
@@ -197,7 +197,7 @@ export default function SystemDashboard() {
         </div>
 
         {/* ── Pipeline architecture ── */}
-        <div className="bg-[#0f1219] border border-[#202532] rounded-2xl p-6">
+        <div className="bg-[#121212] border border-[#2A2A2A] rounded-2xl p-6">
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-6">
             Pipeline Architecture
           </h3>
@@ -208,11 +208,11 @@ export default function SystemDashboard() {
             <div className="flex items-center gap-2 flex-wrap">
               <PipelineNode label="SEC EDGAR" sub="10-K filings" color="border-blue-500/30 bg-blue-500/5 text-blue-300" />
               <Arrow />
-              <PipelineNode label="Downloader" sub="edgartools" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="Downloader" sub="edgartools" color="border-[#2A2A2A] bg-[#1A1A1A] text-gray-300" />
               <Arrow />
-              <PipelineNode label="HTML Parser" sub="BeautifulSoup" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="HTML Parser" sub="BeautifulSoup" color="border-[#2A2A2A] bg-[#1A1A1A] text-gray-300" />
               <Arrow />
-              <PipelineNode label="Structure Chunker" sub="tables + semantic" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="Structure Chunker" sub="tables + semantic" color="border-[#2A2A2A] bg-[#1A1A1A] text-gray-300" />
               <Arrow />
               <PipelineNode label="Embeddings" sub={stats?.config.embedding_model ?? 'Qwen3-Embedding-0.6B'} color="border-purple-500/30 bg-purple-500/5 text-purple-300" />
               <Arrow />
@@ -220,7 +220,7 @@ export default function SystemDashboard() {
             </div>
           </div>
 
-          <div className="border-t border-[#202532] my-4" />
+          <div className="border-t border-[#2A2A2A] my-4" />
 
           {/* Query row */}
           <div className="mb-4">
@@ -230,11 +230,11 @@ export default function SystemDashboard() {
               <Arrow />
               <PipelineNode label="Embed Query" sub={stats?.config.embedding_model ?? 'Qwen3-Embedding-0.6B'} color="border-purple-500/30 bg-purple-500/5 text-purple-300" />
               <Arrow />
-              <PipelineNode label="Hybrid Search" sub="BM25 + vector → RRF" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="Hybrid Search" sub="BM25 + vector → RRF" color="border-[#2A2A2A] bg-[#1A1A1A] text-gray-300" />
               <Arrow />
-              <PipelineNode label="Reranker" sub="cross-encoder" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="Reranker" sub="cross-encoder" color="border-[#2A2A2A] bg-[#1A1A1A] text-gray-300" />
               <Arrow />
-              <PipelineNode label="XBRL Lookup" sub="exact match" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="XBRL Lookup" sub="exact match" color="border-[#2A2A2A] bg-[#1A1A1A] text-gray-300" />
               <Arrow />
               <PipelineNode label="LLM Synthesis" sub={stats?.config.provider ?? 'provider'} color="border-orange-500/30 bg-orange-500/5 text-orange-300" />
               <Arrow />
@@ -242,7 +242,7 @@ export default function SystemDashboard() {
             </div>
           </div>
 
-          <div className="border-t border-[#202532] my-4" />
+          <div className="border-t border-[#2A2A2A] my-4" />
 
           {/* Graph RAG row */}
           <div>
@@ -252,7 +252,7 @@ export default function SystemDashboard() {
               <Arrow />
               <PipelineNode label="Graph Triples" sub="DuckDB" color="border-indigo-500/30 bg-indigo-500/5 text-indigo-300" />
               <Arrow />
-              <PipelineNode label="Subgraph" sub="ILIKE match" color="border-[#202532] bg-[#161b24] text-gray-300" />
+              <PipelineNode label="Subgraph" sub="ILIKE match" color="border-[#2A2A2A] bg-[#1A1A1A] text-gray-300" />
               <Arrow />
               <PipelineNode label="LLM Synthesis" sub="with graph ctx" color="border-orange-500/30 bg-orange-500/5 text-orange-300" />
             </div>
@@ -263,7 +263,7 @@ export default function SystemDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Review queue stats */}
-          <div className="bg-[#0f1219] border border-[#202532] rounded-2xl p-6">
+          <div className="bg-[#121212] border border-[#2A2A2A] rounded-2xl p-6">
             <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
               Review Queue
             </h3>
@@ -274,7 +274,7 @@ export default function SystemDashboard() {
                 { label: 'Pending Review', value: fmt(stats?.review.pending), color: 'text-yellow-400' },
                 { label: 'Escalated',       value: fmt(stats?.review.escalated), color: 'text-red-400' },
               ].map(row => (
-                <div key={row.label} className="flex justify-between items-center py-2 border-b border-[#202532]/50 last:border-0">
+                <div key={row.label} className="flex justify-between items-center py-2 border-b border-[#2A2A2A]/50 last:border-0">
                   <span className="text-sm text-gray-400">{row.label}</span>
                   <span className={`text-sm font-semibold ${row.color}`}>{row.value}</span>
                 </div>
@@ -283,7 +283,7 @@ export default function SystemDashboard() {
           </div>
 
           {/* LLM health */}
-          <div className="bg-[#0f1219] border border-[#202532] rounded-2xl p-6">
+          <div className="bg-[#121212] border border-[#2A2A2A] rounded-2xl p-6">
             <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
               LLM Health
               {llmFailed > 0
@@ -296,7 +296,7 @@ export default function SystemDashboard() {
                 <span className="text-gray-400">Success rate</span>
                 <span className={successPct >= 95 ? 'text-emerald-400' : 'text-yellow-400'}>{successPct}%</span>
               </div>
-              <div className="h-2 bg-[#161b24] rounded-full overflow-hidden">
+              <div className="h-2 bg-[#1A1A1A] rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${successPct >= 95 ? 'bg-emerald-500' : 'bg-yellow-500'}`}
                   style={{ width: `${successPct}%` }}
@@ -309,7 +309,7 @@ export default function SystemDashboard() {
                 { label: 'Failed Calls',   value: fmt(llmFailed) },
                 { label: 'Last Error',     value: stats?.llm.last_error ?? 'None' },
               ].map(row => (
-                <div key={row.label} className="flex justify-between items-start py-1.5 border-b border-[#202532]/50 last:border-0 gap-4">
+                <div key={row.label} className="flex justify-between items-start py-1.5 border-b border-[#2A2A2A]/50 last:border-0 gap-4">
                   <span className="text-sm text-gray-400 flex-shrink-0">{row.label}</span>
                   <span className="text-sm text-white text-right truncate max-w-[200px]" title={row.value}>{row.value}</span>
                 </div>
@@ -328,7 +328,7 @@ export default function SystemDashboard() {
 
         {/* ── Ticker coverage ── */}
         {stats?.data.tickers_embedded && stats.data.tickers_embedded.length > 0 && (
-          <div className="bg-[#0f1219] border border-[#202532] rounded-2xl p-6">
+          <div className="bg-[#121212] border border-[#2A2A2A] rounded-2xl p-6">
             <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
               <Layers size={14} />
               Embedded Tickers ({stats.data.tickers_embedded.length})
@@ -337,7 +337,7 @@ export default function SystemDashboard() {
               {stats.data.tickers_embedded.map(t => (
                 <span
                   key={t}
-                  className="px-2.5 py-1 text-xs font-mono bg-[#161b24] border border-[#202532] rounded-lg text-gray-300 hover:border-blue-500/30 hover:text-blue-300 transition-colors"
+                  className="px-2.5 py-1 text-xs font-mono bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg text-gray-300 hover:border-blue-500/30 hover:text-blue-300 transition-colors"
                 >
                   {t}
                 </span>

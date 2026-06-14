@@ -42,9 +42,9 @@ function StocksList() {
         {COVERED_STOCKS.map((stock) => (
           <div
             key={stock.ticker}
-            className="flex items-center gap-4 px-4 py-3 bg-[#0f1219] border border-[#202532] rounded-xl hover:border-blue-500/30 transition-colors"
+            className="flex items-center gap-4 px-4 py-3 bg-[#121212] border border-[#2A2A2A] rounded-xl hover:border-blue-500/30 transition-colors"
           >
-            <div className="w-14 h-8 bg-[#161b24] rounded-lg flex items-center justify-center text-xs font-mono font-bold text-blue-400 tracking-wider border border-[#202532]">
+            <div className="w-14 h-8 bg-[#1A1A1A] rounded-lg flex items-center justify-center text-xs font-mono font-bold text-blue-400 tracking-wider border border-[#2A2A2A]">
               {stock.ticker}
             </div>
             <div className="flex-1 min-w-0">

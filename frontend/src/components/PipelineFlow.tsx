@@ -35,7 +35,7 @@ const PipelineFlow: React.FC<PipelineFlowProps> = ({ status = {} }) => {
       case 'pending':
         return { ...baseStyle, background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)', borderColor: '#818cf8', animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' };
       default:
-        return { ...baseStyle, background: '#161b24', color: '#9ca3af', borderColor: '#202532', boxShadow: 'none' };
+        return { ...baseStyle, background: '#1A1A1A', color: '#9ca3af', borderColor: '#2A2A2A', boxShadow: 'none' };
     }
   };
 
@@ -97,8 +97,8 @@ const PipelineFlow: React.FC<PipelineFlowProps> = ({ status = {} }) => {
         nodesConnectable={false}
         elementsSelectable={false}
       >
-        <Background color="#202532" gap={24} size={2} />
-        <Controls className="[&>button]:bg-[#161b24] [&>button]:border-[#202532] [&>button]:text-gray-400 [&>button]:fill-gray-400" />
+        <Background color="#2A2A2A" gap={24} size={2} />
+        <Controls className="[&>button]:bg-[#1A1A1A] [&>button]:border-[#2A2A2A] [&>button]:text-gray-400 [&>button]:fill-gray-400" />
       </ReactFlow>
     </div>
   );

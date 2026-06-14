@@ -18,20 +18,20 @@ interface Toast {
 
 function SkeletonCard() {
   return (
-    <div className="bg-[#131926] border border-[#2a3246] rounded-xl p-5 animate-pulse">
+    <div className="bg-[#161616] border border-[#2A2A2A] rounded-xl p-5 animate-pulse">
       <div className="flex items-center gap-3 mb-4">
-        <div className="h-6 w-24 bg-[#2a3246] rounded-full" />
-        <div className="h-4 w-16 bg-[#2a3246] rounded" />
-        <div className="ml-auto h-5 w-12 bg-[#2a3246] rounded" />
+        <div className="h-6 w-24 bg-[#2A2A2A] rounded-full" />
+        <div className="h-4 w-16 bg-[#2A2A2A] rounded" />
+        <div className="ml-auto h-5 w-12 bg-[#2A2A2A] rounded" />
       </div>
-      <div className="h-3 w-1/2 bg-[#2a3246] rounded mb-3" />
+      <div className="h-3 w-1/2 bg-[#2A2A2A] rounded mb-3" />
       <div className="flex gap-2 mb-4">
-        <div className="h-5 w-20 bg-[#2a3246] rounded-full" />
-        <div className="h-5 w-20 bg-[#2a3246] rounded-full" />
+        <div className="h-5 w-20 bg-[#2A2A2A] rounded-full" />
+        <div className="h-5 w-20 bg-[#2A2A2A] rounded-full" />
       </div>
       <div className="flex gap-3 mt-4">
-        <div className="h-9 w-24 bg-[#2a3246] rounded-lg" />
-        <div className="h-9 w-24 bg-[#2a3246] rounded-lg" />
+        <div className="h-9 w-24 bg-[#2A2A2A] rounded-lg" />
+        <div className="h-9 w-24 bg-[#2A2A2A] rounded-lg" />
       </div>
     </div>
   );
@@ -41,7 +41,7 @@ function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.max(0, Math.min(100, Math.round(value * 100)));
   return (
     <div className="flex items-center gap-2 flex-1 min-w-0">
-      <div className="flex-1 h-2 bg-[#2a3246] rounded-full overflow-hidden">
+      <div className="flex-1 h-2 bg-[#2A2A2A] rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-300"
           style={{
@@ -80,7 +80,7 @@ function DecisionCard({
   const isEscalate = decision.route === 'ESCALATE';
 
   return (
-    <div className="bg-[#131926] border border-[#2a3246] rounded-xl p-5 flex flex-col gap-3 transition-colors duration-200 hover:border-[#3d4f6e]">
+    <div className="bg-[#161616] border border-[#2A2A2A] rounded-xl p-5 flex flex-col gap-3 transition-colors duration-200 hover:border-[#3A3A3A]">
       {/* Top row: route badge + confidence bar + form type chip */}
       <div className="flex items-center gap-3 flex-wrap">
         <span
@@ -100,7 +100,7 @@ function DecisionCard({
 
         <ConfidenceBar value={decision.confidence} />
 
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#1c222e] text-gray-300 border border-[#2a3246] flex-shrink-0">
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#242424] text-gray-300 border border-[#2A2A2A] flex-shrink-0">
           {decision.form_type}
         </span>
       </div>
@@ -136,7 +136,7 @@ function DecisionCard({
       {/* Status / actions */}
       <div className="flex items-center gap-3 pt-1">
         {decision.status === 'reviewed' ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-[#1c222e] text-gray-400 border border-[#2a3246]">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-[#242424] text-gray-400 border border-[#2A2A2A]">
             <CheckCircle size={14} className="text-green-500" />
             Reviewed
           </span>
@@ -279,7 +279,7 @@ export default function ReviewQueue() {
       </div>
 
       {/* Header */}
-      <header className="px-4 lg:px-8 py-4 border-b border-[#2a3246] flex items-center gap-4 flex-shrink-0">
+      <header className="px-4 lg:px-8 py-4 border-b border-[#2A2A2A] flex items-center gap-4 flex-shrink-0">
         <div className="flex items-center gap-3">
           <ClipboardList size={22} className="text-blue-400" />
           <h1 className="text-lg font-semibold text-white">Review Queue</h1>
@@ -298,7 +298,7 @@ export default function ReviewQueue() {
               void fetchQueue();
             }}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-gray-200 bg-transparent border border-[#2a3246] hover:border-[#3d4f6e] cursor-pointer transition-all duration-200 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-gray-200 bg-transparent border border-[#2A2A2A] hover:border-[#3A3A3A] cursor-pointer transition-all duration-200 disabled:opacity-50"
           >
             <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -317,7 +317,7 @@ export default function ReviewQueue() {
       </header>
 
       {/* Filter tabs */}
-      <div className="px-4 lg:px-8 pt-4 flex items-center gap-1 border-b border-[#2a3246] pb-0 flex-shrink-0">
+      <div className="px-4 lg:px-8 pt-4 flex items-center gap-1 border-b border-[#2A2A2A] pb-0 flex-shrink-0">
         {tabs.map((tab) => {
           const count =
             tab.value === 'all'
@@ -344,7 +344,7 @@ export default function ReviewQueue() {
                   className={`ml-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
                     activeTab === tab.value
                       ? 'bg-blue-900 text-blue-300'
-                      : 'bg-[#2a3246] text-gray-400'
+                      : 'bg-[#2A2A2A] text-gray-400'
                   }`}
                 >
                   {count}

@@ -58,24 +58,24 @@ const ChatView: React.FC<ChatViewProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
       {/* Header */}
-      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white flex items-center gap-3">
             <MessageSquare className="text-blue-400" />
             Testing Interface
           </h1>
           <div className="text-sm text-gray-400 mt-1 flex items-center gap-2">
-            Engine: <span className="text-gray-200 font-medium px-2 py-0.5 bg-[#161b24] rounded-md border border-[#202532]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
+            Engine: <span className="text-gray-200 font-medium px-2 py-0.5 bg-[#1A1A1A] rounded-md border border-[#2A2A2A]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
           </div>
         </div>
         {/* Mini Pipeline Status Indicator */}
-        <div className="flex items-center gap-2 bg-[#161b24] px-4 py-2 rounded-xl border border-[#202532] shadow-sm">
+        <div className="flex items-center gap-2 bg-[#1A1A1A] px-4 py-2 rounded-xl border border-[#2A2A2A] shadow-sm">
            <div className="text-xs font-semibold text-gray-400 uppercase mr-2">Pipeline</div>
            {['input', 'retrieval', 'extraction', 'math', 'verification', 'output'].map(step => {
              const s = pipelineStatus[step as keyof PipelineStatus];
              return (
                <div key={step} className="group relative">
-                 <div className={`w-3 h-3 rounded-full border-2 border-[#161b24] shadow-sm transition-colors duration-500 ${
+                 <div className={`w-3 h-3 rounded-full border-2 border-[#1A1A1A] shadow-sm transition-colors duration-500 ${
                    s === 'success' ? 'bg-emerald-500' : s === 'error' ? 'bg-red-500' : s === 'pending' ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'
                  }`} />
                </div>
@@ -105,19 +105,19 @@ const ChatView: React.FC<ChatViewProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
                {mode === 'graph' ? (
                   <>
-                    <button onClick={() => setInput(`What are the key relationships in the knowledge graph?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                    <button onClick={() => setInput(`What are the key relationships in the knowledge graph?`)} className="text-left px-4 py-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl hover:bg-[#242424] hover:border-blue-500/30 transition-all text-sm text-gray-300">
                       "What are the key relationships?"
                     </button>
-                    <button onClick={() => setInput(`Show me the suppliers and partners of a company`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                    <button onClick={() => setInput(`Show me the suppliers and partners of a company`)} className="text-left px-4 py-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl hover:bg-[#242424] hover:border-blue-500/30 transition-all text-sm text-gray-300">
                       "Show me suppliers and partners"
                     </button>
                   </>
                 ) : (
                   <>
-               <button onClick={() => setInput(`What was the total revenue in the last fiscal year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+               <button onClick={() => setInput(`What was the total revenue in the last fiscal year?`)} className="text-left px-4 py-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl hover:bg-[#242424] hover:border-blue-500/30 transition-all text-sm text-gray-300">
                   "What was total revenue?"
                </button>
-               <button onClick={() => setInput(`Did the gross margin improve year-over-year?`)} className="text-left px-4 py-3 bg-[#161b24] border border-[#202532] rounded-xl hover:bg-[#1c222e] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+               <button onClick={() => setInput(`Did the gross margin improve year-over-year?`)} className="text-left px-4 py-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl hover:bg-[#242424] hover:border-blue-500/30 transition-all text-sm text-gray-300">
                   "Did gross margin improve?"
                </button>
                  </>
@@ -135,7 +135,7 @@ const ChatView: React.FC<ChatViewProps> = ({
           >
             {/* Avatar */}
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border ${
-               msg.role === 'user' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-[#161b24] border-[#202532] text-blue-400'
+               msg.role === 'user' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-[#1A1A1A] border-[#2A2A2A] text-blue-400'
             }`}>
               {msg.role === 'user' ? <Database size={18} /> : <Search size={18} />}
             </div>
@@ -145,10 +145,10 @@ const ChatView: React.FC<ChatViewProps> = ({
               className={`px-5 py-4 rounded-2xl leading-relaxed text-[15px] shadow-sm ${
                 msg.role === 'user'
                   ? 'bg-blue-600 text-white rounded-tr-sm'
-                  : 'bg-[#161b24] text-gray-200 border border-[#202532] rounded-tl-sm'
+                  : 'bg-[#1A1A1A] text-gray-200 border border-[#2A2A2A] rounded-tl-sm'
               }`}
             >
-              <div className="prose prose-invert prose-p:leading-relaxed prose-pre:bg-[#0a0c10] prose-pre:border prose-pre:border-[#202532] max-w-none">
+              <div className="prose prose-invert prose-p:leading-relaxed prose-pre:bg-[#0A0A0A] prose-pre:border prose-pre:border-[#2A2A2A] max-w-none">
                 <ReactMarkdown
                   allowedElements={['p', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'a', 'br', 'hr']}
                   skipHtml
@@ -162,7 +162,7 @@ const ChatView: React.FC<ChatViewProps> = ({
               )}
 
               {msg.role === 'assistant' && (msg.sources || msg.verification || msg.relevant_xbrl?.length) && (
-                <div className="mt-4 pt-4 border-t border-[#202532]/50">
+                <div className="mt-4 pt-4 border-t border-[#2A2A2A]/50">
                   <AuditTrail
                     sources={msg.sources}
                     xbrl_facts={msg.xbrl_facts}
@@ -176,7 +176,7 @@ const ChatView: React.FC<ChatViewProps> = ({
               )}
 
               {msg.role === 'assistant' && msg.entities && msg.entities.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-[#202532]/50">
+                <div className="mt-4 pt-4 border-t border-[#2A2A2A]/50">
                   <div className="flex items-center gap-2 mb-3">
                     <Network size={14} className="text-indigo-400" />
                     <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Search Entities</span>
@@ -194,9 +194,9 @@ const ChatView: React.FC<ChatViewProps> = ({
                         <Search size={14} className="text-blue-400" />
                         <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Knowledge Graph Triples ({msg.triples.length})</span>
                       </div>
-                      <div className="bg-[#0a0c10] border border-[#202532] rounded-xl overflow-hidden shadow-inner">
+                      <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl overflow-hidden shadow-inner">
                         {msg.triples.map((triple, i) => (
-                          <div key={i} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-mono ${i % 2 === 0 ? 'bg-[#0c0e14]' : ''} ${i > 0 ? 'border-t border-[#202532]/50' : ''}`}>
+                          <div key={i} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-mono ${i % 2 === 0 ? 'bg-[#0F0F0F]' : ''} ${i > 0 ? 'border-t border-[#2A2A2A]/50' : ''}`}>
                             <span className="text-blue-300">{triple.subject}</span>
                             <span className="text-gray-500">&rarr;</span>
                             <span className="text-emerald-400 text-xs px-1.5 py-0.5 bg-emerald-500/10 rounded border border-emerald-500/20">{triple.predicate}</span>
@@ -211,13 +211,13 @@ const ChatView: React.FC<ChatViewProps> = ({
               )}
 
               {msg.sql && (
-                <pre className="mt-4 bg-[#0a0c10] border border-[#202532] text-gray-300 rounded-xl p-4 text-sm font-mono whitespace-pre-wrap overflow-x-auto shadow-inner">
+                <pre className="mt-4 bg-[#0A0A0A] border border-[#2A2A2A] text-gray-300 rounded-xl p-4 text-sm font-mono whitespace-pre-wrap overflow-x-auto shadow-inner">
                   <code>{msg.sql}</code>
                 </pre>
               )}
 
               {msg.data && msg.data.length > 0 && (
-                <div className="mt-4 bg-[#0a0c10] border border-[#202532] rounded-xl overflow-hidden shadow-inner">
+                <div className="mt-4 bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl overflow-hidden shadow-inner">
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse text-sm">
                       <thead>
@@ -225,7 +225,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                           {Object.keys(msg.data[0]).map(key => (
                             <th
                               key={key}
-                              className="text-left px-4 py-3 bg-[#13171f] border-b border-[#202532] text-gray-400 font-semibold"
+                              className="text-left px-4 py-3 bg-[#161616] border-b border-[#2A2A2A] text-gray-400 font-semibold"
                             >
                               {key}
                             </th>
@@ -236,12 +236,12 @@ const ChatView: React.FC<ChatViewProps> = ({
                         {msg.data.slice(0, 10).map((row, i) => (
                           <tr
                             key={i}
-                            className={`transition-colors hover:bg-[#161b24] ${i % 2 === 0 ? '' : 'bg-[#0c0e14]'}`}
+                            className={`transition-colors hover:bg-[#1A1A1A] ${i % 2 === 0 ? '' : 'bg-[#0F0F0F]'}`}
                           >
                             {Object.values(row).map((val, j) => (
                               <td
                                 key={j}
-                                className="px-4 py-3 border-b border-[#202532]/50 text-gray-300"
+                                className="px-4 py-3 border-b border-[#2A2A2A]/50 text-gray-300"
                               >
                                 {typeof val === 'number'
                                   ? val.toLocaleString()
@@ -254,7 +254,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                     </table>
                   </div>
                   {msg.data.length > 10 && (
-                    <div className="px-4 py-2.5 bg-[#13171f] border-t border-[#202532] text-xs text-gray-500 font-medium text-center uppercase tracking-wider">
+                    <div className="px-4 py-2.5 bg-[#161616] border-t border-[#2A2A2A] text-xs text-gray-500 font-medium text-center uppercase tracking-wider">
                       Showing 10 of {msg.data.length} rows
                     </div>
                   )}
@@ -266,10 +266,10 @@ const ChatView: React.FC<ChatViewProps> = ({
 
         {loading && (
           <div className="flex gap-5 max-w-[90%] self-start animate-in slide-in-from-bottom-2 duration-300">
-            <div className="w-10 h-10 rounded-xl bg-[#161b24] border border-[#202532] text-blue-400 flex items-center justify-center shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-[#1A1A1A] border border-[#2A2A2A] text-blue-400 flex items-center justify-center shadow-sm">
               <Search size={18} className="animate-pulse" />
             </div>
-            <div className="px-6 py-4 rounded-2xl rounded-tl-sm bg-[#161b24] text-gray-400 border border-[#202532] flex items-center gap-3">
+            <div className="px-6 py-4 rounded-2xl rounded-tl-sm bg-[#1A1A1A] text-gray-400 border border-[#2A2A2A] flex items-center gap-3">
               <div className="flex gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '0ms' }} />
                 <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -284,10 +284,10 @@ const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Input bar */}
-      <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-[#0a0c10] via-[#0a0c10] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+      <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
         <form
           onSubmit={handleSubmit}
-          className="max-w-4xl mx-auto flex items-center bg-[#161b24]/90 backdrop-blur-md border border-[#202532] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 pointer-events-auto"
+          className="max-w-4xl mx-auto flex items-center bg-[#1A1A1A]/90 backdrop-blur-md border border-[#2A2A2A] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 pointer-events-auto"
         >
           <input
             className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-4 py-3 text-base outline-none w-full"

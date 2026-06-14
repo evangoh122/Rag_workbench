@@ -65,7 +65,7 @@ function RunRow({ run }: { run: AuditRun }) {
   return (
     <>
       <tr
-        className="border-b border-[#202532]/50 hover:bg-[#161b24] cursor-pointer transition-colors"
+        className="border-b border-[#2A2A2A]/50 hover:bg-[#1A1A1A] cursor-pointer transition-colors"
         onClick={() => setExpanded(e => !e)}
       >
         <td className="px-4 py-3 text-gray-500 text-xs font-mono">
@@ -90,14 +90,14 @@ function RunRow({ run }: { run: AuditRun }) {
       </tr>
 
       {expanded && (
-        <tr className="bg-[#0d1017] border-b border-[#202532]">
+        <tr className="bg-[#0F0F0F] border-b border-[#2A2A2A]">
           <td colSpan={7} className="px-6 py-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
 
               {/* Answer */}
               <div className="md:col-span-2">
                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Answer</div>
-                <div className="bg-[#161b24] border border-[#202532] rounded-xl p-4 text-gray-300 leading-relaxed">
+                <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-4 text-gray-300 leading-relaxed">
                   {run.answer || '—'}
                 </div>
               </div>
@@ -106,10 +106,10 @@ function RunRow({ run }: { run: AuditRun }) {
               {run.xbrl_facts_cited.length > 0 && (
                 <div className="md:col-span-2">
                   <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">XBRL Facts Cited</div>
-                  <div className="bg-[#0a0c10] border border-[#202532] rounded-xl overflow-hidden">
+                  <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl overflow-hidden">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="bg-[#13171f] border-b border-[#202532]">
+                        <tr className="bg-[#161616] border-b border-[#2A2A2A]">
                           <th className="text-left px-4 py-2 text-gray-500 font-semibold">Concept</th>
                           <th className="text-left px-4 py-2 text-gray-500 font-semibold">Value</th>
                           <th className="text-left px-4 py-2 text-gray-500 font-semibold">Period End</th>
@@ -118,7 +118,7 @@ function RunRow({ run }: { run: AuditRun }) {
                       </thead>
                       <tbody>
                         {run.xbrl_facts_cited.map((f, i) => (
-                          <tr key={i} className={i % 2 === 0 ? '' : 'bg-[#0c0e14]'}>
+                          <tr key={i} className={i % 2 === 0 ? '' : 'bg-[#0F0F0F]'}>
                             <td className="px-4 py-2 font-mono text-blue-300">{f.concept}</td>
                             <td className="px-4 py-2 text-emerald-400 font-mono">
                               {typeof f.value === 'number' ? f.value.toLocaleString() : f.value}
@@ -157,14 +157,14 @@ function RunRow({ run }: { run: AuditRun }) {
                   <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Source Documents</div>
                   <div className="flex flex-col gap-1">
                     {run.source_docs.map((d, i) => (
-                      <span key={i} className="text-xs font-mono text-gray-400 bg-[#161b24] border border-[#202532] px-3 py-1.5 rounded-lg">{d}</span>
+                      <span key={i} className="text-xs font-mono text-gray-400 bg-[#1A1A1A] border border-[#2A2A2A] px-3 py-1.5 rounded-lg">{d}</span>
                     ))}
                   </div>
                 </div>
               )}
 
               {/* Meta */}
-              <div className="md:col-span-2 flex flex-wrap gap-4 text-xs text-gray-500 pt-2 border-t border-[#202532]/50">
+              <div className="md:col-span-2 flex flex-wrap gap-4 text-xs text-gray-500 pt-2 border-t border-[#2A2A2A]/50">
                 <span>Model: <span className="text-gray-400 font-mono">{run.model_used ?? '—'}</span></span>
                 <span>Query type: <span className="text-gray-400">{run.query_type ?? '—'}</span></span>
                 {run.review_id && <span>Review ID: <span className="text-gray-400 font-mono">{run.review_id}</span></span>}
@@ -222,7 +222,7 @@ export default function AuditLog() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <header className="px-4 lg:px-8 py-5 border-b border-[#202532] bg-[#0f1219]/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between">
+      <header className="px-4 lg:px-8 py-5 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white flex items-center gap-3">
             <ShieldCheck className="text-amber-400" />
@@ -232,7 +232,7 @@ export default function AuditLog() {
         </div>
         <button
           onClick={fetchData}
-          className="flex items-center gap-2 px-4 py-2 bg-[#161b24] border border-[#202532] rounded-xl text-sm text-gray-400 hover:text-white hover:border-amber-500/30 transition-all cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl text-sm text-gray-400 hover:text-white hover:border-amber-500/30 transition-all cursor-pointer"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refresh
@@ -250,7 +250,7 @@ export default function AuditLog() {
               { label: 'Sampled Review', value: stats.sampled_review, color: 'text-yellow-400' },
               { label: 'Escalated', value: stats.escalated, color: 'text-red-400' },
             ].map(s => (
-              <div key={s.label} className="bg-[#0f1219] border border-[#202532] rounded-xl px-5 py-4">
+              <div key={s.label} className="bg-[#121212] border border-[#2A2A2A] rounded-xl px-5 py-4">
                 <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-xs text-gray-500 mt-1 uppercase tracking-widest">{s.label}</div>
               </div>
@@ -265,12 +265,12 @@ export default function AuditLog() {
             placeholder="Filter by ticker (e.g. NVDA)"
             value={tickerFilter}
             onChange={e => setTickerFilter(e.target.value)}
-            className="bg-[#161b24] border border-[#202532] rounded-xl px-4 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/40 w-52 transition-all"
+            className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl px-4 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/40 w-52 transition-all"
           />
           <select
             value={routeFilter}
             onChange={e => setRouteFilter(e.target.value)}
-            className="bg-[#161b24] border border-[#202532] rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500/40 cursor-pointer transition-all appearance-none"
+            className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-amber-500/40 cursor-pointer transition-all appearance-none"
           >
             <option value="">All routes</option>
             <option value="AUTO">AUTO</option>
@@ -294,11 +294,11 @@ export default function AuditLog() {
             <p className="text-sm mt-1">Records appear here after each RAG pipeline query.</p>
           </div>
         ) : (
-          <div className="bg-[#0f1219] border border-[#202532] rounded-xl overflow-hidden">
+          <div className="bg-[#121212] border border-[#2A2A2A] rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-[#13171f] border-b border-[#202532]">
+                  <tr className="bg-[#161616] border-b border-[#2A2A2A]">
                     <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Run ID</th>
                     <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Timestamp</th>
                     <th className="text-left px-4 py-3 text-gray-500 font-semibold text-xs uppercase tracking-wider">Ticker</th>

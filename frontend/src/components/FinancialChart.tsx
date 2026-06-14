@@ -69,7 +69,7 @@ function FinancialChart({ facts }: FinancialChartProps) {
   const unit = numeric.find((f) => f.unit)?.unit || '';
 
   return (
-    <div className="mt-3 p-3 bg-[#0f1219] border border-[#202532] rounded-xl">
+    <div className="mt-3 p-3 bg-[#121212] border border-[#2A2A2A] rounded-xl">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
           Financials{unit ? ` (${unit})` : ''}
@@ -77,12 +77,12 @@ function FinancialChart({ facts }: FinancialChartProps) {
       </div>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#202532" vertical={false} />
-          <XAxis dataKey="period" tick={{ fill: '#9ca3af', fontSize: 12 }} stroke="#2b3242" />
-          <YAxis tickFormatter={fmt} tick={{ fill: '#9ca3af', fontSize: 12 }} stroke="#2b3242" width={48} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" vertical={false} />
+          <XAxis dataKey="period" tick={{ fill: '#9ca3af', fontSize: 12 }} stroke="#2A2A2A" />
+          <YAxis tickFormatter={fmt} tick={{ fill: '#9ca3af', fontSize: 12 }} stroke="#2A2A2A" width={48} />
           <Tooltip
             formatter={(v) => fmt(Number(v))}
-            contentStyle={{ background: '#161b24', border: '1px solid #202532', borderRadius: 8, color: '#e5e7eb' }}
+            contentStyle={{ background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 8, color: '#e5e7eb' }}
             labelStyle={{ color: '#9ca3af' }}
             cursor={{ fill: 'rgba(96,165,250,0.08)' }}
           />

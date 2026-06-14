@@ -31,7 +31,7 @@ export default function DriftAlert() {
 
   if (unavailable) {
     return (
-      <div className="mt-auto px-3 py-3 rounded-lg bg-[#1c2130] border border-[#2a3246]">
+      <div className="mt-auto px-3 py-3 rounded-lg bg-[#1F1F1F] border border-[#2A2A2A]">
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Activity size={12} />
           <span>Status unavailable</span>
@@ -42,9 +42,9 @@ export default function DriftAlert() {
 
   if (status === null) {
     return (
-      <div className="mt-auto px-3 py-3 rounded-lg bg-[#1c2130] border border-[#2a3246] animate-pulse">
-        <div className="h-3 w-3/4 bg-[#2a3246] rounded mb-2" />
-        <div className="h-3 w-2/3 bg-[#2a3246] rounded" />
+      <div className="mt-auto px-3 py-3 rounded-lg bg-[#1F1F1F] border border-[#2A2A2A] animate-pulse">
+        <div className="h-3 w-3/4 bg-[#2A2A2A] rounded mb-2" />
+        <div className="h-3 w-2/3 bg-[#2A2A2A] rounded" />
       </div>
     );
   }
@@ -66,7 +66,7 @@ export default function DriftAlert() {
       className={`mt-auto px-3 py-3 rounded-lg border text-xs transition-colors duration-300 ${
         hasAlert
           ? 'bg-red-950 border-red-800'
-          : 'bg-[#1c2130] border-[#2a3246]'
+          : 'bg-[#1F1F1F] border-[#2A2A2A]'
       }`}
     >
       <div className="flex items-center gap-1.5 mb-2 font-semibold text-gray-300">

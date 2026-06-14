@@ -29,16 +29,16 @@ function CollapsibleSection({ title, children, defaultOpen = false, count }: Col
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="mt-2 border border-[#2a3246] rounded-lg overflow-hidden">
+    <div className="mt-2 border border-[#2A2A2A] rounded-lg overflow-hidden">
       <button
-        className="w-full flex items-center justify-between px-3 py-2 bg-[#161b22] text-sm font-medium text-gray-300 hover:bg-[#1c2130] transition-colors cursor-pointer border-0"
+        className="w-full flex items-center justify-between px-3 py-2 bg-[#1A1A1A] text-sm font-medium text-gray-300 hover:bg-[#1F1F1F] transition-colors cursor-pointer border-0"
         onClick={() => setOpen(prev => !prev)}
       >
         <span className="flex items-center gap-2">{title}{count != null ? <span className="text-xs text-gray-500">({count})</span> : null}</span>
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
       </button>
       {open && (
-        <div className="px-3 py-3 bg-[#0d1117]">
+        <div className="px-3 py-3 bg-[#0F0F0F]">
           {children}
         </div>
       )}
@@ -88,7 +88,7 @@ function XBRLFactCard({ fact }: { fact: XBRLFact }) {
   };
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2 bg-[#131926] border border-[#2a3246] rounded-md">
+    <div className="flex items-center gap-3 px-3 py-2 bg-[#161616] border border-[#2A2A2A] rounded-md">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-300 font-medium truncate">{fact.label || fact.concept}</span>
@@ -163,7 +163,7 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
                   {['Ticker', 'Name', 'Price', 'Date', 'Volume'].map(col => (
                     <th
                       key={col}
-                      className="text-left px-2 py-2 text-gray-400 font-medium border-b border-[#2a3246]"
+                      className="text-left px-2 py-2 text-gray-400 font-medium border-b border-[#2A2A2A]"
                     >
                       {col}
                     </th>
@@ -172,14 +172,14 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
               </thead>
               <tbody>
                 {polygon_data!.map((poly, idx) => (
-                  <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-[#0a0c10]'}>
-                    <td className="px-2 py-1.5 font-mono text-blue-300 border-b border-[#1a1f2e]">{poly.ticker}</td>
-                    <td className="px-2 py-1.5 text-gray-300 border-b border-[#1a1f2e]">{poly.name}</td>
-                    <td className="px-2 py-1.5 text-green-400 border-b border-[#1a1f2e]">
+                  <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-[#0A0A0A]'}>
+                    <td className="px-2 py-1.5 font-mono text-blue-300 border-b border-[#1F1F1F]">{poly.ticker}</td>
+                    <td className="px-2 py-1.5 text-gray-300 border-b border-[#1F1F1F]">{poly.name}</td>
+                    <td className="px-2 py-1.5 text-green-400 border-b border-[#1F1F1F]">
                       {poly.last_price ? `$${poly.last_price.toFixed(2)}` : 'N/A'}
                     </td>
-                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1a1f2e]">{poly.price_date || 'N/A'}</td>
-                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1a1f2e]">
+                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1F1F1F]">{poly.price_date || 'N/A'}</td>
+                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1F1F1F]">
                       {poly.volume ? poly.volume.toLocaleString() : 'N/A'}
                     </td>
                   </tr>
@@ -187,7 +187,7 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
               </tbody>
             </table>
             {polygon_data![0].description && (
-              <div className="mt-3 p-2 bg-[#161b22] rounded border border-[#2a3246]">
+              <div className="mt-3 p-2 bg-[#1A1A1A] rounded border border-[#2A2A2A]">
                 <p className="text-[10px] uppercase text-gray-500 font-bold mb-1">Company Description</p>
                 <p className="text-gray-400 text-xs leading-relaxed italic">
                   "{polygon_data![0].description}"
@@ -203,9 +203,9 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
         <CollapsibleSection title="Sources" count={sources!.length}>
           <div className="flex flex-col gap-3">
             {sources!.map((src, idx) => (
-              <div key={idx} className="border border-[#2a3246] rounded-md p-3 bg-[#131926]">
+              <div key={idx} className="border border-[#2A2A2A] rounded-md p-3 bg-[#161616]">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-[#1c2130] text-blue-300 border border-blue-900">
+                  <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-[#1F1F1F] text-blue-300 border border-blue-900">
                     {src.section}
                   </span>
                   <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-blue-900 text-blue-200">
@@ -243,7 +243,7 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
                   {['Concept', 'Label', 'Value', 'Unit', 'Period'].map(col => (
                     <th
                       key={col}
-                      className="text-left px-2 py-2 text-gray-400 font-medium border-b border-[#2a3246]"
+                      className="text-left px-2 py-2 text-gray-400 font-medium border-b border-[#2A2A2A]"
                     >
                       {col}
                     </th>
@@ -252,14 +252,14 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
               </thead>
               <tbody>
                 {xbrl_facts!.map((fact, idx) => (
-                  <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-[#0a0c10]'}>
-                    <td className="px-2 py-1.5 font-mono text-blue-300 border-b border-[#1a1f2e]">{fact.concept}</td>
-                    <td className="px-2 py-1.5 text-gray-300 border-b border-[#1a1f2e]">{fact.label}</td>
-                    <td className="px-2 py-1.5 text-gray-100 border-b border-[#1a1f2e]">
+                  <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-[#0A0A0A]'}>
+                    <td className="px-2 py-1.5 font-mono text-blue-300 border-b border-[#1F1F1F]">{fact.concept}</td>
+                    <td className="px-2 py-1.5 text-gray-300 border-b border-[#1F1F1F]">{fact.label}</td>
+                    <td className="px-2 py-1.5 text-gray-100 border-b border-[#1F1F1F]">
                       {fact.value != null ? fact.value.toLocaleString() : '—'}
                     </td>
-                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1a1f2e]">{fact.unit}</td>
-                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1a1f2e]">{fact.period}</td>
+                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1F1F1F]">{fact.unit}</td>
+                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1F1F1F]">{fact.period}</td>
                   </tr>
                 ))}
               </tbody>

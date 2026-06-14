@@ -24,7 +24,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onReset 
 }) => {
   return (
-    <aside className="w-72 flex-shrink-0 bg-[#0f1219] border-r border-[#202532] flex flex-col p-5 shadow-[4px_0_24px_rgba(0,0,0,0.2)] z-10 relative">
+    <aside className="w-72 flex-shrink-0 bg-[#121212] border-r border-[#2A2A2A] flex flex-col p-5 shadow-[4px_0_24px_rgba(0,0,0,0.2)] z-10 relative">
       {/* Logo */}
       <div className="flex items-center gap-3 mb-8 px-1">
         <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
@@ -40,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
             view === 'chat'
               ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
           }`}
           onClick={() => setView('chat')}
         >
@@ -52,7 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
             view === 'traceability'
               ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
           }`}
           onClick={() => setView('traceability')}
         >
@@ -64,7 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
             view === 'results'
               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
           }`}
           onClick={() => setView('results')}
         >
@@ -76,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
             view === 'audit'
               ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
           }`}
           onClick={() => setView('audit')}
         >
@@ -88,7 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
             view === 'metrics'
               ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
           }`}
           onClick={() => setView('metrics')}
         >
@@ -100,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
             view === 'system'
               ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
           }`}
           onClick={() => setView('system')}
         >
@@ -112,7 +112,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
             view === 'methodology'
               ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
           }`}
           onClick={() => setView('methodology')}
         >
@@ -123,7 +123,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
             view === 'stocks'
               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b24]'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
           }`}
           onClick={() => setView('stocks')}
         >
@@ -138,12 +138,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest px-2 mb-2">Configuration</div>
           
           {/* Engine Toggle */}
-          <div className="bg-[#161b24] p-1.5 rounded-xl flex flex-col gap-1 border border-[#202532]">
+          <div className="bg-[#1A1A1A] p-1.5 rounded-xl flex flex-col gap-1 border border-[#2A2A2A]">
             <button
               className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
                 mode === 'auditable'
-                  ? 'bg-[#202532] text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
+                  ? 'bg-[#2A2A2A] text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#242424] bg-transparent'
               }`}
               onClick={() => setMode('auditable')}
             >
@@ -153,8 +153,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             <button
               className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
                 mode === 'sql'
-                  ? 'bg-[#202532] text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
+                  ? 'bg-[#2A2A2A] text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#242424] bg-transparent'
               }`}
               onClick={() => setMode('sql')}
             >
@@ -164,8 +164,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             <button
               className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
                 mode === 'rag'
-                  ? 'bg-[#202532] text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
+                  ? 'bg-[#2A2A2A] text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#242424] bg-transparent'
               }`}
               onClick={() => setMode('rag')}
             >
@@ -175,8 +175,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             <button
               className={`flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer border-0 ${
                 mode === 'graph'
-                  ? 'bg-[#202532] text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#1c222e] bg-transparent'
+                  ? 'bg-[#2A2A2A] text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#242424] bg-transparent'
               }`}
               onClick={() => setMode('graph')}
             >
@@ -193,7 +193,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {(view === 'chat' || view === 'traceability') && (
         <div className="mt-auto">
           <button
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium text-gray-400 hover:text-red-400 bg-transparent border border-[#202532] hover:border-red-900/50 hover:bg-red-500/5 cursor-pointer transition-all duration-300"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium text-gray-400 hover:text-red-400 bg-transparent border border-[#2A2A2A] hover:border-red-900/50 hover:bg-red-500/5 cursor-pointer transition-all duration-300"
             onClick={onReset}
           >
             <RefreshCcw size={16} />
