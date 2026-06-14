@@ -29,15 +29,23 @@ TICKER_TO_CIK = {
     "QCOM": "0000804328", "TXN": "0000097476", "TSM": "0001046179",
     "MRVL": "0001835632", "NXPI": "0001413447", "MCHP": "0000827054",
     "MPWR": "0001280452", "SWKS": "0000004127", "QRVO": "0001604778",
-    "ON": "0001666635", "AMAT": "0000069515", "LRCX": "0000707549",
+    "ON": "0001097864", "AMAT": "0000006951", "LRCX": "0000707549",
     "KLAC": "0000319201", "TER": "0000097210", "ENTG": "0001101302",
     "ONTO": "0000704532", "FORM": "0001039399", "PLAB": "0000810136",
     "COHU": "0000021535", "KLIC": "0000056978", "ICHR": "0001652535",
     "VECO": "0000103145", "AEHR": "0001040470", "ACLS": "0000897077",
     "AMKR": "0001047127",
+    # STMicroelectronics files Form 20-F (foreign private issuer), not 10-K.
+    "STM": "0000932787",
 }
 
 KEY_CONCEPTS = [
+    # Revenue: legacy "Revenues" plus the modern ASC 606 tags that most filers
+    # switched to (~2018-2019). Without these, post-2018 revenue is missing for
+    # MCHP/ADI/MRVL/AMAT/ON/STM (and stale for AMD/TXN/INTC), so numeric revenue
+    # queries abstain at the verification gate.
+    "us-gaap/RevenueFromContractWithCustomerExcludingAssessedTax",
+    "us-gaap/RevenueFromContractWithCustomerIncludingAssessedTax",
     "us-gaap/Revenues", "us-gaap/NetIncomeLoss", "us-gaap/Assets",
     "us-gaap/Liabilities", "us-gaap/StockholdersEquity",
     "us-gaap/OperatingIncomeLoss", "us-gaap/GrossProfit",
@@ -84,7 +92,9 @@ def _extract_facts(company_data: dict, ticker: str, cik: str) -> list[dict]:
         if not unit_data:
             continue
         for entry in unit_data:
-            if entry.get("form", "") not in ("10-K", "10-K/A"):
+            # 20-F / 20-F/A are the annual reports of foreign private issuers
+            # (e.g. STM) — the equivalent of a 10-K for XBRL purposes.
+            if entry.get("form", "") not in ("10-K", "10-K/A", "20-F", "20-F/A"):
                 continue
             facts_list.append({
                 "ticker": ticker, "cik": cik, "concept": concept_name,
