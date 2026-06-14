@@ -111,11 +111,85 @@ class TestLangGraphNodes:
         assert "cannot answer" in result["final_answer"]
 
 class TestLangGraphFullFlow:
+    @patch("api.services.langgraph_engine._generate_educational_layers", return_value={})
     @patch("api.services.langgraph_engine.get_app")
-    def test_run_auditable_rag(self, mock_get_app):
+    def test_run_auditable_rag(self, mock_get_app, _mock_layers):
         mock_app = MagicMock()
         mock_get_app.return_value = mock_app
         mock_app.invoke.return_value = {"final_answer": "Mocked Answer"}
-        
+
         result = run_auditable_rag("What is revenue?", "AAPL")
         assert result["final_answer"] == "Mocked Answer"
+        # Educational-layer keys are always present (additive, default empty).
+        assert result["what_it_means"] == ""
+        assert result["how_to_interpret"] == ""
+        assert result["follow_ups"] == []
+
+    @patch("api.services.langgraph_engine.get_app")
+    def test_run_auditable_rag_attaches_layers(self, mock_get_app):
+        mock_app = MagicMock()
+        mock_get_app.return_value = mock_app
+        mock_app.invoke.return_value = {"final_answer": "Revenue was $37.4B."}
+        with patch(
+            "api.services.langgraph_engine._generate_educational_layers",
+            return_value={
+                "what_it_means": "It earned 37.4B.",
+                "how_to_interpret": "Revenue is sales before costs.",
+                "follow_ups": ["How did it grow?"],
+            },
+        ):
+            result = run_auditable_rag("What is revenue?", "AAPL")
+        assert result["what_it_means"] == "It earned 37.4B."
+        assert result["follow_ups"] == ["How did it grow?"]
+
+
+class TestEducationalLayers:
+    """Sections 3–5 of the Standard Response Framework (additive, best-effort)."""
+
+    def test_guard_refusal_returns_empty(self):
+        from api.services.langgraph_engine import _generate_educational_layers
+        out = _generate_educational_layers(
+            "q", "I cannot answer this with sufficient confidence.", "MU")
+        assert out == {}
+
+    def test_guard_empty_answer_returns_empty(self):
+        from api.services.langgraph_engine import _generate_educational_layers
+        assert _generate_educational_layers("q", "", "MU") == {}
+
+    def test_disabled_flag_returns_empty(self, monkeypatch):
+        from api.services.langgraph_engine import _generate_educational_layers
+        monkeypatch.setenv("ANSWER_FRAMEWORK_ENABLED", "false")
+        assert _generate_educational_layers("q", "Revenue was $37.4B.", "MU") == {}
+
+    def test_happy_path_parses_json(self, monkeypatch):
+        from api.services import langgraph_engine as eng
+        monkeypatch.delenv("ANSWER_FRAMEWORK_ENABLED", raising=False)
+        payload = (
+            '{"what_it_means": "plain english", '
+            '"how_to_interpret": "context", '
+            '"follow_ups": ["a", "b", "c"]}'
+        )
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=payload))]
+        )
+        with patch.object(eng.Config, "get_provider_config",
+                          return_value={"api_key": "k", "base_url": "http://x", "model": "m"}), \
+             patch("openai.OpenAI", return_value=mock_client):
+            out = eng._generate_educational_layers("What is revenue?", "Revenue was $37.4B.", "MU")
+        assert out["what_it_means"] == "plain english"
+        assert out["how_to_interpret"] == "context"
+        assert out["follow_ups"] == ["a", "b", "c"]
+
+    def test_malformed_json_returns_empty(self, monkeypatch):
+        from api.services import langgraph_engine as eng
+        monkeypatch.delenv("ANSWER_FRAMEWORK_ENABLED", raising=False)
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="not json at all"))]
+        )
+        with patch.object(eng.Config, "get_provider_config",
+                          return_value={"api_key": "k", "base_url": "http://x", "model": "m"}), \
+             patch("openai.OpenAI", return_value=mock_client):
+            out = eng._generate_educational_layers("q", "Revenue was $37.4B.", "MU")
+        assert out == {}

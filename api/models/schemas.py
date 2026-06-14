@@ -57,6 +57,12 @@ class ChatResponse(BaseModel):
     xbrl_group: str = ""
     polygon_data: List[Dict[str, Any]] = Field(default_factory=list)
 
+    # Standard Response Framework — educational layers (sections 3–5).
+    # Additive, display-only; empty when not applicable (abstention) or disabled.
+    what_it_means: str = ""
+    how_to_interpret: str = ""
+    follow_ups: List[str] = Field(default_factory=list)
+
     # Verification
     verification: VerificationResult = Field(default_factory=VerificationResult)
 

@@ -55,6 +55,10 @@ export interface ChatResponse {
   pipeline_status?: Record<string, 'success' | 'error' | 'pending'>;
   entities?: string[];
   triples?: Record<string, string>[];
+  // Standard Response Framework educational layers (sections 3–5)
+  what_it_means?: string;
+  how_to_interpret?: string;
+  follow_ups?: string[];
 }
 
 interface HistoryEntry {

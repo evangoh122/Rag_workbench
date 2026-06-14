@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck, Menu, X } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck, Menu, X, Lightbulb, Info, ChevronDown, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse, Source, XBRLFact } from './api/chat';
@@ -33,6 +33,9 @@ interface Message {
   math_steps?: string[];
   entities?: string[];
   triples?: Record<string, string>[];
+  what_it_means?: string;
+  how_to_interpret?: string;
+  follow_ups?: string[];
 }
 
 type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
@@ -78,18 +81,19 @@ function App() {
     }
   }, [view]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || loading) return;
+  const handleSubmit = async (e?: React.FormEvent, overrideText?: string) => {
+    e?.preventDefault();
+    const text = (overrideText ?? input).trim();
+    if (!text || loading) return;
 
     if (mode === 'auditable') {
       setPipelineStatus({ input: 'success', retrieval: 'pending' });
       // If the user submits from the traceability view, we might want to stay there or move them.
       // We'll keep them wherever they are.
     }
-    const userMsg: Message = { role: 'user', content: input };
+    const userMsg: Message = { role: 'user', content: text };
     setMessages(prev => [...prev, userMsg]);
-    const currentInput = input;
+    const currentInput = text;
     setInput('');
     setLoading(true);
 
@@ -138,6 +142,9 @@ function App() {
         math_steps: data.math_steps,
         entities: data.entities,
         triples: data.triples,
+        what_it_means: data.what_it_means,
+        how_to_interpret: data.how_to_interpret,
+        follow_ups: data.follow_ups,
       };
 
       setMessages(prev => [...prev, assistantMsg]);
@@ -656,6 +663,63 @@ function App() {
                           verification={msg.verification}
                           math_steps={msg.math_steps}
                         />
+                      </div>
+                    )}
+
+                    {msg.role === 'assistant' && (msg.what_it_means || msg.how_to_interpret || (msg.follow_ups && msg.follow_ups.length > 0)) && (
+                      <div className="mt-4 pt-4 border-t border-border/50 space-y-3">
+                        {/* Section 3 — What This Means */}
+                        {msg.what_it_means && (
+                          <div className="bg-background/60 border border-border rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Lightbulb size={14} className="text-amber-400" />
+                              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">What This Means</span>
+                            </div>
+                            <p className="text-sm text-secondary leading-relaxed m-0">{msg.what_it_means}</p>
+                          </div>
+                        )}
+
+                        {/* Section 4 — How to Interpret This (collapsible) */}
+                        {msg.how_to_interpret && (
+                          <details className="bg-background/60 border border-border rounded-xl p-4 group">
+                            <summary className="flex items-center gap-2 cursor-pointer list-none select-none">
+                              <Info size={14} className="text-cyan-400" />
+                              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">How to Interpret This</span>
+                              <ChevronDown size={14} className="text-gray-500 ml-auto transition-transform group-open:rotate-180" />
+                            </summary>
+                            <p className="text-sm text-secondary leading-relaxed mt-3 mb-0">{msg.how_to_interpret}</p>
+                          </details>
+                        )}
+
+                        {/* Section 5 — Suggested Follow-Up Questions */}
+                        {msg.follow_ups && msg.follow_ups.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <ArrowRight size={14} className="text-emerald-400" />
+                              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Suggested Follow-Ups</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {msg.follow_ups.map((q, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => {
+                                    handleSubmit(undefined, q);
+                                    if (import.meta.env.VITE_POSTHOG_KEY) {
+                                      getPosthog().then(p => p.capture('follow_up_click', { question: q }));
+                                    }
+                                  }}
+                                  disabled={loading}
+                                  className="text-left text-sm px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                                >
+                                  {q}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-[11px] text-gray-500 mt-3 italic m-0">
+                              SEC filings explain business fundamentals, reported financials, and disclosed risks — they don't provide investment advice, valuation, or market sentiment. Combine with other sources before making decisions.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
 

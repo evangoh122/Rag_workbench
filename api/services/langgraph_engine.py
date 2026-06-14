@@ -996,6 +996,88 @@ def _text_grounded_decorations(state: GraphState, answer: str = "") -> dict:
     }
 
 
+def _generate_educational_layers(query: str, answer: str, ticker: str) -> dict:
+    """Produce the educational layers (sections 3–5 of the Standard Response
+    Framework) for an already-finished answer: "What This Means", "How to
+    Interpret This", and suggested follow-up questions.
+
+    This is deliberately a SEPARATE, best-effort step that never touches the
+    audited Layer-1 answer. It is given the finished answer and is forbidden
+    from introducing any fact or number not already present — so it can only
+    explain, never re-answer. Returns {} on any failure or when the layers
+    don't apply (empty answer or an abstention/refusal), so callers can treat
+    the result as purely additive display data.
+    """
+    import os
+
+    if os.getenv("ANSWER_FRAMEWORK_ENABLED", "true").strip().lower() in ("0", "false", "no"):
+        return {}
+
+    answer = (answer or "").strip()
+    if not answer:
+        return {}
+    # No point explaining an "I can't answer that" abstention.
+    if any(m in answer.lower() for m in _REFUSAL_MARKERS):
+        return {}
+
+    try:
+        import json
+        from openai import OpenAI
+
+        cfg = Config.get_provider_config()
+        client = OpenAI(
+            api_key=cfg["api_key"] or "local",
+            base_url=cfg["base_url"],
+            timeout=20.0,
+        )
+        system = (
+            "You help people with NO accounting or finance background understand "
+            "SEC filing answers. You are given a user question and a factual answer "
+            "that has ALREADY been produced from the filings. Your job is to explain "
+            "it — never to re-answer it. "
+            "CRITICAL: do not introduce any number, statistic, or fact that is not "
+            "already present in the answer. Do not contradict the answer. "
+            "Respond with STRICT JSON only, no markdown, with exactly these keys: "
+            '{"what_it_means": str, "how_to_interpret": str, "follow_ups": [str, ...]}. '
+            '"what_it_means": translate the answer into plain English (2-3 sentences). '
+            '"how_to_interpret": generic educational context about the metric/topic '
+            "(what it measures, why it matters, a caveat) — assume zero finance "
+            "background. "
+            '"follow_ups": 3-4 concrete next questions the user could ask to go deeper.'
+        )
+        user = (
+            f"Company ticker: {ticker or 'N/A'}\n"
+            f"User question: {query}\n\n"
+            f"Factual answer already produced:\n{answer}"
+        )
+        resp = client.chat.completions.create(
+            model=cfg["model"],
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.3,
+            max_tokens=600,
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        # Tolerate a ```json fence if the model adds one despite instructions.
+        if raw.startswith("```"):
+            raw = raw.strip("`")
+            raw = raw[raw.find("{"): raw.rfind("}") + 1] if "{" in raw else raw
+        data = json.loads(raw)
+        follow_ups = data.get("follow_ups") or []
+        if not isinstance(follow_ups, list):
+            follow_ups = []
+        return {
+            "what_it_means": str(data.get("what_it_means", "")).strip(),
+            "how_to_interpret": str(data.get("how_to_interpret", "")).strip(),
+            "follow_ups": [str(f).strip() for f in follow_ups if str(f).strip()][:4],
+        }
+    except Exception as e:  # best-effort: never let this break the answer
+        logger.warning(f"Educational layers generation failed (non-fatal): {e}")
+        return {}
+
+
 def classifier_node(state: GraphState) -> Dict[str, Any]:
     """Classify query as numeric/qualitative and detect comparison vs latest intent."""
     query = state["query"]
@@ -1539,4 +1621,12 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
         },
     }
 
-    return app.invoke(inputs)
+    result = app.invoke(inputs)
+
+    # Standard Response Framework sections 3–5: additive educational layers
+    # generated from the finished answer (never alters the audited answer).
+    layers = _generate_educational_layers(query, result.get("final_answer", ""), ticker)
+    result["what_it_means"] = layers.get("what_it_means", "")
+    result["how_to_interpret"] = layers.get("how_to_interpret", "")
+    result["follow_ups"] = layers.get("follow_ups", [])
+    return result
