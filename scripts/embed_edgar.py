@@ -399,6 +399,22 @@ def _extract_sections_with_labels(text: str) -> List[tuple[str, str]]:
         logger.debug("No target sections found — falling back to full text")
         return [("full_text", text)]
 
+    # Guard against table-of-contents-only matches. `.search()` returns the
+    # FIRST occurrence of each Item header, which in many filings is the TOC
+    # line (e.g. "Item 1. Business .... 5"), not the real section body deeper
+    # in the document. Those slices are tiny, so when the kept sections cover
+    # only a sliver of the filing the extraction has clearly latched onto the
+    # TOC — fall back to full-text chunking, which covers the whole document
+    # (this is what foreign 20-F filers already hit, and it yields rich,
+    # well-distributed chunks).
+    covered = sum(len(t) for _, t in extracted)
+    if len(text) > 0 and covered < 0.15 * len(text):
+        logger.debug(
+            f"Section coverage {covered}/{len(text)} (<15%) looks like a TOC-only "
+            f"match — falling back to full text"
+        )
+        return [("full_text", text)]
+
     logger.debug(f"Extracted {len(extracted)} sections")
     return extracted
 
