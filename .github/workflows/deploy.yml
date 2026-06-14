@@ -200,40 +200,35 @@ jobs:
               print(f'WARNING — skipped {len(skipped)} ticker(s): {skipped}')
           "
 
-# ── 4-b. Chunk + embed 10-K filings into edgar_embeddings (every push) ─────
+# ── 4-b. Verify the restored dataset DB on the live deployment ──────────────
   embed-data:
     needs: await-space
     runs-on: ubuntu-latest
     steps:
-      - name: "Verify new deployment re-embedded (poll /api/stats)"
+      - name: "Verify restored dataset DB (poll /api/stats)"
         env:
           HF_USERNAME:   ${{ secrets.HF_USERNAME }}
           HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
           SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
           SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
-          # The in-container startup seed (seed_on_startup.py) embeds via localhost
-          # on every container start — no HF gateway, so it actually completes.
-          # (The old external POST to /api/admin/embed-data always 504'd at the
-          # gateway because the synchronous 31-filing embed exceeds the request
-          # timeout — a false negative that skipped the rag-pipeline gate.)
-          # We only POLL here; triggering a second embed job would collide with
-          # the startup seed on DuckDB's single-writer lock.
-          #
-          # The gate verifies the NEW deployment, not just row count:
+          # The Space restores the prebuilt Qwen DuckDB from the HF dataset at
+          # boot (fetch_db_from_dataset.py); no re-embedding happens in CI. This
+          # gate just confirms the NEW container is serving the right DB, not a
+          # stale one left over during HF's rebuild swap:
           #   - active model == expected (defeats config drift)
-          #   - ALL stored vector dims == expected (defeats stale 768-dim rows AND the
-          #     old container that keeps serving during HF's rebuild swap — its
-          #     stored vectors are still the previous dimension until the new
-          #     container re-embeds)
+          #   - ALL stored chunk-vector dims == expected (defeats stale 768-dim
+          #     rows AND the old container still serving mid-swap)
           #   - coverage >= TARGET companies
+          # (Ticker-level summary embeddings aren't part of the curated dataset,
+          # so they're intentionally NOT checked here.)
           EXPECTED_MODEL="Qwen/Qwen3-Embedding-0.6B"
           EXPECTED_DIM=1024
-          TARGET=25   # of 31 tickers — allows a few SEC-fetch misses
-          echo "Waiting 60s for Space to begin startup seed..."
-          sleep 60
+          TARGET=12   # curated dataset = 14 companies (semis + SPCX); floor allows slack
+          echo "Waiting 30s for the Space to finish initialising..."
+          sleep 30
           echo "Polling $SPACE_URL/api/stats — require model=$EXPECTED_MODEL, all stored dims=$EXPECTED_DIM, >=$TARGET companies..."
-          for i in $(seq 1 45); do   # 45 * 40s = 30 min budget
+          for i in $(seq 1 20); do   # 20 * 20s = ~7 min budget
             STATS=$(curl -sS --max-time 30 "$SPACE_URL/api/stats" || echo '{"error": "curl failed"}')
             RESULT=$(echo "$STATS" | EXPECTED_MODEL="$EXPECTED_MODEL" EXPECTED_DIM="$EXPECTED_DIM" TARGET="$TARGET" python3 -c "
           import sys, json, os
@@ -269,19 +264,17 @@ jobs:
           
           if (model == exp_model and cfg_dim == exp_dim and dim_min == exp_dim
                   and dim_max == exp_dim and dim_variants == 1
-                  and ticker_dim_min == exp_dim and ticker_dim_max == exp_dim
-                  and ticker_dim_variants == 1 and ticker_vectors >= target
                   and companies >= target):
               print('READY')
           ")
-            echo "Attempt $i/45 — $(echo "$RESULT" | grep '^status=' | sed 's/^status=//')"
+            echo "Attempt $i/20 — $(echo "$RESULT" | grep '^status=' | sed 's/^status=//')"
             if echo "$RESULT" | grep -q '^READY$'; then
               echo "New deployment verified (model + stored dim + coverage)."
               exit 0
             fi
-            sleep 40
+            sleep 20
           done
-          echo "ERROR: new deployment not confirmed after 30 min (model=$EXPECTED_MODEL, all stored dims=$EXPECTED_DIM, >=$TARGET companies)."
+          echo "ERROR: new deployment not confirmed after ~7 min (model=$EXPECTED_MODEL, all stored dims=$EXPECTED_DIM, >=$TARGET companies)."
           echo "Last stats: $RESULT"
           exit 1
 
