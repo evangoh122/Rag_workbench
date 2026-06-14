@@ -38,7 +38,7 @@ interface Message {
   follow_ups?: string[];
 }
 
-type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
+type AppView = 'landing' | 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
 
 type PipelineStatus = {
   input?: 'success' | 'error' | 'pending';
@@ -51,6 +51,7 @@ type PipelineStatus = {
 
 import { getPosthog } from './utils/posthog'
 
+import Landing from './components/Landing';
 import KnowledgeGraph from './components/KnowledgeGraph';
 import type { GraphSelection } from './components/KnowledgeGraph';
 import { getGraphEvidence, type GraphEvidence } from './api/graph';
@@ -60,7 +61,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [mode, _setMode] = useState<'sql' | 'rag' | 'auditable' | 'graph'>('auditable');
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState<AppView>('chat');
+  const [view, setView] = useState<AppView>('landing');
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
   const [ticker, _setTicker] = useState('MU');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -211,6 +212,11 @@ function App() {
     }
   };
 
+  // Full-bleed marketing landing (app front door); CTAs enter the workbench.
+  if (view === 'landing') {
+    return <Landing onEnter={() => setView('chat')} />;
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-primary font-sans">
       {/* Mobile Sidebar Overlay */}
@@ -227,14 +233,20 @@ function App() {
         transition-transform duration-300 ease-out lg:relative lg:translate-x-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        {/* Logo */}
+        {/* Logo (returns to the landing page) */}
         <div className="flex items-center justify-between mb-7 px-1">
-          <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-2 rounded-lg shadow-[0_0_12px_rgba(59,130,246,0.2)]">
+          <button
+            type="button"
+            onClick={() => setView('landing')}
+            title="Back to home"
+            aria-label="Back to home"
+            className="flex items-center gap-3 bg-transparent border-0 p-0 cursor-pointer text-left"
+          >
+            <div className="bg-gradient-to-br from-emerald-500 to-green-600 p-2 rounded-lg shadow-[0_0_12px_rgba(46,139,87,0.25)]">
               <Search size={20} className="text-white" />
             </div>
-            <h2 className="m-0 text-lg font-semibold text-primary tracking-tight">RAG Workbench</h2>
-          </div>
+            <h2 className="m-0 text-lg font-semibold text-primary tracking-tight hover:text-emerald-300 transition-colors">RAG Workbench</h2>
+          </button>
           <button
             className="lg:hidden p-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer"
             onClick={() => setSidebarOpen(false)}
@@ -518,7 +530,7 @@ function App() {
               <header className="px-3 md:px-4 lg:px-8 py-3 md:py-4 glass-header z-10 flex-shrink-0 flex items-center justify-between gap-2">
               <div>
                 <h1 className="text-base md:text-lg font-semibold text-primary flex items-center gap-2">
-                  <MessageSquare className="text-blue-400" size={18} />
+                  <MessageSquare className="text-accent" size={18} />
                   Testing Interface
                 </h1>
                 <div className="text-xs text-secondary mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -565,10 +577,40 @@ function App() {
                       : 'Test the basic retrieval or SQL capabilities of the platform.'}
                   </p>
 
+                  {/* Front-and-center query composer */}
+                  <form
+                    onSubmit={handleSubmit}
+                    className="w-full max-w-2xl mx-auto flex items-center glass-input mb-7"
+                  >
+                    <input
+                      autoFocus
+                      className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-4 py-3.5 text-[15px] outline-none w-full min-w-0"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder={
+                        mode === 'sql'
+                          ? 'Ask a SQL question...'
+                          : mode === 'rag'
+                          ? 'Ask a Knowledge Base question...'
+                          : mode === 'graph'
+                          ? 'Ask about the knowledge graph...'
+                          : "Ask about an SEC filing, e.g. How did Micron's revenue change year over year?"
+                      }
+                      disabled={loading}
+                    />
+                    <button
+                      type="submit"
+                      disabled={loading || !input.trim()}
+                      className="flex items-center justify-center px-5 py-3.5 bg-bullish hover:bg-emerald-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-sm gap-1.5 ml-2 shrink-0 active:scale-[0.97]"
+                    >
+                      Try a query <Send size={14} />
+                    </button>
+                  </form>
+
                   {mode === 'auditable' && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-full mb-6 text-left">
                       <div className="glass p-3.5">
-                        <div className="flex items-center gap-2 text-blue-300 font-medium text-sm mb-1.5">
+                        <div className="flex items-center gap-2 text-emerald-300 font-medium text-sm mb-1.5">
                           <Search size={14} />
                           Retrieve evidence
                         </div>
@@ -577,7 +619,7 @@ function App() {
                         </p>
                       </div>
                       <div className="glass p-3.5">
-                        <div className="flex items-center gap-2 text-purple-300 font-medium text-sm mb-1.5">
+                        <div className="flex items-center gap-2 text-emerald-300 font-medium text-sm mb-1.5">
                           <Database size={14} />
                           Ground the numbers
                         </div>
@@ -602,7 +644,7 @@ function App() {
                     <button
                       type="button"
                       onClick={() => setView('methodology')}
-                      className="inline-flex items-center gap-1.5 text-indigo-300 hover:text-indigo-200 bg-transparent border-0 p-0 cursor-pointer font-medium"
+                      className="inline-flex items-center gap-1.5 text-accent hover:text-emerald-300 bg-transparent border-0 p-0 cursor-pointer font-medium"
                     >
                       <BookOpen size={14} />
                       Read the methodology
@@ -662,7 +704,7 @@ function App() {
                 >
                   {/* Avatar */}
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${
-                     msg.role === 'user' ? 'bg-blue-600 border-blue-500/50 text-white' : 'glass-sm text-blue-400'
+                     msg.role === 'user' ? 'bg-bullish border-emerald-500/50 text-white' : 'glass-sm text-accent'
                   }`}>
                     {msg.role === 'user' ? <Database size={14} /> : <Search size={14} />}
                   </div>
@@ -715,7 +757,7 @@ function App() {
                         {msg.how_to_interpret && (
                           <details className="glass-sm p-3.5 group">
                             <summary className="flex items-center gap-2 cursor-pointer list-none select-none">
-                              <Info size={13} className="text-cyan-400" />
+                              <Info size={13} className="text-accent" />
                               <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">How to Interpret This</span>
                               <ChevronDown size={13} className="text-muted ml-auto transition-transform group-open:rotate-180" />
                             </summary>
@@ -758,12 +800,12 @@ function App() {
                     {msg.role === 'assistant' && msg.entities && msg.entities.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-border/40">
                         <div className="flex items-center gap-2 mb-2.5">
-                          <Network size={13} className="text-indigo-400" />
+                          <Network size={13} className="text-accent" />
                           <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">Search Entities</span>
                         </div>
                         <div className="flex flex-wrap gap-1.5 mb-3.5">
                           {msg.entities.map((entity, i) => (
-                            <span key={i} className="px-2.5 py-0.5 bg-indigo-500/8 border border-indigo-500/15 rounded-md text-[13px] text-indigo-300 font-mono">
+                            <span key={i} className="px-2.5 py-0.5 bg-bullish/8 border border-bullish/15 rounded-md text-[13px] text-emerald-300 font-mono">
                               {entity}
                             </span>
                           ))}
@@ -778,7 +820,7 @@ function App() {
                               {msg.triples.map((triple, i) => (
                                 <div
                                   key={i}
-                                  className={`flex items-center gap-2 px-3.5 py-2 text-[13px] font-mono cursor-pointer transition-colors hover:bg-indigo-500/8 ${i % 2 === 0 ? 'bg-surface/20' : ''} ${i > 0 ? 'border-t border-border/30' : ''}`}
+                                  className={`flex items-center gap-2 px-3.5 py-2 text-[13px] font-mono cursor-pointer transition-colors hover:bg-bullish/8 ${i % 2 === 0 ? 'bg-surface/20' : ''} ${i > 0 ? 'border-t border-border/30' : ''}`}
                                   onClick={() => {
                                     setActiveTriples(msg.triples!);
                                     setGraphModalOpen(true);
@@ -788,11 +830,11 @@ function App() {
                                   }}
                                   title="Click to visualize this relationship"
                                 >
-                                  <span className="text-blue-300">{triple.subject}</span>
+                                  <span className="text-emerald-300">{triple.subject}</span>
                                   <span className="text-muted">&rarr;</span>
                                   <span className="text-bullish text-[11px] px-1.5 py-0.5 bg-bullish/8 rounded border border-bullish/15">{triple.predicate}</span>
                                   <span className="text-muted">&rarr;</span>
-                                  <span className="text-purple-300">{triple.object}</span>
+                                  <span className="text-emerald-200">{triple.object}</span>
                                 </div>
                               ))}
                             </div>
@@ -916,7 +958,7 @@ function App() {
 
               {loading && (
                 <div className="flex gap-4 max-w-[88%] self-start animate-in slide-in-from-bottom-2 duration-300">
-                  <div className="w-8 h-8 rounded-lg glass-sm text-blue-400 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg glass-sm text-accent flex items-center justify-center">
                     <Search size={14} className="animate-pulse" />
                   </div>
                   <div className="px-5 py-3 rounded-xl rounded-tl-sm glass text-gray-400 flex items-center gap-2.5 text-sm">
@@ -933,8 +975,8 @@ function App() {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Input bar */}
-            <div className="px-3 md:px-4 lg:px-8 py-3 md:py-5 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/95 to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+            {/* Input bar (hidden on the empty state, where the front-and-center composer is shown) */}
+            <div className={`px-3 md:px-4 lg:px-8 py-3 md:py-5 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/95 to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none${messages.length === 0 ? ' hidden' : ''}`}>
               <form
                 onSubmit={handleSubmit}
                 className="max-w-4xl mx-auto flex items-center glass-input pointer-events-auto"
@@ -957,7 +999,7 @@ function App() {
                 <button
                   type="submit"
                   disabled={loading || !input.trim()}
-                  className="flex items-center justify-center px-4 md:px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-sm gap-1.5 ml-1.5 md:ml-2 shrink-0 active:scale-[0.97]"
+                  className="flex items-center justify-center px-4 md:px-5 py-3 bg-bullish hover:bg-emerald-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-sm gap-1.5 ml-1.5 md:ml-2 shrink-0 active:scale-[0.97]"
                 >
                   Send <Send size={14} />
                 </button>
@@ -978,7 +1020,7 @@ function App() {
             <header className="px-5 py-3.5 glass-header flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-primary flex items-center gap-2">
-                  <Network className="text-indigo-400" size={18} />
+                  <Network className="text-accent" size={18} />
                   Knowledge Graph Visualization
                 </h3>
                 <p className="text-xs text-secondary mt-0.5">Click an edge or node to see its source in the filing</p>
@@ -1028,7 +1070,7 @@ function App() {
                           <span className="px-2 py-0.5 rounded bg-surface-elevated border border-border text-muted">{evidence.period_of_report}</span>
                         )}
                       </div>
-                      <blockquote className="text-[13px] text-primary/85 leading-relaxed border-l-2 border-indigo-400/30 pl-3 max-h-72 overflow-y-auto">
+                      <blockquote className="text-[13px] text-primary/85 leading-relaxed border-l-2 border-accent/40 pl-3 max-h-72 overflow-y-auto">
                         {evidence.excerpt.slice(0, 1200)}{evidence.excerpt.length > 1200 ? '…' : ''}
                       </blockquote>
                       {evidence.edgar_url && (
@@ -1036,7 +1078,7 @@ function App() {
                           href={evidence.edgar_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-block text-[11px] text-indigo-400 hover:text-indigo-300 font-medium"
+                          className="inline-block text-[11px] text-accent hover:text-emerald-300 font-medium"
                         >
                           View {evidence.ticker} on EDGAR ↗
                         </a>

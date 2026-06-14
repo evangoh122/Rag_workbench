@@ -8,6 +8,8 @@
   --color-secondary: #888888;
   --color-bullish: #2E8B57;
   --color-bearish: #CD5C5C;
+  --color-accent: #2E8B57;
+  --color-muted: #6B6B6B;
   --color-border: rgba(255, 255, 255, 0.08);
 
   --font-sans: "Inter", "SF Pro Display", "Geist", system-ui, -apple-system, sans-serif;
@@ -215,7 +217,7 @@
 
   /* Glass message bubble */
   .msg-user {
-    background: rgba(59, 130, 246, 0.85);
+    background: rgba(46, 139, 87, 0.9);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
