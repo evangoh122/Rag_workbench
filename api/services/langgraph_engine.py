@@ -1345,16 +1345,68 @@ def _resolve_query_ticker(query: str, fallback: str) -> str:
     return fallback
 
 
+# Well-known companies we do NOT have SEC data for. If a user names one of
+# these, abstain ("I don't know") instead of silently answering with the
+# default ticker's data. Not exhaustive — the retrieval layer is the general
+# backstop — but covers the common cases people test with.
+_OUT_OF_UNIVERSE = {
+    "tesla", "apple", "amazon", "alphabet", "google", "microsoft", "meta",
+    "facebook", "netflix", "oracle", "salesforce", "adobe", "walmart", "costco",
+    "jpmorgan", "goldman sachs", "berkshire", "coca cola", "pepsi", "disney",
+    "boeing", "ford", "general motors", "exxon", "chevron", "pfizer", "moderna",
+    "palantir", "uber", "airbnb", "spotify", "openai", "anthropic", "stripe",
+    "blue origin", "rocket lab", "rivian", "lucid", "snowflake",
+}
+
+
+def _named_uncovered_company(query: str) -> Optional[str]:
+    """Return a well-known company named in the query that we do NOT cover, else None."""
+    q = (query or "").lower()
+    for name in _OUT_OF_UNIVERSE:
+        if re.search(r"\b" + re.escape(name) + r"\b", q):
+            return name
+    return None
+
+
+def _abstain_response(company: str) -> Dict[str, Any]:
+    """A grounded 'I don't have data on that' answer (shaped like graph output)."""
+    msg = (
+        f"I don't have SEC filing data for **{company.title()}**, so I can't answer "
+        f"that. I currently cover **SpaceX (SPCX)** and major semiconductor companies "
+        f"(e.g. NVDA, AMD, MU, AVGO, QCOM, TXN, AMAT, LRCX, KLAC). "
+        f"Ask about one of those and I'll pull it from their filings."
+    )
+    done = {k: "skipped" for k in (
+        "input", "retrieval", "classifier", "extraction", "eval", "math", "verification", "output")}
+    done["input"] = "success"
+    done["output"] = "success"
+    return {
+        "final_answer": msg,
+        "xbrl_facts": [], "relevant_xbrl": [], "retrieved_docs": [], "polygon_data": [],
+        "math_result": None, "math_steps": [],
+        "verification_status": "ABSTAIN",
+        "verification_reasoning": f"Out of coverage: no SEC data for {company}.",
+        "status": done,
+    }
+
+
 def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
     """
     Run the LangGraph DAG for a given query and ticker.
     """
-    # Ground the pipeline on the ticker named in the question, not just the
-    # UI's default selector — prevents "NVDA revenue" returning Micron's data.
-    resolved = _resolve_query_ticker(query, ticker)
-    if resolved != ticker:
-        logger.info(f"Ticker override: query resolved to {resolved!r} (caller passed {ticker!r})")
-    ticker = resolved
+    # Ground on the company named in the question, not the UI's default ticker.
+    # If the query names a company we DON'T cover, abstain rather than answering
+    # with the default ticker's data ("SpaceX revenue" must not return Micron's).
+    by_name = _resolve_query_ticker(query, "")  # covered ticker, or "" if none recognised
+    if not by_name:
+        uncovered = _named_uncovered_company(query)
+        if uncovered:
+            logger.info(f"Abstaining — query names uncovered company {uncovered!r}")
+            return _abstain_response(uncovered)
+        by_name = ticker  # no company named -> honour the UI's selected ticker
+    if by_name != ticker:
+        logger.info(f"Ticker override: query resolved to {by_name!r} (caller passed {ticker!r})")
+    ticker = by_name
     app = get_app()
     inputs = {
         "query": query,

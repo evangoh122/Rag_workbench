@@ -229,7 +229,11 @@ _COMPANY_ALIASES: dict[str, str] = {
     "aehr test systems": "AEHR",
     "texas instruments": "TXN",
     "micron technology": "MU",
+    "space exploration technologies": "SPCX",
+    "space exploration": "SPCX",
+    "space x": "SPCX",
     # Single-word aliases — unambiguous, >= 5 chars, not common English words
+    "spacex": "SPCX",
     "broadcom": "AVGO",
     "intel": "INTC",
     "micron": "MU",
