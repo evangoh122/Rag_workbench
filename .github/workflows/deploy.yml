@@ -1,11 +1,14 @@
-name: Deploy → Seed → RAG Pipeline Validation
+name: Deploy → Verify → RAG Pipeline Validation
+
+# The Space restores the prebuilt Qwen DuckDB from the HF dataset at boot
+# (fetch_db_from_dataset.py), so routine pushes do NOT re-seed/re-embed from
+# SEC EDGAR. The dataset is the single source of truth. EDGAR seeding is a
+# manual escape hatch (workflow_dispatch) for rebuilding the corpus.
+# Keep-warm pings live in keep-awake.yml (daily 00:00 UTC).
 
 on:
   push:
     branches: [main]
-  schedule:
-    - cron: '*/20 * * * *'   # keepalive ping
-    - cron: '0 3 * * *'      # nightly full data refresh
   workflow_dispatch:
     inputs:
       force-seed:
@@ -139,7 +142,9 @@ jobs:
 # ── 4. Seed XBRL data from SEC EDGAR ────────────────────────────────────────
   seed-data:
     needs: await-space
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Manual only: routine pushes rely on the dataset restore; trigger this from
+    # the Actions tab (workflow_dispatch) to rebuild the corpus from EDGAR.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger incremental XBRL refresh (skips existing tickers)
@@ -273,7 +278,10 @@ jobs:
 #  Runs sequentially to avoid hammering the HF Space; collects all failures
 #  before exiting so you see the full pass/fail table in one run.
   rag-pipeline:
-    needs: [await-space, seed-data, embed-data]
+    # seed-data is intentionally omitted: it's manual-only now, and a skipped
+    # job in `needs` would skip this gate too. embed-data verifies the restored
+    # dataset DB (model + dims + coverage) before the smoke test runs.
+    needs: [await-space, embed-data]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
@@ -287,59 +295,3 @@ jobs:
           SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
           export SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
           python3 scripts/rag_pipeline_ci.py
-
-# ── Keepalive (every 20 min) ─────────────────────────────────────────────────
-  keepalive:
-    if: github.event.schedule == '*/20 * * * *'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Ping health endpoint
-        env:
-          HF_USERNAME:   ${{ secrets.HF_USERNAME }}
-          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
-        run: |
-          SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
-          STATUS=$(curl -sf --max-time 30 \
-            "https://$HF_USERNAME-$SLUG.hf.space/api/health" \
-            -o /dev/null -w "%{http_code}" || echo "000")
-          echo "Health: HTTP $STATUS"
-          [ "$STATUS" = "200" ] && echo "Space alive" || echo "Space cold/waking"
-
-# ── Nightly data refresh (3 AM UTC) ─────────────────────────────────────────
-  nightly-refresh:
-    if: github.event.schedule == '0 3 * * *'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Incremental XBRL refresh
-        env:
-          HF_USERNAME:   ${{ secrets.HF_USERNAME }}
-          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
-          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
-        run: |
-          SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
-          BASE="https://$HF_USERNAME-$SLUG.hf.space"
-          echo "Waking space..."
-          for i in $(seq 1 10); do
-            STATUS=$(curl -sf --max-time 30 "$BASE/api/health" \
-              -o /dev/null -w "%{http_code}" || echo "000")
-            [ "$STATUS" = "200" ] && echo "Awake." && break
-            echo "Attempt $i: $STATUS — retrying in 15s..."
-            sleep 15
-          done
-          RESPONSE=$(curl -sf --max-time 600 -X POST \
-            "$BASE/api/admin/refresh-data" \
-            -H "X-API-Key: $ADMIN_API_KEY" \
-            -H "Content-Type: application/json")
-          echo "$RESPONSE"
-          echo "$RESPONSE" | python3 -c "
-          import sys, json
-          try:
-              d = json.load(sys.stdin)
-          except Exception:
-              print('Refresh failed: non-JSON response (likely an error page)'); sys.exit(1)
-          status = d.get('status')
-          assert status in ('ok', 'partial'), f'Refresh failed: {d}'
-          skipped = d.get('skipped_tickers', [])
-          print(f'Refresh: {d.get(\"tickers_processed\", 0)} tickers, {d.get(\"facts_loaded\", 0)} facts')
-          if skipped: print(f'Skipped: {skipped}')
-          "
