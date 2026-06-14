@@ -62,12 +62,21 @@ def query_graph(state: GraphRAGState) -> dict:
         params.extend([f"%{ent}%", f"%{ent}%"])
         
     conditions_sql = " OR ".join(conditions)
+    # Phase C: carry the source refs (chunk_id/source_file/source_loc) and node
+    # types so the Evidence Graph can show *where in the filing* each edge came
+    # from. COALESCE keeps legacy rows (pre-Phase-B, untyped/no chunk_id) valid.
     sql = f"""
-        SELECT ticker, subject, predicate, object 
-        FROM graph_triples 
+        SELECT ticker, subject, predicate, object,
+               COALESCE(subject_type, '') AS subject_type,
+               COALESCE(object_type, '')  AS object_type,
+               COALESCE(chunk_id, '')     AS chunk_id,
+               COALESCE(source_file, '')  AS source_file,
+               COALESCE(source_loc, '')   AS source_loc,
+               COALESCE(confidence, 1.0)  AS confidence
+        FROM graph_triples
         WHERE ticker = ? AND ({conditions_sql})
     """
-    
+
     try:
         cursor = db_manager.execute(sql, params)
         rows = cursor.fetchall()
@@ -75,7 +84,13 @@ def query_graph(state: GraphRAGState) -> dict:
             extracted_triples.append({
                 "subject": row[1],
                 "predicate": row[2],
-                "object": row[3]
+                "object": row[3],
+                "subject_type": row[4],
+                "object_type": row[5],
+                "chunk_id": row[6],
+                "source_file": row[7],
+                "source_loc": row[8],
+                "confidence": row[9],
             })
     except Exception as e:
         logger.error(f"Error querying graph DB: {e}")

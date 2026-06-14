@@ -13,6 +13,7 @@ from api.routes.stats import router as stats_router
 from api.routes.admin import router as admin_router
 from api.routes.audit import router as audit_router
 from api.routes.analytics import router as analytics_router
+from api.routes.graph import router as graph_router
 from api.config import config, Config
 from api.middleware.rate_limit import rate_limit_middleware
 from api.middleware.cors_config import configure_cors
@@ -44,6 +45,7 @@ app.include_router(stats_router)
 app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 app.include_router(audit_router)
 app.include_router(analytics_router)
+app.include_router(graph_router)
 
 
 @app.get("/api/health")

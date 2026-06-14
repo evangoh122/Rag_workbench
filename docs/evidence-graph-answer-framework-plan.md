@@ -143,7 +143,17 @@ follow_ups: List[str] = Field(default_factory=list)
 **Risk:** LLM extraction cost/noise → cap per filing, dedupe, confidence-threshold.
 
 ## Phase C — Evidence-Graph Auditability *(depends on B, ~M)*
+> Status: **code-complete (2026-06-14)** — click-through + typed nodes + evidence route landed. Real data appears once Phase B extraction runs (legacy triples have no `chunk_id`, so they degrade gracefully to "no linked source").
+
 **Goal:** click an edge/node → see the source text; type the nodes.
+
+**As built:**
+- **`GET /api/graph/evidence?chunk_id=`** (`api/routes/graph.py`, registered in `main.py`) — parses `chunk_id` (`ticker:accession:chunk_index`, robust to dashed accessions and `-` unknown-index), fetches the source excerpt + filing metadata (`section_id`, `form_type`, `period_of_report`, EDGAR url) from `edgar_embeddings`. 400 on malformed id, 404 when no chunk.
+- **`graph_rag_engine.query_graph`** now SELECTs + returns `subject_type/object_type/chunk_id/source_file/source_loc/confidence` (COALESCE keeps legacy untyped rows valid). `ChatResponse.triples` widened to `List[Dict[str, Any]]`.
+- **`KnowledgeGraph.tsx`** — nodes colored by type (`TYPE_COLORS` for Company/Segment/Risk/Executive/Metric/XBRL/Product/Geography); `onNodeClick`/`onEdgeClick` bubble a `GraphSelection` (label + source refs) via an `onSelect` prop.
+- **`App.tsx`** — graph modal gains a right-hand **Source-evidence drawer**: on select it fetches `/api/graph/evidence`, shows the filing badges + quoted excerpt + EDGAR link; legacy triples (no `chunk_id`) show a graceful "no linked source" note. New `graph_evidence_open` PostHog event.
+- **`api/graph.ts`** — typed client (`getGraphEvidence` / `GraphEvidence`); `Triple` interface centralised in `api/chat.ts` with optional Phase-B/C fields.
+- **Tests:** `tests/test_graph_route.py` (10: chunk_id parsing + endpoint 400/404/happy/index-omit) + updated `test_query_graph` asserting the refs plumb through. Frontend `tsc -b` + `npm run build` clean.
 
 | Area | Change |
 |---|---|

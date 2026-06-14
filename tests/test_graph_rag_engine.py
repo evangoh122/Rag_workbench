@@ -30,20 +30,31 @@ class TestGraphRAGEngine:
     def test_query_graph(self, mock_execute):
         mock_cursor = MagicMock()
         mock_execute.return_value = mock_cursor
+        # Row shape mirrors the Phase C SELECT: base triple + node types +
+        # source refs (chunk_id/source_file/source_loc) + confidence.
         mock_cursor.fetchall.return_value = [
-            ("AAPL", "Apple", "manufactures", "iPhone")
+            ("AAPL", "Apple", "manufactures", "iPhone",
+             "Company", "Product", "AAPL:acc1:5", "acc1", "item_1", 0.92)
         ]
-        
+
         state = {
             "ticker": "AAPL",
             "search_entities": ["Apple"]
         }
         result = query_graph(state)
-        
+
         assert len(result["extracted_triples"]) == 1
-        assert result["extracted_triples"][0]["subject"] == "Apple"
-        assert result["extracted_triples"][0]["predicate"] == "manufactures"
-        assert result["extracted_triples"][0]["object"] == "iPhone"
+        t = result["extracted_triples"][0]
+        assert t["subject"] == "Apple"
+        assert t["predicate"] == "manufactures"
+        assert t["object"] == "iPhone"
+        # Phase C: source refs + types are plumbed through for auditability.
+        assert t["subject_type"] == "Company"
+        assert t["object_type"] == "Product"
+        assert t["chunk_id"] == "AAPL:acc1:5"
+        assert t["source_file"] == "acc1"
+        assert t["source_loc"] == "item_1"
+        assert t["confidence"] == 0.92
 
     @patch("api.services.graph_rag_engine._get_llm")
     def test_generate_answer(self, mock_get_llm):

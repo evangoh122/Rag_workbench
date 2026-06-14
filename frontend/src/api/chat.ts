@@ -54,11 +54,25 @@ export interface ChatResponse {
   math_steps?: string[];
   pipeline_status?: Record<string, 'success' | 'error' | 'pending'>;
   entities?: string[];
-  triples?: Record<string, string>[];
+  triples?: Triple[];
   // Standard Response Framework educational layers (sections 3–5)
   what_it_means?: string;
   how_to_interpret?: string;
   follow_ups?: string[];
+}
+
+// A knowledge-graph triple. Phase C adds source refs + node types (optional so
+// legacy/code-graph triples without them still render).
+export interface Triple {
+  subject: string;
+  predicate: string;
+  object: string;
+  subject_type?: string;
+  object_type?: string;
+  chunk_id?: string;
+  source_file?: string;
+  source_loc?: string;
+  confidence?: number;
 }
 
 interface HistoryEntry {

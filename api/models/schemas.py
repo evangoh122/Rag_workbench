@@ -72,9 +72,10 @@ class ChatResponse(BaseModel):
     # Pipeline status
     pipeline_status: PipelineStatus = Field(default_factory=PipelineStatus)
 
-    # Graph RAG specific
+    # Graph RAG specific. Triples carry source refs + node types (Phase C) so
+    # the Evidence Graph is auditable, so values are mixed (str + float).
     entities: List[str] = Field(default_factory=list)
-    triples: List[Dict[str, str]] = Field(default_factory=list)
+    triples: List[Dict[str, Any]] = Field(default_factory=list)
 
     # SQL mode specific
     sql: Optional[str] = None
