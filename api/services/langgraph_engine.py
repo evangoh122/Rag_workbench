@@ -791,7 +791,11 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
         math_result = state.get("math_result")
         def _dumps(v):
             return json.dumps(v, default=str)
-        conn = db_manager.get_connection()
+        # Audit records are runtime output and MUST survive container restarts,
+        # so they go to the persistent review/runtime DB (REVIEW_DB_PATH on the
+        # persistent volume) — NOT the main DB, which is overwritten from the HF
+        # dataset on every boot.
+        conn = db_manager.get_review_connection()
         _ensure_audit_table(conn)
         conn.execute("""
             INSERT INTO audit_runs (

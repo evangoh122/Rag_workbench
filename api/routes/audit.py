@@ -101,7 +101,7 @@ def _ensure_audit_table(conn) -> None:
 def audit_summary():
     """Aggregate stats over all runs — useful for a regulator dashboard."""
     try:
-        conn = db_manager.get_connection()
+        conn = db_manager.get_review_connection()
         _ensure_audit_table(conn)
 
         stats = conn.execute("""
@@ -153,7 +153,7 @@ def list_audit_runs(
             )
 
     try:
-        conn = db_manager.get_connection()
+        conn = db_manager.get_review_connection()
         _ensure_audit_table(conn)
 
         # Build query with explicit branches — no f-string interpolation of user input
@@ -214,7 +214,7 @@ def list_audit_runs(
 def get_audit_run(run_id: str):
     """Fetch a single run by ID."""
     try:
-        conn = db_manager.get_connection()
+        conn = db_manager.get_review_connection()
         _ensure_audit_table(conn)
 
         rows = conn.execute("""

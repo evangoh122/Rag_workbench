@@ -41,8 +41,28 @@ class Config:
 
     @property
     def REVIEW_DB_PATH(self) -> str:
+        """Runtime DB holding the audit log + review/testing queue.
+
+        This data is generated at runtime and must SURVIVE container restarts,
+        so it lives on the persistent-storage volume (PERSIST_DIR — e.g. HF
+        Spaces persistent storage mounted at /data) whenever that volume is
+        actually mounted and writable. Falls back to the local project dir for
+        dev. An explicit REVIEW_DB_PATH env var always wins.
+
+        NOTE: keep the MAIN DB_PATH OFF the persistent volume — it is restored
+        fresh from the HF dataset each boot, and persisting it would pin a stale
+        corpus.
+        """
         if self._review_db_path is None:
-            self._review_db_path = os.getenv("REVIEW_DB_PATH", "./data/review_queue.duckdb")
+            explicit = os.getenv("REVIEW_DB_PATH")
+            if explicit:
+                self._review_db_path = explicit
+            else:
+                persist = os.getenv("PERSIST_DIR", "/data").strip()
+                if persist and os.path.isdir(persist) and os.access(persist, os.W_OK):
+                    self._review_db_path = str(Path(persist) / "review_queue.duckdb")
+                else:
+                    self._review_db_path = "./data/review_queue.duckdb"
         return self._review_db_path
 
     # ── LangSmith (tracing & observability) ──────────────────────────────────
