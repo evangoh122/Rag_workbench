@@ -7,6 +7,7 @@ import { submitChatFeedback } from './api/review';
 import ReviewQueue from './pages/ReviewQueue';
 import MetricsDashboard from './pages/MetricsDashboard';
 import SystemDashboard from './pages/SystemDashboard';
+import ProductAnalytics from './pages/ProductAnalytics';
 import Methodology from './pages/Methodology';
 import StocksList from './pages/StocksList';
 import AuditLog from './pages/AuditLog';
@@ -34,7 +35,7 @@ interface Message {
   triples?: Record<string, string>[];
 }
 
-type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit';
+type AppView = 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
 
 type PipelineStatus = {
   input?: 'success' | 'error' | 'pending';
@@ -47,6 +48,8 @@ type PipelineStatus = {
 
 import { getPosthog } from './utils/posthog'
 
+import KnowledgeGraph from './components/KnowledgeGraph';
+
 function App() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -57,6 +60,8 @@ function App() {
   const [ticker, _setTicker] = useState('MU');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<Set<number>>(new Set());
+  const [graphModalOpen, setGraphModalOpen] = useState(false);
+  const [activeTriples, setActiveTriples] = useState<any[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -311,6 +316,24 @@ function App() {
 
           <button
             className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+              view === 'analytics'
+                ? 'bg-pink-500/10 text-pink-400 border-pink-500/20'
+                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+            }`}
+            onClick={() => {
+              setView('analytics');
+              setSidebarOpen(false);
+              if (import.meta.env.VITE_POSTHOG_KEY) {
+                getPosthog().then(p => p.capture('nav_click', { destination: 'analytics', source: 'sidebar' }));
+              }
+            }}
+          >
+            <BarChart3 size={18} className={view === 'analytics' ? 'text-pink-400' : 'text-secondary'} />
+            Product Analytics
+          </button>
+
+          <button
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
               view === 'system'
                 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
                 : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
@@ -408,6 +431,13 @@ function App() {
         {view === 'metrics' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
             <MetricsDashboard />
+          </div>
+        )}
+
+        {/* VIEW: PRODUCT ANALYTICS */}
+        {view === 'analytics' && (
+          <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
+            <ProductAnalytics />
           </div>
         )}
 
@@ -683,7 +713,18 @@ function App() {
                             </div>
                             <div className="bg-background border border-border rounded-xl overflow-hidden shadow-none">
                               {msg.triples.map((triple, i) => (
-                                <div key={i} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-mono ${i % 2 === 0 ? 'bg-surface/30' : ''} ${i > 0 ? 'border-t border-border/50' : ''}`}>
+                                <div 
+                                  key={i} 
+                                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-mono cursor-pointer transition-colors hover:bg-indigo-500/10 ${i % 2 === 0 ? 'bg-surface/30' : ''} ${i > 0 ? 'border-t border-border/50' : ''}`}
+                                  onClick={() => {
+                                    setActiveTriples(msg.triples!);
+                                    setGraphModalOpen(true);
+                                    if (import.meta.env.VITE_POSTHOG_KEY) {
+                                      getPosthog().then(p => p.capture('graph_modal_open', { triple_count: msg.triples?.length }));
+                                    }
+                                  }}
+                                  title="Click to visualize this relationship"
+                                >
                                   <span className="text-blue-300">{triple.subject}</span>
                                   <span className="text-gray-500">&rarr;</span>
                                   <span className="text-emerald-400 text-xs px-1.5 py-0.5 bg-emerald-500/10 rounded border border-emerald-500/20">{triple.predicate}</span>
@@ -692,6 +733,7 @@ function App() {
                                 </div>
                               ))}
                             </div>
+
                           </>
                         )}
                       </div>
@@ -862,6 +904,38 @@ function App() {
         )}
 
       </main>
+      {/* Knowledge Graph Modal */}
+      {graphModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            onClick={() => setGraphModalOpen(false)}
+          />
+          <div className="relative w-full max-w-6xl h-full max-h-[800px] bg-background border border-border rounded-3xl overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
+            <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-surface/50 backdrop-blur-sm">
+              <div>
+                <h3 className="text-xl font-bold text-primary flex items-center gap-3">
+                  <Network className="text-indigo-400" />
+                  Knowledge Graph Visualization
+                </h3>
+                <p className="text-sm text-secondary mt-1">Relationships extracted from financial filings</p>
+              </div>
+              <button 
+                onClick={() => setGraphModalOpen(false)}
+                className="p-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </header>
+            <div className="flex-1 min-h-0">
+              <KnowledgeGraph triples={activeTriples} />
+            </div>
+            <footer className="px-6 py-4 border-t border-border bg-surface/30 text-xs text-secondary/60">
+              Interactive node-edge graph. Drag nodes to rearrange. Use scroll to zoom.
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -129,6 +129,22 @@ class Config:
     def POLYGON_API_KEY(self) -> str | None:
         return os.getenv("POLYGON_API_KEY") or None
 
+    # ── PostHog (server-side read of product analytics) ───────────────────────
+    @property
+    def POSTHOG_API_KEY(self) -> str | None:
+        # Personal API key (read scope) — only needed to pull aggregates back
+        # from PostHog's Query API for the analytics page. Self-capture to
+        # DuckDB works without it.
+        return os.getenv("POSTHOG_API_KEY") or os.getenv("POSTHOG_PERSONAL_API_KEY") or None
+
+    @property
+    def POSTHOG_PROJECT_ID(self) -> str | None:
+        return os.getenv("POSTHOG_PROJECT_ID") or None
+
+    @property
+    def POSTHOG_API_HOST(self) -> str:
+        return os.getenv("POSTHOG_API_HOST", "https://us.posthog.com").rstrip("/")
+
     # MiMo reasoning model needs large token budget
     @property
     def MIMO_MAX_TOKENS(self) -> int:
