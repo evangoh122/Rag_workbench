@@ -11,18 +11,27 @@ Strategy:
       retained decisions would cross 0.95.
     - MEDIUM threshold: highest confidence below which the agreement rate
       would cross 0.75.
-    - Returns None dict with 'error' key when < 10 verdicts are available.
+    - Returns a dict with an 'error' key when fewer than CALIBRATION_MIN_VERDICTS
+      (default 3) verdicts are available.
 """
 
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 
 # Target agreement rates for each tier boundary
 _HIGH_AGREEMENT_TARGET: float = 0.95
 _MEDIUM_AGREEMENT_TARGET: float = 0.75
-_MIN_VERDICTS: int = 10
+# Minimum reviewer verdicts required before calibration runs. Configurable so
+# small / demo deployments can calibrate on the data they actually have — the
+# review queue now persists across restarts (REVIEW_DB_PATH on the durable
+# volume), so verdicts accumulate instead of resetting. Set
+# CALIBRATION_MIN_VERDICTS to tune; below ~10 the thresholds are indicative, not
+# statistically robust, and the function falls back to conservative defaults
+# when it can't derive a cut-point.
+_MIN_VERDICTS: int = max(1, int(os.getenv("CALIBRATION_MIN_VERDICTS", "3")))
 
 
 def recalibrate_thresholds(
@@ -61,7 +70,9 @@ def recalibrate_thresholds(
     if verdicts_used < _MIN_VERDICTS:
         return {
             "error": (
-                "Insufficient data for calibration — need at least 10 reviewer verdicts"
+                f"Insufficient data for calibration — need at least "
+                f"{_MIN_VERDICTS} reviewer verdict(s), have {verdicts_used}. "
+                f"Submit a few agree/disagree verdicts in the review queue, then retry."
             ),
             "high_threshold": None,
             "medium_threshold": None,
