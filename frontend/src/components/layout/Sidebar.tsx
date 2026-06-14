@@ -34,102 +34,123 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex flex-col gap-2 mb-8">
-        <div className="text-[11px] font-bold text-secondary uppercase tracking-widest px-2 mb-2">Sections</div>
-        <button
-          className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-            view === 'chat'
-              ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-              : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-          }`}
-          onClick={() => setView('chat')}
-        >
-          <MessageSquare size={18} className={view === 'chat' ? 'text-blue-400' : 'text-secondary'} />
-          Testing Chat
-        </button>
-        
-        <button
-          className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-            view === 'traceability'
-              ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-              : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-          }`}
-          onClick={() => setView('traceability')}
-        >
-          <Activity size={18} className={view === 'traceability' ? 'text-purple-400' : 'text-secondary'} />
-          Pipeline Traceability
-        </button>
+      <nav className="flex flex-col gap-6 mb-8 overflow-y-auto">
+        {/* USER SECTION */}
+        <div>
+          <div className="text-[11px] font-bold text-secondary uppercase tracking-widest px-2 mb-3">For Users</div>
+          <div className="flex flex-col gap-1.5">
+            <button
+              className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                view === 'stocks'
+                  ? 'bg-bullish/10 text-bullish border-bullish/20'
+                  : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+              }`}
+              onClick={() => setView('stocks')}
+            >
+              <Cpu size={18} className={view === 'stocks' ? 'text-bullish' : 'text-secondary'} />
+              Coverage List
+            </button>
+            <button
+              className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                view === 'chat'
+                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                  : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+              }`}
+              onClick={() => setView('chat')}
+            >
+              <MessageSquare size={18} className={view === 'chat' ? 'text-blue-400' : 'text-secondary'} />
+              Testing Chat
+            </button>
+            <button
+              className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                view === 'traceability'
+                  ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                  : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+              }`}
+              onClick={() => setView('traceability')}
+            >
+              <Activity size={18} className={view === 'traceability' ? 'text-purple-400' : 'text-secondary'} />
+              Pipeline Traceability
+            </button>
+            <button
+              className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                view === 'methodology'
+                  ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                  : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+              }`}
+              onClick={() => setView('methodology')}
+            >
+              <BookOpen size={18} className={view === 'methodology' ? 'text-indigo-400' : 'text-secondary'} />
+              Methodology
+            </button>
+          </div>
+        </div>
 
-        <button
-          className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-            view === 'results'
-              ? 'bg-bullish/10 text-bullish border-bullish/20'
-              : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-          }`}
-          onClick={() => setView('results')}
-        >
-          <BarChart3 size={18} className={view === 'results' ? 'text-bullish' : 'text-secondary'} />
-          Results & Testing
-        </button>
+        {/* DIAGNOSTIC SECTION */}
+        <div>
+          <div className="text-[11px] font-bold text-secondary uppercase tracking-widest px-2 mb-3">Audit & Diagnostics</div>
+          <div className="flex flex-col gap-1.5">
+            <button
+              className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                view === 'results'
+                  ? 'bg-bullish/10 text-bullish border-bullish/20'
+                  : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+              }`}
+              onClick={() => setView('results')}
+            >
+              <BarChart3 size={18} className={view === 'results' ? 'text-bullish' : 'text-secondary'} />
+              Results & Testing
+            </button>
 
-        <button
-          className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-            view === 'audit'
-              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-              : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-          }`}
-          onClick={() => setView('audit')}
-        >
-          <ClipboardList size={18} className={view === 'audit' ? 'text-amber-400' : 'text-secondary'} />
-          Audit Log
-        </button>
+            <button
+              className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                view === 'audit'
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+              }`}
+              onClick={() => setView('audit')}
+            >
+              <ClipboardList size={18} className={view === 'audit' ? 'text-amber-400' : 'text-secondary'} />
+              Audit Log
+            </button>
 
-        <button
-          className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-            view === 'metrics'
-              ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
-              : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-          }`}
-          onClick={() => setView('metrics')}
-        >
-          <Activity size={18} className={view === 'metrics' ? 'text-cyan-400' : 'text-secondary'} />
-          Metrics Dashboard
-        </button>
+            <button
+              className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                view === 'metrics'
+                  ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                  : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+              }`}
+              onClick={() => setView('metrics')}
+            >
+              <Activity size={18} className={view === 'metrics' ? 'text-cyan-400' : 'text-secondary'} />
+              Metrics Dashboard
+            </button>
 
-        <button
-          className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-            view === 'system'
-              ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-              : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-          }`}
-          onClick={() => setView('system')}
-        >
-          <Server size={18} className={view === 'system' ? 'text-orange-400' : 'text-secondary'} />
-          System Overview
-        </button>
+            <button
+              className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                view === 'analytics'
+                  ? 'bg-pink-500/10 text-pink-400 border-pink-500/20'
+                  : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+              }`}
+              onClick={() => setView('analytics')}
+            >
+              <BarChart3 size={18} className={view === 'analytics' ? 'text-pink-400' : 'text-secondary'} />
+              Product Analytics
+            </button>
 
-        <button
-          className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-            view === 'methodology'
-              ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-              : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-          }`}
-          onClick={() => setView('methodology')}
-        >
-          <BookOpen size={18} className={view === 'methodology' ? 'text-indigo-400' : 'text-secondary'} />
-          Methodology
-        </button>
-        <button
-          className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-            view === 'stocks'
-              ? 'bg-bullish/10 text-bullish border-bullish/20'
-              : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-          }`}
-          onClick={() => setView('stocks')}
-        >
-          <Cpu size={18} className={view === 'stocks' ? 'text-bullish' : 'text-secondary'} />
-          Stocks
-        </button>
+            <button
+              className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                view === 'system'
+                  ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                  : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+              }`}
+              onClick={() => setView('system')}
+            >
+              <Server size={18} className={view === 'system' ? 'text-orange-400' : 'text-secondary'} />
+              System Overview
+            </button>
+          </div>
+        </div>
       </nav>
 
       {/* Mode & Context (Only show if relevant) */}

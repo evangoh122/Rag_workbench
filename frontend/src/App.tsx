@@ -205,168 +205,135 @@ function App() {
         </div>
 
         {/* Main Navigation */}
-        <nav className="flex flex-col gap-2 mb-8">
-          <div className="text-[11px] font-bold text-secondary uppercase tracking-widest px-2 mb-2">Sections</div>
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-              view === 'stocks'
-                ? 'bg-bullish/10 text-bullish border-bullish/20'
-                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-            }`}
-            onClick={() => { 
-              setView('stocks'); 
-              setSidebarOpen(false); 
-              if (import.meta.env.VITE_POSTHOG_KEY) {
-                getPosthog().then(p => p.capture('nav_click', { destination: 'stocks', source: 'sidebar' }));
-              }
-            }}
-          >
-            <Cpu size={18} className={view === 'stocks' ? 'text-bullish' : 'text-secondary'} />
-            Coverage List
-          </button>
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-              view === 'chat'
-                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-            }`}
-            onClick={() => { 
-              setView('chat'); 
-              setSidebarOpen(false); 
-              if (import.meta.env.VITE_POSTHOG_KEY) {
-                getPosthog().then(p => p.capture('nav_click', { destination: 'chat', source: 'sidebar' }));
-              }
-            }}
-          >
-            <MessageSquare size={18} className={view === 'chat' ? 'text-blue-400' : 'text-secondary'} />
-            Testing Chat
-          </button>
-          
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-              view === 'traceability'
-                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-            }`}
-            onClick={() => { 
-              setView('traceability'); 
-              setSidebarOpen(false); 
-              if (import.meta.env.VITE_POSTHOG_KEY) {
-                getPosthog().then(p => p.capture('nav_click', { destination: 'traceability', source: 'sidebar' }));
-              }
-            }}
-          >
-            <Activity size={18} className={view === 'traceability' ? 'text-purple-400' : 'text-secondary'} />
-            Pipeline Traceability
-          </button>
+        <nav className="flex flex-col gap-6 mb-8 overflow-y-auto">
+          {/* USER SECTION */}
+          <div>
+            <div className="text-[11px] font-bold text-secondary uppercase tracking-widest px-2 mb-3">For Users</div>
+            <div className="flex flex-col gap-1.5">
+              <button
+                className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                  view === 'stocks'
+                    ? 'bg-bullish/10 text-bullish border-bullish/20'
+                    : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+                }`}
+                onClick={() => { 
+                  setView('stocks'); 
+                  setSidebarOpen(false); 
+                }}
+              >
+                <Cpu size={18} className={view === 'stocks' ? 'text-bullish' : 'text-secondary'} />
+                Coverage List
+              </button>
+              <button
+                className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                  view === 'chat'
+                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                    : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+                }`}
+                onClick={() => { 
+                  setView('chat'); 
+                  setSidebarOpen(false); 
+                }}
+              >
+                <MessageSquare size={18} className={view === 'chat' ? 'text-blue-400' : 'text-secondary'} />
+                Testing Chat
+              </button>
+              <button
+                className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                  view === 'traceability'
+                    ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                    : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+                }`}
+                onClick={() => { 
+                  setView('traceability'); 
+                  setSidebarOpen(false); 
+                }}
+              >
+                <Activity size={18} className={view === 'traceability' ? 'text-purple-400' : 'text-secondary'} />
+                Pipeline Traceability
+              </button>
+              <button
+                className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                  view === 'methodology'
+                    ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                    : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+                }`}
+                onClick={() => { 
+                  setView('methodology'); 
+                  setSidebarOpen(false); 
+                }}
+              >
+                <BookOpen size={18} className={view === 'methodology' ? 'text-indigo-400' : 'text-secondary'} />
+                Methodology
+              </button>
+            </div>
+          </div>
 
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-              view === 'results'
-                ? 'bg-bullish/10 text-bullish border-bullish/20'
-                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-            }`}
-            onClick={() => { 
-              setView('results'); 
-              setSidebarOpen(false); 
-              if (import.meta.env.VITE_POSTHOG_KEY) {
-                getPosthog().then(p => p.capture('nav_click', { destination: 'results', source: 'sidebar' }));
-              }
-            }}
-          >
-            <BarChart3 size={18} className={view === 'results' ? 'text-bullish' : 'text-secondary'} />
-            Results & Testing
-          </button>
+          {/* DIAGNOSTIC SECTION */}
+          <div>
+            <div className="text-[11px] font-bold text-secondary uppercase tracking-widest px-2 mb-3">Audit & Diagnostics</div>
+            <div className="flex flex-col gap-1.5">
+              <button
+                className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                  view === 'results'
+                    ? 'bg-bullish/10 text-bullish border-bullish/20'
+                    : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+                }`}
+                onClick={() => { 
+                  setView('results'); 
+                  setSidebarOpen(false); 
+                }}
+              >
+                <BarChart3 size={18} className={view === 'results' ? 'text-bullish' : 'text-secondary'} />
+                Results & Testing
+              </button>
 
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-              view === 'audit'
-                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-            }`}
-            onClick={() => { 
-              setView('audit'); 
-              setSidebarOpen(false); 
-              if (import.meta.env.VITE_POSTHOG_KEY) {
-                getPosthog().then(p => p.capture('nav_click', { destination: 'audit', source: 'sidebar' }));
-              }
-            }}
-          >
-            <ShieldCheck size={18} className={view === 'audit' ? 'text-amber-400' : 'text-secondary'} />
-            Audit Log
-          </button>
+              <button
+                className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                  view === 'audit'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+                }`}
+                onClick={() => { 
+                  setView('audit'); 
+                  setSidebarOpen(false); 
+                }}
+              >
+                <ShieldCheck size={18} className={view === 'audit' ? 'text-amber-400' : 'text-secondary'} />
+                Audit Log
+              </button>
 
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-              view === 'metrics'
-                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
-                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-            }`}
-            onClick={() => { 
-              setView('metrics'); 
-              setSidebarOpen(false); 
-              if (import.meta.env.VITE_POSTHOG_KEY) {
-                getPosthog().then(p => p.capture('nav_click', { destination: 'metrics', source: 'sidebar' }));
-              }
-            }}
-          >
-            <Activity size={18} className={view === 'metrics' ? 'text-cyan-400' : 'text-secondary'} />
-            Metrics Dashboard
-          </button>
+              <button
+                className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                  view === 'metrics'
+                    ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                    : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+                }`}
+                onClick={() => { 
+                  setView('metrics'); 
+                  setSidebarOpen(false); 
+                }}
+              >
+                <Activity size={18} className={view === 'metrics' ? 'text-cyan-400' : 'text-secondary'} />
+                Metrics Dashboard
+              </button>
 
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-              view === 'analytics'
-                ? 'bg-pink-500/10 text-pink-400 border-pink-500/20'
-                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-            }`}
-            onClick={() => {
-              setView('analytics');
-              setSidebarOpen(false);
-              if (import.meta.env.VITE_POSTHOG_KEY) {
-                getPosthog().then(p => p.capture('nav_click', { destination: 'analytics', source: 'sidebar' }));
-              }
-            }}
-          >
-            <BarChart3 size={18} className={view === 'analytics' ? 'text-pink-400' : 'text-secondary'} />
-            Product Analytics
-          </button>
-
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-              view === 'system'
-                ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-            }`}
-            onClick={() => { 
-              setView('system'); 
-              setSidebarOpen(false); 
-              if (import.meta.env.VITE_POSTHOG_KEY) {
-                getPosthog().then(p => p.capture('nav_click', { destination: 'system', source: 'sidebar' }));
-              }
-            }}
-          >
-            <Server size={18} className={view === 'system' ? 'text-orange-400' : 'text-secondary'} />
-            System Overview
-          </button>
-
-          <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
-              view === 'methodology'
-                ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
-            }`}
-            onClick={() => { 
-              setView('methodology'); 
-              setSidebarOpen(false); 
-              if (import.meta.env.VITE_POSTHOG_KEY) {
-                getPosthog().then(p => p.capture('nav_click', { destination: 'methodology', source: 'sidebar' }));
-              }
-            }}
-          >
-            <BookOpen size={18} className={view === 'methodology' ? 'text-indigo-400' : 'text-secondary'} />
-            Methodology
-          </button>
+              <button
+                className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
+                  view === 'system'
+                    ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                    : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
+                }`}
+                onClick={() => { 
+                  setView('system'); 
+                  setSidebarOpen(false); 
+                }}
+              >
+                <Server size={18} className={view === 'system' ? 'text-orange-400' : 'text-secondary'} />
+                System Overview
+              </button>
+            </div>
+          </div>
         </nav>
 
         {/* Clear chat button */}
