@@ -69,26 +69,57 @@ function FinancialChart({ facts }: FinancialChartProps) {
   const unit = numeric.find((f) => f.unit)?.unit || '';
 
   return (
-    <div className="mt-3 p-3 bg-[#121212] border border-[#2A2A2A] rounded-xl">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+    <div className="mt-3 p-4 bg-surface border border-border rounded-xl">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-xs font-semibold text-secondary uppercase tracking-widest">
           Financials{unit ? ` (${unit})` : ''}
         </span>
       </div>
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" vertical={false} />
-          <XAxis dataKey="period" tick={{ fill: '#9ca3af', fontSize: 12 }} stroke="#2A2A2A" />
-          <YAxis tickFormatter={fmt} tick={{ fill: '#9ca3af', fontSize: 12 }} stroke="#2A2A2A" width={48} />
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+          <XAxis 
+            dataKey="period" 
+            tick={{ fill: 'var(--color-secondary)', fontSize: 11 }} 
+            axisLine={false}
+            tickLine={false}
+            dy={8}
+          />
+          <YAxis 
+            tickFormatter={fmt} 
+            tick={{ fill: 'var(--color-secondary)', fontSize: 11 }} 
+            axisLine={false}
+            tickLine={false}
+            width={40}
+          />
           <Tooltip
             formatter={(v) => fmt(Number(v))}
-            contentStyle={{ background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 8, color: '#e5e7eb' }}
-            labelStyle={{ color: '#9ca3af' }}
-            cursor={{ fill: 'rgba(96,165,250,0.08)' }}
+            contentStyle={{ 
+              backgroundColor: 'var(--color-surface-elevated)', 
+              border: '1px solid var(--color-border)', 
+              borderRadius: '8px', 
+              color: 'var(--color-primary)',
+              boxShadow: 'none'
+            }}
+            labelStyle={{ color: 'var(--color-secondary)', fontWeight: 600, marginBottom: '4px' }}
+            cursor={{ fill: 'rgba(255,255,255,0.04)' }}
           />
-          {labels.length > 1 && <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />}
+          {labels.length > 1 && (
+            <Legend 
+              verticalAlign="top" 
+              align="right" 
+              wrapperStyle={{ fontSize: 10, color: 'var(--color-secondary)', paddingBottom: '10px' }} 
+              iconType="circle"
+              iconSize={8}
+            />
+          )}
           {labels.map((label, i) => (
-            <Bar key={label} dataKey={label} fill={COLORS[i % COLORS.length]} radius={[3, 3, 0, 0]} />
+            <Bar 
+              key={label} 
+              dataKey={label} 
+              fill={COLORS[i % COLORS.length]} 
+              radius={[4, 4, 0, 0]} 
+              barSize={labels.length > 1 ? 20 : 40}
+            />
           ))}
         </BarChart>
       </ResponsiveContainer>

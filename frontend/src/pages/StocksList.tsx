@@ -31,8 +31,8 @@ function StocksList() {
   return (
     <div className="p-4 lg:p-6 max-w-4xl mx-auto space-y-4 lg:space-y-6">
       <div>
-        <h2 className="text-lg font-bold text-white">Company Coverage</h2>
-        <p className="text-sm text-gray-400 mt-1">
+        <h2 className="text-lg font-bold text-primary">Company Coverage</h2>
+        <p className="text-sm text-secondary mt-1">
           {COVERED_STOCKS.length} companies tracked — semiconductor memory, logic, analog, and
           equipment segments, plus SpaceX's IPO prospectus.
         </p>
@@ -42,15 +42,15 @@ function StocksList() {
         {COVERED_STOCKS.map((stock) => (
           <div
             key={stock.ticker}
-            className="flex items-center gap-4 px-4 py-3 bg-[#121212] border border-[#2A2A2A] rounded-xl hover:border-blue-500/30 transition-colors"
+            className="flex items-center gap-4 px-4 py-3 bg-surface border border-border rounded-xl transition-colors hover:bg-surface-elevated"
           >
-            <div className="w-14 h-8 bg-[#1A1A1A] rounded-lg flex items-center justify-center text-xs font-mono font-bold text-blue-400 tracking-wider border border-[#2A2A2A]">
+            <div className="w-14 h-8 bg-surface-elevated rounded-lg flex items-center justify-center text-xs font-mono font-bold text-blue-400 tracking-wider border border-border tabular-nums">
               {stock.ticker}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-white">{stock.name}</div>
-              <div className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
-                <span className="text-gray-600">{stock.icon}</span>
+              <div className="text-sm font-semibold text-primary">{stock.name}</div>
+              <div className="text-xs text-secondary flex items-center gap-1.5 mt-0.5">
+                <span className="text-secondary/60">{stock.icon}</span>
                 {stock.segment}
               </div>
             </div>

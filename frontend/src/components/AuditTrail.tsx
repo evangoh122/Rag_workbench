@@ -29,16 +29,16 @@ function CollapsibleSection({ title, children, defaultOpen = false, count }: Col
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="mt-2 border border-[#2A2A2A] rounded-lg overflow-hidden">
+    <div className="mt-2 border border-border rounded-lg overflow-hidden">
       <button
-        className="w-full flex items-center justify-between px-3 py-2 bg-[#1A1A1A] text-sm font-medium text-gray-300 hover:bg-[#1F1F1F] transition-colors cursor-pointer border-0"
+        className="w-full flex items-center justify-between px-3 py-2 bg-surface-elevated text-sm font-medium text-secondary hover:bg-surface transition-colors cursor-pointer border-0"
         onClick={() => setOpen(prev => !prev)}
       >
-        <span className="flex items-center gap-2">{title}{count != null ? <span className="text-xs text-gray-500">({count})</span> : null}</span>
+        <span className="flex items-center gap-2">{title}{count != null ? <span className="text-xs text-secondary/40 tabular-nums">({count})</span> : null}</span>
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
       </button>
       {open && (
-        <div className="px-3 py-3 bg-[#0F0F0F]">
+        <div className="px-3 py-3 bg-background">
           {children}
         </div>
       )}
@@ -52,7 +52,7 @@ function VerificationBadge({ verification }: { verification: VerificationResult 
 
   if (status === 'verified' || status === 'PASS') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-900 text-green-300 border border-green-700">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-bullish/10 text-bullish border border-bullish/20">
         &#x2713; Verified ({verification.reasoning})
       </span>
     );
@@ -60,7 +60,7 @@ function VerificationBadge({ verification }: { verification: VerificationResult 
 
   if (status === 'mismatch' || status === 'FAIL') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-900 text-red-300 border border-red-700">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-bearish/10 text-bearish border border-bearish/20">
         &#x2717; Verification Failed — {verification.reasoning}
       </span>
     );
@@ -68,7 +68,7 @@ function VerificationBadge({ verification }: { verification: VerificationResult 
 
   if (status === 'unverifiable' || status === 'ERROR') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-800 text-gray-400 border border-gray-600">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-surface-elevated text-secondary border border-border">
         Unverifiable
       </span>
     );
@@ -88,23 +88,23 @@ function XBRLFactCard({ fact }: { fact: XBRLFact }) {
   };
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2 bg-[#161616] border border-[#2A2A2A] rounded-md">
+    <div className="flex items-center gap-3 px-3 py-2 bg-surface border border-border rounded-md">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-300 font-medium truncate">{fact.label || fact.concept}</span>
+          <span className="text-xs text-primary font-medium truncate">{fact.label || fact.concept}</span>
           {fact.is_verified && (
-            <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-green-400">
+            <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-bullish">
               <CheckCircle size={10} /> verified
             </span>
           )}
         </div>
         {fact.period && (
-          <div className="text-[10px] text-gray-500 mt-0.5">{fact.period}</div>
+          <div className="text-[10px] text-secondary/60 mt-0.5 tabular-nums">{fact.period}</div>
         )}
       </div>
       <div className="text-right shrink-0">
-        <div className="text-sm font-mono text-green-400 tabular-nums">{fmt(fact.value)}</div>
-        <div className="text-[10px] text-gray-500">{fact.unit || ''}</div>
+        <div className="text-sm font-mono text-bullish tabular-nums">{fmt(fact.value)}</div>
+        <div className="text-[10px] text-secondary/40">{fact.unit || ''}</div>
       </div>
     </div>
   );
@@ -163,7 +163,7 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
                   {['Ticker', 'Name', 'Price', 'Date', 'Volume'].map(col => (
                     <th
                       key={col}
-                      className="text-left px-2 py-2 text-gray-400 font-medium border-b border-[#2A2A2A]"
+                      className="text-left px-2 py-2 text-secondary font-medium border-b border-border"
                     >
                       {col}
                     </th>
@@ -172,14 +172,14 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
               </thead>
               <tbody>
                 {polygon_data!.map((poly, idx) => (
-                  <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-[#0A0A0A]'}>
-                    <td className="px-2 py-1.5 font-mono text-blue-300 border-b border-[#1F1F1F]">{poly.ticker}</td>
-                    <td className="px-2 py-1.5 text-gray-300 border-b border-[#1F1F1F]">{poly.name}</td>
-                    <td className="px-2 py-1.5 text-green-400 border-b border-[#1F1F1F]">
+                  <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-background'}>
+                    <td className="px-2 py-1.5 font-mono text-blue-300 border-b border-border/40 tabular-nums">{poly.ticker}</td>
+                    <td className="px-2 py-1.5 text-secondary border-b border-border/40">{poly.name}</td>
+                    <td className="px-2 py-1.5 text-bullish border-b border-border/40 tabular-nums">
                       {poly.last_price ? `$${poly.last_price.toFixed(2)}` : 'N/A'}
                     </td>
-                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1F1F1F]">{poly.price_date || 'N/A'}</td>
-                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1F1F1F]">
+                    <td className="px-2 py-1.5 text-secondary/60 border-b border-border/40 tabular-nums">{poly.price_date || 'N/A'}</td>
+                    <td className="px-2 py-1.5 text-secondary/60 border-b border-border/40 tabular-nums">
                       {poly.volume ? poly.volume.toLocaleString() : 'N/A'}
                     </td>
                   </tr>
@@ -187,9 +187,9 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
               </tbody>
             </table>
             {polygon_data![0].description && (
-              <div className="mt-3 p-2 bg-[#1A1A1A] rounded border border-[#2A2A2A]">
-                <p className="text-[10px] uppercase text-gray-500 font-bold mb-1">Company Description</p>
-                <p className="text-gray-400 text-xs leading-relaxed italic">
+              <div className="mt-3 p-2 bg-surface-elevated rounded border border-border">
+                <p className="text-[10px] uppercase text-secondary/60 font-bold mb-1">Company Description</p>
+                <p className="text-secondary text-xs leading-relaxed italic">
                   "{polygon_data![0].description}"
                 </p>
               </div>
@@ -203,20 +203,20 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
         <CollapsibleSection title="Sources" count={sources!.length}>
           <div className="flex flex-col gap-3">
             {sources!.map((src, idx) => (
-              <div key={idx} className="border border-[#2A2A2A] rounded-md p-3 bg-[#161616]">
+              <div key={idx} className="border border-border rounded-md p-3 bg-surface">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-[#1F1F1F] text-blue-300 border border-blue-900">
+                  <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-surface-elevated text-blue-300 border border-blue-900/30">
                     {src.section}
                   </span>
-                  <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-blue-900 text-blue-200">
+                  <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-blue-900/30 text-blue-200">
                     {src.ticker}
                   </span>
-                  <span className="text-xs text-gray-500">{src.accession}</span>
+                  <span className="text-xs text-secondary/40 tabular-nums">{src.accession}</span>
                   {src.distance != null && (
-                    <span className="text-xs text-gray-600 ml-auto">dist: {src.distance.toFixed(4)}</span>
+                    <span className="text-xs text-secondary/30 ml-auto tabular-nums">dist: {src.distance.toFixed(4)}</span>
                   )}
                 </div>
-                <p className="text-gray-400 text-xs leading-relaxed mb-2 line-clamp-3">
+                <p className="text-secondary text-xs leading-relaxed mb-2 line-clamp-3">
                   {src.text.slice(0, 200)}{src.text.length > 200 ? '…' : ''}
                 </p>
                 <a
@@ -243,7 +243,7 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
                   {['Concept', 'Label', 'Value', 'Unit', 'Period'].map(col => (
                     <th
                       key={col}
-                      className="text-left px-2 py-2 text-gray-400 font-medium border-b border-[#2A2A2A]"
+                      className="text-left px-2 py-2 text-secondary font-medium border-b border-border"
                     >
                       {col}
                     </th>
@@ -252,14 +252,14 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
               </thead>
               <tbody>
                 {xbrl_facts!.map((fact, idx) => (
-                  <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-[#0A0A0A]'}>
-                    <td className="px-2 py-1.5 font-mono text-blue-300 border-b border-[#1F1F1F]">{fact.concept}</td>
-                    <td className="px-2 py-1.5 text-gray-300 border-b border-[#1F1F1F]">{fact.label}</td>
-                    <td className="px-2 py-1.5 text-gray-100 border-b border-[#1F1F1F]">
+                  <tr key={idx} className={idx % 2 === 0 ? '' : 'bg-background'}>
+                    <td className="px-2 py-1.5 font-mono text-blue-300 border-b border-border/40 tabular-nums">{fact.concept}</td>
+                    <td className="px-2 py-1.5 text-secondary border-b border-border/40">{fact.label}</td>
+                    <td className="px-2 py-1.5 text-primary border-b border-border/40 tabular-nums">
                       {fact.value != null ? fact.value.toLocaleString() : '—'}
                     </td>
-                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1F1F1F]">{fact.unit}</td>
-                    <td className="px-2 py-1.5 text-gray-400 border-b border-[#1F1F1F]">{fact.period}</td>
+                    <td className="px-2 py-1.5 text-secondary/60 border-b border-border/40">{fact.unit}</td>
+                    <td className="px-2 py-1.5 text-secondary/60 border-b border-border/40 tabular-nums">{fact.period}</td>
                   </tr>
                 ))}
               </tbody>
@@ -273,7 +273,7 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
         <CollapsibleSection title="Math Steps">
           <ol className="list-decimal list-inside space-y-1">
             {math_steps!.map((step, idx) => (
-              <li key={idx} className="text-gray-300 font-mono text-xs leading-relaxed">
+              <li key={idx} className="text-secondary font-mono text-xs leading-relaxed tabular-nums">
                 {step}
               </li>
             ))}

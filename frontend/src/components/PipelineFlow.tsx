@@ -21,21 +21,21 @@ const PipelineFlow: React.FC<PipelineFlowProps> = ({ status = {} }) => {
       fontSize: '14px',
       fontWeight: 600,
       color: 'white',
-      border: '1px solid rgba(255,255,255,0.1)',
-      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      boxShadow: 'none',
       width: 180,
       textAlign: 'center' as const
     };
 
     switch (nodeStatus) {
       case 'success':
-        return { ...baseStyle, background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', borderColor: '#34d399' };
+        return { ...baseStyle, background: 'linear-gradient(135deg, #2E8B57 0%, #4ADE80 100%)', borderColor: 'rgba(74, 222, 128, 0.2)' };
       case 'error':
-        return { ...baseStyle, background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)', borderColor: '#f87171' };
+        return { ...baseStyle, background: 'linear-gradient(135deg, #CD5C5C 0%, #F87171 100%)', borderColor: 'rgba(248, 113, 113, 0.2)' };
       case 'pending':
-        return { ...baseStyle, background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)', borderColor: '#818cf8', animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' };
+        return { ...baseStyle, background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)', borderColor: 'rgba(99, 102, 241, 0.2)', animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' };
       default:
-        return { ...baseStyle, background: '#1A1A1A', color: '#9ca3af', borderColor: '#2A2A2A', boxShadow: 'none' };
+        return { ...baseStyle, background: '#1A1A1A', color: '#888888', borderColor: 'rgba(255,255,255,0.08)' };
     }
   };
 
@@ -97,8 +97,8 @@ const PipelineFlow: React.FC<PipelineFlowProps> = ({ status = {} }) => {
         nodesConnectable={false}
         elementsSelectable={false}
       >
-        <Background color="#2A2A2A" gap={24} size={2} />
-        <Controls className="[&>button]:bg-[#1A1A1A] [&>button]:border-[#2A2A2A] [&>button]:text-gray-400 [&>button]:fill-gray-400" />
+        <Background color="rgba(255,255,255,0.05)" gap={24} size={1} />
+        <Controls className="[&>button]:bg-surface-elevated [&>button]:border-border [&>button]:text-secondary [&>button]:fill-secondary" />
       </ReactFlow>
     </div>
   );

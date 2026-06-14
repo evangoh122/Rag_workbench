@@ -18,20 +18,20 @@ interface Toast {
 
 function SkeletonCard() {
   return (
-    <div className="bg-[#161616] border border-[#2A2A2A] rounded-xl p-5 animate-pulse">
+    <div className="bg-surface border border-border rounded-xl p-5 animate-pulse">
       <div className="flex items-center gap-3 mb-4">
-        <div className="h-6 w-24 bg-[#2A2A2A] rounded-full" />
-        <div className="h-4 w-16 bg-[#2A2A2A] rounded" />
-        <div className="ml-auto h-5 w-12 bg-[#2A2A2A] rounded" />
+        <div className="h-6 w-24 bg-surface-elevated rounded-full" />
+        <div className="h-4 w-16 bg-surface-elevated rounded" />
+        <div className="ml-auto h-5 w-12 bg-surface-elevated rounded" />
       </div>
-      <div className="h-3 w-1/2 bg-[#2A2A2A] rounded mb-3" />
+      <div className="h-3 w-1/2 bg-surface-elevated rounded mb-3" />
       <div className="flex gap-2 mb-4">
-        <div className="h-5 w-20 bg-[#2A2A2A] rounded-full" />
-        <div className="h-5 w-20 bg-[#2A2A2A] rounded-full" />
+        <div className="h-5 w-20 bg-surface-elevated rounded-full" />
+        <div className="h-5 w-20 bg-surface-elevated rounded-full" />
       </div>
       <div className="flex gap-3 mt-4">
-        <div className="h-9 w-24 bg-[#2A2A2A] rounded-lg" />
-        <div className="h-9 w-24 bg-[#2A2A2A] rounded-lg" />
+        <div className="h-9 w-24 bg-surface-elevated rounded-lg" />
+        <div className="h-9 w-24 bg-surface-elevated rounded-lg" />
       </div>
     </div>
   );
@@ -41,18 +41,18 @@ function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.max(0, Math.min(100, Math.round(value * 100)));
   return (
     <div className="flex items-center gap-2 flex-1 min-w-0">
-      <div className="flex-1 h-2 bg-[#2A2A2A] rounded-full overflow-hidden">
+      <div className="flex-1 h-2 bg-surface-elevated rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-300"
           style={{
             width: `${pct}%`,
-            background: `linear-gradient(90deg, #ef4444 0%, #eab308 50%, #22c55e 100%)`,
+            background: `linear-gradient(90deg, #CD5C5C 0%, #eab308 50%, #2E8B57 100%)`,
             backgroundSize: '200% 100%',
             backgroundPosition: `${100 - pct}% 0`,
           }}
         />
       </div>
-      <span className="text-xs text-gray-400 flex-shrink-0 w-9 text-right">
+      <span className="text-xs text-secondary flex-shrink-0 w-9 text-right tabular-nums">
         {pct}%
       </span>
     </div>
@@ -80,14 +80,14 @@ function DecisionCard({
   const isEscalate = decision.route === 'ESCALATE';
 
   return (
-    <div className="bg-[#161616] border border-[#2A2A2A] rounded-xl p-5 flex flex-col gap-3 transition-colors duration-200 hover:border-[#3A3A3A]">
+    <div className="bg-surface border border-border rounded-xl p-5 flex flex-col gap-3 transition-colors duration-200 hover:border-secondary/30">
       {/* Top row: route badge + confidence bar + form type chip */}
       <div className="flex items-center gap-3 flex-wrap">
         <span
           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${
             isEscalate
-              ? 'bg-red-900 text-red-300'
-              : 'bg-amber-900 text-amber-300'
+              ? 'bg-bearish/10 text-bearish border border-bearish/20'
+              : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
           }`}
         >
           {isEscalate ? (
@@ -100,20 +100,20 @@ function DecisionCard({
 
         <ConfidenceBar value={decision.confidence} />
 
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[#242424] text-gray-300 border border-[#2A2A2A] flex-shrink-0">
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-surface-elevated text-secondary border border-border flex-shrink-0">
           {decision.form_type}
         </span>
       </div>
 
       {/* Filing info */}
-      <div className="flex items-center gap-4 text-sm text-gray-400">
+      <div className="flex items-center gap-4 text-sm text-secondary">
         <span>
-          <span className="text-gray-500">CIK: </span>
-          <span className="text-gray-200 font-mono">{decision.cik}</span>
+          <span className="text-secondary/60">CIK: </span>
+          <span className="text-primary font-mono tabular-nums">{decision.cik}</span>
         </span>
         <span>
-          <span className="text-gray-500">Accession: </span>
-          <span className="text-gray-200 font-mono text-xs">{decision.accession}</span>
+          <span className="text-secondary/60">Accession: </span>
+          <span className="text-primary font-mono text-xs tabular-nums">{decision.accession}</span>
         </span>
       </div>
 
@@ -123,21 +123,21 @@ function DecisionCard({
           decision.triggers_fired.map((trigger) => (
             <span
               key={trigger}
-              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-950 text-red-400 border border-red-900"
+              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-bearish/10 text-bearish border border-bearish/20"
             >
               {trigger}
             </span>
           ))
         ) : (
-          <span className="text-xs text-gray-500 italic">No triggers fired</span>
+          <span className="text-xs text-secondary/60 italic">No triggers fired</span>
         )}
       </div>
 
       {/* Status / actions */}
       <div className="flex items-center gap-3 pt-1">
         {decision.status === 'reviewed' ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-[#242424] text-gray-400 border border-[#2A2A2A]">
-            <CheckCircle size={14} className="text-green-500" />
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-surface-elevated text-secondary border border-border">
+            <CheckCircle size={14} className="text-bullish" />
             Reviewed
           </span>
         ) : (
@@ -145,7 +145,7 @@ function DecisionCard({
             <button
               onClick={() => void handleVerdict(true)}
               disabled={submitting}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-green-700 hover:bg-green-600 text-white border-0 cursor-pointer transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-bullish hover:bg-bullish/90 text-white border-0 cursor-pointer transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle size={14} />
               Agree
@@ -153,14 +153,14 @@ function DecisionCard({
             <button
               onClick={() => void handleVerdict(false)}
               disabled={submitting}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-red-700 hover:bg-red-600 text-white border-0 cursor-pointer transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-bearish hover:bg-bearish/90 text-white border-0 cursor-pointer transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <XCircle size={14} />
               Disagree
             </button>
           </>
         )}
-        <span className="ml-auto text-xs text-gray-600">
+        <span className="ml-auto text-xs text-secondary/40 tabular-nums">
           {new Date(decision.created_at).toLocaleString()}
         </span>
       </div>
@@ -267,10 +267,10 @@ export default function ReviewQueue() {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`px-4 py-3 rounded-lg text-sm font-medium shadow-lg pointer-events-auto transition-all duration-300 ${
+            className={`px-4 py-3 rounded-lg text-sm font-medium shadow-none border pointer-events-auto transition-all duration-300 ${
               t.type === 'success'
-                ? 'bg-green-800 text-green-100 border border-green-700'
-                : 'bg-red-800 text-red-100 border border-red-700'
+                ? 'bg-bullish/20 text-bullish border-bullish/30'
+                : 'bg-bearish/20 text-bearish border-bearish/30'
             }`}
           >
             {t.message}
@@ -279,12 +279,12 @@ export default function ReviewQueue() {
       </div>
 
       {/* Header */}
-      <header className="px-4 lg:px-8 py-4 border-b border-[#2A2A2A] flex items-center gap-4 flex-shrink-0">
+      <header className="px-4 lg:px-8 py-4 border-b border-border flex items-center gap-4 flex-shrink-0">
         <div className="flex items-center gap-3">
           <ClipboardList size={22} className="text-blue-400" />
-          <h1 className="text-lg font-semibold text-white">Review Queue</h1>
+          <h1 className="text-lg font-semibold text-primary">Review Queue</h1>
           {pendingCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full text-xs font-bold bg-blue-600 text-white">
+            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full text-xs font-bold bg-blue-600 text-white tabular-nums">
               {pendingCount}
             </span>
           )}
@@ -298,7 +298,7 @@ export default function ReviewQueue() {
               void fetchQueue();
             }}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:text-gray-200 bg-transparent border border-[#2A2A2A] hover:border-[#3A3A3A] cursor-pointer transition-all duration-200 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-secondary hover:text-primary bg-transparent border border-border hover:bg-surface-elevated cursor-pointer transition-all duration-200 disabled:opacity-50"
           >
             <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -317,7 +317,7 @@ export default function ReviewQueue() {
       </header>
 
       {/* Filter tabs */}
-      <div className="px-4 lg:px-8 pt-4 flex items-center gap-1 border-b border-[#2A2A2A] pb-0 flex-shrink-0">
+      <div className="px-4 lg:px-8 pt-4 flex items-center gap-1 border-b border-border pb-0 flex-shrink-0">
         {tabs.map((tab) => {
           const count =
             tab.value === 'all'
@@ -335,16 +335,16 @@ export default function ReviewQueue() {
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors duration-200 cursor-pointer bg-transparent border-l-0 border-r-0 border-t-0 ${
                 activeTab === tab.value
                   ? 'border-b-blue-500 text-blue-400'
-                  : 'border-b-transparent text-gray-400 hover:text-gray-200'
+                  : 'border-b-transparent text-secondary hover:text-primary'
               }`}
             >
               {tab.label}
               {count > 0 && (
                 <span
-                  className={`ml-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
+                  className={`ml-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold tabular-nums ${
                     activeTab === tab.value
                       ? 'bg-blue-900 text-blue-300'
-                      : 'bg-[#2A2A2A] text-gray-400'
+                      : 'bg-surface-elevated text-secondary'
                   }`}
                 >
                   {count}

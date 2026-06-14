@@ -168,7 +168,7 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0A0A0A] text-gray-200 font-sans selection:bg-blue-500/30">
+    <div className="flex h-screen w-screen overflow-hidden bg-background text-primary font-sans selection:bg-blue-500/30">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
@@ -179,20 +179,20 @@ function App() {
 
       {/* Sidebar Navigation */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-[#121212] border-r border-[#2A2A2A] flex flex-col p-5 shadow-[4px_0_24px_rgba(0,0,0,0.2)] 
+        fixed inset-y-0 left-0 z-50 w-72 bg-surface border-r border-border flex flex-col p-5 
         transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo */}
         <div className="flex items-center justify-between mb-8 px-1">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 rounded-xl">
               <Search size={22} className="text-white" />
             </div>
-            <h2 className="m-0 text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-100 to-gray-400 tracking-tight">RAG Workbench</h2>
+            <h2 className="m-0 text-xl font-bold text-primary tracking-tight">RAG Workbench</h2>
           </div>
           <button 
-            className="lg:hidden p-2 text-gray-500 hover:text-white bg-transparent border-0 cursor-pointer"
+            className="lg:hidden p-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer"
             onClick={() => setSidebarOpen(false)}
           >
             <X size={20} />
@@ -201,12 +201,12 @@ function App() {
 
         {/* Main Navigation */}
         <nav className="flex flex-col gap-2 mb-8">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest px-2 mb-2">Sections</div>
+          <div className="text-[11px] font-bold text-secondary uppercase tracking-widest px-2 mb-2">Sections</div>
           <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
               view === 'stocks'
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
+                ? 'bg-bullish/10 text-bullish border-bullish/20'
+                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
             }`}
             onClick={() => { 
               setView('stocks'); 
@@ -216,14 +216,14 @@ function App() {
               }
             }}
           >
-            <Cpu size={18} className={view === 'stocks' ? 'text-emerald-400' : 'text-gray-500'} />
+            <Cpu size={18} className={view === 'stocks' ? 'text-bullish' : 'text-secondary'} />
             Coverage List
           </button>
           <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
               view === 'chat'
-                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
+                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
             }`}
             onClick={() => { 
               setView('chat'); 
@@ -233,15 +233,15 @@ function App() {
               }
             }}
           >
-            <MessageSquare size={18} className={view === 'chat' ? 'text-blue-400' : 'text-gray-500'} />
+            <MessageSquare size={18} className={view === 'chat' ? 'text-blue-400' : 'text-secondary'} />
             Testing Chat
           </button>
           
           <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
               view === 'traceability'
-                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
+                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
             }`}
             onClick={() => { 
               setView('traceability'); 
@@ -251,15 +251,15 @@ function App() {
               }
             }}
           >
-            <Activity size={18} className={view === 'traceability' ? 'text-purple-400' : 'text-gray-500'} />
+            <Activity size={18} className={view === 'traceability' ? 'text-purple-400' : 'text-secondary'} />
             Pipeline Traceability
           </button>
 
           <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
               view === 'results'
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
+                ? 'bg-bullish/10 text-bullish border-bullish/20'
+                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
             }`}
             onClick={() => { 
               setView('results'); 
@@ -269,15 +269,15 @@ function App() {
               }
             }}
           >
-            <BarChart3 size={18} className={view === 'results' ? 'text-emerald-400' : 'text-gray-500'} />
+            <BarChart3 size={18} className={view === 'results' ? 'text-bullish' : 'text-secondary'} />
             Results & Testing
           </button>
 
           <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
               view === 'audit'
-                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
+                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
             }`}
             onClick={() => { 
               setView('audit'); 
@@ -287,15 +287,15 @@ function App() {
               }
             }}
           >
-            <ShieldCheck size={18} className={view === 'audit' ? 'text-amber-400' : 'text-gray-500'} />
+            <ShieldCheck size={18} className={view === 'audit' ? 'text-amber-400' : 'text-secondary'} />
             Audit Log
           </button>
 
           <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
               view === 'metrics'
-                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
+                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
             }`}
             onClick={() => { 
               setView('metrics'); 
@@ -305,15 +305,15 @@ function App() {
               }
             }}
           >
-            <Activity size={18} className={view === 'metrics' ? 'text-cyan-400' : 'text-gray-500'} />
+            <Activity size={18} className={view === 'metrics' ? 'text-cyan-400' : 'text-secondary'} />
             Metrics Dashboard
           </button>
 
           <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
               view === 'system'
-                ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
+                ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
             }`}
             onClick={() => { 
               setView('system'); 
@@ -323,15 +323,15 @@ function App() {
               }
             }}
           >
-            <Server size={18} className={view === 'system' ? 'text-orange-400' : 'text-gray-500'} />
+            <Server size={18} className={view === 'system' ? 'text-orange-400' : 'text-secondary'} />
             System Overview
           </button>
 
           <button
-            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border border-transparent ${
+            className={`w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer border ${
               view === 'methodology'
-                ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1A1A]'
+                ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                : 'text-secondary border-transparent hover:text-primary hover:bg-surface-elevated'
             }`}
             onClick={() => { 
               setView('methodology'); 
@@ -341,7 +341,7 @@ function App() {
               }
             }}
           >
-            <BookOpen size={18} className={view === 'methodology' ? 'text-indigo-400' : 'text-gray-500'} />
+            <BookOpen size={18} className={view === 'methodology' ? 'text-indigo-400' : 'text-secondary'} />
             Methodology
           </button>
         </nav>
@@ -350,7 +350,7 @@ function App() {
         {(view === 'chat' || view === 'traceability') && (
           <div className="mt-auto">
             <button
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium text-gray-400 hover:text-red-400 bg-transparent border border-[#2A2A2A] hover:border-red-900/50 hover:bg-red-500/5 cursor-pointer transition-all duration-300"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium text-gray-400 hover:text-red-400 bg-transparent border border-border hover:border-red-900/50 hover:bg-red-500/5 cursor-pointer transition-all duration-300"
               onClick={() => {
                 if (import.meta.env.VITE_POSTHOG_KEY) {
                   getPosthog().then(p => p.capture('session_reset', { message_count: messages.length, view }));
@@ -373,20 +373,20 @@ function App() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full min-w-0 bg-[#0A0A0A] relative">
+      <main className="flex-1 flex flex-col h-full min-w-0 bg-background relative">
         {/* Mobile Header Toggle */}
-          <div className="lg:hidden flex items-center px-3 py-3 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-md sticky top-0 z-30 flex-shrink-0">
+          <div className="lg:hidden flex items-center px-3 py-3 border-b border-border bg-surface/50 backdrop-blur-md sticky top-0 z-30 flex-shrink-0">
           <button 
             onClick={() => setSidebarOpen(true)}
-            className="p-2 -ml-2 text-gray-400 hover:text-white bg-transparent border-0 cursor-pointer"
+            className="p-2 -ml-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer"
           >
             <Menu size={24} />
           </button>
           <div className="ml-4 flex items-center gap-2">
-            <div className="bg-blue-600 p-1.5 rounded-lg shadow-lg">
+            <div className="bg-blue-600 p-1.5 rounded-lg">
               <Search size={16} className="text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight">RAG Workbench</span>
+            <span className="font-bold text-lg tracking-tight text-primary">RAG Workbench</span>
           </div>
         </div>
         
@@ -428,7 +428,7 @@ function App() {
         {/* VIEW: STOCKS */}
         {view === 'stocks' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300 overflow-y-auto">
-              <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-sm z-10 flex-shrink-0">
+              <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-border bg-surface/50 backdrop-blur-sm z-10 flex-shrink-0">
                 <h1 className="text-base md:text-xl font-semibold text-white flex items-center gap-3">
                   <Cpu className="text-emerald-400" />
                   Coverage List
@@ -441,21 +441,21 @@ function App() {
         {/* VIEW: TRACEABILITY */}
         {view === 'traceability' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
-              <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-sm z-10 flex-shrink-0">
+              <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-border bg-surface/50 backdrop-blur-sm z-10 flex-shrink-0">
                 <h1 className="text-base md:text-xl font-semibold text-white flex items-center gap-3">
                   <Activity className="text-purple-400" />
                   Pipeline Traceability
                 </h1>
                 <p className="text-xs md:text-sm text-gray-400 mt-1">Live visualization of the execution steps for your last query.</p>
               </header>
-            <div className="flex-1 relative bg-[#0A0A0A]">
+            <div className="flex-1 relative bg-background">
               <PipelineFlow status={pipelineStatus} />
             </div>
             {/* Input allowed in Traceability view too */}
               <div className="px-3 md:px-4 lg:px-8 py-3 md:py-6 bg-gradient-to-t from-[#0A0A0A] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
                 <form
                   onSubmit={handleSubmit}
-                  className="max-w-4xl mx-auto flex items-center bg-[#1A1A1A]/90 backdrop-blur-md border border-[#2A2A2A] rounded-2xl p-1.5 md:p-2 shadow-2xl transition-all duration-300 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 pointer-events-auto"
+                  className="max-w-4xl mx-auto flex items-center bg-surface-elevated/90 backdrop-blur-md border border-border rounded-2xl p-1.5 md:p-2 shadow-none transition-all duration-300 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 pointer-events-auto"
                 >
                   <input
                     className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-3 md:px-4 py-3 text-base outline-none w-full min-w-0"
@@ -479,7 +479,7 @@ function App() {
         {/* VIEW: CHAT */}
         {view === 'chat' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
-              <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between gap-2">
+              <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-border bg-surface/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between gap-2">
               <div>
                 <h1 className="text-base md:text-lg lg:text-xl font-semibold text-white flex items-center gap-2 md:gap-3">
                   <MessageSquare className="text-blue-400" size={18} />
@@ -487,7 +487,7 @@ function App() {
                 </h1>
                 <div className="text-xs lg:text-sm text-gray-400 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="hidden sm:inline">Engine:</span> <span className="text-gray-200 font-medium px-2 py-0.5 bg-[#1A1A1A] rounded-md border border-[#2A2A2A]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
+                    <span className="hidden sm:inline">Engine:</span> <span className="text-gray-200 font-medium px-2 py-0.5 bg-surface-elevated rounded-md border border-border">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-blue-400/80 font-medium">
                     <ShieldCheck size={14} />
@@ -496,13 +496,13 @@ function App() {
                 </div>
               </div>
               {/* Mini Pipeline Status Indicator */}
-              <div className="flex items-center gap-1 md:gap-1.5 lg:gap-2 bg-[#1A1A1A] px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-xl border border-[#2A2A2A] shadow-sm shrink-0">
+              <div className="flex items-center gap-1 md:gap-1.5 lg:gap-2 bg-surface-elevated px-2 md:px-3 lg:px-4 py-1.5 md:py-2 rounded-xl border border-border shadow-none shrink-0">
                  <div className="text-[9px] md:text-[10px] lg:text-xs font-semibold text-gray-400 uppercase mr-0.5 md:mr-1 lg:mr-2 hidden xs:block">Pipeline</div>
                  {['input', 'retrieval', 'extraction', 'math', 'verification', 'output'].map(step => {
                    const s = pipelineStatus[step as keyof PipelineStatus];
                    return (
                      <div key={step} className="group relative">
-                       <div className={`w-3 h-3 rounded-full border-2 border-[#1A1A1A] shadow-sm transition-colors duration-500 ${
+                       <div className={`w-3 h-3 rounded-full border-2 border-surface-elevated shadow-none transition-colors duration-500 ${
                          s === 'success' ? 'bg-emerald-500' : s === 'error' ? 'bg-red-500' : s === 'pending' ? 'bg-blue-500 animate-pulse' : 'bg-gray-600'
                        }`} />
                      </div>
@@ -531,7 +531,7 @@ function App() {
 
                   {mode === 'auditable' && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full mb-6 text-left">
-                      <div className="rounded-xl border border-[#2A2A2A] bg-[#121212] p-4">
+                      <div className="rounded-xl border border-border bg-surface p-4">
                         <div className="flex items-center gap-2 text-blue-300 font-semibold text-sm mb-2">
                           <Search size={16} />
                           Retrieve evidence
@@ -540,7 +540,7 @@ function App() {
                           Finds relevant passages using hybrid semantic and keyword search across supported SEC filings.
                         </p>
                       </div>
-                      <div className="rounded-xl border border-[#2A2A2A] bg-[#121212] p-4">
+                      <div className="rounded-xl border border-border bg-surface p-4">
                         <div className="flex items-center gap-2 text-purple-300 font-semibold text-sm mb-2">
                           <Database size={16} />
                           Ground the numbers
@@ -549,7 +549,7 @@ function App() {
                           Uses structured XBRL facts and deterministic math for financial metrics and period comparisons.
                         </p>
                       </div>
-                      <div className="rounded-xl border border-[#2A2A2A] bg-[#121212] p-4">
+                      <div className="rounded-xl border border-border bg-surface p-4">
                         <div className="flex items-center gap-2 text-emerald-300 font-semibold text-sm mb-2">
                           <ShieldCheck size={16} />
                           Verify the answer
@@ -581,7 +581,7 @@ function App() {
                            if (import.meta.env.VITE_POSTHOG_KEY) {
                              getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'micron_relationships', mode }));
                            }
-                         }} className="text-left px-4 py-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl hover:bg-[#242424] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                         }} className="text-left px-4 py-3 bg-surface-elevated border-border rounded-xl transition-all text-sm text-secondary">
                            "What are Micron's key relationships?"
                          </button>
                          <button onClick={() => {
@@ -589,7 +589,7 @@ function App() {
                            if (import.meta.env.VITE_POSTHOG_KEY) {
                              getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'nvidia_suppliers', mode }));
                            }
-                         }} className="text-left px-4 py-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl hover:bg-[#242424] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                         }} className="text-left px-4 py-3 bg-surface-elevated border-border rounded-xl transition-all text-sm text-secondary">
                            "Show me NVIDIA's suppliers and partners"
                          </button>
                        </>
@@ -600,7 +600,7 @@ function App() {
                        if (import.meta.env.VITE_POSTHOG_KEY) {
                          getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'nvidia_revenue', mode }));
                        }
-                     }} className="text-left px-4 py-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl hover:bg-[#242424] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                     }} className="text-left px-4 py-3 bg-surface-elevated border-border rounded-xl transition-all text-sm text-secondary">
                         "What was NVIDIA's total revenue?"
                      </button>
                      <button onClick={() => {
@@ -608,7 +608,7 @@ function App() {
                        if (import.meta.env.VITE_POSTHOG_KEY) {
                          getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'micron_margin', mode }));
                        }
-                     }} className="text-left px-4 py-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl hover:bg-[#242424] hover:border-blue-500/30 transition-all text-sm text-gray-300">
+                     }} className="text-left px-4 py-3 bg-surface-elevated border-border rounded-xl transition-all text-sm text-secondary">
                         "Did Micron's gross margin improve?"
                      </button>
                        </>
@@ -625,21 +625,21 @@ function App() {
                   }`}
                 >
                   {/* Avatar */}
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border ${
-                     msg.role === 'user' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-[#1A1A1A] border-[#2A2A2A] text-blue-400'
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-none border ${
+                     msg.role === 'user' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-surface-elevated border-border text-blue-400'
                   }`}>
                     {msg.role === 'user' ? <Database size={18} /> : <Search size={18} />}
                   </div>
 
                   {/* Message Bubble */}
                   <div
-                    className={`px-5 py-4 rounded-2xl leading-relaxed text-[15px] shadow-sm ${
+                    className={`px-5 py-4 rounded-2xl leading-relaxed text-[15px] shadow-none ${
                       msg.role === 'user'
                         ? 'bg-blue-600 text-white rounded-tr-sm'
-                        : 'bg-[#1A1A1A] text-gray-200 border border-[#2A2A2A] rounded-tl-sm'
+                        : 'bg-surface-elevated text-primary border border-border rounded-tl-sm'
                     }`}
                   >
-                    <div className="prose prose-invert prose-p:leading-relaxed prose-pre:bg-[#0A0A0A] prose-pre:border prose-pre:border-[#2A2A2A] max-w-none">
+                    <div className="prose prose-invert prose-p:leading-relaxed prose-pre:bg-background prose-pre:border prose-pre:border-border max-w-none">
                       <ReactMarkdown
                         allowedElements={['p', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'a', 'br', 'hr']}
                         skipHtml
@@ -649,7 +649,7 @@ function App() {
                     </div>
 
                     {msg.role === 'assistant' && (msg.sources || msg.verification || msg.xbrl_facts?.length || msg.relevant_xbrl?.length || msg.xbrl_badge || msg.math_steps?.length) && (
-                      <div className="mt-4 pt-4 border-t border-[#2A2A2A]/50">
+                      <div className="mt-4 pt-4 border-t border-border/50">
                         <AuditTrail
                           sources={msg.sources}
                           xbrl_facts={msg.xbrl_facts}
@@ -663,7 +663,7 @@ function App() {
                     )}
 
                     {msg.role === 'assistant' && msg.entities && msg.entities.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-[#2A2A2A]/50">
+                      <div className="mt-4 pt-4 border-t border-border/50">
                         <div className="flex items-center gap-2 mb-3">
                           <Network size={14} className="text-indigo-400" />
                           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Search Entities</span>
@@ -681,9 +681,9 @@ function App() {
                               <Search size={14} className="text-blue-400" />
                               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Knowledge Graph Triples ({msg.triples.length})</span>
                             </div>
-                            <div className="bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl overflow-hidden shadow-inner">
+                            <div className="bg-background border border-border rounded-xl overflow-hidden shadow-none">
                               {msg.triples.map((triple, i) => (
-                                <div key={i} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-mono ${i % 2 === 0 ? 'bg-[#0F0F0F]' : ''} ${i > 0 ? 'border-t border-[#2A2A2A]/50' : ''}`}>
+                                <div key={i} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-mono ${i % 2 === 0 ? 'bg-surface/30' : ''} ${i > 0 ? 'border-t border-border/50' : ''}`}>
                                   <span className="text-blue-300">{triple.subject}</span>
                                   <span className="text-gray-500">&rarr;</span>
                                   <span className="text-emerald-400 text-xs px-1.5 py-0.5 bg-emerald-500/10 rounded border border-emerald-500/20">{triple.predicate}</span>
@@ -698,13 +698,13 @@ function App() {
                     )}
 
                     {msg.sql && (
-                      <pre className="mt-4 bg-[#0A0A0A] border border-[#2A2A2A] text-gray-300 rounded-xl p-4 text-sm font-mono whitespace-pre-wrap overflow-x-auto shadow-inner">
+                      <pre className="mt-4 bg-background border border-border text-gray-300 rounded-xl p-4 text-sm font-mono whitespace-pre-wrap overflow-x-auto shadow-none">
                         <code>{msg.sql}</code>
                       </pre>
                     )}
 
                     {msg.data && msg.data.length > 0 && (
-                      <div className="mt-4 bg-[#0A0A0A] border border-[#2A2A2A] rounded-xl overflow-hidden shadow-inner">
+                      <div className="mt-4 bg-background border border-border rounded-xl overflow-hidden shadow-none">
                         <div className="overflow-x-auto">
                           <table className="w-full border-collapse text-sm">
                             <thead>
@@ -712,7 +712,7 @@ function App() {
                                 {Object.keys(msg.data[0]).map(key => (
                                   <th
                                     key={key}
-                                    className="text-left px-4 py-3 bg-[#161616] border-b border-[#2A2A2A] text-gray-400 font-semibold"
+                                    className="text-left px-4 py-3 bg-surface border-b border-border text-secondary font-semibold"
                                   >
                                     {key}
                                   </th>
@@ -723,12 +723,12 @@ function App() {
                               {msg.data.slice(0, 10).map((row, i) => (
                                 <tr
                                   key={i}
-                                  className={`transition-colors hover:bg-[#1A1A1A] ${i % 2 === 0 ? '' : 'bg-[#0F0F0F]'}`}
+                                  className={`transition-colors hover:bg-surface-elevated ${i % 2 === 0 ? '' : 'bg-surface/30'}`}
                                 >
                                   {Object.values(row).map((val, j) => (
                                     <td
                                       key={j}
-                                      className="px-4 py-3 border-b border-[#2A2A2A]/50 text-gray-300"
+                                      className="px-4 py-3 border-b border-border/50 text-gray-300"
                                     >
                                       {typeof val === 'number'
                                         ? val.toLocaleString()
@@ -741,7 +741,7 @@ function App() {
                           </table>
                         </div>
                         {msg.data.length > 10 && (
-                          <div className="px-4 py-2.5 bg-[#161616] border-t border-[#2A2A2A] text-xs text-gray-500 font-medium text-center uppercase tracking-wider">
+                          <div className="px-4 py-2.5 bg-surface border-t border-border text-xs text-secondary font-medium text-center uppercase tracking-wider">
                             Showing 10 of {msg.data.length} rows
                           </div>
                         )}
@@ -749,7 +749,7 @@ function App() {
                     )}
 
                     {msg.role === 'assistant' && idx > 0 && (
-                      <div className="mt-4 pt-3 border-t border-[#2A2A2A]/50 flex items-center gap-3">
+                      <div className="mt-4 pt-3 border-t border-border/50 flex items-center gap-3">
                         <span className="text-xs text-gray-500">Was this correct?</span>
                         <button
                           disabled={feedbackSent.has(idx)}
@@ -771,7 +771,7 @@ function App() {
                           className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border-0 cursor-pointer transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                             feedbackSent.has(idx)
                               ? 'bg-emerald-500/10 text-emerald-400'
-                              : 'bg-[#242424] text-gray-400 hover:bg-emerald-500/10 hover:text-emerald-400'
+                              : 'bg-surface-elevated text-secondary border border-border shadow-none transition-colors duration-500'
                           }`}
                         >
                           <ThumbsUp size={12} />
@@ -797,7 +797,7 @@ function App() {
                           className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border-0 cursor-pointer transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                             feedbackSent.has(idx)
                               ? 'bg-red-500/10 text-red-400'
-                              : 'bg-[#242424] text-gray-400 hover:bg-red-500/10 hover:text-red-400'
+                              : 'bg-surface-elevated text-secondary border border-border shadow-none transition-colors duration-500'
                           }`}
                         >
                           <ThumbsDown size={12} />
@@ -811,10 +811,10 @@ function App() {
 
               {loading && (
                 <div className="flex gap-5 max-w-[90%] self-start animate-in slide-in-from-bottom-2 duration-300">
-                  <div className="w-10 h-10 rounded-xl bg-[#1A1A1A] border border-[#2A2A2A] text-blue-400 flex items-center justify-center shadow-sm">
+                  <div className="w-10 h-10 rounded-xl bg-surface-elevated border border-border text-blue-400 flex items-center justify-center shadow-none">
                     <Search size={18} className="animate-pulse" />
                   </div>
-                  <div className="px-6 py-4 rounded-2xl rounded-tl-sm bg-[#1A1A1A] text-gray-400 border border-[#2A2A2A] flex items-center gap-3">
+                  <div className="px-6 py-4 rounded-2xl rounded-tl-sm bg-surface-elevated text-gray-400 border border-border flex items-center gap-3">
                     <div className="flex gap-1.5">
                       <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '0ms' }} />
                       <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -832,7 +832,7 @@ function App() {
             <div className="px-3 md:px-4 lg:px-8 py-3 md:py-6 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
               <form
                 onSubmit={handleSubmit}
-                className="max-w-4xl mx-auto flex items-center bg-[#1A1A1A]/90 backdrop-blur-md border border-[#2A2A2A] rounded-2xl p-1.5 md:p-2 shadow-2xl transition-all duration-300 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 pointer-events-auto"
+                className="max-w-4xl mx-auto flex items-center bg-surface-elevated border-border rounded-xl transition-all duration-300 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 pointer-events-auto"
               >
                 <input
                   className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-3 md:px-4 py-3 text-base outline-none w-full min-w-0"

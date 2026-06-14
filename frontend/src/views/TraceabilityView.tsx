@@ -28,24 +28,24 @@ const TraceabilityView: React.FC<TraceabilityViewProps> = ({
 }) => {
   return (
     <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
-      <header className="px-4 lg:px-8 py-5 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-sm z-10 flex-shrink-0">
-        <h1 className="text-xl font-semibold text-white flex items-center gap-3">
+      <header className="px-4 lg:px-8 py-5 border-b border-border bg-surface/50 backdrop-blur-sm z-10 flex-shrink-0">
+        <h1 className="text-xl font-semibold text-primary flex items-center gap-3">
           <Activity className="text-purple-400" />
           Pipeline Traceability
         </h1>
-        <p className="text-sm text-gray-400 mt-1">Live visualization of the execution steps for your last query.</p>
+        <p className="text-sm text-secondary mt-1">Live visualization of the execution steps for your last query.</p>
       </header>
-      <div className="flex-1 relative bg-[#0A0A0A]">
+      <div className="flex-1 relative bg-background">
         <PipelineFlow status={pipelineStatus} />
       </div>
       {/* Input allowed in Traceability view too */}
-      <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-[#0A0A0A] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+      <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-background via-background to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
         <form
           onSubmit={handleSubmit}
-          className="max-w-4xl mx-auto flex items-center bg-[#1A1A1A]/90 backdrop-blur-md border border-[#2A2A2A] rounded-2xl p-2 shadow-2xl transition-all duration-300 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 pointer-events-auto"
+          className="max-w-4xl mx-auto flex items-center bg-surface-elevated border border-border rounded-2xl p-2 transition-all duration-300 focus-within:border-purple-500/50 focus-within:ring-4 focus-within:ring-purple-500/10 pointer-events-auto shadow-none"
         >
           <input
-            className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-4 py-3 text-base outline-none w-full"
+            className="flex-1 bg-transparent border-0 text-primary placeholder-secondary px-4 py-3 text-base outline-none w-full"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Test a query to trace its execution..."

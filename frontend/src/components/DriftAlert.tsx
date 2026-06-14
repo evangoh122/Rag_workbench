@@ -31,8 +31,8 @@ export default function DriftAlert() {
 
   if (unavailable) {
     return (
-      <div className="mt-auto px-3 py-3 rounded-lg bg-[#1F1F1F] border border-[#2A2A2A]">
-        <div className="flex items-center gap-2 text-xs text-gray-500">
+      <div className="mt-auto px-3 py-3 rounded-lg bg-surface-elevated border border-border">
+        <div className="flex items-center gap-2 text-xs text-secondary/60">
           <Activity size={12} />
           <span>Status unavailable</span>
         </div>
@@ -42,9 +42,9 @@ export default function DriftAlert() {
 
   if (status === null) {
     return (
-      <div className="mt-auto px-3 py-3 rounded-lg bg-[#1F1F1F] border border-[#2A2A2A] animate-pulse">
-        <div className="h-3 w-3/4 bg-[#2A2A2A] rounded mb-2" />
-        <div className="h-3 w-2/3 bg-[#2A2A2A] rounded" />
+      <div className="mt-auto px-3 py-3 rounded-lg bg-surface-elevated border border-border animate-pulse">
+        <div className="h-3 w-3/4 bg-border rounded mb-2" />
+        <div className="h-3 w-2/3 bg-border rounded" />
       </div>
     );
   }
@@ -65,62 +65,62 @@ export default function DriftAlert() {
     <div
       className={`mt-auto px-3 py-3 rounded-lg border text-xs transition-colors duration-300 ${
         hasAlert
-          ? 'bg-red-950 border-red-800'
-          : 'bg-[#1F1F1F] border-[#2A2A2A]'
+          ? 'bg-bearish/10 border-bearish/30'
+          : 'bg-surface-elevated border-border'
       }`}
     >
-      <div className="flex items-center gap-1.5 mb-2 font-semibold text-gray-300">
-        <Activity size={12} className={hasAlert ? 'text-red-400' : 'text-gray-400'} />
+      <div className="flex items-center gap-1.5 mb-2 font-semibold text-secondary">
+        <Activity size={12} className={hasAlert ? 'text-bearish' : 'text-secondary/60'} />
         <span>Pipeline Monitor</span>
       </div>
 
       {/* Agreement rate row */}
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-gray-500">Agreement</span>
-        <div className="flex items-center gap-1.5">
+        <span className="text-secondary/60">Agreement</span>
+        <div className="flex items-center gap-1.5 tabular-nums">
           <span
             className={
-              status.agreement_alert ? 'text-red-400 font-semibold animate-pulse' : 'text-green-400'
+              status.agreement_alert ? 'text-bearish font-semibold animate-pulse' : 'text-bullish'
             }
           >
             {agreementPct}%
           </span>
-          <span className="text-gray-600">/</span>
-          <span className="text-gray-500">{floorPct}% floor</span>
+          <span className="text-secondary/20">/</span>
+          <span className="text-secondary/60">{floorPct}% floor</span>
           {status.agreement_alert ? (
-            <AlertTriangle size={11} className="text-red-400" />
+            <AlertTriangle size={11} className="text-bearish" />
           ) : (
-            <CheckCircle size={11} className="text-green-500" />
+            <CheckCircle size={11} className="text-bullish" />
           )}
         </div>
       </div>
 
       {/* Concept spike row */}
       <div className="flex items-center justify-between">
-        <span className="text-gray-500">Unknown concepts</span>
-        <div className="flex items-center gap-1.5">
+        <span className="text-secondary/60">Unknown concepts</span>
+        <div className="flex items-center gap-1.5 tabular-nums">
           <span
             className={
-              status.concept_alert ? 'text-amber-400 font-semibold' : 'text-green-400'
+              status.concept_alert ? 'text-amber-400 font-semibold' : 'text-bullish'
             }
           >
             {conceptCount}
           </span>
-          <span className="text-gray-600">/</span>
-          <span className="text-gray-500">{conceptThreshold} limit</span>
+          <span className="text-secondary/20">/</span>
+          <span className="text-secondary/60">{conceptThreshold} limit</span>
           {status.concept_alert ? (
             <AlertTriangle size={11} className="text-amber-400" />
           ) : (
-            <CheckCircle size={11} className="text-green-500" />
+            <CheckCircle size={11} className="text-bullish" />
           )}
         </div>
       </div>
 
       {/* Healthy chip */}
       {!hasAlert && (
-        <div className="mt-2 flex items-center gap-1 text-green-600">
+        <div className="mt-2 flex items-center gap-1 text-bullish/60">
           <CheckCircle size={10} />
-          <span className="text-green-600">Pipeline healthy</span>
+          <span>Pipeline healthy</span>
         </div>
       )}
     </div>

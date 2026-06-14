@@ -10,18 +10,18 @@ interface Section {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
-    <div className="bg-[#121212] border border-[#2A2A2A] rounded-2xl overflow-hidden">
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
       <button
-        className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-[#1A1A1A] transition-colors cursor-pointer border-0 bg-transparent"
+        className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-surface-elevated transition-colors cursor-pointer border-0 bg-transparent"
         onClick={() => setOpen(o => !o)}
       >
-        <span className="text-sm font-semibold text-white">{title}</span>
+        <span className="text-sm font-semibold text-primary">{title}</span>
         {open
-          ? <ChevronDown size={16} className="text-gray-500" />
-          : <ChevronRight size={16} className="text-gray-500" />}
+          ? <ChevronDown size={16} className="text-secondary" />
+          : <ChevronRight size={16} className="text-secondary" />}
       </button>
       {open && (
-        <div className="px-6 pb-6 border-t border-[#2A2A2A]">
+        <div className="px-6 pb-6 border-t border-border">
           {children}
         </div>
       )}
@@ -30,17 +30,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function P({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-gray-300 leading-relaxed mt-4">{children}</p>;
+  return <p className="text-sm text-secondary leading-relaxed mt-4">{children}</p>;
 }
 
 function H({ children }: { children: React.ReactNode }) {
-  return <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-5 mb-2">{children}</h4>;
+  return <h4 className="text-xs font-bold text-secondary/60 uppercase tracking-widest mt-5 mb-2">{children}</h4>;
 }
 
 function Tag({ children, color = 'blue' }: { children: React.ReactNode; color?: string }) {
   const colors: Record<string, string> = {
     blue:   'bg-blue-500/10 border-blue-500/20 text-blue-300',
-    emerald:'bg-emerald-500/10 border-emerald-500/20 text-emerald-300',
+    emerald:'bg-bullish/10 border-bullish/20 text-bullish',
     purple: 'bg-purple-500/10 border-purple-500/20 text-purple-300',
     orange: 'bg-orange-500/10 border-orange-500/20 text-orange-300',
     cyan:   'bg-cyan-500/10 border-cyan-500/20 text-cyan-300',
@@ -54,11 +54,11 @@ function Tag({ children, color = 'blue' }: { children: React.ReactNode; color?: 
 
 function Table({ rows }: { rows: [string, string][] }) {
   return (
-    <div className="mt-4 border border-[#2A2A2A] rounded-xl overflow-hidden">
+    <div className="mt-4 border border-border rounded-xl overflow-hidden">
       {rows.map(([k, v], i) => (
-        <div key={i} className={`flex items-start gap-4 px-4 py-3 text-sm ${i % 2 === 0 ? 'bg-[#0A0A0A]' : ''} ${i > 0 ? 'border-t border-[#2A2A2A]/50' : ''}`}>
-          <span className="text-gray-400 font-medium w-40 flex-shrink-0">{k}</span>
-          <span className="text-gray-300">{v}</span>
+        <div key={i} className={`flex items-start gap-4 px-4 py-3 text-sm ${i % 2 === 0 ? 'bg-background' : ''} ${i > 0 ? 'border-t border-border/50' : ''}`}>
+          <span className="text-secondary font-medium w-40 flex-shrink-0">{k}</span>
+          <span className="text-primary">{v}</span>
         </div>
       ))}
     </div>
@@ -68,12 +68,12 @@ function Table({ rows }: { rows: [string, string][] }) {
 export default function Methodology() {
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto">
-      <header className="px-4 lg:px-8 py-5 border-b border-[#2A2A2A] bg-[#121212]/50 backdrop-blur-sm flex-shrink-0">
-        <h1 className="text-xl font-semibold text-white flex items-center gap-3">
+      <header className="px-4 lg:px-8 py-5 border-b border-border bg-surface/50 backdrop-blur-sm flex-shrink-0">
+        <h1 className="text-xl font-semibold text-primary flex items-center gap-3">
           <BookOpen className="text-indigo-400" />
           Methodology
         </h1>
-        <p className="text-sm text-gray-400 mt-1">
+        <p className="text-sm text-secondary mt-1">
           How the RAG Workbench ingests, embeds, retrieves, and verifies financial data
         </p>
       </header>
