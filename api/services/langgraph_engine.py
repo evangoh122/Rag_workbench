@@ -48,6 +48,7 @@ class GraphState(TypedDict):
     ticker: str
     query_type: str              # "numeric" | "qualitative"
     query_intent: str            # "latest" | "comparison" | "general"
+    numeric_text_grounded: Optional[bool]  # numeric Q answered from filing text (no XBRL), flagged unverified
     retrieved_docs: List[Dict[str, Any]]
     xbrl_facts: List[Dict[str, Any]]
     polygon_data: List[Dict[str, Any]]
@@ -911,15 +912,83 @@ def _is_numeric_query(query: str) -> bool:
     return has_numeric
 
 
+_xbrl_ticker_cache: dict[str, bool] = {}
+
+
+def _ticker_has_xbrl(ticker: str) -> bool:
+    """True if this ticker has any structured XBRL facts in the DB.
+
+    Tickers ingested only from an S-1/424B4 IPO prospectus (e.g. SPCX) carry
+    rich filing text but no XBRL facts, so deterministic numeric verification
+    can't run. Callers use this to allow text-grounded (clearly unverified)
+    numeric answers for such tickers instead of abstaining outright. Cached
+    per-ticker for the process lifetime. On any error, assumes XBRL is present
+    so we fall back to the safe deterministic-verify path.
+    """
+    if not ticker:
+        return True
+    if ticker in _xbrl_ticker_cache:
+        return _xbrl_ticker_cache[ticker]
+    has = True
+    try:
+        from api.db.database import db_manager
+        conn = db_manager.get_connection()
+        row = conn.execute(
+            "SELECT COUNT(*) FROM xbrl_facts WHERE ticker = ?", [ticker]
+        ).fetchone()
+        has = bool(row and row[0] > 0)
+    except Exception as e:
+        logger.warning("XBRL availability check failed for {}: {} — assuming present", ticker, e)
+        has = True
+    _xbrl_ticker_cache[ticker] = has
+    return has
+
+
+def _text_grounded_decorations(state: GraphState) -> dict:
+    """Disclaimer note + badge for numeric answers grounded in filing text (no XBRL).
+
+    Returns empty strings unless the classifier flagged this run as
+    numeric_text_grounded, so it's a no-op on the normal qualitative path.
+    """
+    if not state.get("numeric_text_grounded"):
+        return {"note": "", "badge": "", "reasoning": ""}
+    ticker = state.get("ticker", "")
+    return {
+        "note": (
+            f"\n\n_Figures above are quoted from {ticker}'s filing narrative "
+            f"(IPO prospectus / S-1) and are **not XBRL-verified** like our "
+            f"10-K-based numbers._"
+        ),
+        "badge": "From filing text • not XBRL-verified",
+        "reasoning": (
+            f"Text-grounded numeric answer for {ticker}: no XBRL facts were filed "
+            f"(prospectus only), so figures are quoted from narrative text and not "
+            f"deterministically verified."
+        ),
+    }
+
+
 def classifier_node(state: GraphState) -> Dict[str, Any]:
     """Classify query as numeric/qualitative and detect comparison vs latest intent."""
     query = state["query"]
     qtype  = "numeric" if _is_numeric_query(query) else "qualitative"
     intent = _detect_intent(query)
+    text_grounded = False
+    # A numeric question about a ticker with no XBRL facts (e.g. an S-1
+    # prospectus filer like SPCX) can't be deterministically verified. Rather
+    # than abstain at the verification gate, route it through the LLM/text path
+    # and flag the answer as quoted-from-text / not XBRL-verified.
+    if qtype == "numeric" and not _ticker_has_xbrl(state.get("ticker", "")):
+        logger.info(
+            "--- CLASSIFIER: numeric query for {} but no XBRL facts — "
+            "routing to text-grounded answer ---", state.get("ticker", ""))
+        qtype = "qualitative"
+        text_grounded = True
     logger.info(f"--- CLASSIFIER: {qtype} | intent={intent} ---")
     return {
         "query_type":   qtype,
         "query_intent": intent,
+        "numeric_text_grounded": text_grounded,
         "status": {**state.get("status", {}), "classifier": "success"},
     }
 
@@ -1094,24 +1163,28 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
             )
             answer = (resp2.choices[0].message.content or "").strip()
 
+            deco = _text_grounded_decorations(state)
             return {
-                "final_answer": answer,
+                "final_answer": answer + deco["note"],
                 "verification_status": "SKIPPED",
-                "verification_reasoning": "Qualitative query with tool-assisted calculation.",
+                "verification_reasoning": deco["reasoning"] or "Qualitative query with tool-assisted calculation.",
                 "math_steps": math_steps,
                 "math_result": None,
+                "xbrl_badge": deco["badge"],
                 "status": {**state.get("status", {}), "output": "success"},
             }
 
         # No tools needed — direct answer
         answer = (msg.content or "").strip()
 
+        deco = _text_grounded_decorations(state)
         return {
-            "final_answer": answer,
+            "final_answer": answer + deco["note"],
             "verification_status": "SKIPPED",
-            "verification_reasoning": "Qualitative query — numeric verification not applicable.",
+            "verification_reasoning": deco["reasoning"] or "Qualitative query — numeric verification not applicable.",
             "math_steps": ["Qualitative query — no computation needed."],
             "math_result": None,
+            "xbrl_badge": deco["badge"],
             "status": {**state.get("status", {}), "output": "success"},
         }
     except Exception as e:
@@ -1413,6 +1486,7 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
         "ticker": ticker,
         "query_type":           "numeric",
         "query_intent":         "general",
+        "numeric_text_grounded": False,
         "retrieved_docs":      [],
         "xbrl_facts":          [],
         "polygon_data":        [],
