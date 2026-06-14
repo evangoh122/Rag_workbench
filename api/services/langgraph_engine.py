@@ -944,15 +944,39 @@ def _ticker_has_xbrl(ticker: str) -> bool:
     return has
 
 
-def _text_grounded_decorations(state: GraphState) -> dict:
+_REFUSAL_MARKERS = (
+    "don't have", "do not have", "insufficient", "no information",
+    "does not contain", "not contain", "cannot answer", "can't answer",
+    "no financial", "no revenue", "no numerical", "would need",
+)
+
+
+def _text_grounded_decorations(state: GraphState, answer: str = "") -> dict:
     """Disclaimer note + badge for numeric answers grounded in filing text (no XBRL).
 
     Returns empty strings unless the classifier flagged this run as
     numeric_text_grounded, so it's a no-op on the normal qualitative path.
+
+    The disclaimer is only attached when the answer actually presents a figure
+    and isn't itself a refusal — otherwise "figures above are quoted from text"
+    would contradict an "I don't have that data" answer when retrieval failed to
+    surface a usable number.
     """
     if not state.get("numeric_text_grounded"):
         return {"note": "", "badge": "", "reasoning": ""}
     ticker = state.get("ticker", "")
+    low = (answer or "").lower()
+    has_figure = bool(re.search(r"[$\d]", answer or ""))
+    is_refusal = any(m in low for m in _REFUSAL_MARKERS)
+    if not has_figure or is_refusal:
+        return {
+            "note": "",
+            "badge": "",
+            "reasoning": (
+                f"Text-grounded path for {ticker} (no XBRL filed); retrieval did "
+                f"not surface a usable figure for this query."
+            ),
+        }
     return {
         "note": (
             f"\n\n_Figures above are quoted from {ticker}'s filing narrative "
@@ -1163,7 +1187,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
             )
             answer = (resp2.choices[0].message.content or "").strip()
 
-            deco = _text_grounded_decorations(state)
+            deco = _text_grounded_decorations(state, answer)
             return {
                 "final_answer": answer + deco["note"],
                 "verification_status": "SKIPPED",
@@ -1177,7 +1201,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
         # No tools needed — direct answer
         answer = (msg.content or "").strip()
 
-        deco = _text_grounded_decorations(state)
+        deco = _text_grounded_decorations(state, answer)
         return {
             "final_answer": answer + deco["note"],
             "verification_status": "SKIPPED",
