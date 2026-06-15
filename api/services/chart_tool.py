@@ -47,6 +47,38 @@ _MAX_YEARS = 8  # keep the chart readable
 
 CHARTABLE_METRICS = sorted(_CHART_METRICS.keys())
 
+# Words that signal the user wants a trend/visual, used by the numeric path to
+# auto-attach a chart (the qualitative path uses the LLM tool instead).
+_CHART_TRIGGER_WORDS = (
+    "chart", "plot", "graph", "visuali", "trend", "historical", "history",
+    "over time", "over the years", "year over year", "year-over-year",
+    "by year", "yoy", "trajectory", "trended",
+)
+
+# Query phrasing → chart metric. First match wins; order specific → general.
+_METRIC_PHRASES: List[tuple] = [
+    (("gross margin", "gross profit margin"), "gross_margin"),
+    (("operating margin",), "operating_margin"),
+    (("net margin", "profit margin"), "net_margin"),
+    (("gross profit",), "gross_profit"),
+    (("operating income",), "operating_income"),
+    (("r&d", "research and development"), "rd_expense"),
+    (("net income", "earnings", "profit"), "net_income"),
+    (("revenue", "sales", "top line"), "revenue"),
+]
+
+
+def detect_chart_request(query: str) -> Optional[str]:
+    """If the query asks for a trend/visual of a chartable metric, return that
+    metric; otherwise None. Used to auto-build a chart on the numeric path."""
+    q = (query or "").lower()
+    if not any(w in q for w in _CHART_TRIGGER_WORDS):
+        return None
+    for phrases, metric in _METRIC_PHRASES:
+        if any(p in q for p in phrases):
+            return metric
+    return None
+
 
 def _annual_series(ticker: str, concepts: List[str]) -> Dict[str, float]:
     """Return {fiscal_year: value} for a concept set, annual periods only.

@@ -683,12 +683,24 @@ def output_node(state: GraphState) -> Dict[str, Any]:
         badge = ""
         group = ""
 
+    # Auto-attach a chart when the user asked for a trend/history of a metric
+    # (numeric path doesn't use the LLM charting tool). Data is built from XBRL.
+    chart_spec = None
+    try:
+        from api.services.chart_tool import detect_chart_request, build_chart_spec
+        metric = detect_chart_request(state.get("query", ""))
+        if metric:
+            chart_spec = build_chart_spec(ticker, metric)
+    except Exception as e:
+        logger.warning(f"output_node chart build failed (non-fatal): {e}")
+
     return {
         "final_answer": answer,
         "status": {**state.get('status', {}), "output": "success"},
         "relevant_xbrl": relevant_display,
         "xbrl_badge": badge,
         "xbrl_group": group,
+        "chart": chart_spec,
     }
 
 def abstention_node(state: GraphState) -> Dict[str, Any]:
