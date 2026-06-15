@@ -1,0 +1,70 @@
+name: Daily Runtime Snapshot
+
+# Persist the Space's runtime/review DB (audit log, HITL decisions, calibration,
+# eval_runs/eval_results) to the private HF dataset every day.
+#
+# WHY a cron instead of just the in-app timer: the free Space sleeps when idle, so
+# an internal daily timer may never fire. This workflow wakes the Space and asks
+# it to snapshot itself, so the data is captured even after a long idle period.
+#
+# NOTE: scheduled workflows only run from the repository's DEFAULT branch (main),
+# so this file must be on `main` to actually fire. Use the "Run workflow" button
+# (workflow_dispatch) to trigger it manually any time.
+#
+# Required config:
+#   secret  ADMIN_API_KEY   — same key uploaded to the Space by deploy.yml
+#   var     SPACE_BASE_URL  — optional override of the Space origin
+
+on:
+  schedule:
+    - cron: "30 3 * * *" # daily at 03:30 UTC (off-peak; avoids the 00:00 rush)
+  workflow_dispatch: {}
+
+# Never overlap snapshot runs.
+concurrency:
+  group: runtime-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wake Space, then trigger self-snapshot to the private dataset
+        env:
+          BASE: ${{ vars.SPACE_BASE_URL || 'https://egoh33-auditable-filing-qa.hf.space' }}
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ADMIN_API_KEY:-}" ]; then
+            echo "::error::ADMIN_API_KEY secret is not set."
+            exit 1
+          fi
+
+          echo "Waking $BASE (a sleeping Space takes ~1-2 min) ..."
+          awake=0
+          for i in $(seq 1 8); do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" -m 90 "$BASE/api/health" || echo "000")
+            echo "health attempt $i -> HTTP $code"
+            if [ "$code" = "200" ]; then awake=1; break; fi
+            sleep 30
+          done
+          if [ "$awake" != "1" ]; then
+            echo "::error::Space did not become healthy; skipping snapshot."
+            exit 1
+          fi
+
+          echo "Triggering snapshot ..."
+          resp=$(curl -sS -m 180 -X POST "$BASE/api/admin/snapshot" \
+            -H "X-API-Key: $ADMIN_API_KEY" -w $'\n%{http_code}')
+          body=$(printf '%s' "$resp" | sed '$d')
+          code=$(printf '%s' "$resp" | tail -n1)
+          echo "HTTP $code: $body"
+          if [ "$code" != "200" ]; then
+            echo "::error::Snapshot endpoint returned HTTP $code"
+            exit 1
+          fi
+          case "$body" in
+            *'"uploaded":true'*) echo "Snapshot uploaded to the private dataset." ;;
+            *) echo "::warning::Snapshot endpoint returned but did not upload (uploaded=false). Check Space logs / HF token." ;;
+          esac

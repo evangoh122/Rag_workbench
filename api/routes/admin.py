@@ -289,6 +289,33 @@ def refresh_data(
     )
 
 
+class SnapshotResponse(BaseModel):
+    status: str
+    uploaded: bool
+    timestamp: str
+
+
+@router.post("/snapshot", response_model=SnapshotResponse)
+def snapshot_runtime_db(
+    _: str = Depends(get_admin_api_key),
+):
+    """Persist the runtime/review DB (audit log, HITL decisions, calibration,
+    eval_runs/eval_results) to the private HF dataset as Parquet.
+
+    The Space has no persistent volume, so this is how that data survives restarts.
+    Triggered daily by the snapshot CI/CD cron (.github/workflows/snapshot.yml) and
+    available for manual/on-demand backups. force=True bypasses the on-Space guard
+    since the call is an explicit admin request."""
+    from api.services.runtime_snapshot import snapshot_review_db
+
+    uploaded = snapshot_review_db(reason="cron", force=True)
+    return SnapshotResponse(
+        status="ok" if uploaded else "skipped",
+        uploaded=uploaded,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+
+
 class EmbedResponse(BaseModel):
     status: str
     chunks_stored: int

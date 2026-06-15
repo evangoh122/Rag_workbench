@@ -59,14 +59,17 @@ def snapshot_enabled() -> bool:
     return _on_space() and _token() is not None
 
 
-def snapshot_review_db(*, reason: str = "periodic") -> bool:
+def snapshot_review_db(*, reason: str = "periodic", force: bool = False) -> bool:
     """Export every review table to Parquet and upload to the private dataset in one commit.
 
     Best-effort: logs and returns False on any failure; never raises. Safe to call
     from a worker thread — it uses a fresh DuckDB cursor for the export so it does
     not contend with request-handler writes.
+
+    `force=True` bypasses the on-Space guard (used by the admin/cron trigger, where
+    the snapshot is explicitly requested) but still requires an HF token.
     """
-    if not _on_space():
+    if not force and not _on_space():
         logger.info("[snapshot] not on a Space (and not forced) — skipping review-DB snapshot")
         return False
     token = _token()
