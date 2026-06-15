@@ -262,3 +262,54 @@ class TestQueryClassification:
             "revenue year over year growth",
         ]:
             assert _is_numeric_query(q) is True, q
+
+
+class TestQualitativeGrounding:
+    """The qualitative path must not invent competitor/company names from the
+    model's general knowledge — only names present in the filing context are
+    allowed. We assert the grounding instruction is in the system prompt the
+    LLM actually receives."""
+
+    @patch("api.services.langgraph_engine._text_grounded_decorations",
+           return_value={"note": "", "reasoning": "", "badge": ""})
+    @patch("openai.OpenAI")
+    def test_system_prompt_grounds_competitor_names(self, mock_openai_cls, _mock_deco):
+        from api.services.langgraph_engine import qualitative_output_node
+
+        captured: dict = {}
+
+        def _create(**kwargs):
+            captured["messages"] = kwargs.get("messages")
+            msg = MagicMock()
+            msg.tool_calls = None
+            msg.content = "The filings under review do not enumerate specific competitors."
+            resp = MagicMock()
+            resp.choices = [MagicMock(message=msg)]
+            return resp
+
+        mock_openai_cls.return_value.chat.completions.create.side_effect = _create
+
+        state = {
+            "query": "Who are NVIDIA's competitors?",
+            "ticker": "NVDA",
+            "retrieved_docs": [
+                {"chunk_text": "NVIDIA designs GPUs for data centers and gaming.",
+                 "metadata": {"source": "10-K", "ticker": "NVDA"}}
+            ],
+            "xbrl_facts": [],
+            "query_intent": "general",
+            "history": [],
+            "status": {},
+        }
+
+        result = qualitative_output_node(state)
+
+        sys_msg = captured["messages"][0]
+        assert sys_msg["role"] == "system"
+        content = sys_msg["content"].lower()
+        # The guardrail must (1) restrict company/competitor names to the context
+        # and (2) explicitly forbid general-knowledge names.
+        assert "only name competitors" in content
+        assert "general knowledge" in content
+        assert "do not enumerate specific competitors" in content
+        assert result["status"]["output"] == "success"

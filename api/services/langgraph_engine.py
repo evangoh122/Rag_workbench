@@ -1324,6 +1324,14 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                     "calculate_financial_metric tool to compute it precisely. "
                     "Use Polars, never Pandas for any data operations. "
                     "Do not fabricate numbers, statistics, or claims not present in the context. "
+                    "GROUNDING — company and competitor names: only name competitors, peers, "
+                    "customers, suppliers, or other companies if that name explicitly appears in "
+                    "the provided filing context above. Never introduce company, product, or "
+                    "startup names from your own general knowledge (for example, do not list "
+                    "specific competitors, chips, or AI startups that are not mentioned in the "
+                    "context). If asked who the competitors or peers are and the provided filings "
+                    "do not name them, say plainly that the filings under review do not enumerate "
+                    "specific competitors — do not fill the gap with names from outside the filings. "
                     f"If the context is insufficient, say so clearly. {intent_instruction}"
                 ),
             },
