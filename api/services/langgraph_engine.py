@@ -32,6 +32,7 @@ except ImportError:  # pragma: no cover
 from api.services.financial_calc import (
     FactExtractor, CalcResult,
     gross_margin, gross_margin_growth, operating_margin, net_margin, rd_intensity, current_ratio, debt_to_equity, net_debt, free_cash_flow, check_balance_sheet, check_gross_profit,
+    yoy_growth, cagr,
 )
 from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display
 
@@ -46,6 +47,7 @@ class GraphState(TypedDict):
     """
     query: str
     ticker: str
+    history: Optional[List[Dict[str, str]]]  # prior [{role, content}] turns for context
     query_type: str              # "numeric" | "qualitative"
     query_intent: str            # "latest" | "comparison" | "general"
     numeric_text_grounded: Optional[bool]  # numeric Q answered from filing text (no XBRL), flagged unverified
@@ -289,6 +291,52 @@ def math_node(state: GraphState) -> Dict[str, Any]:
             rd  = extractor.get("researchanddevelopment",  period=latest)
             if rev is not None and rd is not None:
                 calc = rd_intensity(rev, rd, period=latest)
+
+        # Revenue growth (YoY + full-period CAGR). Must come before the plain
+        # revenue fallback below, otherwise "revenue growth rate" matches the
+        # bare "revenue" keyword and returns the latest level instead.
+        elif (
+            any(k in query for k in (
+                "revenue growth", "sales growth", "top line growth",
+                "top-line growth", "revenue cagr", "revenue yoy",
+                "revenue year over year", "revenue year-over-year",
+            ))
+            or (
+                any(g in query for g in ("growth", "cagr", "grew", "grow", "increase"))
+                and any(r in query for r in ("revenue", "net sales", "top line", "top-line", "sales"))
+            )
+        ):
+            # Use the same clean annual series the chart tool uses (annual
+            # periods only, one value per fiscal year) so multi-year "over the
+            # same period" questions get a real series, not quarterly noise.
+            from api.services.chart_tool import _annual_series, _REVENUE_CONCEPTS
+            series = _annual_series(state['ticker'], _REVENUE_CONCEPTS)
+            years = sorted(series)
+            if len(years) >= 2:
+                cur_y, pri_y = years[-1], years[-2]
+                calc = yoy_growth(
+                    series[cur_y], series[pri_y], metric_name="Revenue",
+                    current_period=cur_y, prior_period=pri_y,
+                )
+                # Full-period CAGR when the series spans multiple years — this is
+                # the "growth rate over the same period" most users mean.
+                start_y, end_y = years[0], years[-1]
+                span = int(end_y) - int(start_y)
+                if span >= 2 and series[start_y] > 0 and series[end_y] >= 0:
+                    try:
+                        cagr_calc = cagr(
+                            series[start_y], series[end_y], span,
+                            metric_name="Revenue", start_period=start_y, end_period=end_y,
+                        )
+                        steps.append(cagr_calc.display())
+                    except Exception as ce:
+                        steps.append(f"CAGR skipped: {ce}")
+                steps.append(
+                    "Annual revenue: "
+                    + ", ".join(f"{y}: ${series[y]:,.0f}" for y in years)
+                )
+            else:
+                steps.append("Need at least two annual revenue figures to compute growth.")
 
         # Revenue standalone fallback
         elif any(k in query for k in ("revenue", "net sales", "total revenue")):
@@ -1279,11 +1327,22 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                     f"If the context is insufficient, say so clearly. {intent_instruction}"
                 ),
             },
-            {
-                "role": "user",
-                "content": f"Context from SEC filings:\n\n{context}{facts_text}\n\nQuestion: {state['query']}",
-            },
         ]
+
+        # Prior conversation turns so follow-ups ("what about its net income?",
+        # "over the same period") resolve against earlier context. Only plain
+        # user/assistant text is forwarded; the current turn's grounded context
+        # is the final user message below.
+        for turn in (state.get("history") or [])[-6:]:
+            role = turn.get("role")
+            content = (turn.get("content") or "").strip()
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content[:2000]})
+
+        messages.append({
+            "role": "user",
+            "content": f"Context from SEC filings:\n\n{context}{facts_text}\n\nQuestion: {state['query']}",
+        })
 
         cfg = Config.get_provider_config()
         client = OpenAI(
@@ -1654,9 +1713,14 @@ def _abstain_response(company: str) -> Dict[str, Any]:
     }
 
 
-def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
+def run_auditable_rag(query: str, ticker: str,
+                      history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     """
     Run the LangGraph DAG for a given query and ticker.
+
+    `history` carries prior conversation turns ([{role, content}, ...]) so
+    follow-up questions ("what about its net income?", "over the same period")
+    are answered with the earlier context, not in isolation.
     """
     # Ground on the company named in the question, not the UI's default ticker.
     # If the query names a company we DON'T cover, abstain rather than answering
@@ -1691,6 +1755,7 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
     inputs = {
         "query": query,
         "ticker": ticker,
+        "history":              history or [],
         "query_type":           "numeric",
         "query_intent":         "general",
         "numeric_text_grounded": False,

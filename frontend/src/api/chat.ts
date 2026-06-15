@@ -133,10 +133,12 @@ export async function sendGraphRagMessage(
 export async function sendAuditableRagMessage(
   message: string,
   ticker: string = 'MU',
+  history: HistoryEntry[] = [],
 ): Promise<ChatResponse> {
   const response = await client.post<ChatResponse>('/chat/auditable-rag', {
     message,
     ticker,
+    history,
   });
   return response.data;
 }

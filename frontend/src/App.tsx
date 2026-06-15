@@ -141,7 +141,7 @@ function App() {
       } else if (mode === 'graph') {
         data = await sendGraphRagMessage(currentInput, ticker);
       } else {
-        data = await sendAuditableRagMessage(currentInput, ticker);
+        data = await sendAuditableRagMessage(currentInput, ticker, history);
       }
 
       // Persist the company the backend resolved to, so a follow-up that names
