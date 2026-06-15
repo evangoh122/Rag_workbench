@@ -93,6 +93,11 @@ general-knowledge names as "not from filings", or (b) deliberately ingest those
 entities as graph nodes (labelled non-XBRL) if we want them shown. Not yet
 implemented.
 
+> **Memory cross-ref**: this concern is also saved as the local Claude memory
+> `competitor-grounding-gap.md` (in `~/.claude/.../memory/`, this machine only —
+> it does not travel with the repo, so this section is the cross-machine record).
+> Related memories: `evidence-graph-feature-brief`, `product-philosophy-answer-framework`.
+
 ## Known data gaps (pre-existing)
 - **ADI / INTC / KLAC** are 1-chunk stubs with incomplete XBRL → `n/a` in some
   peer comparisons and charts. Fix = the deferred re-ingest (blocked while the

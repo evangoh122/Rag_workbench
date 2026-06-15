@@ -295,20 +295,6 @@ function App() {
               </button>
               <button
                 className={`nav-item ${
-                  view === 'graph'
-                    ? 'active !text-accent [&>svg]:text-accent'
-                    : ''
-                }`}
-                onClick={() => {
-                  setView('graph');
-                  setSidebarOpen(false);
-                }}
-              >
-                <Network size={16} className={view === 'graph' ? 'text-accent' : 'text-secondary'} />
-                Knowledge Graph
-              </button>
-              <button
-                className={`nav-item ${
                   view === 'traceability'
                     ? 'active !text-purple-400 [&>svg]:text-purple-400'
                     : ''
@@ -342,6 +328,20 @@ function App() {
           <div>
             <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.12em] px-2 mb-2.5">Audit & Diagnostics</div>
             <div className="flex flex-col gap-1">
+              <button
+                className={`nav-item ${
+                  view === 'graph'
+                    ? 'active !text-accent [&>svg]:text-accent'
+                    : ''
+                }`}
+                onClick={() => {
+                  setView('graph');
+                  setSidebarOpen(false);
+                }}
+              >
+                <Network size={16} className={view === 'graph' ? 'text-accent' : 'text-secondary'} />
+                Knowledge Graph
+              </button>
               <button
                 className={`nav-item ${
                   view === 'results'
