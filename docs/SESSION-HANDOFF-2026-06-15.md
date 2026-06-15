@@ -90,8 +90,16 @@ which violates the auditability promise.
 **Decision needed next session**: either (a) add a guardrail so competitor
 answers only cite filing-named / curated peers and clearly label any
 general-knowledge names as "not from filings", or (b) deliberately ingest those
-entities as graph nodes (labelled non-XBRL) if we want them shown. Not yet
-implemented.
+entities as graph nodes (labelled non-XBRL) if we want them shown.
+
+> **RESOLVED (2026-06-15, commit `8bcea97`)** via option (a). The
+> `qualitative_output_node` system prompt (`api/services/langgraph_engine.py`)
+> now restricts competitor/peer/company names to those present in the retrieved
+> filing context and tells the model to say the filings don't enumerate specific
+> competitors rather than filling the gap from general knowledge. Covered by
+> `TestQualitativeGrounding`. **Caveat**: this is a prompt-level (non-deterministic)
+> guard, not a post-hoc NER filter — if leakage recurs, escalate to a hard
+> post-processing check or option (b).
 
 > **Memory cross-ref**: this concern is also saved as the local Claude memory
 > `competitor-grounding-gap.md` (in `~/.claude/.../memory/`, this machine only —
