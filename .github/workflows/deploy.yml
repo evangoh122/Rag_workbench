@@ -271,7 +271,11 @@ jobs:
                   and dim_max == exp_dim and dim_variants == 1
                   and companies >= target):
               print('READY')
-          ")
+          " || true)
+            # ^ `|| true`: a transient empty/parse response (Space still warming)
+            #   makes the python helper exit 1; without this, bash -e would abort
+            #   the whole retry loop on the first poll. The loop's own ~7-min budget
+            #   + final `exit 1` still catches a genuinely-unhealthy deployment.
             echo "Attempt $i/20 — $(echo "$RESULT" | grep '^status=' | sed 's/^status=//')"
             if echo "$RESULT" | grep -q '^READY$'; then
               echo "New deployment verified (model + stored dim + coverage)."
