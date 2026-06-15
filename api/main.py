@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -20,6 +21,22 @@ from api.middleware.cors_config import configure_cors
 from api.db.database import db_manager
 from api.services.llm_health import get_llm_tracker
 from api.services.drift_detection import check_drift
+from api.services.runtime_snapshot import snapshot_enabled, snapshot_review_db
+
+
+async def _daily_snapshot_loop(interval_s: float):
+    """Periodically persist the runtime/review DB to the private HF dataset.
+
+    The Space has no persistent volume, so without this the audit log / HITL
+    decisions / eval results are wiped on every restart. Runs the (blocking)
+    upload in a worker thread so it never stalls the event loop.
+    """
+    while True:
+        await asyncio.sleep(interval_s)
+        try:
+            await asyncio.to_thread(snapshot_review_db, reason="periodic")
+        except Exception as e:  # noqa: BLE001 — loop must survive a failed snapshot
+            logger.error("periodic snapshot loop error (non-fatal): {}", e)
 
 
 @asynccontextmanager
@@ -29,8 +46,25 @@ async def lifespan(app: FastAPI):
     logger.info("RAG Workbench starting up (provider={})", Config.CHAT_PROVIDER)
     if Config.LANGSMITH_TRACING and Config.LANGSMITH_API_KEY:
         logger.info("LangSmith tracing: enabled (project={})", Config.LANGSMITH_PROJECT)
+
+    snapshot_task = None
+    if snapshot_enabled():
+        interval_h = float(os.getenv("SNAPSHOT_INTERVAL_HOURS", "24"))
+        interval_s = max(60.0, interval_h * 3600.0)
+        snapshot_task = asyncio.create_task(_daily_snapshot_loop(interval_s))
+        logger.info("Runtime snapshot: enabled (every {}h → dataset)", interval_h)
+
     yield
+
     logger.info("RAG Workbench shutting down — closing database connections")
+    if snapshot_task is not None:
+        snapshot_task.cancel()
+        try:
+            await snapshot_task
+        except asyncio.CancelledError:
+            pass
+        # Final best-effort snapshot so a graceful shutdown loses nothing.
+        await asyncio.to_thread(snapshot_review_db, reason="shutdown")
     db_manager.close()
 
 

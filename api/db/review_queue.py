@@ -60,10 +60,63 @@ def init_review_tables(conn: duckdb.DuckDBPyConnection) -> None:
         )
     """)
 
+    # Golden-set evaluation results — one row per suite execution (eval_runs)
+    # plus one row per question per run (eval_results). Lives in the persistent
+    # review/runtime DB so eval history survives the boot-time overwrite of the
+    # main DB (mirrors how audit_runs and calibration_history are stored).
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS eval_runs (
+            run_id          VARCHAR PRIMARY KEY,
+            run_at          TIMESTAMP DEFAULT current_timestamp,
+            api_url         VARCHAR,
+            git_sha         VARCHAR,
+            filter_id       VARCHAR,
+            filter_mode     VARCHAR,
+            n_questions     INTEGER NOT NULL,
+            pass_rate       DOUBLE,
+            avg_correctness DOUBLE,
+            avg_xbrl        DOUBLE,
+            avg_sources     DOUBLE,
+            avg_overall     DOUBLE,
+            by_failure_mode JSON NOT NULL DEFAULT '{}'
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS eval_results (
+            id                 VARCHAR PRIMARY KEY,
+            run_id             VARCHAR NOT NULL,
+            question_id        VARCHAR,
+            ticker             VARCHAR,
+            company            VARCHAR,
+            failure_mode       VARCHAR,
+            difficulty         VARCHAR,
+            question           TEXT,
+            expected           TEXT,
+            answer_snippet     TEXT,
+            correctness        DOUBLE,
+            correctness_reason TEXT,
+            xbrl               DOUBLE,
+            xbrl_reason        TEXT,
+            sources            DOUBLE,
+            sources_reason     TEXT,
+            abstention         DOUBLE,
+            abstention_reason  TEXT,
+            overall            DOUBLE,
+            has_error          BOOLEAN DEFAULT FALSE
+        )
+    """)
+
     # Performance index: cover status-filtered queries ordered by creation time
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_rd_status
         ON review_decisions(status, created_at DESC)
+    """)
+
+    # Index eval_results by run for fast per-run detail lookups.
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_er_run
+        ON eval_results(run_id)
     """)
 
 
@@ -319,6 +372,103 @@ def get_calibration_data(
     columns = [desc[0] for desc in cursor.description]
     rows = cursor.fetchall()
     return [dict(zip(columns, row)) for row in rows]
+
+
+def persist_eval_run(
+    conn: duckdb.DuckDBPyConnection,
+    data: dict,
+    *,
+    api_url: Optional[str] = None,
+    git_sha: Optional[str] = None,
+    filter_id: Optional[str] = None,
+    filter_mode: Optional[str] = None,
+) -> str:
+    """Persist a golden-set eval run (summary + per-question detail) to DuckDB.
+
+    Args:
+        conn:        Active DuckDB connection (review/runtime DB).
+        data:        The dict returned by evals.run_eval.run() — must contain
+                     ``summary``, ``pass_rate``, ``n``, ``results`` and
+                     ``by_failure_mode``.
+        api_url:     Base URL the suite ran against (provenance).
+        git_sha:     Commit the suite ran on (provenance), if known.
+        filter_id:   --id filter used for the run, if any.
+        filter_mode: --mode (failure_mode) filter used, if any.
+
+    Returns:
+        The generated run_id (UUID string) linking eval_runs ↔ eval_results.
+    """
+    run_id = str(uuid.uuid4())
+    summary = data.get("summary", {}) or {}
+
+    conn.execute("BEGIN")
+    try:
+        conn.execute(
+            """
+            INSERT INTO eval_runs
+                (run_id, run_at, api_url, git_sha, filter_id, filter_mode,
+                 n_questions, pass_rate, avg_correctness, avg_xbrl,
+                 avg_sources, avg_overall, by_failure_mode)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                run_id,
+                data.get("run_at"),
+                api_url,
+                git_sha,
+                filter_id,
+                filter_mode,
+                data.get("n", len(data.get("results", []))),
+                data.get("pass_rate"),
+                summary.get("correctness"),
+                summary.get("xbrl"),
+                summary.get("sources"),
+                summary.get("overall"),
+                json.dumps(data.get("by_failure_mode", {})),
+            ],
+        )
+
+        for r in data.get("results", []):
+            conn.execute(
+                """
+                INSERT INTO eval_results
+                    (id, run_id, question_id, ticker, company, failure_mode,
+                     difficulty, question, expected, answer_snippet,
+                     correctness, correctness_reason, xbrl, xbrl_reason,
+                     sources, sources_reason, abstention, abstention_reason,
+                     overall, has_error)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    str(uuid.uuid4()),
+                    run_id,
+                    str(r.get("id")) if r.get("id") is not None else None,
+                    r.get("ticker"),
+                    r.get("company"),
+                    r.get("failure_mode"),
+                    r.get("difficulty"),
+                    r.get("question"),
+                    r.get("expected"),
+                    r.get("answer_snippet"),
+                    r.get("correctness"),
+                    r.get("correctness_reason"),
+                    r.get("xbrl"),
+                    r.get("xbrl_reason"),
+                    r.get("sources"),
+                    r.get("sources_reason"),
+                    r.get("abstention"),
+                    r.get("abstention_reason"),
+                    r.get("overall"),
+                    bool(r.get("has_error", False)),
+                ],
+            )
+
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+    return run_id
 
 
 def persist_calibration_result(

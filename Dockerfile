@@ -84,5 +84,8 @@ USER user
 # Restore the prebuilt DuckDB (Qwen embeddings + XBRL + graph_triples) from the
 # HF dataset BEFORE uvicorn opens the DB connection. Falls through (|| true) to
 # the startup seed if the fetch fails (no token / network / repo missing).
-CMD ["sh", "-c", "cd /app && PYTHONPATH=/app python -m scripts.fetch_db_from_dataset || true; exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"]
-# build: v5 — fetch runs as a module so `import api` resolves; honours DB_PATH (persistent /data)
+# Then restore the runtime/review DB (audit log, HITL decisions, eval results)
+# from its Parquet snapshots in the same dataset — the Space has no persistent
+# volume, so this is how that data survives restarts.
+CMD ["sh", "-c", "cd /app && PYTHONPATH=/app python -m scripts.fetch_db_from_dataset || true; PYTHONPATH=/app python -m scripts.restore_review_db || true; exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"]
+# build: v6 — also restore runtime/review DB from dataset Parquet snapshots before boot

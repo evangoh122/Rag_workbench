@@ -21,6 +21,7 @@ import csv
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -29,12 +30,59 @@ from typing import Optional
 
 import requests
 
+# Make the repo root importable so `from api...` works when run as a script.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
 GOLDEN_SET_PATH = Path(__file__).parent / "golden_set.csv"
 RESULTS_DIR = Path(__file__).parent / "results"
+
+
+def _git_sha() -> Optional[str]:
+    """Best-effort short commit SHA for run provenance."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+            cwd=str(Path(__file__).resolve().parent.parent),
+        )
+        return out.stdout.strip() or None
+    except Exception:
+        return None
+
+
+def persist_to_duckdb(
+    data: dict,
+    *,
+    api_url: str,
+    filter_id: Optional[str] = None,
+    filter_mode: Optional[str] = None,
+) -> Optional[str]:
+    """Persist the run to the review/runtime DuckDB. Best-effort.
+
+    Returns the run_id on success, or None if persistence was skipped (e.g. the
+    review DB is locked by a running API server, or deps are unavailable). Never
+    raises — a failed write must not fail the eval run.
+    """
+    try:
+        from api.db.database import db_manager
+        from api.db.review_queue import persist_eval_run
+
+        conn = db_manager.get_review_connection()
+        run_id = persist_eval_run(
+            conn, data,
+            api_url=api_url,
+            git_sha=_git_sha(),
+            filter_id=filter_id,
+            filter_mode=filter_mode,
+        )
+        return run_id
+    except Exception as e:  # noqa: BLE001 — intentional best-effort guard
+        print(f"  [db] skipped DuckDB persistence: {str(e)[:120]}")
+        return None
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -380,6 +428,11 @@ if __name__ == "__main__":
         default=1.0,
         help="Seconds between API calls (default: 1.0)",
     )
+    parser.add_argument(
+        "--no-db",
+        action="store_true",
+        help="Do not persist the run to the review/runtime DuckDB",
+    )
     args = parser.parse_args()
 
     data = run(
@@ -393,6 +446,16 @@ if __name__ == "__main__":
     if not args.dry_run:
         out_path = save_results(data, Path(args.out))
         print(f"  Results saved ? {out_path}")
+
+        if not args.no_db:
+            run_id = persist_to_duckdb(
+                data,
+                api_url=args.api_url,
+                filter_id=args.filter_id,
+                filter_mode=args.filter_mode,
+            )
+            if run_id:
+                print(f"  Persisted to DuckDB (eval_runs/eval_results) ? run_id={run_id}")
 
     failed = [r for r in data["results"] if r["overall"] < 0.5]
     if failed:
