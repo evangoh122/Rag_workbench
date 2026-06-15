@@ -40,7 +40,10 @@ QUERIES = {
 }
 
 passed, failed = [], []
-RETRY_CODES = {502, 503, 504}
+# 500 included: HF's proxy returns HTML 500 when the sentence-transformer model
+# cold-loads on the first request and exceeds the proxy timeout. Retrying after
+# a short back-off gives the model time to finish loading.
+RETRY_CODES = {500, 502, 503, 504}
 MAX_RETRIES = 3
 
 
@@ -69,6 +72,18 @@ def _call_endpoint(ticker: str, query: str) -> dict:
                 continue
             raise
 
+
+# Warm-up: send one request before the timed loop so the embedding model is
+# loaded into memory. The first real RAG call triggers a ~30s model load;
+# HF's proxy times out and returns HTML 500 before FastAPI can respond. This
+# dummy call absorbs the cold-start penalty without counting toward pass/fail.
+print("Warming up embedding model (cold-start load)...")
+try:
+    _call_endpoint("NVDA", "What was NVIDIA's total revenue in its most recent fiscal year?")
+    print("Warm-up complete.")
+except Exception as warm_err:
+    print(f"Warm-up failed (non-fatal, continuing): {warm_err}")
+time.sleep(5)
 
 for ticker in TICKERS:
     query = QUERIES[ticker]
