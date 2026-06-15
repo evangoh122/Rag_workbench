@@ -3,6 +3,7 @@ import { ReactFlow, Background, Controls, MarkerType } from '@xyflow/react';
 import type { Edge, Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { Triple } from '../api/chat';
+import GraphAnalytics from './GraphAnalytics';
 
 // One node/edge selection bubbled up so the parent can fetch + show evidence.
 export interface GraphSelection {
@@ -140,7 +141,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect }) =>
   };
 
   return (
-    <div style={{ width: '100%', height: '100%' }} className="bg-background">
+    <div style={{ width: '100%', height: '100%' }} className="relative bg-background">
+      <GraphAnalytics />
       <ReactFlow
         nodes={nodes}
         edges={edges}

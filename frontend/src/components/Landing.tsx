@@ -70,6 +70,7 @@ export default function Landing({ onEnter }: { onEnter: () => void }) {
       <section className="hero" id="top">
         <div className="wrap hero-grid">
           <div className="reveal">
+            <span className="uat-pill">● Undergoing UAT — user acceptance testing in progress</span>
             <span className="eyebrow">SEC filing intelligence</span>
             <h1>Every answer traces back to the filing.</h1>
             <p className="lede">Ask questions about 10-K filings and get answers with clickable citations and figures checked against XBRL.</p>

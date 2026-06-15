@@ -62,6 +62,20 @@ export interface ChatResponse {
   what_it_means?: string;
   how_to_interpret?: string;
   follow_ups?: string[];
+  // Optional chart spec (recharts), built from XBRL when the LLM uses the
+  // charting tool.
+  chart?: ChartSpec;
+}
+
+// A chart the backend built from filed XBRL facts (recharts-ready).
+export interface ChartSpec {
+  type: 'line' | 'bar';
+  title: string;
+  metric: string;
+  label: string;
+  unit: 'USD' | '%' | string;
+  ticker: string;
+  data: { period: string; value: number }[];
 }
 
 // A knowledge-graph triple. Phase C adds source refs + node types (optional so

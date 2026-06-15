@@ -82,6 +82,11 @@ class ChatResponse(BaseModel):
     entities: List[str] = Field(default_factory=list)
     triples: List[Dict[str, Any]] = Field(default_factory=list)
 
+    # Optional chart spec (recharts). Built deterministically from XBRL facts
+    # when the LLM calls the charting tool — never from model-generated numbers.
+    # Shape: {type, title, metric, unit, data:[{period, value}]}.
+    chart: Optional[Dict[str, Any]] = None
+
     # SQL mode specific
     sql: Optional[str] = None
     data: Optional[List[Dict[str, Any]]] = None

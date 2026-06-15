@@ -57,6 +57,7 @@ class GraphState(TypedDict):
     verification_status: str # PASS, FAIL, ERROR, SKIPPED
     verification_reasoning: str
     final_answer: str
+    chart: Optional[Dict[str, Any]]  # recharts spec from the charting tool
     status: Dict[str, str] # {node_name: 'success' | 'error' | 'pending'}
     # Eval pipeline outputs (populated by eval_node, optional)
     eval_route: Optional[str]           # AUTO | SAMPLED_REVIEW | ESCALATE
@@ -1198,6 +1199,40 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_financial_chart",
+                    "description": (
+                        "Render a chart of a financial metric's history across "
+                        "fiscal years. Call this when the user asks for a trend, "
+                        "history, 'over time', 'year over year', or 'historical' "
+                        "view of a metric (e.g. 'historical revenue' -> a revenue "
+                        "line chart). The chart's data is pulled from filed XBRL "
+                        "facts automatically; you only choose the metric and type."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "metric": {
+                                "type": "string",
+                                "enum": [
+                                    "revenue", "net_income", "gross_profit",
+                                    "operating_income", "rd_expense",
+                                    "gross_margin", "operating_margin", "net_margin",
+                                ],
+                                "description": "Which metric's history to chart.",
+                            },
+                            "chart_type": {
+                                "type": "string",
+                                "enum": ["line", "bar"],
+                                "description": "line for trends over time, bar for discrete year-by-year comparison.",
+                            },
+                        },
+                        "required": ["metric"],
+                    },
+                },
+            },
         ]
 
         if intent == "comparison":
@@ -1261,16 +1296,35 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
         if msg.tool_calls:
             messages.append(msg.model_dump())
             math_steps = []
+            chart_spec: Optional[Dict[str, Any]] = None
 
             for tool_call in msg.tool_calls:
+                fn_name = getattr(tool_call.function, "name", "") or ""
                 try:
                     args = json.loads(tool_call.function.arguments)
-                    metric_name = args.get("metric", "")
                 except (json.JSONDecodeError, KeyError):
-                    metric_name = ""
+                    args = {}
 
-                tool_result = _execute_tool(metric_name, state)
-                math_steps.append(tool_result.get("display", str(tool_result)))
+                if fn_name == "create_financial_chart":
+                    from api.services.chart_tool import build_chart_spec
+                    spec = build_chart_spec(
+                        state.get("ticker", ""),
+                        args.get("metric", ""),
+                        args.get("chart_type", "line"),
+                    )
+                    if spec and chart_spec is None:
+                        chart_spec = spec
+                    tool_result = (
+                        {"status": "chart created",
+                         "title": spec["title"],
+                         "points": len(spec["data"])}
+                        if spec else
+                        {"status": "no chart",
+                         "reason": "not enough multi-period XBRL data for that metric"}
+                    )
+                else:
+                    tool_result = _execute_tool(args.get("metric", ""), state)
+                    math_steps.append(tool_result.get("display", str(tool_result)))
 
                 messages.append({
                     "role": "tool",
@@ -1295,6 +1349,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                 "math_steps": math_steps,
                 "math_result": None,
                 "xbrl_badge": deco["badge"],
+                "chart": chart_spec,
                 "status": {**state.get("status", {}), "output": "success"},
             }
 
@@ -1604,6 +1659,22 @@ def run_auditable_rag(query: str, ticker: str) -> Dict[str, Any]:
     if by_name != ticker:
         logger.info(f"Ticker override: query resolved to {by_name!r} (caller passed {ticker!r})")
     ticker = by_name
+
+    # Multi-company comparison: the single-ticker DAG can't compare across
+    # companies. Detect "vs competitors / industry" or 2+ named companies and
+    # branch to the dedicated peer-comparison path (graph-derived peers + the
+    # same financial_calc metrics), returning a comparison table.
+    try:
+        from api.services.peer_comparison import detect_comparison, run_peer_comparison
+        decision = detect_comparison(query, ticker)
+        if decision:
+            logger.info(f"--- PEER COMPARISON: {decision} ---")
+            result = run_peer_comparison(query, decision)
+            result["resolved_ticker"] = decision["subject"]
+            return result
+    except Exception as e:
+        logger.warning(f"Peer comparison path failed, falling back to single-company: {e}")
+
     app = get_app()
     inputs = {
         "query": query,

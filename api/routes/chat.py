@@ -267,6 +267,7 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
             confidence=result.get("eval_confidence"),
             eval_route=result.get("eval_route"),
             lineage=result.get("lineage"),
+            chart=result.get("chart"),
         )
     except HTTPException:
         raise

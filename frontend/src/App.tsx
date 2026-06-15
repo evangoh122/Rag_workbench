@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck, Menu, X, Lightbulb, Info, ChevronDown, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
-import type { ChatResponse, Source, XBRLFact, Triple } from './api/chat';
+import type { ChatResponse, Source, XBRLFact, Triple, ChartSpec } from './api/chat';
 import { submitChatFeedback } from './api/review';
 import ReviewQueue from './pages/ReviewQueue';
 import MetricsDashboard from './pages/MetricsDashboard';
@@ -36,6 +36,7 @@ interface Message {
   what_it_means?: string;
   how_to_interpret?: string;
   follow_ups?: string[];
+  chart?: ChartSpec;
 }
 
 type AppView = 'landing' | 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
@@ -52,6 +53,7 @@ type PipelineStatus = {
 import { getPosthog } from './utils/posthog'
 
 import Landing from './components/Landing';
+import ChartView from './components/ChartView';
 import KnowledgeGraph from './components/KnowledgeGraph';
 import type { GraphSelection } from './components/KnowledgeGraph';
 import { getGraphEvidence, type GraphEvidence } from './api/graph';
@@ -178,6 +180,7 @@ function App() {
         what_it_means: data.what_it_means,
         how_to_interpret: data.how_to_interpret,
         follow_ups: data.follow_ups,
+        chart: data.chart,
       };
 
       setMessages(prev => [...prev, assistantMsg]);
@@ -541,6 +544,10 @@ function App() {
                     <ShieldCheck size={12} />
                     <span>Coverage List Only</span>
                   </div>
+                  <div className="flex items-center gap-1 font-medium text-[11px] px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 status-pulse" />
+                    <span>Undergoing UAT</span>
+                  </div>
                 </div>
               </div>
               {/* Mini Pipeline Status Indicator */}
@@ -725,6 +732,10 @@ function App() {
                         {msg.content}
                       </ReactMarkdown>
                     </div>
+
+                    {msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
+                      <ChartView chart={msg.chart} />
+                    )}
 
                     {msg.role === 'assistant' && (msg.sources || msg.verification || msg.xbrl_facts?.length || msg.relevant_xbrl?.length || msg.xbrl_badge || msg.math_steps?.length) && (
                       <div className="mt-3 pt-3 border-t border-border/40">

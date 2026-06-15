@@ -47,6 +47,57 @@ def _edgar_url(ticker: str) -> str:
     )
 
 
+@router.get("/analytics")
+def analytics():
+    """Aggregate stats for the knowledge graph: totals, relation types, entity
+    types, and per-company coverage. Powers the graph-view analytics panel."""
+    try:
+        totals = db_manager.execute(
+            "SELECT count(*), count(DISTINCT ticker), count(DISTINCT predicate), "
+            "count(DISTINCT object) FROM graph_triples WHERE ticker <> ''"
+        ).fetchone()
+        predicates = db_manager.execute(
+            "SELECT predicate, count(*) c, round(avg(confidence), 2) "
+            "FROM graph_triples WHERE ticker <> '' GROUP BY predicate ORDER BY c DESC"
+        ).fetchall()
+        entities = db_manager.execute(
+            "SELECT object_type, count(*) c FROM graph_triples "
+            "WHERE ticker <> '' AND object_type IS NOT NULL AND object_type <> '' "
+            "GROUP BY object_type ORDER BY c DESC"
+        ).fetchall()
+        per_company = db_manager.execute(
+            "SELECT ticker, count(*) c, count(DISTINCT predicate) p "
+            "FROM graph_triples WHERE ticker <> '' GROUP BY ticker ORDER BY c DESC"
+        ).fetchall()
+        xbrl_linked = db_manager.execute(
+            "SELECT count(*) FROM graph_triples "
+            "WHERE ticker <> '' AND (predicate = 'VERIFIED_BY' OR object_type = 'XBRL')"
+        ).fetchone()
+    except Exception as e:
+        logger.exception("graph analytics failed")
+        raise HTTPException(status_code=500, detail="graph analytics failed") from e
+
+    t = totals or (0, 0, 0, 0)
+    return {
+        "totals": {
+            "triples": t[0],
+            "companies": t[1],
+            "relation_types": t[2],
+            "entities": t[3],
+            "xbrl_linked": (xbrl_linked or [0])[0],
+        },
+        "relations": [
+            {"predicate": r[0], "count": r[1], "avg_confidence": r[2]}
+            for r in predicates
+        ],
+        "entity_types": [{"type": r[0], "count": r[1]} for r in entities],
+        "per_company": [
+            {"ticker": r[0], "triples": r[1], "relation_types": r[2]}
+            for r in per_company
+        ],
+    }
+
+
 @router.get("/evidence")
 def evidence(chunk_id: str):
     """Return the source excerpt + filing metadata for a graph triple's chunk."""
