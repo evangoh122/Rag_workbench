@@ -1,4 +1,5 @@
 import client from './client';
+import type { Triple } from './chat';
 
 // One node/edge's source evidence — returned by GET /api/graph/evidence.
 export interface GraphEvidence {
@@ -36,4 +37,16 @@ export interface GraphAnalytics {
 export async function getGraphAnalytics(): Promise<GraphAnalytics> {
   const res = await client.get<GraphAnalytics>('/graph/analytics');
   return res.data;
+}
+
+// Knowledge-graph triples for the dedicated Graph tab. Optionally per-company.
+export async function getGraphTriples(
+  ticker?: string,
+  limit = 300,
+): Promise<Triple[]> {
+  const res = await client.get<{ triples: Triple[]; count: number }>(
+    '/graph/triples',
+    { params: { ...(ticker ? { ticker } : {}), limit } },
+  );
+  return res.data.triples;
 }

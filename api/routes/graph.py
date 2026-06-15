@@ -98,6 +98,52 @@ def analytics():
     }
 
 
+@router.get("/triples")
+def triples(ticker: str | None = None, limit: int = 300):
+    """Return knowledge-graph triples for the dedicated Graph tab.
+
+    Optionally filtered to one company. Capped (default 300) so the force
+    graph stays legible. Highest-confidence edges first.
+    """
+    limit = max(1, min(int(limit), 1000))
+    sql = (
+        "SELECT subject, predicate, object, subject_type, object_type, "
+        "chunk_id, source_file, source_loc, confidence, ticker "
+        "FROM graph_triples WHERE ticker <> ''"
+    )
+    params: list = []
+    if ticker:
+        sql += " AND ticker = ?"
+        params.append(ticker)
+    sql += " ORDER BY confidence DESC NULLS LAST LIMIT ?"
+    params.append(limit)
+
+    try:
+        rows = db_manager.execute(sql, params).fetchall()
+    except Exception as e:
+        logger.exception("graph triples fetch failed")
+        raise HTTPException(status_code=500, detail="graph triples fetch failed") from e
+
+    return {
+        "triples": [
+            {
+                "subject": r[0],
+                "predicate": r[1],
+                "object": r[2],
+                "subject_type": r[3] or "",
+                "object_type": r[4] or "",
+                "chunk_id": r[5] or "",
+                "source_file": r[6] or "",
+                "source_loc": r[7] or "",
+                "confidence": r[8],
+                "ticker": r[9],
+            }
+            for r in rows
+        ],
+        "count": len(rows),
+    }
+
+
 @router.get("/evidence")
 def evidence(chunk_id: str):
     """Return the source excerpt + filing metadata for a graph triple's chunk."""

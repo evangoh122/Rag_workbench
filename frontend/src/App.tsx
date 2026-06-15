@@ -39,7 +39,7 @@ interface Message {
   chart?: ChartSpec;
 }
 
-type AppView = 'landing' | 'chat' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
+type AppView = 'landing' | 'chat' | 'graph' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
 
 type PipelineStatus = {
   input?: 'success' | 'error' | 'pending';
@@ -54,6 +54,7 @@ import { getPosthog } from './utils/posthog'
 
 import Landing from './components/Landing';
 import ChartView from './components/ChartView';
+import GraphExplorer from './components/GraphExplorer';
 import KnowledgeGraph from './components/KnowledgeGraph';
 import type { GraphSelection } from './components/KnowledgeGraph';
 import { getGraphEvidence, type GraphEvidence } from './api/graph';
@@ -294,6 +295,20 @@ function App() {
               </button>
               <button
                 className={`nav-item ${
+                  view === 'graph'
+                    ? 'active !text-accent [&>svg]:text-accent'
+                    : ''
+                }`}
+                onClick={() => {
+                  setView('graph');
+                  setSidebarOpen(false);
+                }}
+              >
+                <Network size={16} className={view === 'graph' ? 'text-accent' : 'text-secondary'} />
+                Knowledge Graph
+              </button>
+              <button
+                className={`nav-item ${
                   view === 'traceability'
                     ? 'active !text-purple-400 [&>svg]:text-purple-400'
                     : ''
@@ -526,6 +541,9 @@ function App() {
               </div>
           </div>
         )}
+
+        {/* VIEW: KNOWLEDGE GRAPH */}
+        {view === 'graph' && <GraphExplorer />}
 
         {/* VIEW: CHAT */}
         {view === 'chat' && (
