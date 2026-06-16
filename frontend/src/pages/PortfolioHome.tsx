@@ -65,7 +65,7 @@ export default function PortfolioHome() {
             Hi, I'm <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 bg-clip-text text-transparent">Evan Goh</span>.
           </h1>
           <p className="text-secondary text-base md:text-lg lg:text-xl leading-relaxed max-w-2xl font-light">
-            I design and build high-performance data systems, agentic workflows, and semantic intelligence layers. Focused on absolute auditability, engineering durability, and clean architecture.
+            I sit at the intersection of tech, data, and business. As a solutions architect and product manager, I translate complex data infrastructure and agentic systems into auditable, high-impact products that solve real business challenges.
           </p>
           <div className="flex flex-wrap gap-4 mt-8">
             <Link
