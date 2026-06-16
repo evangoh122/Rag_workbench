@@ -86,9 +86,9 @@ export default function PortfolioHome() {
             <h2 className="text-lg md:text-xl font-bold tracking-tight text-primary">Featured Work</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="max-w-3xl">
             {/* RAG Workbench Card */}
-            <div className="md:col-span-2 border border-border/80 rounded-2xl bg-surface/40 hover:bg-surface-elevated/40 transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden">
+            <div className="border border-border/80 rounded-2xl bg-surface/40 hover:bg-surface-elevated/40 transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors pointer-events-none" />
               <div>
                 <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
@@ -144,23 +144,6 @@ export default function PortfolioHome() {
               </div>
             </div>
 
-            {/* Small Spec Card 1 */}
-            <div className="border border-border/80 rounded-2xl bg-surface/30 p-6 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="p-1.5 bg-accent/8 rounded-lg text-accent">
-                    <Database size={16} />
-                  </div>
-                  <h4 className="text-sm font-bold text-primary tracking-tight">Data Engineering</h4>
-                </div>
-                <p className="text-xs text-secondary leading-relaxed font-light mb-4">
-                  Experience indexing multi-gigabyte corpora of financial filings, building automated ingestion scripts (EDGAR/Polygon), and implementing fast vector databases + hybrid search pipelines.
-                </p>
-              </div>
-              <div className="text-[10px] font-mono text-secondary/60">
-                DuckDB &middot; sentence-transformers &middot; SEC API
-              </div>
-            </div>
           </div>
         </section>
 
