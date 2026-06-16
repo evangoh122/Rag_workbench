@@ -35,9 +35,6 @@ const TYPE_COLORS: Record<string, string> = {
 };
 const DEFAULT_NODE = '#1A1A1A';
 
-// Maximum nodes before showing a warning
-const NODE_WARNING_THRESHOLD = 150;
-
 const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxNodes = 200 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
