@@ -259,7 +259,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Run shadow deployment (standalone)")
     parser.add_argument("--tickers", default="", help="Comma-separated tickers (empty=all)")
-    parser.add_argument("--db-path", default="./data/rag.duckdb", help="DuckDB path")
+    parser.add_argument("--db-path", default="./data/test_rag.duckdb", help="DuckDB path (test DB from create_test_db.py)")
     parser.add_argument("--output", default="./data/shadow_report.json", help="Report output path")
     args = parser.parse_args()
 

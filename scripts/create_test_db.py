@@ -8,11 +8,20 @@ import os
 import duckdb
 from pathlib import Path
 
-DB_PATH = Path("./data/rag.duckdb")
+# Write to a DEDICATED test path — NEVER the production corpus (./data/rag.duckdb),
+# which this script deletes to start fresh. Override with TEST_DB_PATH if needed.
+DB_PATH = Path(os.getenv("TEST_DB_PATH", "./data/test_rag.duckdb"))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-# Remove existing DB to start fresh
+# Safety guard: refuse to clobber what looks like a real corpus (the test DB is
+# ~1 MB; the production corpus is tens of MB). Prevents accidental data loss if
+# DB_PATH is ever pointed at the prod file.
 if DB_PATH.exists():
+    if DB_PATH.stat().st_size > 5_000_000:
+        raise SystemExit(
+            f"Refusing to overwrite {DB_PATH} ({DB_PATH.stat().st_size/1e6:.1f} MB) — "
+            "looks like a real corpus, not a test DB. Set TEST_DB_PATH to a fresh path."
+        )
     DB_PATH.unlink()
 
 conn = duckdb.connect(str(DB_PATH))
