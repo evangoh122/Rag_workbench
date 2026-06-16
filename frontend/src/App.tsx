@@ -14,6 +14,7 @@ import AuditLog from './pages/AuditLog';
 import DriftAlert from './components/DriftAlert';
 import AuditTrail from './components/AuditTrail';
 import PipelineFlow from './components/PipelineFlow';
+import FinancialChart from './components/FinancialChart';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -753,6 +754,10 @@ function App() {
 
                     {msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
                       <ChartView chart={msg.chart} />
+                    )}
+
+                    {msg.role === 'assistant' && (msg.relevant_xbrl?.length > 0 || msg.xbrl_facts?.length > 0) && (
+                      <FinancialChart facts={msg.relevant_xbrl?.length ? msg.relevant_xbrl : msg.xbrl_facts} />
                     )}
 
                     {msg.role === 'assistant' && (msg.sources || msg.verification || msg.xbrl_facts?.length || msg.relevant_xbrl?.length || msg.xbrl_badge || msg.math_steps?.length) && (

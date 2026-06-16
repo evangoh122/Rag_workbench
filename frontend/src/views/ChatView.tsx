@@ -3,6 +3,8 @@ import { Send, Database, Search, MessageSquare, Network } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import AuditTrail from '../components/AuditTrail';
 import FinancialChart from '../components/FinancialChart';
+import ChartView from '../components/ChartView';
+import type { ChartSpec } from '../api/chat';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -22,6 +24,7 @@ interface Message {
   math_steps?: string[];
   entities?: string[];
   triples?: Record<string, string>[];
+  chart?: ChartSpec;
 }
 
 interface PipelineStatus {
@@ -159,6 +162,10 @@ const ChatView: React.FC<ChatViewProps> = ({
 
               {msg.role === 'assistant' && (
                 <FinancialChart facts={msg.relevant_xbrl?.length ? msg.relevant_xbrl : msg.xbrl_facts} />
+              )}
+
+              {msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
+                <ChartView chart={msg.chart} />
               )}
 
               {msg.role === 'assistant' && (msg.sources || msg.verification || msg.relevant_xbrl?.length) && (

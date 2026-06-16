@@ -53,6 +53,16 @@ _CHART_TRIGGER_WORDS = (
     "chart", "plot", "graph", "visuali", "trend", "historical", "history",
     "over time", "over the years", "year over year", "year-over-year",
     "by year", "yoy", "trajectory", "trended",
+    "show", "display", "compare", "comparison", "pattern", "growth",
+    "change", "changed", "evolving", "evolution", "progression",
+)
+
+# Direct metric queries that should always show a chart (no trigger word needed).
+# These are questions that are inherently about seeing the data over time.
+_DIRECT_CHART_QUERIES = (
+    "revenue", "net income", "gross profit", "operating income",
+    "gross margin", "operating margin", "net margin", "r&d",
+    "sales", "earnings", "profit", "top line", "bottom line",
 )
 
 # Query phrasing → chart metric. First match wins; order specific → general.
@@ -70,13 +80,29 @@ _METRIC_PHRASES: List[tuple] = [
 
 def detect_chart_request(query: str) -> Optional[str]:
     """If the query asks for a trend/visual of a chartable metric, return that
-    metric; otherwise None. Used to auto-build a chart on the numeric path."""
+    metric; otherwise None. Used to auto-build a chart on the numeric path.
+
+    Detection is aggressive: any mention of a chartable metric triggers a chart,
+    even without explicit trend/historical keywords. Users asking about revenue
+    almost always want to see the historical data.
+    """
     q = (query or "").lower()
-    if not any(w in q for w in _CHART_TRIGGER_WORDS):
+    if not q:
         return None
+
+    # Check for explicit trigger words + metric combination (original behavior)
+    has_trigger = any(w in q for w in _CHART_TRIGGER_WORDS)
+    if has_trigger:
+        for phrases, metric in _METRIC_PHRASES:
+            if any(p in q for p in phrases):
+                return metric
+
+    # Direct metric query: if the query mentions a chartable metric, always
+    # return it. Users asking "what is the revenue" want to see the data.
     for phrases, metric in _METRIC_PHRASES:
         if any(p in q for p in phrases):
             return metric
+
     return None
 
 

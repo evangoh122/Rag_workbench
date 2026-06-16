@@ -1443,6 +1443,16 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
         # No tools needed — direct answer
         answer = (msg.content or "").strip()
 
+        # Auto-attach chart for metric queries even when LLM didn't call the tool
+        chart_spec = None
+        try:
+            from api.services.chart_tool import detect_chart_request, build_chart_spec
+            metric = detect_chart_request(state.get("query", ""))
+            if metric:
+                chart_spec = build_chart_spec(state.get("ticker", ""), metric)
+        except Exception as e:
+            logger.warning(f"qualitative_output_node auto-chart failed (non-fatal): {e}")
+
         deco = _text_grounded_decorations(state, answer)
         return {
             "final_answer": answer + deco["note"],
@@ -1451,6 +1461,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
             "math_steps": ["Qualitative query — no computation needed."],
             "math_result": None,
             "xbrl_badge": deco["badge"],
+            "chart": chart_spec,
             "status": {**state.get("status", {}), "output": "success"},
         }
     except Exception as e:
