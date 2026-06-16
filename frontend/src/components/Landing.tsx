@@ -245,7 +245,7 @@ export default function Landing({ onEnter }: { onEnter: () => void }) {
           </div>
 
           <div className="panel reveal">
-            <svg viewBox="0 0 420 230" width="100%" height="auto" role="img" aria-label="Evidence graph linking Micron to revenue and a 10-K filing">
+            <svg viewBox="0 0 420 230" width="100%" role="img" aria-label="Evidence graph linking Micron to revenue and a 10-K filing">
               <line x1="90" y1="115" x2="240" y2="60" stroke="#4ADE80" strokeWidth="2" />
               <line x1="240" y1="60" x2="350" y2="120" stroke="rgba(255,255,255,.16)" strokeWidth="1.6" />
               <line x1="90" y1="115" x2="230" y2="175" stroke="rgba(255,255,255,.16)" strokeWidth="1.6" />

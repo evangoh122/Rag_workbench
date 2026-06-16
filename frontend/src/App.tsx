@@ -59,7 +59,8 @@ import ChartView from './components/ChartView';
 import GraphExplorer from './components/GraphExplorer';
 import KnowledgeGraph from './components/KnowledgeGraph';
 import type { GraphSelection } from './components/KnowledgeGraph';
-import { getGraphEvidence, type GraphEvidence } from './api/graph';
+import { getGraphEvidence, getGraphTriples, getGraphAnalytics, type GraphEvidence } from './api/graph';
+import { COMPANY_NAMES } from './components/GraphExplorer';
 
 function App() {
   const [input, setInput] = useState('');
@@ -73,6 +74,10 @@ function App() {
   const [feedbackSent, setFeedbackSent] = useState<Set<number>>(new Set());
   const [graphModalOpen, setGraphModalOpen] = useState(false);
   const [activeTriples, setActiveTriples] = useState<any[]>([]);
+  const [originalTriples, setOriginalTriples] = useState<any[]>([]);
+  const [modalTicker, setModalTicker] = useState('');
+  const [graphCompanies, setGraphCompanies] = useState<string[]>([]);
+  const [modalLoading, setModalLoading] = useState(false);
   // Phase C: click an edge/node in the graph → fetch + show its source evidence.
   const [evidence, setEvidence] = useState<GraphEvidence | null>(null);
   const [evidenceSel, setEvidenceSel] = useState<GraphSelection | null>(null);
@@ -98,6 +103,27 @@ function App() {
     setEvidence(null);
     setEvidenceSel(null);
   };
+
+  const handleModalTickerChange = (ticker: string) => {
+    setModalTicker(ticker);
+    setEvidence(null);
+    setEvidenceSel(null);
+    if (!ticker) {
+      setActiveTriples(originalTriples);
+    } else {
+      setModalLoading(true);
+      getGraphTriples(ticker, 150)
+        .then((t) => setActiveTriples(t))
+        .catch(() => {})
+        .finally(() => setModalLoading(false));
+    }
+  };
+
+  useEffect(() => {
+    getGraphAnalytics()
+      .then((a) => setGraphCompanies(a.per_company.map((c) => c.ticker)))
+      .catch(() => {});
+  }, []);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -861,6 +887,8 @@ function App() {
                                   className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-[13px] font-mono cursor-pointer transition-colors hover:bg-bullish/8 min-w-0 ${i % 2 === 0 ? 'bg-surface/20' : ''} ${i > 0 ? 'border-t border-border/30' : ''}`}
                                   onClick={() => {
                                     setActiveTriples(msg.triples!);
+                                    setOriginalTriples(msg.triples!);
+                                    setModalTicker('');
                                     setGraphModalOpen(true);
                                     if (import.meta.env.VITE_POSTHOG_KEY) {
                                       getPosthog().then(p => p.capture('graph_modal_open', { triple_count: msg.triples?.length }));
@@ -1055,7 +1083,7 @@ function App() {
             onClick={closeGraphModal}
           />
           <div className="relative w-full max-w-6xl h-full max-h-[800px] glass-modal overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
-            <header className="px-5 py-3.5 glass-header flex items-center justify-between">
+            <header className="px-5 py-3.5 glass-header flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <h3 className="text-lg font-semibold text-primary flex items-center gap-2">
                   <Network className="text-accent" size={18} />
@@ -1063,14 +1091,36 @@ function App() {
                 </h3>
                 <p className="text-xs text-secondary mt-0.5">Click an edge or node to see its source in the filing</p>
               </div>
-              <button
-                onClick={closeGraphModal}
-                className="p-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer transition-colors"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-secondary">Company:</span>
+                  <select
+                    value={modalTicker}
+                    onChange={(e) => handleModalTickerChange(e.target.value)}
+                    className="glass-sm text-xs text-primary bg-surface border border-border px-2.5 py-1.5 rounded-lg outline-none cursor-pointer focus:border-accent/40"
+                  >
+                    <option value="">(Current response)</option>
+                    {graphCompanies.map((c) => (
+                      <option key={c} value={c} className="bg-surface text-primary">
+                        {c} — {COMPANY_NAMES[c] ?? c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={closeGraphModal}
+                  className="p-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </header>
-            <div className="flex-1 min-h-0 flex">
+            <div className="flex-1 min-h-0 flex relative">
+              {modalLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm text-secondary gap-2 z-20">
+                  <RefreshCcw className="animate-spin text-accent" size={18} /> Loading graph…
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <KnowledgeGraph triples={activeTriples} onSelect={handleGraphSelect} />
               </div>

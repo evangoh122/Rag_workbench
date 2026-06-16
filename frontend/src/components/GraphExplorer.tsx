@@ -9,7 +9,7 @@ import {
 } from '../api/graph';
 import type { Triple } from '../api/chat';
 
-const COMPANY_NAMES: Record<string, string> = {
+export const COMPANY_NAMES: Record<string, string> = {
   SPCX: 'SpaceX',
   MU: 'Micron Technology',
   NVDA: 'NVIDIA',
