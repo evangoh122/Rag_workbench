@@ -118,25 +118,25 @@ export default function SystemDashboard() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-y-auto">
-      <header className="px-4 lg:px-8 py-5 border-b border-border bg-surface/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between">
+      <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-border bg-surface/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-primary flex items-center gap-3">
-            <Server className="text-orange-400" />
+          <h1 className="text-base md:text-xl font-semibold text-primary flex items-center gap-2 md:gap-3">
+            <Server className="text-orange-400" size={18} />
             System Overview
           </h1>
-          <p className="text-sm text-secondary mt-1">
+          <p className="text-xs md:text-sm text-secondary mt-0.5">
             Live data coverage, LLM health, and pipeline architecture
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
           {lastRefresh && (
-            <span className="text-xs text-secondary/60 tabular-nums">
+            <span className="text-[11px] text-secondary/60 tabular-nums hidden sm:inline">
               Updated {lastRefresh.toLocaleTimeString()}
             </span>
           )}
           <button
             onClick={fetchStats}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-secondary hover:text-primary border border-border hover:bg-surface-elevated transition-all cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-secondary hover:text-primary border border-border hover:bg-surface-elevated transition-all cursor-pointer min-h-[44px]"
           >
             <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -144,23 +144,27 @@ export default function SystemDashboard() {
         </div>
       </header>
 
-      <div className="flex-1 p-4 lg:p-8 space-y-4 lg:space-y-8">
+      <div className="flex-1 p-3 md:p-4 lg:p-8 space-y-3 md:space-y-4 lg:space-y-8">
 
-        {/* ── Status bar ── */}
-        <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl border border-border bg-surface text-sm">
-          <div className={`w-2 h-2 rounded-full ${mainOk ? 'bg-bullish' : 'bg-bearish'}`} />
-          <span className={mainOk ? 'text-bullish' : 'text-bearish'}>Main DB</span>
-          <span className="text-secondary/20">·</span>
-          <div className={`w-2 h-2 rounded-full ${reviewOk ? 'bg-bullish' : 'bg-bearish'}`} />
-          <span className={reviewOk ? 'text-bullish' : 'text-bearish'}>Review DB</span>
-          <span className="text-secondary/20">·</span>
-          <span className="text-secondary">Provider:</span>
-          <span className="text-primary font-medium">{stats?.config.provider ?? '—'}</span>
-          <span className="text-secondary/20">·</span>
-          <span className="text-secondary">Embeddings:</span>
-          <span className="text-primary font-medium tabular-nums">
-            {stats?.config.embedding_model ?? '—'} ({stats?.config.embedding_dim ?? '—'}d)
-          </span>
+        {/* ── Status bar — stacked on mobile ── */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 md:px-5 py-3 md:py-3.5 rounded-xl border border-border bg-surface text-sm">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${mainOk ? 'bg-bullish' : 'bg-bearish'}`} />
+            <span className={mainOk ? 'text-bullish' : 'text-bearish'}>Main DB</span>
+            <span className="text-secondary/20">·</span>
+            <div className={`w-2 h-2 rounded-full ${reviewOk ? 'bg-bullish' : 'bg-bearish'}`} />
+            <span className={reviewOk ? 'text-bullish' : 'text-bearish'}>Review DB</span>
+          </div>
+          <span className="text-secondary/20 hidden sm:inline">·</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-secondary">Provider:</span>
+            <span className="text-primary font-medium">{stats?.config.provider ?? '—'}</span>
+            <span className="text-secondary/20">·</span>
+            <span className="text-secondary">Embeddings:</span>
+            <span className="text-primary font-medium tabular-nums">
+              {stats?.config.embedding_model ?? '—'} ({stats?.config.embedding_dim ?? '—'}d)
+            </span>
+          </div>
         </div>
 
         {/* ── Stat cards ── */}
@@ -197,15 +201,15 @@ export default function SystemDashboard() {
         </div>
 
         {/* ── Pipeline architecture ── */}
-        <div className="bg-surface border border-border rounded-2xl p-6">
-          <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-6">
+        <div className="bg-surface border border-border rounded-2xl p-4 md:p-6">
+          <h3 className="text-xs md:text-sm font-semibold text-secondary uppercase tracking-wider mb-4 md:mb-6">
             Pipeline Architecture
           </h3>
 
           {/* Ingestion row */}
           <div className="mb-4">
             <p className="text-xs text-secondary/60 uppercase tracking-widest mb-3 px-1">Data Ingestion</p>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
               <PipelineNode label="SEC EDGAR" sub="10-K filings" color="border-blue-500/30 bg-blue-500/5 text-blue-300" />
               <Arrow />
               <PipelineNode label="Downloader" sub="edgartools" color="border-border bg-surface-elevated text-secondary" />
@@ -225,7 +229,7 @@ export default function SystemDashboard() {
           {/* Query row */}
           <div className="mb-4">
             <p className="text-xs text-secondary/60 uppercase tracking-widest mb-3 px-1">Query Pipeline</p>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
               <PipelineNode label="User Query" sub="natural language" color="border-blue-500/30 bg-blue-500/5 text-blue-300" />
               <Arrow />
               <PipelineNode label="Embed Query" sub={stats?.config.embedding_model ?? 'Qwen3-Embedding-0.6B'} color="border-purple-500/30 bg-purple-500/5 text-purple-300" />
@@ -247,7 +251,7 @@ export default function SystemDashboard() {
           {/* Graph RAG row */}
           <div>
             <p className="text-xs text-secondary/60 uppercase tracking-widest mb-3 px-1">Graph RAG (optional)</p>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
               <PipelineNode label="Entity Extract" sub="from query" color="border-indigo-500/30 bg-indigo-500/5 text-indigo-300" />
               <Arrow />
               <PipelineNode label="Graph Triples" sub="DuckDB" color="border-indigo-500/30 bg-indigo-500/5 text-indigo-300" />

@@ -16,7 +16,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => (
   <div className="flex flex-col">
-    <span className="text-lg font-semibold tabular-nums text-primary">
+    <span className="text-base md:text-lg font-semibold tabular-nums text-primary">
       {value.toLocaleString()}
     </span>
     <span className="text-[10px] uppercase tracking-wide text-secondary">{label}</span>
@@ -27,21 +27,23 @@ const Bar: React.FC<{ label: string; count: number; max: number; color?: string;
   label, count, max, color = 'var(--color-accent, #2E8B57)', suffix,
 }) => (
   <div className="flex items-center gap-2 text-xs">
-    <span className="w-28 shrink-0 truncate text-secondary" title={label}>{label}</span>
+    <span className="w-20 md:w-28 shrink-0 truncate text-secondary" title={label}>{label}</span>
     <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
       <div
         className="h-full rounded-full"
         style={{ width: `${Math.max(4, (count / max) * 100)}%`, background: color }}
       />
     </div>
-    <span className="w-14 shrink-0 text-right tabular-nums text-primary">
+    <span className="w-12 md:w-14 shrink-0 text-right tabular-nums text-primary">
       {count}{suffix ?? ''}
     </span>
   </div>
 );
 
 /** Collapsible analytics overlay for the knowledge-graph view. Fetches
- *  graph-wide aggregates (relation/entity types, per-company coverage). */
+ *  graph-wide aggregates (relation/entity types, per-company coverage).
+ *  On mobile (< md) the panel renders as a bottom sheet; on desktop as a
+ *  right-side overlay. */
 const GraphAnalytics: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<Analytics | null>(null);
@@ -61,7 +63,7 @@ const GraphAnalytics: React.FC = () => {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="absolute top-3 right-3 z-10 flex items-center gap-1.5 glass-button px-3 py-1.5 text-xs font-medium text-primary"
+        className="absolute top-3 right-3 z-10 flex items-center gap-1.5 glass-button px-3 py-2 md:py-1.5 text-xs font-medium text-primary min-h-[44px] md:min-h-0"
       >
         <BarChart3 size={14} className="text-accent" />
         Analytics
@@ -74,23 +76,77 @@ const GraphAnalytics: React.FC = () => {
   const coMax = data ? Math.max(...data.per_company.map((c) => c.triples), 1) : 1;
 
   return (
-    <div className="absolute top-3 right-3 z-10 w-80 max-h-[calc(100%-1.5rem)] overflow-y-auto glass-modal p-4 text-sm">
+    <>
+      {/* Desktop: right-side panel */}
+      <div className="hidden md:block absolute top-3 right-3 z-10 w-80 max-h-[calc(100%-1.5rem)] overflow-y-auto glass-modal p-4 text-sm">
+        <AnalyticsContent
+          data={data}
+          loading={loading}
+          error={error}
+          relMax={relMax}
+          entMax={entMax}
+          coMax={coMax}
+          onClose={() => setOpen(false)}
+        />
+      </div>
+
+      {/* Mobile: bottom sheet */}
+      <div className="md:hidden fixed inset-x-0 bottom-0 z-50 glass-modal p-4 pb-6 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-accent/20 shadow-2xl text-sm">
+        <div className="flex justify-center mb-3">
+          <div className="w-10 h-1 rounded-full bg-border" />
+        </div>
+        <AnalyticsContent
+          data={data}
+          loading={loading}
+          error={error}
+          relMax={relMax}
+          entMax={entMax}
+          coMax={coMax}
+          onClose={() => setOpen(false)}
+        />
+      </div>
+
+      {/* Mobile backdrop */}
+      <div
+        className="md:hidden fixed inset-0 bg-black/50 z-40"
+        onClick={() => setOpen(false)}
+      />
+    </>
+  );
+};
+
+function AnalyticsContent({
+  data, loading, error, relMax, entMax, coMax, onClose,
+}: {
+  data: Analytics | null;
+  loading: boolean;
+  error: boolean;
+  relMax: number;
+  entMax: number;
+  coMax: number;
+  onClose: () => void;
+}) {
+  return (
+    <>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-1.5">
           <BarChart3 size={16} className="text-accent" />
           <h3 className="font-semibold text-primary">Graph Analytics</h3>
         </div>
-        <button onClick={() => setOpen(false)} className="text-secondary hover:text-primary">
+        <button
+          onClick={onClose}
+          className="text-secondary hover:text-primary p-1 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:p-0 flex items-center justify-center"
+        >
           <X size={16} />
         </button>
       </div>
 
       {loading && <p className="text-secondary text-xs">Loading…</p>}
-      {error && <p className="text-bearish text-xs">Couldn’t load analytics.</p>}
+      {error && <p className="text-bearish text-xs">Couldn't load analytics.</p>}
 
       {data && (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2 md:gap-3">
             <Stat label="Triples" value={data.totals.triples} />
             <Stat label="Companies" value={data.totals.companies} />
             <Stat label="Relations" value={data.totals.relation_types} />
@@ -132,8 +188,8 @@ const GraphAnalytics: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
-};
+}
 
 export default GraphAnalytics;

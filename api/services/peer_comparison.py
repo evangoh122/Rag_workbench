@@ -97,7 +97,7 @@ _USD_METRICS = {"revenue", "net_income", "free_cash_flow"}
 def covered_tickers() -> List[str]:
     """The tickers we actually have SEC data for."""
     try:
-        from api.routes.admin import TICKER_TO_CIK
+        from api.config import TICKER_TO_CIK
         return list(TICKER_TO_CIK.keys())
     except Exception:
         return list(_TICKER_TO_NAMES.keys())
