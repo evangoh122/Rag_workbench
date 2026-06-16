@@ -228,7 +228,7 @@ const GraphExplorer: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex-1 relative bg-background overflow-hidden">
+      <div className="flex-1 relative bg-background overflow-hidden" style={{ minHeight: 0 }}>
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center text-secondary gap-2 z-20">
             <Loader2 className="animate-spin" size={18} /> Loading graph…

@@ -181,7 +181,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
   }, [onSelect]);
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%' }} className="relative bg-background">
+    <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: 300 }} className="relative bg-background">
       <GraphAnalytics />
       
       {/* Warning for large graphs */}
@@ -208,7 +208,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
         maxZoom={2}
       >
         <Background color="rgba(255,255,255,0.05)" gap={20} size={1} />
-        <Controls className="[&>button]:bg-surface-elevated [&>button]:border-border [&>button]:text-secondary [&>button]:fill-secondary" />
+        <Controls className="[&>button]:bg-surface-elevated [&>button]:border-border [&>button]:text-secondary [&>button]:fill-secondary [&_svg]:w-4 [&_svg]:h-4" />
       </ReactFlow>
     </div>
   );
