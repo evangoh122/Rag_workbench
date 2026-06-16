@@ -224,7 +224,7 @@ Plans:
 | 9. LangGraph Auditable RAG | 1/1 | Completed | 2026-06-07 |
 | 10. Knowledge Graph RAG Engine | 1/1 | Completed | 2026-06-07 |
 | 11. GraphRAG Frontend Integration | 1/1 | Completed | 2026-06-09 |
-| 12. Outstanding Integrations & Fixes | 1/1 | Completed | 2026-06-09 |
+| 12. Outstanding Integrations & Fixes | 0/5 | In Progress | — |
 | 13. Input & Dialog Rails | 1/1 | Completed | 2026-06-09 |
 | 14. Retrieval & Execution Rails | 1/1 | Completed | 2026-06-09 |
 | 15. Output Rails | 1/1 | Completed | 2026-06-09 |
