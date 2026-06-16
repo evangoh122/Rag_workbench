@@ -92,6 +92,11 @@ jobs:
           upload_secret "LANGSMITH_API_KEY" "${{ secrets.LANGSMITH_API_KEY }}"
           upload_secret "ADMIN_API_KEY"     "${{ secrets.ADMIN_API_KEY }}"
           upload_secret "EDGAR_USER_AGENT"  "${{ secrets.EDGAR_USER_AGENT }}"
+          # Dedicated WRITE token for the private runtime dataset (egoh33/app_data).
+          # The daily snapshot (POST /api/admin/snapshot) runs ON the Space and reads
+          # this from the Space env, so it must be synced here — a GitHub-only secret
+          # never reaches the Space. Leaving the GitHub secret unset skips this (no-op).
+          upload_secret "APP_DATA_HF_TOKEN" "${{ secrets.APP_DATA_HF_TOKEN }}"
           # Local in-process embeddings (sentence-transformers) — no HF Inference
           # API call, so no scaleway-routing 403s and no 8B-model OOM on the Space.
           upload_secret "EMBEDDING_PROVIDER" "sentence-transformers"
