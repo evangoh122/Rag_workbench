@@ -11,6 +11,7 @@ None and the caller falls back to a normal text answer.
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -53,9 +54,13 @@ _CHART_TRIGGER_WORDS = (
     "chart", "plot", "graph", "visuali", "trend", "historical", "history",
     "over time", "over the years", "year over year", "year-over-year",
     "by year", "yoy", "trajectory", "trended",
+    "show", "display", "compare", "comparison", "pattern", "growth",
+    "change", "changed", "evolving", "evolution", "progression",
 )
 
 # Query phrasing → chart metric. First match wins; order specific → general.
+# Each phrase is compiled into a regex with word boundaries to avoid false
+# positives like "revenue recognition" matching "revenue".
 _METRIC_PHRASES: List[tuple] = [
     (("gross margin", "gross profit margin"), "gross_margin"),
     (("operating margin",), "operating_margin"),
@@ -67,16 +72,60 @@ _METRIC_PHRASES: List[tuple] = [
     (("revenue", "sales", "top line"), "revenue"),
 ]
 
+# Pre-compile regex patterns with word boundaries for each metric phrase.
+_METRIC_REGEX: List[tuple] = []
+for phrases, metric in _METRIC_PHRASES:
+    patterns = []
+    for phrase in phrases:
+        # Escape special chars, then wrap with word boundaries
+        escaped = re.escape(phrase)
+        patterns.append(re.compile(r'\b' + escaped + r'\b', re.IGNORECASE))
+    _METRIC_REGEX.append((patterns, metric))
+
+# Qualitative markers that indicate a question about a concept, not a data query.
+_QUALITATIVE_MARKERS = (
+    "policy", "recognition", "structure", "compensation", "plan",
+    "definition", "accounting", "treatment", "standard", "guidance",
+    "methodology", "approach", "technique", "method", "process",
+    "regulation", "rule", "requirement", "disclosure",
+)
+
+
+def _has_qualitative_marker(query: str) -> bool:
+    """Check if the query contains qualitative markers that indicate a
+    conceptual question rather than a data query."""
+    q = query.lower()
+    return any(re.search(r'\b' + re.escape(m) + r'\b', q) for m in _QUALITATIVE_MARKERS)
+
 
 def detect_chart_request(query: str) -> Optional[str]:
     """If the query asks for a trend/visual of a chartable metric, return that
-    metric; otherwise None. Used to auto-build a chart on the numeric path."""
+    metric; otherwise None. Used to auto-build a chart on the numeric path.
+
+    Uses word-boundary regex matching to avoid false positives like
+    "revenue recognition policy" triggering a revenue chart.
+    """
     q = (query or "").lower()
-    if not any(w in q for w in _CHART_TRIGGER_WORDS):
+    if not q:
         return None
-    for phrases, metric in _METRIC_PHRASES:
-        if any(p in q for p in phrases):
+
+    # Skip chart generation for clearly qualitative queries
+    if _has_qualitative_marker(q):
+        return None
+
+    # Check for explicit trigger words + metric combination
+    has_trigger = any(w in q for w in _CHART_TRIGGER_WORDS)
+    if has_trigger:
+        for patterns, metric in _METRIC_REGEX:
+            if any(p.search(q) for p in patterns):
+                return metric
+
+    # Direct metric query with word boundaries: only match if the query is
+    # primarily about the metric itself (not about policies, definitions, etc.)
+    for patterns, metric in _METRIC_REGEX:
+        if any(p.search(q) for p in patterns):
             return metric
+
     return None
 
 

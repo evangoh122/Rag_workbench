@@ -14,6 +14,8 @@ import AuditLog from './pages/AuditLog';
 import DriftAlert from './components/DriftAlert';
 import AuditTrail from './components/AuditTrail';
 import PipelineFlow from './components/PipelineFlow';
+import FinancialChart from './components/FinancialChart';
+import ChartErrorBoundary from './components/ChartErrorBoundary';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -751,9 +753,16 @@ function App() {
                       </ReactMarkdown>
                     </div>
 
-                    {msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
-                      <ChartView chart={msg.chart} />
-                    )}
+                    <ChartErrorBoundary>
+                      {msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
+                        <ChartView chart={msg.chart} />
+                      )}
+
+                      {/* Only show raw XBRL chart when no backend chart is present */}
+                      {msg.role === 'assistant' && !msg.chart && ((msg.relevant_xbrl?.length ?? 0) > 0 || (msg.xbrl_facts?.length ?? 0) > 0) && (
+                        <FinancialChart facts={(msg.relevant_xbrl?.length ?? 0) > 0 ? msg.relevant_xbrl : msg.xbrl_facts} />
+                      )}
+                    </ChartErrorBoundary>
 
                     {msg.role === 'assistant' && (msg.sources || msg.verification || msg.xbrl_facts?.length || msg.relevant_xbrl?.length || msg.xbrl_badge || msg.math_steps?.length) && (
                       <div className="mt-3 pt-3 border-t border-border/40">
