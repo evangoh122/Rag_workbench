@@ -6,13 +6,12 @@ metadata so the UI can show *where in the filing* a graph edge came from.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from loguru import logger
 
 from api.db.database import db_manager
-from api.middleware.auth import get_read_api_key
 
-router = APIRouter(prefix="/api/graph", tags=["graph"], dependencies=[Depends(get_read_api_key)])
+router = APIRouter(prefix="/api/graph", tags=["graph"])
 
 
 def _parse_chunk_id(chunk_id: str) -> tuple[str, str, int | None]:
