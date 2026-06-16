@@ -17,21 +17,26 @@ function fmtUSD(v: number): string {
   return `$${v.toLocaleString()}`;
 }
 
+interface TooltipBoxProps {
+  active?: boolean;
+  payload?: { value: number }[];
+  label?: string;
+  formatter: (v: number) => string;
+}
+
+const TooltipBox: React.FC<TooltipBoxProps> = ({ active, payload, label, formatter }) => {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div className="glass-sm px-3 py-2 text-xs">
+      <div className="text-secondary">{label}</div>
+      <div className="text-primary font-semibold tabular-nums">{formatter(payload[0].value)}</div>
+    </div>
+  );
+};
+
 const ChartView: React.FC<{ chart: ChartSpec }> = ({ chart }) => {
   const isPct = chart.unit === '%';
   const fmt = (v: number) => (isPct ? `${v.toFixed(1)}%` : fmtUSD(v));
-
-  const TooltipBox = ({ active, payload, label }: {
-    active?: boolean; payload?: { value: number }[]; label?: string;
-  }) => {
-    if (!active || !payload || !payload.length) return null;
-    return (
-      <div className="glass-sm px-3 py-2 text-xs">
-        <div className="text-secondary">{label}</div>
-        <div className="text-primary font-semibold tabular-nums">{fmt(payload[0].value)}</div>
-      </div>
-    );
-  };
 
   return (
     <div className="fintech-card p-4 mt-3">
@@ -49,7 +54,7 @@ const ChartView: React.FC<{ chart: ChartSpec }> = ({ chart }) => {
               <XAxis dataKey="period" stroke={AXIS} fontSize={11} tickLine={false} />
               <YAxis stroke={AXIS} fontSize={11} tickLine={false} width={52}
                      tickFormatter={fmt} />
-              <Tooltip content={<TooltipBox />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+              <Tooltip content={<TooltipBox formatter={fmt} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
               <Bar dataKey="value" fill={ACCENT} radius={[4, 4, 0, 0]} />
             </BarChart>
           ) : (
@@ -58,7 +63,7 @@ const ChartView: React.FC<{ chart: ChartSpec }> = ({ chart }) => {
               <XAxis dataKey="period" stroke={AXIS} fontSize={11} tickLine={false} />
               <YAxis stroke={AXIS} fontSize={11} tickLine={false} width={52}
                      tickFormatter={fmt} />
-              <Tooltip content={<TooltipBox />} cursor={{ stroke: 'rgba(255,255,255,0.12)' }} />
+              <Tooltip content={<TooltipBox formatter={fmt} />} cursor={{ stroke: 'rgba(255,255,255,0.12)' }} />
               <Line type="monotone" dataKey="value" stroke={ACCENT} strokeWidth={2}
                     dot={{ r: 3, fill: ACCENT }} activeDot={{ r: 5 }} />
             </LineChart>
