@@ -56,7 +56,7 @@ function verificationIcon(status: string | null) {
   return <Clock size={14} className="text-gray-500" />;
 }
 
-function RunRow({ run }: { run: AuditRun }) {
+function RunTableRow({ run }: { run: AuditRun }) {
   const [expanded, setExpanded] = useState(false);
 
   const ts = new Date(run.timestamp).toLocaleString();
@@ -92,91 +92,146 @@ function RunRow({ run }: { run: AuditRun }) {
       {expanded && (
         <tr className="bg-background border-b border-border">
           <td colSpan={7} className="px-6 py-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
-
-              {/* Answer */}
-              <div className="md:col-span-2">
-                <div className="text-xs font-semibold text-secondary uppercase tracking-widest mb-2">Answer</div>
-                <div className="bg-surface border border-border rounded-xl p-4 text-primary leading-relaxed">
-                  {run.answer || '—'}
-                </div>
-              </div>
-
-              {/* XBRL Facts */}
-              {run.xbrl_facts_cited.length > 0 && (
-                <div className="md:col-span-2">
-                  <div className="text-xs font-semibold text-secondary uppercase tracking-widest mb-2">XBRL Facts Cited</div>
-                  <div className="bg-background border border-border rounded-xl overflow-hidden">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-surface border-b border-border">
-                          <th className="text-left px-4 py-2 text-secondary font-semibold">Concept</th>
-                          <th className="text-left px-4 py-2 text-secondary font-semibold">Value</th>
-                          <th className="text-left px-4 py-2 text-secondary font-semibold">Period End</th>
-                          <th className="text-left px-4 py-2 text-secondary font-semibold">Form</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {run.xbrl_facts_cited.map((f, i) => (
-                          <tr key={i} className={i % 2 === 0 ? '' : 'bg-surface/30'}>
-                            <td className="px-4 py-2 font-mono text-blue-300">{f.concept}</td>
-                            <td className="px-4 py-2 text-bullish font-mono tabular-nums">
-                              {typeof f.value === 'number' ? f.value.toLocaleString() : f.value}
-                            </td>
-                            <td className="px-4 py-2 text-secondary tabular-nums">{f.period_end}</td>
-                            <td className="px-4 py-2 text-secondary">{f.form_type}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Math Steps */}
-              {run.math_steps.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Calculation Steps</div>
-                  <ol className="space-y-1">
-                    {run.math_steps.map((s, i) => (
-                      <li key={i} className="text-xs text-gray-400 flex gap-2">
-                        <span className="text-gray-600 font-mono w-5 flex-shrink-0">{i + 1}.</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ol>
-                  {run.math_result && (
-                    <div className="mt-2 text-xs text-emerald-400 font-mono">= {run.math_result}</div>
-                  )}
-                </div>
-              )}
-
-              {/* Source Docs */}
-              {run.source_docs.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-secondary uppercase tracking-widest mb-2">Source Documents</div>
-                  <div className="flex flex-col gap-1">
-                    {run.source_docs.map((d, i) => (
-                      <span key={i} className="text-xs font-mono text-secondary bg-surface-elevated border border-border px-3 py-1.5 rounded-lg">{d}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Meta */}
-              <div className="md:col-span-2 flex flex-wrap gap-4 text-xs text-secondary pt-2 border-t border-border/50">
-                <span>Model: <span className="text-primary font-mono">{run.model_used ?? '—'}</span></span>
-                <span>Query type: <span className="text-primary">{run.query_type ?? '—'}</span></span>
-                {run.review_id && <span>Review ID: <span className="text-primary font-mono">{run.review_id}</span></span>}
-                {run.eval_triggers.length > 0 && (
-                  <span>Triggers: <span className="text-bearish">{run.eval_triggers.join(', ')}</span></span>
-                )}
-              </div>
-            </div>
+            <ExpandedContent run={run} />
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+function RunCard({ run }: { run: AuditRun }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const ts = new Date(run.timestamp).toLocaleString();
+  const conf = run.confidence != null ? `${(run.confidence * 100).toFixed(1)}%` : '—';
+
+  return (
+    <>
+      <div
+        className="bg-surface border border-border rounded-xl p-4 cursor-pointer transition-colors hover:bg-surface-elevated"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-secondary">
+              {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </span>
+            <span className="text-xs font-mono text-secondary tabular-nums">{run.run_id.slice(0, 8)}…</span>
+            <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-md text-xs font-mono font-semibold">
+              {run.ticker ?? '—'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {routeBadge(run.eval_route)}
+          </div>
+        </div>
+        <p className="text-sm text-primary truncate mb-2">{run.question ?? '—'}</p>
+        <div className="flex items-center justify-between text-xs text-secondary">
+          <span className="tabular-nums">{ts}</span>
+          <div className="flex items-center gap-3">
+            <span className="tabular-nums">Conf: {conf}</span>
+            <span className="flex items-center gap-1">
+              {verificationIcon(run.verification_status)}
+              {run.verification_status ?? '—'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="bg-background border border-border rounded-xl p-4 -mt-2 mb-2">
+          <ExpandedContent run={run} />
+        </div>
+      )}
+    </>
+  );
+}
+
+function ExpandedContent({ run }: { run: AuditRun }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 text-sm">
+      {/* Answer */}
+      <div className="md:col-span-2">
+        <div className="text-xs font-semibold text-secondary uppercase tracking-widest mb-2">Answer</div>
+        <div className="bg-surface border border-border rounded-xl p-3 md:p-4 text-primary leading-relaxed text-sm">
+          {run.answer || '—'}
+        </div>
+      </div>
+
+      {/* XBRL Facts */}
+      {run.xbrl_facts_cited.length > 0 && (
+        <div className="md:col-span-2">
+          <div className="text-xs font-semibold text-secondary uppercase tracking-widest mb-2">XBRL Facts Cited</div>
+          <div className="bg-background border border-border rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-surface border-b border-border">
+                    <th className="text-left px-3 md:px-4 py-2 text-secondary font-semibold">Concept</th>
+                    <th className="text-left px-3 md:px-4 py-2 text-secondary font-semibold">Value</th>
+                    <th className="text-left px-3 md:px-4 py-2 text-secondary font-semibold">Period End</th>
+                    <th className="text-left px-3 md:px-4 py-2 text-secondary font-semibold">Form</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {run.xbrl_facts_cited.map((f, i) => (
+                    <tr key={i} className={i % 2 === 0 ? '' : 'bg-surface/30'}>
+                      <td className="px-3 md:px-4 py-2 font-mono text-blue-300 break-all">{f.concept}</td>
+                      <td className="px-3 md:px-4 py-2 text-bullish font-mono tabular-nums">
+                        {typeof f.value === 'number' ? f.value.toLocaleString() : f.value}
+                      </td>
+                      <td className="px-3 md:px-4 py-2 text-secondary tabular-nums">{f.period_end}</td>
+                      <td className="px-3 md:px-4 py-2 text-secondary">{f.form_type}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Math Steps */}
+      {run.math_steps.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Calculation Steps</div>
+          <ol className="space-y-1">
+            {run.math_steps.map((s, i) => (
+              <li key={i} className="text-xs text-gray-400 flex gap-2">
+                <span className="text-gray-600 font-mono w-5 flex-shrink-0">{i + 1}.</span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ol>
+          {run.math_result && (
+            <div className="mt-2 text-xs text-emerald-400 font-mono">= {run.math_result}</div>
+          )}
+        </div>
+      )}
+
+      {/* Source Docs */}
+      {run.source_docs.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold text-secondary uppercase tracking-widest mb-2">Source Documents</div>
+          <div className="flex flex-col gap-1">
+            {run.source_docs.map((d, i) => (
+              <span key={i} className="text-xs font-mono text-secondary bg-surface-elevated border border-border px-3 py-1.5 rounded-lg break-all">{d}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Meta */}
+      <div className="md:col-span-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary pt-2 border-t border-border/50">
+        <span>Model: <span className="text-primary font-mono">{run.model_used ?? '—'}</span></span>
+        <span>Query type: <span className="text-primary">{run.query_type ?? '—'}</span></span>
+        {run.review_id && <span>Review ID: <span className="text-primary font-mono">{run.review_id}</span></span>}
+        {run.eval_triggers.length > 0 && (
+          <span>Triggers: <span className="text-bearish">{run.eval_triggers.join(', ')}</span></span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -222,55 +277,55 @@ export default function AuditLog() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <header className="px-4 lg:px-8 py-5 border-b border-border bg-surface/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between">
+      <header className="px-3 md:px-4 lg:px-8 py-3 md:py-5 border-b border-border bg-surface/50 backdrop-blur-sm flex-shrink-0 flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-primary flex items-center gap-3">
-            <ShieldCheck className="text-amber-400" />
+          <h1 className="text-base md:text-xl font-semibold text-primary flex items-center gap-2 md:gap-3">
+            <ShieldCheck className="text-amber-400" size={18} />
             Audit Log
           </h1>
-          <p className="text-sm text-secondary mt-1">Complete record of every RAG pipeline run — queryable by regulators.</p>
+          <p className="text-xs md:text-sm text-secondary mt-0.5">Complete record of every RAG pipeline run — queryable by regulators.</p>
         </div>
         <button
           onClick={fetchData}
-          className="flex items-center gap-2 px-4 py-2 bg-surface-elevated border border-border rounded-xl text-sm text-secondary hover:text-primary transition-all cursor-pointer"
+          className="flex items-center gap-2 px-3 py-2 bg-surface-elevated border border-border rounded-xl text-sm text-secondary hover:text-primary transition-all cursor-pointer min-h-[44px]"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-4 lg:py-6">
+      <div className="flex-1 overflow-y-auto px-3 md:px-4 lg:px-8 py-3 md:py-6">
 
         {/* Stats bar */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 gap-3 md:gap-4 mb-4 md:mb-6">
             {[
               { label: 'Total Runs', value: stats.total_runs, color: 'text-primary' },
               { label: 'Auto Approved', value: stats.auto_approved, color: 'text-bullish' },
               { label: 'Sampled Review', value: stats.sampled_review, color: 'text-yellow-400' },
               { label: 'Escalated', value: stats.escalated, color: 'text-bearish' },
             ].map(s => (
-              <div key={s.label} className="bg-surface border border-border rounded-xl px-5 py-4">
-                <div className={`text-2xl font-bold ${s.color} tabular-nums`}>{s.value}</div>
-                <div className="text-xs text-secondary mt-1 uppercase tracking-widest">{s.label}</div>
+              <div key={s.label} className="bg-surface border border-border rounded-xl px-4 md:px-5 py-3 md:py-4">
+                <div className={`text-xl md:text-2xl font-bold ${s.color} tabular-nums`}>{s.value}</div>
+                <div className="text-[10px] md:text-xs text-secondary mt-1 uppercase tracking-widest">{s.label}</div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Filters */}
-        <div className="flex gap-3 mb-5">
+        {/* Filters — stacked on mobile, row on desktop */}
+        <div className="flex flex-col md:flex-row gap-2 md:gap-3 mb-4 md:mb-5">
           <input
             type="text"
             placeholder="Filter by ticker (e.g. NVDA)"
             value={tickerFilter}
             onChange={e => setTickerFilter(e.target.value)}
-            className="bg-surface-elevated border border-border rounded-xl px-4 py-2 text-sm text-primary placeholder-secondary focus:outline-none focus:border-amber-500/40 w-52 transition-all tabular-nums"
+            className="bg-surface-elevated border border-border rounded-xl px-4 py-2.5 md:py-2 text-sm text-primary placeholder-secondary focus:outline-none focus:border-amber-500/40 w-full md:w-52 transition-all tabular-nums"
           />
           <select
             value={routeFilter}
             onChange={e => setRouteFilter(e.target.value)}
-            className="bg-surface-elevated border border-border rounded-xl px-4 py-2 text-sm text-primary focus:outline-none focus:border-amber-500/40 cursor-pointer transition-all appearance-none"
+            className="bg-surface-elevated border border-border rounded-xl px-4 py-2.5 md:py-2 text-sm text-primary focus:outline-none focus:border-amber-500/40 cursor-pointer transition-all appearance-none"
           >
             <option value="">All routes</option>
             <option value="AUTO">AUTO</option>
@@ -279,7 +334,7 @@ export default function AuditLog() {
           </select>
         </div>
 
-        {/* Table */}
+        {/* Content */}
         {error ? (
           <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl px-5 py-4 text-red-400 text-sm">
             <AlertTriangle size={16} />
@@ -294,26 +349,36 @@ export default function AuditLog() {
             <p className="text-sm mt-1">Records appear here after each RAG pipeline query.</p>
           </div>
         ) : (
-          <div className="bg-surface border border-border rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-surface-elevated border-b border-border">
-                    <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Run ID</th>
-                    <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Timestamp</th>
-                    <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Ticker</th>
-                    <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Question</th>
-                    <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Route</th>
-                    <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Confidence</th>
-                    <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Verification</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {runs.map(run => <RunRow key={run.run_id} run={run} />)}
-                </tbody>
-              </table>
+          <>
+            {/* Desktop: table */}
+            <div className="hidden md:block bg-surface border border-border rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-surface-elevated border-b border-border">
+                      <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Run ID</th>
+                      <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Timestamp</th>
+                      <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Ticker</th>
+                      <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Question</th>
+                      <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Route</th>
+                      <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Confidence</th>
+                      <th className="text-left px-4 py-3 text-secondary font-semibold text-xs uppercase tracking-wider">Verification</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runs.map(run => <RunTableRow key={run.run_id} run={run} />)}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+
+            {/* Mobile: card list */}
+            <div className="md:hidden flex flex-col gap-2">
+              {runs.map(run => (
+                <RunCard key={run.run_id} run={run} />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

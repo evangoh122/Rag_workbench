@@ -1613,7 +1613,7 @@ def _resolve_query_ticker(query: str, fallback: str) -> str:
     # 2. Explicit ticker symbol in the query ("NVDA", "AVGO"). Length >= 3 with a
     #    word boundary avoids prose false-matches on short/ambiguous symbols.
     try:
-        from api.routes.admin import TICKER_TO_CIK
+        from api.config import TICKER_TO_CIK
         for sym in TICKER_TO_CIK:
             if len(sym) >= 3 and re.search(r"\b" + re.escape(sym) + r"\b", query, re.IGNORECASE):
                 logger.info(f"Resolved ticker {sym!r} from explicit symbol in query")

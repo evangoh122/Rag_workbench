@@ -14,7 +14,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from api.middleware.auth import get_admin_api_key
-from api.config import Config
+from api.config import Config, TICKER_TO_CIK
 from scripts.embed_edgar import run_embed_edgar_etl
 from scripts.embed_tickers import run_embed_tickers_etl
 
@@ -23,21 +23,6 @@ router = APIRouter()
 EDGAR_USER_AGENT = os.getenv("EDGAR_USER_AGENT", "RAGWorkbench/1.0 (research@example.com)")
 SEC_RATE_LIMIT_DELAY = 0.15
 
-TICKER_TO_CIK = {
-    "ADI": "0000006281", "AMD": "0000002488", "AVGO": "0001730168",
-    "INTC": "0000050863", "MU": "0000723125", "NVDA": "0001045810",
-    "QCOM": "0000804328", "TXN": "0000097476", "TSM": "0001046179",
-    "MRVL": "0001835632", "NXPI": "0001413447", "MCHP": "0000827054",
-    "MPWR": "0001280452", "SWKS": "0000004127", "QRVO": "0001604778",
-    "ON": "0001097864", "AMAT": "0000006951", "LRCX": "0000707549",
-    "KLAC": "0000319201", "TER": "0000097210", "ENTG": "0001101302",
-    "ONTO": "0000704532", "FORM": "0001039399", "PLAB": "0000810136",
-    "COHU": "0000021535", "KLIC": "0000056978", "ICHR": "0001652535",
-    "VECO": "0000103145", "AEHR": "0001040470", "ACLS": "0000897077",
-    "AMKR": "0001047127",
-    # STMicroelectronics files Form 20-F (foreign private issuer), not 10-K.
-    "STM": "0000932787",
-}
 
 KEY_CONCEPTS = [
     # Revenue: legacy "Revenues" plus the modern ASC 606 tags that most filers

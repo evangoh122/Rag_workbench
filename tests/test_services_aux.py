@@ -126,3 +126,53 @@ def test_detect_chart_request():
     assert detect_chart_request("") is None
     assert detect_chart_request(None) is None
 
+
+def test_quarterly_series_mocked():
+    from api.services.chart_tool import _quarterly_series
+
+    cur = MagicMock()
+    # 2024-Q1: start=2024-01-01, end=2024-03-31 (~90 days), value=100
+    # 2024-Q2: start=2024-04-01, end=2024-06-30 (~90 days), value=200
+    # annual (should be filtered out): start=2024-01-01, end=2024-12-31 (~365 days), value=500
+    # too short period (should be filtered out): start=2024-01-01, end=2024-01-10 (~9 days), value=50
+    cur.fetchall.return_value = [
+        ("2024-01-01", "2024-03-31", 100.0),
+        ("2024-04-01", "2024-06-30", 200.0),
+        ("2024-01-01", "2024-12-31", 500.0),
+        ("2024-01-01", "2024-01-10", 50.0),
+    ]
+
+    with patch("api.db.database.db_manager") as mock_db_manager:
+        mock_db_manager.execute.return_value = cur
+
+        result = _quarterly_series("NVDA", ["Revenues"])
+
+        assert "2024-Q1" in result
+        assert result["2024-Q1"] == 100.0
+        assert "2024-Q2" in result
+        assert result["2024-Q2"] == 200.0
+        # Ensure annual and short periods are filtered out
+        assert len(result) == 2
+
+
+@patch("api.services.chart_tool._annual_series")
+@patch("api.services.chart_tool._quarterly_series")
+def test_build_chart_spec_quarterly(mock_q, mock_a):
+    from api.services.chart_tool import build_chart_spec
+
+    # Mock annual and quarterly series for revenue (level kind)
+    mock_a.return_value = {"2023": 1000.0, "2024": 1200.0}
+    mock_q.return_value = {"2023-Q3": 250.0, "2023-Q4": 300.0, "2024-Q1": 280.0, "2024-Q2": 320.0}
+
+    spec = build_chart_spec("NVDA", "revenue", "line")
+
+    assert spec is not None
+    assert spec["type"] == "line"
+    assert spec["ticker"] == "NVDA"
+    assert spec["metric"] == "revenue"
+    assert len(spec["annual"]) == 2
+    assert len(spec["quarterly"]) == 4
+    assert spec["annual"][0] == {"period": "2023", "value": 1000.0}
+    assert spec["quarterly"][0] == {"period": "2023-Q3", "value": 250.0}
+
+

@@ -187,14 +187,20 @@ def _quarterly_series(ticker: str, concepts: List[str]) -> Dict[str, float]:
             try:
                 if isinstance(period_start, str):
                     start = datetime.strptime(period_start[:10], '%Y-%m-%d').date()
+                elif hasattr(period_start, 'date'):
+                    start = period_start.date()
                 else:
                     start = period_start
+
                 if isinstance(period_end, str):
                     end = datetime.strptime(period_end[:10], '%Y-%m-%d').date()
+                elif hasattr(period_end, 'date'):
+                    end = period_end.date()
                 else:
                     end = period_end
+
                 days = (end - start).days
-            except (ValueError, AttributeError):
+            except (ValueError, AttributeError, TypeError):
                 continue
             # Approximate quarterly check: 60-120 days
             if 60 <= days <= 120:

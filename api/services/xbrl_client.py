@@ -11,7 +11,7 @@ from typing import Optional
 from functools import lru_cache
 from loguru import logger
 
-from api.routes.admin import TICKER_TO_CIK
+from api.config import TICKER_TO_CIK
 
 COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 _USER_AGENT = os.getenv("EDGAR_USER_AGENT", "RAG-Workbench research@example.com")
