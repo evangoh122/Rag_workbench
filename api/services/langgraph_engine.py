@@ -739,13 +739,10 @@ def output_node(state: GraphState) -> Dict[str, Any]:
     # (numeric path doesn't use the LLM charting tool). Data is built from XBRL.
     chart_spec = None
     try:
-        from api.services.chart_tool import detect_chart_request, build_chart_spec, _CHART_METRICS
+        from api.services.chart_tool import detect_chart_request, build_chart_spec
         metric = detect_chart_request(state.get("query", ""))
         if metric:
-            # Use bar chart for ratio metrics (margins), line for level metrics
-            meta = _CHART_METRICS.get(metric, {})
-            chart_type = "bar" if meta.get("kind") == "ratio" else "line"
-            chart_spec = build_chart_spec(ticker, metric, chart_type)
+            chart_spec = build_chart_spec(ticker, metric, "line")
     except Exception as e:
         logger.warning(f"output_node chart build failed (non-fatal): {e}")
 
