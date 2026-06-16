@@ -58,7 +58,7 @@ export default function PortfolioHome() {
               <span className="hidden sm:inline">GitHub</span>
             </a>
             <a
-              href="https://linkedin.com"
+              href="https://www.linkedin.com/in/eevangoh/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-secondary hover:text-primary transition-colors flex items-center gap-1.5"
@@ -254,7 +254,7 @@ export default function PortfolioHome() {
           <span>&copy; {new Date().getFullYear()} Evan Goh. All rights reserved.</span>
           <div className="flex gap-4">
             <a href="https://github.com/evangoh122" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">GitHub</a>
-            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">LinkedIn</a>
+            <a href="https://www.linkedin.com/in/eevangoh/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">LinkedIn</a>
           </div>
         </div>
       </footer>
