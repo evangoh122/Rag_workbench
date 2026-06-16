@@ -66,49 +66,39 @@ def test_get_latest_10k_facts_preserves_period_metadata(mock_get_connection):
     assert df["fiscal_period"][0] == "FY"
     assert df["filed"][0] == "2026-02-01"
 
-@patch("api.services.sec_client.Company")
-@patch("api.services.sec_client.ensure_edgar_identity")
-def test_get_latest_10k_facts(mock_ensure, mock_company_cls):
-    # Mock company and filing
-    mock_company = MagicMock()
-    mock_filing = MagicMock()
-    mock_financials = MagicMock()
-    
-    mock_company_cls.return_value = mock_company
-    mock_company.get_filing.return_value = mock_filing
-    mock_filing.financials = mock_financials
-    
-    # Mock statements
-    df_pd = pd.DataFrame({"Concept": ["Revenue"], "Value": [1000], "Unit": ["USD"], "Period": ["2023"]})
-    mock_statement = MagicMock()
-    mock_statement.to_pandas.return_value = df_pd
-    
-    mock_financials.balance_sheet = mock_statement
-    mock_financials.income_statement = None
-    mock_financials.cash_flow_statement = None
-    
+@patch("api.db.database.db_manager.get_connection")
+def test_get_latest_10k_facts(mock_get_connection):
+    # Mock DuckDB connection
+    mock_conn = MagicMock()
+    mock_get_connection.return_value = mock_conn
+    mock_conn.execute.return_value.fetchall.return_value = [
+        ("Revenue", 1000.0, "USD", "2023-12-31", "10-K", 2023, "FY", "2024-02-01")
+    ]
+    get_latest_10k_facts.cache_clear()
+
     df_pl = get_latest_10k_facts("NVDA")
-    
+
     # Check that it returns something that looks like a DataFrame
     assert hasattr(df_pl, "shape")
     assert df_pl.shape[0] == 1
-    assert df_pl["Concept"][0] == "Revenue"
+    assert df_pl["concept"][0] == "Revenue"
 
 @patch("api.services.sec_client.Company")
 @patch("api.services.sec_client.ensure_edgar_identity")
 def test_chunk_filing_sections(mock_ensure, mock_company_cls):
     mock_company = MagicMock()
     mock_filing = MagicMock()
-    
+
     mock_company_cls.return_value = mock_company
-    mock_company.get_filing.return_value = mock_filing
-    
-    mock_filing.sections = ["Item 1", "Item 1A"]
+    mock_company.get_filings.return_value.latest.return_value = mock_filing
+
+    mock_filing.sections.return_value = ["Item 1", "Item 1A"]
     mock_filing.get_section.side_effect = ["This is business section.", "This is risk factors."]
     mock_filing.accession_number = "000-111"
-    
+
+    chunk_filing_sections.cache_clear()
     chunks = chunk_filing_sections("NVDA")
-    
+
     assert len(chunks) == 2
     assert chunks[0]["metadata"]["section_name"] == "Item 1"
     assert chunks[1]["metadata"]["section_name"] == "Item 1A"

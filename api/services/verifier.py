@@ -17,11 +17,13 @@ class Verifier:
     def __init__(self, model_name: str = "cross-encoder/nli-deberta-v3-small"):
         self.model = None
         self.model_name = model_name
+        self.failed_to_load = False
         if CrossEncoder:
             try:
                 self.model = CrossEncoder(model_name)
             except Exception as e:
                 logger.error(f"Failed to load CrossEncoder model {model_name}: {e}")
+                self.failed_to_load = True
 
     def verify_numeric(self, llm_value: float, xbrl_fact_value: float, tolerance: float = 0.005) -> bool:
         """
@@ -41,6 +43,8 @@ class Verifier:
         Verify if the source text strictly entails the generated claim using an NLI model.
         Returns a tuple of (PASS/FAIL/SKIPPED, reasoning).
         """
+        if self.failed_to_load:
+            return "ERROR", f"Failed to load CrossEncoder model {self.model_name}."
         if not self.model:
             return "SKIPPED", "NLI model not available (sentence-transformers missing or model failed to load)."
 

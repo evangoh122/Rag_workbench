@@ -56,8 +56,8 @@ function Table({ rows }: { rows: [string, string][] }) {
   return (
     <div className="mt-4 border border-border rounded-xl overflow-hidden">
       {rows.map(([k, v], i) => (
-        <div key={i} className={`flex items-start gap-4 px-4 py-3 text-sm ${i % 2 === 0 ? 'bg-background' : ''} ${i > 0 ? 'border-t border-border/50' : ''}`}>
-          <span className="text-secondary font-medium w-40 flex-shrink-0">{k}</span>
+        <div key={i} className={`flex flex-col sm:flex-row items-start gap-1 sm:gap-4 px-4 py-3 text-sm ${i % 2 === 0 ? 'bg-background' : ''} ${i > 0 ? 'border-t border-border/50' : ''}`}>
+          <span className="text-secondary font-medium w-full sm:w-40 flex-shrink-0">{k}</span>
           <span className="text-primary">{v}</span>
         </div>
       ))}
@@ -78,7 +78,7 @@ export default function Methodology() {
         </p>
       </header>
 
-      <div className="flex-1 p-8 space-y-4 max-w-4xl">
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-4 max-w-4xl">
 
         <Section title="1 · Overview">
           <P>

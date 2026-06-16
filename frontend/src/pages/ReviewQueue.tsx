@@ -80,7 +80,7 @@ function DecisionCard({
   const isEscalate = decision.route === 'ESCALATE';
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-5 flex flex-col gap-3 transition-colors duration-200 hover:border-secondary/30">
+    <div className="bg-surface border border-border rounded-xl p-4 sm:p-5 flex flex-col gap-3 transition-colors duration-200 hover:border-secondary/30">
       {/* Top row: route badge + confidence bar + form type chip */}
       <div className="flex items-center gap-3 flex-wrap">
         <span
@@ -106,14 +106,14 @@ function DecisionCard({
       </div>
 
       {/* Filing info */}
-      <div className="flex items-center gap-4 text-sm text-secondary">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-secondary">
         <span>
           <span className="text-secondary/60">CIK: </span>
           <span className="text-primary font-mono tabular-nums">{decision.cik}</span>
         </span>
         <span>
           <span className="text-secondary/60">Accession: </span>
-          <span className="text-primary font-mono text-xs tabular-nums">{decision.accession}</span>
+          <span className="text-primary font-mono text-[11px] sm:text-xs tabular-nums">{decision.accession}</span>
         </span>
       </div>
 
@@ -134,7 +134,7 @@ function DecisionCard({
       </div>
 
       {/* Status / actions */}
-      <div className="flex items-center gap-3 pt-1">
+      <div className="flex items-center gap-3 pt-1 flex-wrap">
         {decision.status === 'reviewed' ? (
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-surface-elevated text-secondary border border-border">
             <CheckCircle size={14} className="text-bullish" />
@@ -279,17 +279,17 @@ export default function ReviewQueue() {
       </div>
 
       {/* Header */}
-      <header className="px-4 lg:px-8 py-4 border-b border-border flex items-center gap-4 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <ClipboardList size={22} className="text-blue-400" />
-          <h1 className="text-lg font-semibold text-primary">Review Queue</h1>
+      <header className="px-3 md:px-4 lg:px-8 py-3 md:py-4 border-b border-border flex flex-wrap items-center gap-3 sm:gap-4 flex-shrink-0">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <ClipboardList size={20} className="text-blue-400" />
+          <h1 className="text-base sm:text-lg font-semibold text-primary">Review Queue</h1>
           {pendingCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full text-xs font-bold bg-blue-600 text-white tabular-nums">
+            <span className="inline-flex items-center justify-center min-w-[1.25rem] sm:min-w-[1.5rem] h-5 sm:h-6 px-1.5 sm:px-2 rounded-full text-[10px] sm:text-xs font-bold bg-blue-600 text-white tabular-nums">
               {pendingCount}
             </span>
           )}
         </div>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap">
           <button
             onClick={() => {
               if (import.meta.env.VITE_POSTHOG_KEY) {
@@ -298,18 +298,18 @@ export default function ReviewQueue() {
               void fetchQueue();
             }}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-secondary hover:text-primary bg-transparent border border-border hover:bg-surface-elevated cursor-pointer transition-all duration-200 disabled:opacity-50"
+            className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm text-secondary hover:text-primary bg-transparent border border-border hover:bg-surface-elevated cursor-pointer transition-all duration-200 disabled:opacity-50"
           >
-            <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
+            <RefreshCcw size={13} className={loading ? 'animate-spin' : ''} />
             Refresh
           </button>
           <button
             onClick={() => void handleCalibration()}
             disabled={calibrating}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white border-0 cursor-pointer transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white border-0 cursor-pointer transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {calibrating ? (
-              <RefreshCcw size={14} className="animate-spin" />
+              <RefreshCcw size={13} className="animate-spin" />
             ) : null}
             Trigger Calibration
           </button>
@@ -317,7 +317,7 @@ export default function ReviewQueue() {
       </header>
 
       {/* Filter tabs */}
-      <div className="px-4 lg:px-8 pt-4 flex items-center gap-1 border-b border-border pb-0 flex-shrink-0">
+      <div className="px-3 md:px-4 lg:px-8 pt-3 md:pt-4 flex items-center gap-1 border-b border-border pb-0 flex-shrink-0 overflow-x-auto scrollbar-none flex-nowrap">
         {tabs.map((tab) => {
           const count =
             tab.value === 'all'

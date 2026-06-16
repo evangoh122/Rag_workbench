@@ -92,38 +92,40 @@ export default function MetricsDashboard() {
         </p>
       </header>
 
-      <div className="flex-1 p-4 lg:p-8">
+      <div className="flex-1 p-3 sm:p-4 lg:p-8">
         {/* Status bar */}
-        <div className={`mb-8 px-6 py-4 rounded-xl border flex items-center gap-3 ${
+        <div className={`mb-6 sm:mb-8 px-4 sm:px-6 py-3 sm:py-4 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 ${
           hasDriftAlert
             ? 'bg-bearish/10 border-bearish/30 text-bearish'
             : isCertified
             ? 'bg-bullish/10 border-bullish/30 text-bullish'
             : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
         }`}>
-          {hasDriftAlert ? (
-            <AlertTriangle size={20} />
-          ) : isCertified ? (
-            <CheckCircle size={20} />
-          ) : (
-            <TrendingDown size={20} />
-          )}
-          <span className="text-sm font-medium">
-            {hasDriftAlert
-              ? 'DRIFT ALERT — agreement rate below floor'
-              : isCertified
-              ? 'AUTO tier certified for production use'
-              : 'AUTO tier NOT certified — agreement rate below 95% threshold'}
-          </span>
+          <div className="flex items-center gap-2">
+            {hasDriftAlert ? (
+              <AlertTriangle size={18} className="flex-shrink-0" />
+            ) : isCertified ? (
+              <CheckCircle size={18} className="flex-shrink-0" />
+            ) : (
+              <TrendingDown size={18} className="flex-shrink-0" />
+            )}
+            <span className="text-sm font-medium">
+              {hasDriftAlert
+                ? 'DRIFT ALERT — agreement rate below floor'
+                : isCertified
+                ? 'AUTO tier certified for production use'
+                : 'AUTO tier NOT certified — agreement rate below 95% threshold'}
+            </span>
+          </div>
           {!isCertified && !hasDriftAlert && (
-            <span className="text-xs opacity-70 ml-auto">
+            <span className="text-xs opacity-70 sm:ml-auto">
               Target: &ge;95% agreement for AUTO tier certification
             </span>
           )}
         </div>
 
         {/* Metrics grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <MetricCard
             label="Agreement Rate"
             value={`${agreementPct.toFixed(1)}%`}
@@ -155,7 +157,7 @@ export default function MetricsDashboard() {
         </div>
 
         {/* Routing distribution */}
-        <div className="bg-surface border border-border rounded-2xl p-6 mb-8">
+        <div className="bg-surface border border-border rounded-2xl p-4 sm:p-6 mb-8">
           <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-4">
             Routing Distribution
           </h3>
@@ -195,12 +197,12 @@ export default function MetricsDashboard() {
         </div>
 
         {/* Agreement gauge */}
-        <div className="bg-surface border border-border rounded-2xl p-6">
+        <div className="bg-surface border border-border rounded-2xl p-4 sm:p-6">
           <h3 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-4">
             AUTO Tier Certification
           </h3>
-          <div className="flex items-center gap-6">
-            <div className="relative w-32 h-32">
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+            <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex-shrink-0">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                 <circle
                   cx="50" cy="50" r="40"
@@ -218,12 +220,12 @@ export default function MetricsDashboard() {
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className={`text-2xl font-bold tabular-nums ${isCertified ? 'text-bullish' : 'text-yellow-400'}`}>
+                <span className={`text-xl sm:text-2xl font-bold tabular-nums ${isCertified ? 'text-bullish' : 'text-yellow-400'}`}>
                   {agreementPct.toFixed(0)}%
                 </span>
               </div>
             </div>
-            <div className="flex-1">
+            <div className="w-full flex-1">
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-secondary tabular-nums">0%</span>
                 <span className="text-secondary text-xs tabular-nums">{`${80}%`}</span>

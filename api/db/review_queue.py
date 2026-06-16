@@ -24,7 +24,7 @@ def init_review_tables(conn: duckdb.DuckDBPyConnection) -> None:
     """
     conn.execute("""
         CREATE TABLE IF NOT EXISTS review_decisions (
-            id          VARCHAR PRIMARY KEY,
+            id          VARCHAR, -- Plain VARCHAR to avoid DuckDB 1.0.0 index constraint bugs on UPDATE
             cik         VARCHAR NOT NULL,
             accession   VARCHAR NOT NULL,
             form_type   VARCHAR NOT NULL,

@@ -72,7 +72,7 @@ function ProductAnalytics() {
         {data && (
           <>
             {/* KPIs */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <Kpi icon={<Activity size={20} />} label="Total events" value={data.total_events.toLocaleString()} />
               <Kpi icon={<Users size={20} />} label="Unique visitors" value={data.unique_visitors.toLocaleString()} />
               <Kpi icon={<Database size={20} />} label="Event types" value={data.by_event.length} />
@@ -161,10 +161,10 @@ function ProductAnalytics() {
               <div className="text-[11px] uppercase tracking-widest text-secondary mb-3">Recent events</div>
               <div className="divide-y divide-border">
                 {data.recent.map((r, i) => (
-                  <div key={i} className="flex items-center justify-between py-2 text-sm">
-                    <span className="font-mono text-primary">{r.event}</span>
-                    <span className="text-secondary">{r.view ?? ''}</span>
-                    <span className="text-secondary tabular-nums text-xs">{r.ts.replace('T', ' ').slice(0, 19)}</span>
+                  <div key={i} className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs sm:text-sm">
+                    <span className="font-mono text-primary break-all max-w-[200px]">{r.event}</span>
+                    <span className="text-secondary font-medium">{r.view ?? ''}</span>
+                    <span className="text-secondary/60 tabular-nums text-xs whitespace-nowrap">{r.ts.replace('T', ' ').slice(0, 19)}</span>
                   </div>
                 ))}
                 {data.recent.length === 0 && <div className="text-secondary text-sm py-2">No events captured yet.</div>}
