@@ -99,15 +99,7 @@ export default function PortfolioHome() {
               Launch RAG Workbench
               <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
             </Link>
-            <a
-              href="https://github.com/evangoh122"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-surface hover:bg-surface-elevated text-primary font-semibold border border-border transition-all duration-200"
-            >
-              <GithubIcon size={16} />
-              View Open Source
-            </a>
+
           </div>
         </section>
 
