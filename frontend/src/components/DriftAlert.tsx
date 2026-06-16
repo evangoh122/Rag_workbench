@@ -11,23 +11,35 @@ const CONCEPT_SPIKE_THRESHOLD = isNaN(_parsedThreshold) ? 50 : _parsedThreshold;
 export default function DriftAlert() {
   const [status, setStatus] = useState<DriftStatus | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0);
 
   const fetchStatus = useCallback(async () => {
     try {
       const data = await getDriftStatus();
       setStatus(data);
       setUnavailable(false);
+      setConsecutiveFailures(0);
     } catch (err) {
       console.error('Failed to fetch drift status:', err);
       setUnavailable(true);
+      setConsecutiveFailures((prev) => prev + 1);
     }
   }, []);
 
   useEffect(() => {
     void fetchStatus();
-    const interval = setInterval(() => void fetchStatus(), 30_000);
-    return () => clearInterval(interval);
   }, [fetchStatus]);
+
+  useEffect(() => {
+    if (consecutiveFailures >= 3) return;
+
+    const delay = Math.max(60_000, 60_000 * Math.pow(2, consecutiveFailures));
+    const intervalId = setInterval(() => {
+      void fetchStatus();
+    }, delay);
+
+    return () => clearInterval(intervalId);
+  }, [fetchStatus, consecutiveFailures]);
 
   if (unavailable) {
     return (
