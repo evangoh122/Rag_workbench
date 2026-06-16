@@ -520,13 +520,13 @@ function App() {
               <PipelineFlow status={pipelineStatus} />
             </div>
             {/* Input allowed in Traceability view too */}
-              <div className="px-3 md:px-4 lg:px-8 py-3 md:py-5 bg-gradient-to-t from-[#0A0A0A] to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
+              <div className="px-2 sm:px-3 md:px-4 lg:px-8 py-2 sm:py-3 md:py-5 bg-gradient-to-t from-[#0A0A0A] to-transparent flex-shrink-0 sticky bottom-0 z-20 pointer-events-none">
                 <form
                   onSubmit={handleSubmit}
-                  className="max-w-4xl mx-auto flex items-center glass-input p-1.5 md:p-2 pointer-events-auto"
+                  className="max-w-4xl mx-auto flex items-center glass-input p-1 sm:p-1.5 md:p-2 pointer-events-auto"
                 >
                   <input
-                    className="flex-1 bg-transparent border-0 text-primary placeholder-muted px-3 md:px-4 py-2.5 text-sm outline-none w-full min-w-0"
+                    className="flex-1 bg-transparent border-0 text-primary placeholder-muted px-2.5 sm:px-3 md:px-4 py-2 sm:py-2.5 text-[13px] sm:text-sm outline-none w-full min-w-0"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Test a query to trace its execution..."
@@ -535,9 +535,9 @@ function App() {
                   <button
                     type="submit"
                     disabled={loading || !input.trim()}
-                    className="flex items-center justify-center px-4 md:px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-sm gap-1.5 ml-1.5 md:ml-2 shrink-0 active:scale-[0.97]"
+                    className="flex items-center justify-center px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-[13px] sm:text-sm gap-1 sm:gap-1.5 ml-1 sm:ml-1.5 md:ml-2 shrink-0 active:scale-[0.97]"
                   >
-                    Trace <Send size={14} />
+                    <span className="hidden sm:inline">Trace</span> <Send size={14} />
                   </button>
                 </form>
               </div>
@@ -550,23 +550,23 @@ function App() {
         {/* VIEW: CHAT */}
         {view === 'chat' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-200">
-              <header className="px-3 md:px-4 lg:px-8 py-3 md:py-4 glass-header z-10 flex-shrink-0 flex items-center justify-between gap-2">
+              <header className="px-2 sm:px-3 md:px-4 lg:px-8 py-2 sm:py-3 md:py-4 glass-header z-10 flex-shrink-0 flex items-center justify-between gap-2">
               <div>
-                <h1 className="text-base md:text-lg font-semibold text-primary flex items-center gap-2">
-                  <MessageSquare className="text-accent" size={18} />
+                <h1 className="text-sm sm:text-base md:text-lg font-semibold text-primary flex items-center gap-1.5 sm:gap-2">
+                  <MessageSquare className="text-accent" size={16} />
                   Testing Interface
                 </h1>
-                <div className="text-xs text-secondary mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="hidden sm:inline">Engine:</span> <span className="text-gray-200 font-medium px-2 py-0.5 glass-sm text-[11px]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
+                <div className="text-[10px] sm:text-xs text-secondary mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <div className="flex items-center gap-1 sm:gap-1.5">
+                    <span className="hidden sm:inline">Engine:</span> <span className="text-gray-200 font-medium px-1.5 sm:px-2 py-0.5 glass-sm text-[10px] sm:text-[11px]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
                   </div>
-                  <div className="flex items-center gap-1 text-accent/70 font-medium text-[11px]">
+                  <div className="hidden sm:flex items-center gap-1 text-accent/70 font-medium text-[11px]">
                     <ShieldCheck size={12} />
                     <span>Coverage List Only</span>
                   </div>
-                  <div className="flex items-center gap-1 font-medium text-[11px] px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-500">
+                  <div className="flex items-center gap-1 font-medium text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-500">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 status-pulse" />
-                    <span>Undergoing UAT</span>
+                    <span>UAT</span>
                   </div>
                 </div>
               </div>
@@ -587,7 +587,7 @@ function App() {
             </header>
 
             {/* Chat area */}
-            <div className="flex-1 overflow-y-auto px-3 md:px-4 lg:px-8 py-6 md:py-8 flex flex-col gap-6 scroll-smooth pb-28 md:pb-32">
+            <div className="flex-1 overflow-y-auto px-2 sm:px-3 md:px-4 lg:px-8 py-4 sm:py-6 md:py-8 flex flex-col gap-4 sm:gap-6 scroll-smooth pb-4 sm:pb-6">
               {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center min-h-full text-center max-w-4xl mx-auto py-4">
                   <div className="w-14 h-14 bg-accent/8 rounded-xl flex items-center justify-center mb-5 border border-accent/15">
@@ -604,14 +604,14 @@ function App() {
                       : 'Test the basic retrieval or SQL capabilities of the platform.'}
                   </p>
 
-                  {/* Front-and-center query composer */}
+                   {/* Front-and-center query composer */}
                   <form
                     onSubmit={handleSubmit}
-                    className="w-full max-w-2xl mx-auto flex items-center glass-input mb-7"
+                    className="w-full max-w-2xl mx-auto flex items-center glass-input mb-5 sm:mb-7"
                   >
                     <input
                       autoFocus
-                      className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-4 py-3.5 text-[15px] outline-none w-full min-w-0"
+                      className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-3 sm:px-4 py-3 sm:py-3.5 text-[14px] sm:text-[15px] outline-none w-full min-w-0"
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       placeholder={
@@ -621,16 +621,16 @@ function App() {
                           ? 'Ask a Knowledge Base question...'
                           : mode === 'graph'
                           ? 'Ask about the knowledge graph...'
-                          : "Ask about an SEC filing, e.g. How did Micron's revenue change year over year?"
+                          : "Ask about an SEC filing..."
                       }
                       disabled={loading}
                     />
                     <button
                       type="submit"
                       disabled={loading || !input.trim()}
-                      className="flex items-center justify-center px-5 py-3.5 bg-bullish hover:bg-emerald-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-sm gap-1.5 ml-2 shrink-0 active:scale-[0.97]"
+                      className="flex items-center justify-center px-3 sm:px-5 py-3 sm:py-3.5 bg-bullish hover:bg-emerald-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-[13px] sm:text-sm gap-1 sm:gap-1.5 ml-1.5 sm:ml-2 shrink-0 active:scale-[0.97]"
                     >
-                      Try a query <Send size={14} />
+                      <span className="hidden sm:inline">Try a query</span> <Send size={14} />
                     </button>
                   </form>
 
@@ -678,7 +678,7 @@ function App() {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 w-full">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 w-full">
                      {mode === 'graph' ? (
                        <>
                          <button onClick={() => {
@@ -686,7 +686,7 @@ function App() {
                            if (import.meta.env.VITE_POSTHOG_KEY) {
                              getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'micron_relationships', mode }));
                            }
-                         }} className="text-left px-4 py-3 glass-button text-sm text-secondary hover:text-primary">
+                         }} className="text-left px-3 sm:px-4 py-2.5 sm:py-3 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
                            "What are Micron's key relationships?"
                          </button>
                          <button onClick={() => {
@@ -694,7 +694,7 @@ function App() {
                            if (import.meta.env.VITE_POSTHOG_KEY) {
                              getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'nvidia_suppliers', mode }));
                            }
-                         }} className="text-left px-4 py-3 glass-button text-sm text-secondary hover:text-primary">
+                         }} className="text-left px-3 sm:px-4 py-2.5 sm:py-3 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
                            "Show me NVIDIA's suppliers and partners"
                          </button>
                        </>
@@ -705,7 +705,7 @@ function App() {
                         if (import.meta.env.VITE_POSTHOG_KEY) {
                           getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'nvidia_revenue', mode }));
                         }
-                      }} className="text-left px-4 py-3 glass-button text-sm text-secondary hover:text-primary">
+                      }} className="text-left px-3 sm:px-4 py-2.5 sm:py-3 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
                          "What was NVIDIA's total revenue?"
                       </button>
                       <button onClick={() => {
@@ -713,7 +713,7 @@ function App() {
                         if (import.meta.env.VITE_POSTHOG_KEY) {
                           getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'micron_margin', mode }));
                         }
-                      }} className="text-left px-4 py-3 glass-button text-sm text-secondary hover:text-primary">
+                      }} className="text-left px-3 sm:px-4 py-2.5 sm:py-3 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
                          "Did Micron's gross margin improve?"
                       </button>
                        </>
@@ -725,20 +725,20 @@ function App() {
               {messages.map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`flex gap-3 md:gap-4 max-w-full md:max-w-[88%] ${
+                  className={`flex gap-2 sm:gap-3 md:gap-4 max-w-[95%] sm:max-w-[90%] md:max-w-[88%] ${
                     msg.role === 'user' ? 'self-end flex-row-reverse' : 'self-start'
                   }`}
                 >
                   {/* Avatar */}
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${
                      msg.role === 'user' ? 'bg-bullish border-emerald-500/50 text-white' : 'glass-sm text-accent'
                   }`}>
-                    {msg.role === 'user' ? <Database size={14} /> : <Search size={14} />}
+                    {msg.role === 'user' ? <Database size={13} /> : <Search size={13} />}
                   </div>
 
                   {/* Message Bubble */}
                   <div
-                    className={`px-4 py-3.5 rounded-xl leading-relaxed text-[14.5px] ${
+                    className={`px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl leading-relaxed text-[13px] sm:text-[14.5px] min-w-0 ${
                       msg.role === 'user'
                         ? 'msg-user text-white rounded-tr-sm'
                         : 'msg-assistant text-primary rounded-tl-sm'
@@ -850,15 +850,15 @@ function App() {
                         </div>
                         {msg.triples && msg.triples.length > 0 && (
                           <>
-                            <div className="flex items-center gap-2 mb-2.5 mt-3">
-                              <Search size={13} className="text-accent" />
-                              <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">Knowledge Graph Triples ({msg.triples.length})</span>
+                            <div className="flex items-center gap-2 mb-2 sm:mb-2.5 mt-3">
+                              <Search size={12} className="text-accent" />
+                              <span className="text-[10px] sm:text-[11px] font-semibold text-muted uppercase tracking-wider">Knowledge Graph Triples ({msg.triples.length})</span>
                             </div>
-                            <div className="bg-background border border-border/50 rounded-lg overflow-hidden">
+                            <div className="bg-background border border-border/50 rounded-lg overflow-hidden overflow-x-auto">
                               {msg.triples.map((triple, i) => (
                                 <div
                                   key={i}
-                                  className={`flex items-center gap-2 px-3.5 py-2 text-[13px] font-mono cursor-pointer transition-colors hover:bg-bullish/8 ${i % 2 === 0 ? 'bg-surface/20' : ''} ${i > 0 ? 'border-t border-border/30' : ''}`}
+                                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-[13px] font-mono cursor-pointer transition-colors hover:bg-bullish/8 min-w-0 ${i % 2 === 0 ? 'bg-surface/20' : ''} ${i > 0 ? 'border-t border-border/30' : ''}`}
                                   onClick={() => {
                                     setActiveTriples(msg.triples!);
                                     setGraphModalOpen(true);
@@ -868,11 +868,11 @@ function App() {
                                   }}
                                   title="Click to visualize this relationship"
                                 >
-                                  <span className="text-emerald-300">{triple.subject}</span>
-                                  <span className="text-muted">&rarr;</span>
-                                  <span className="text-bullish text-[11px] px-1.5 py-0.5 bg-bullish/8 rounded border border-bullish/15">{triple.predicate}</span>
-                                  <span className="text-muted">&rarr;</span>
-                                  <span className="text-emerald-200">{triple.object}</span>
+                                  <span className="text-emerald-300 truncate flex-shrink min-w-0">{triple.subject}</span>
+                                  <span className="text-muted flex-shrink-0">&rarr;</span>
+                                  <span className="text-bullish text-[10px] sm:text-[11px] px-1 sm:px-1.5 py-0.5 bg-bullish/8 rounded border border-bullish/15 whitespace-nowrap flex-shrink-0">{triple.predicate}</span>
+                                  <span className="text-muted flex-shrink-0">&rarr;</span>
+                                  <span className="text-emerald-200 truncate flex-shrink min-w-0">{triple.object}</span>
                                 </div>
                               ))}
                             </div>
@@ -883,21 +883,21 @@ function App() {
                     )}
 
                     {msg.sql && (
-                      <pre className="mt-3 bg-background border border-border/50 text-gray-300 rounded-lg p-3.5 text-[13px] font-mono whitespace-pre-wrap overflow-x-auto">
+                      <pre className="mt-3 bg-background border border-border/50 text-gray-300 rounded-lg p-2.5 sm:p-3.5 text-[11px] sm:text-[13px] font-mono whitespace-pre-wrap overflow-x-auto max-w-full">
                         <code>{msg.sql}</code>
                       </pre>
                     )}
 
                     {msg.data && msg.data.length > 0 && (
-                      <div className="mt-3 bg-background border border-border/50 rounded-lg overflow-hidden">
-                        <div className="overflow-x-auto">
-                          <table className="w-full border-collapse text-[13px]">
+                      <div className="mt-3 bg-background border border-border/50 rounded-lg overflow-hidden max-w-full">
+                        <div className="overflow-x-auto -mx-1 px-1">
+                          <table className="w-full border-collapse text-[11px] sm:text-[13px]">
                             <thead>
                               <tr>
                                 {Object.keys(msg.data[0]).map(key => (
                                   <th
                                     key={key}
-                                    className="text-left px-3.5 py-2.5 bg-surface border-b border-border/50 text-muted font-semibold text-[11px] uppercase tracking-wider"
+                                    className="text-left px-2 sm:px-3.5 py-2 sm:py-2.5 bg-surface border-b border-border/50 text-muted font-semibold text-[10px] sm:text-[11px] uppercase tracking-wider whitespace-nowrap"
                                   >
                                     {key}
                                   </th>
@@ -1014,13 +1014,13 @@ function App() {
             </div>
 
             {/* Input bar (hidden on the empty state, where the front-and-center composer is shown) */}
-            <div className={`px-3 md:px-4 lg:px-8 py-3 md:py-5 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/95 to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none${messages.length === 0 ? ' hidden' : ''}`}>
+            <div className={`px-2 sm:px-3 md:px-4 lg:px-8 py-2 sm:py-3 md:py-5 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/95 to-transparent flex-shrink-0 sticky bottom-0 z-20 pointer-events-none${messages.length === 0 ? ' hidden' : ''}`}>
               <form
                 onSubmit={handleSubmit}
                 className="max-w-4xl mx-auto flex items-center glass-input pointer-events-auto"
               >
                 <input
-                  className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-3.5 md:px-4 py-3 text-sm outline-none w-full min-w-0"
+                  className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-2.5 sm:px-3.5 md:px-4 py-2.5 sm:py-3 text-[13px] sm:text-sm outline-none w-full min-w-0"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={
@@ -1037,9 +1037,9 @@ function App() {
                 <button
                   type="submit"
                   disabled={loading || !input.trim()}
-                  className="flex items-center justify-center px-4 md:px-5 py-3 bg-bullish hover:bg-emerald-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-sm gap-1.5 ml-1.5 md:ml-2 shrink-0 active:scale-[0.97]"
+                  className="flex items-center justify-center px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 bg-bullish hover:bg-emerald-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-[13px] sm:text-sm gap-1 sm:gap-1.5 ml-1 sm:ml-1.5 md:ml-2 shrink-0 active:scale-[0.97]"
                 >
-                  Send <Send size={14} />
+                  <span className="hidden sm:inline">Send</span> <Send size={14} />
                 </button>
               </form>
             </div>
