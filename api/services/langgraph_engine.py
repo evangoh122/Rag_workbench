@@ -739,10 +739,13 @@ def output_node(state: GraphState) -> Dict[str, Any]:
     # (numeric path doesn't use the LLM charting tool). Data is built from XBRL.
     chart_spec = None
     try:
-        from api.services.chart_tool import detect_chart_request, build_chart_spec
+        from api.services.chart_tool import detect_chart_request, build_chart_spec, _CHART_METRICS
         metric = detect_chart_request(state.get("query", ""))
         if metric:
-            chart_spec = build_chart_spec(ticker, metric)
+            # Use bar chart for ratio metrics (margins), line for level metrics
+            meta = _CHART_METRICS.get(metric, {})
+            chart_type = "bar" if meta.get("kind") == "ratio" else "line"
+            chart_spec = build_chart_spec(ticker, metric, chart_type)
     except Exception as e:
         logger.warning(f"output_node chart build failed (non-fatal): {e}")
 
@@ -946,6 +949,12 @@ _QUALITATIVE_SIGNALS = [
     "sources of revenue", "source of revenue", "revenue sources", "revenue source",
     "main sources", "where does the revenue", "where did the revenue",
     "come from", "made up of", "driven by", "data center", "gaming",
+    # Qualitative policy/structure questions that happen to contain metric words
+    "policy", "recognition", "structure", "compensation", "plan",
+    "definition", "accounting", "treatment", "standard", "guidance",
+    "methodology", "approach", "technique", "method", "process",
+    "capitalization", "amortization", "depreciation",
+    "call", "transcript", "earnings call", "conference",
 ]
 
 
@@ -1446,10 +1455,13 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
         # Auto-attach chart for metric queries even when LLM didn't call the tool
         chart_spec = None
         try:
-            from api.services.chart_tool import detect_chart_request, build_chart_spec
+            from api.services.chart_tool import detect_chart_request, build_chart_spec, _CHART_METRICS
             metric = detect_chart_request(state.get("query", ""))
             if metric:
-                chart_spec = build_chart_spec(state.get("ticker", ""), metric)
+                # Use bar chart for ratio metrics (margins), line for level metrics
+                meta = _CHART_METRICS.get(metric, {})
+                chart_type = "bar" if meta.get("kind") == "ratio" else "line"
+                chart_spec = build_chart_spec(state.get("ticker", ""), metric, chart_type)
         except Exception as e:
             logger.warning(f"qualitative_output_node auto-chart failed (non-fatal): {e}")
 

@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import AuditTrail from '../components/AuditTrail';
 import FinancialChart from '../components/FinancialChart';
 import ChartView from '../components/ChartView';
+import ChartErrorBoundary from '../components/ChartErrorBoundary';
 import type { ChartSpec } from '../api/chat';
 
 interface Message {
@@ -160,13 +161,16 @@ const ChatView: React.FC<ChatViewProps> = ({
                 </ReactMarkdown>
               </div>
 
-              {msg.role === 'assistant' && (
-                <FinancialChart facts={msg.relevant_xbrl?.length ? msg.relevant_xbrl : msg.xbrl_facts} />
-              )}
+              <ChartErrorBoundary>
+                {msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
+                  <ChartView chart={msg.chart} />
+                )}
 
-              {msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
-                <ChartView chart={msg.chart} />
-              )}
+                {/* Only show raw XBRL chart when no backend chart is present */}
+                {msg.role === 'assistant' && !msg.chart && ((msg.relevant_xbrl?.length ?? 0) > 0 || (msg.xbrl_facts?.length ?? 0) > 0) && (
+                  <FinancialChart facts={(msg.relevant_xbrl?.length ?? 0) > 0 ? msg.relevant_xbrl : msg.xbrl_facts} />
+                )}
+              </ChartErrorBoundary>
 
               {msg.role === 'assistant' && (msg.sources || msg.verification || msg.relevant_xbrl?.length) && (
                 <div className="mt-4 pt-4 border-t border-border/50">
