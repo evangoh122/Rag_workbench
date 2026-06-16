@@ -587,7 +587,7 @@ function App() {
             </header>
 
             {/* Chat area */}
-            <div className="flex-1 overflow-y-auto px-2 sm:px-3 md:px-4 lg:px-8 py-4 sm:py-6 md:py-8 flex flex-col gap-4 sm:gap-6 scroll-smooth pb-4 sm:pb-6">
+            <div className="flex-1 overflow-y-auto px-2 sm:px-3 md:px-4 lg:px-8 py-4 sm:py-6 md:py-8 flex flex-col gap-4 sm:gap-6 scroll-smooth pb-12 sm:pb-16">
               {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center min-h-full text-center max-w-4xl mx-auto py-4">
                   <div className="w-14 h-14 bg-accent/8 rounded-xl flex items-center justify-center mb-5 border border-accent/15">
