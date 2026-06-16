@@ -1452,13 +1452,10 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
         # Auto-attach chart for metric queries even when LLM didn't call the tool
         chart_spec = None
         try:
-            from api.services.chart_tool import detect_chart_request, build_chart_spec, _CHART_METRICS
+            from api.services.chart_tool import detect_chart_request, build_chart_spec
             metric = detect_chart_request(state.get("query", ""))
             if metric:
-                # Use bar chart for ratio metrics (margins), line for level metrics
-                meta = _CHART_METRICS.get(metric, {})
-                chart_type = "bar" if meta.get("kind") == "ratio" else "line"
-                chart_spec = build_chart_spec(state.get("ticker", ""), metric, chart_type)
+                chart_spec = build_chart_spec(state.get("ticker", ""), metric, "line")
         except Exception as e:
             logger.warning(f"qualitative_output_node auto-chart failed (non-fatal): {e}")
 
