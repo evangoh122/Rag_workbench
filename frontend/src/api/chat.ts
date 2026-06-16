@@ -76,6 +76,8 @@ export interface ChartSpec {
   unit: 'USD' | '%' | string;
   ticker: string;
   data: { period: string; value: number }[];
+  annual?: { period: string; value: number }[];
+  quarterly?: { period: string; value: number }[];
 }
 
 // A knowledge-graph triple. Phase C adds source refs + node types (optional so

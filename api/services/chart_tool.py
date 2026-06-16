@@ -45,6 +45,7 @@ _LEVEL_CONCEPTS: Dict[str, List[str]] = {
 }
 
 _MAX_YEARS = 8  # keep the chart readable
+_MAX_QUARTERS = 20  # ~5 years of quarterly data
 
 CHARTABLE_METRICS = sorted(_CHART_METRICS.keys())
 
@@ -160,9 +161,64 @@ def _annual_series(ticker: str, concepts: List[str]) -> Dict[str, float]:
     return by_year
 
 
+def _quarterly_series(ticker: str, concepts: List[str]) -> Dict[str, float]:
+    """Return {fiscal_year-quarter: value} for a concept set, quarterly periods only.
+
+    Quarterly is detected by a period spanning ~90 days (60-120 days).
+    Returns keys like "2024-Q1", "2024-Q2", etc.
+    """
+    from api.db.database import db_manager
+    from datetime import datetime
+
+    if not concepts:
+        return {}
+    placeholders = ",".join("?" for _ in concepts)
+    sql = (
+        f"SELECT period_start, period_end, value FROM xbrl_facts "
+        f"WHERE ticker = ? AND concept IN ({placeholders}) "
+        f"  AND value IS NOT NULL AND period_start IS NOT NULL AND period_end IS NOT NULL "
+        f"ORDER BY period_end"
+    )
+    by_quarter: Dict[str, float] = {}
+    try:
+        rows = db_manager.execute(sql, [ticker, *concepts]).fetchall()
+        for period_start, period_end, value in rows:
+            # Parse dates from strings
+            try:
+                if isinstance(period_start, str):
+                    start = datetime.strptime(period_start[:10], '%Y-%m-%d').date()
+                else:
+                    start = period_start
+                if isinstance(period_end, str):
+                    end = datetime.strptime(period_end[:10], '%Y-%m-%d').date()
+                else:
+                    end = period_end
+                days = (end - start).days
+            except (ValueError, AttributeError):
+                continue
+            # Approximate quarterly check: 60-120 days
+            if 60 <= days <= 120:
+                year = str(end)[:4]
+                month = end.month
+                # Map month to fiscal quarter
+                if month <= 3:
+                    q = "Q1"
+                elif month <= 6:
+                    q = "Q2"
+                elif month <= 9:
+                    q = "Q3"
+                else:
+                    q = "Q4"
+                key = f"{year}-{q}"
+                by_quarter[key] = float(value)  # latest period_end in quarter wins
+    except Exception as e:
+        logger.warning(f"_quarterly_series({ticker}) failed: {e}")
+    return by_quarter
+
+
 def build_chart_spec(ticker: str, metric: str,
                      chart_type: str = "line") -> Optional[Dict[str, Any]]:
-    """Build a recharts spec for a metric's annual history, or None."""
+    """Build a recharts spec for a metric's annual and quarterly history, or None."""
     meta = _CHART_METRICS.get(metric)
     if not meta or not ticker:
         logger.info(f"chart_tool: unsupported metric {metric!r}")
@@ -170,41 +226,71 @@ def build_chart_spec(ticker: str, metric: str,
     if chart_type not in ("line", "bar"):
         chart_type = "line"
 
-    points: List[Dict[str, Any]] = []
+    annual_points: List[Dict[str, Any]] = []
+    quarterly_points: List[Dict[str, Any]] = []
+
     if meta["kind"] == "level":
+        # Annual data
         series = _annual_series(ticker, _LEVEL_CONCEPTS[metric])
         for year in sorted(series):
-            points.append({"period": year, "value": round(series[year], 2)})
+            annual_points.append({"period": year, "value": round(series[year], 2)})
+        # Quarterly data
+        q_series = _quarterly_series(ticker, _LEVEL_CONCEPTS[metric])
+        for quarter in sorted(q_series):
+            quarterly_points.append({"period": quarter, "value": round(q_series[quarter], 2)})
     else:
-        rev = _annual_series(ticker, _REVENUE_CONCEPTS)
-        if metric == "gross_margin":
-            gp = _annual_series(ticker, ["GrossProfit"])
-            cogs = _annual_series(ticker, _COGS_CONCEPTS)
-            # Recover revenue by identity (GP + COGS) for filers lacking a
-            # top-line revenue tag.
-            for y in set(gp) | set(cogs):
-                if y not in rev and y in gp and y in cogs:
-                    rev[y] = gp[y] + cogs[y]
-            num = gp
-        elif metric == "operating_margin":
-            num = _annual_series(ticker, ["OperatingIncomeLoss"])
-        else:  # net_margin
-            num = _annual_series(ticker, ["NetIncomeLoss"])
-        for year in sorted(set(rev) & set(num)):
-            denom = rev[year]
-            if denom:
-                points.append({"period": year, "value": round(num[year] / denom * 100, 2)})
+        # Ratio metrics
+        rev_annual = _annual_series(ticker, _REVENUE_CONCEPTS)
+        rev_quarterly = _quarterly_series(ticker, _REVENUE_CONCEPTS)
 
-    if len(points) < 2:
+        if metric == "gross_margin":
+            gp_annual = _annual_series(ticker, ["GrossProfit"])
+            cogs_annual = _annual_series(ticker, _COGS_CONCEPTS)
+            for y in set(gp_annual) | set(cogs_annual):
+                if y not in rev_annual and y in gp_annual and y in cogs_annual:
+                    rev_annual[y] = gp_annual[y] + cogs_annual[y]
+            num_annual = gp_annual
+
+            gp_quarterly = _quarterly_series(ticker, ["GrossProfit"])
+            cogs_quarterly = _quarterly_series(ticker, _COGS_CONCEPTS)
+            for q in set(gp_quarterly) | set(cogs_quarterly):
+                if q not in rev_quarterly and q in gp_quarterly and q in cogs_quarterly:
+                    rev_quarterly[q] = gp_quarterly[q] + cogs_quarterly[q]
+            num_quarterly = gp_quarterly
+        elif metric == "operating_margin":
+            num_annual = _annual_series(ticker, ["OperatingIncomeLoss"])
+            num_quarterly = _quarterly_series(ticker, ["OperatingIncomeLoss"])
+        else:  # net_margin
+            num_annual = _annual_series(ticker, ["NetIncomeLoss"])
+            num_quarterly = _quarterly_series(ticker, ["NetIncomeLoss"])
+
+        # Annual ratio
+        for year in sorted(set(rev_annual) & set(num_annual)):
+            denom = rev_annual[year]
+            if denom:
+                annual_points.append({"period": year, "value": round(num_annual[year] / denom * 100, 2)})
+
+        # Quarterly ratio
+        for quarter in sorted(set(rev_quarterly) & set(num_quarterly)):
+            denom = rev_quarterly[quarter]
+            if denom:
+                quarterly_points.append({"period": quarter, "value": round(num_quarterly[quarter] / denom * 100, 2)})
+
+    # Need at least 2 annual points to show a chart
+    if len(annual_points) < 2:
         return None
-    points = points[-_MAX_YEARS:]
+
+    annual_points = annual_points[-_MAX_YEARS:]
+    quarterly_points = quarterly_points[-_MAX_QUARTERS:]
 
     return {
         "type": chart_type,
-        "title": f"{ticker} — {meta['label']} ({points[0]['period']}–{points[-1]['period']})",
+        "title": f"{ticker} — {meta['label']} ({annual_points[0]['period']}–{annual_points[-1]['period']})",
         "metric": metric,
         "label": meta["label"],
         "unit": meta["unit"],
         "ticker": ticker,
-        "data": points,
+        "data": annual_points,
+        "annual": annual_points,
+        "quarterly": quarterly_points,
     }
