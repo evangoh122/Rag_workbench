@@ -90,6 +90,7 @@ export interface Triple {
   source_file?: string;
   source_loc?: string;
   confidence?: number;
+  ticker?: string;
 }
 
 interface HistoryEntry {

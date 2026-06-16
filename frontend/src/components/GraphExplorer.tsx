@@ -55,7 +55,7 @@ const GraphExplorer: React.FC = () => {
       getGraphTriples(undefined, 1000)
         .then((all) => {
           const set = new Set(selectedTickers);
-          setTriples(all.filter((t) => set.has(t.ticker)));
+          setTriples(all.filter((t) => t.ticker && set.has(t.ticker)));
         })
         .catch(() => setError('Could not load the knowledge graph.'))
         .finally(() => setLoading(false));
