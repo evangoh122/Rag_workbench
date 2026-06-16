@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Mail, ArrowRight, Cpu, Network, Database, Search, Terminal } from 'lucide-react';
+import Presentation from './Presentation';
 
 const GithubIcon = ({ size = 20 }: { size?: number }) => (
   <svg
@@ -196,7 +197,7 @@ export default function PortfolioHome() {
         </section>
 
         {/* Technical Core Values */}
-        <section className="mb-8">
+        <section className="mb-16 md:mb-24">
           <div className="flex items-center gap-2.5 mb-8">
             <div className="w-1 bg-accent h-6 rounded" />
             <h2 className="text-lg md:text-xl font-bold tracking-tight text-primary">Technical Approach</h2>
@@ -232,6 +233,17 @@ export default function PortfolioHome() {
                 Designing snapshots, boot restore systems, and automated persistence cycles to guarantee runtime stability across restarts.
               </p>
             </div>
+          </div>
+        </section>
+
+        {/* Slide Deck Section */}
+        <section className="mb-16 md:mb-24 animate-fade-in">
+          <div className="flex items-center gap-2.5 mb-8">
+            <div className="w-1 bg-accent h-6 rounded" />
+            <h2 className="text-lg md:text-xl font-bold tracking-tight text-primary">Show Your Work</h2>
+          </div>
+          <div className="border border-border/40 rounded-2xl bg-surface/20 overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+            <Presentation />
           </div>
         </section>
       </main>
