@@ -65,6 +65,7 @@ def query_graph(state: GraphRAGState) -> dict:
     # Phase C: carry the source refs (chunk_id/source_file/source_loc) and node
     # types so the Evidence Graph can show *where in the filing* each edge came
     # from. COALESCE keeps legacy rows (pre-Phase-B, untyped/no chunk_id) valid.
+    # LIMIT prevents runaway queries when LLM extracts broad entities like "%".
     sql = f"""
         SELECT ticker, subject, predicate, object,
                COALESCE(subject_type, '') AS subject_type,
@@ -75,6 +76,8 @@ def query_graph(state: GraphRAGState) -> dict:
                COALESCE(confidence, 1.0)  AS confidence
         FROM graph_triples
         WHERE ticker = ? AND ({conditions_sql})
+        ORDER BY confidence DESC NULLS LAST
+        LIMIT 500
     """
 
     try:

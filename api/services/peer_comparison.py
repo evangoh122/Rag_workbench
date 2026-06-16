@@ -270,10 +270,8 @@ def compute_metric(ticker: str, metric: str) -> Dict[str, Any]:
 
     Returns {"value": float|None, "period": str, "ok": bool}.
     """
-    from api.services.financial_calc import (
-        FactExtractor, gross_margin, operating_margin, net_margin,
-        free_cash_flow, current_ratio, debt_to_equity, rd_intensity, yoy_growth,
-    )
+    from api.services.financial_calc import FactExtractor
+    from api.services.metric_router import route_metric
     from api.services.sec_client import get_latest_10k_facts
 
     import polars as pl
@@ -289,76 +287,10 @@ def compute_metric(ticker: str, metric: str) -> Dict[str, Any]:
         prior = periods[-2] if len(periods) >= 2 else None
         out["period"] = latest
 
-        # Strict, period-scoped extractors: slice the facts to a single period
-        # so a concept that's missing for that period returns None instead of
-        # FactExtractor falling back to a stale value from an earlier year
-        # (which silently produced wrong margins / 0% growth for filers whose
-        # current-period revenue isn't in xbrl_facts).
-        pcol = "period_end" if "period_end" in df.columns else None
-
-        def _scoped(period: Optional[str]) -> FactExtractor:
-            if pcol and period:
-                sliced = df.filter(pl.col(pcol).cast(pl.Utf8).str.starts_with(period))
-                if not sliced.is_empty():
-                    return FactExtractor(sliced)
-            return FactExtractor(df.clear())  # empty -> all lookups return None
-
-        ex_latest = _scoped(latest)
-        ex_prior = _scoped(prior) if prior else None
-
-        def g(c: str, p: Optional[str] = None) -> Optional[float]:
-            src = ex_prior if (p == prior and ex_prior is not None) else ex_latest
-            return src.get(c) if src is not None else None
-
-        r: Optional[Any] = None
-        if metric == "gross_margin":
-            rev, gp, cogs = g("revenues"), g("grossprofit"), g("costofrevenue")
-            # Revenue ≡ GrossProfit + COGS — recover it by identity for filers
-            # that tag GP/COGS but not a top-line Revenues concept (e.g. TXN).
-            if rev is None and gp is not None and cogs is not None:
-                rev = gp + cogs
-            if rev is not None and gp is not None:
-                r = gross_margin(rev, cogs, period=latest, gross_profit=gp)
-            elif rev is not None and cogs is not None:
-                r = gross_margin(rev, cogs, period=latest)
-        elif metric == "operating_margin":
-            rev, oi = g("revenues"), g("operatingincomeloss")
-            if rev is not None and oi is not None:
-                r = operating_margin(rev, oi, period=latest)
-        elif metric == "net_margin":
-            rev, ni = g("revenues"), g("netincomeloss")
-            if rev is not None and ni is not None:
-                r = net_margin(rev, ni, period=latest)
-        elif metric == "rd_intensity":
-            rev, rd = g("revenues"), g("researchanddevelopment")
-            if rev is not None and rd is not None:
-                r = rd_intensity(rev, rd, period=latest)
-        elif metric == "free_cash_flow":
-            ocf, capex = g("netcashoperating"), g("capitalexpenditures")
-            if ocf is not None and capex is not None:
-                r = free_cash_flow(ocf, capex, period=latest)
-        elif metric == "current_ratio":
-            ca, cl = g("currentassets"), g("currentliabilities")
-            if ca is not None and cl is not None:
-                r = current_ratio(ca, cl, period=latest)
-        elif metric == "debt_to_equity":
-            debt, eq = g("longtermdebt"), g("stockholdersequity")
-            if debt is not None and eq is not None:
-                r = debt_to_equity(debt, eq, period=latest)
-        elif metric == "revenue_yoy_growth" and prior:
-            cur, prev = g("revenues"), g("revenues", prior)
-            if cur is not None and prev is not None:
-                r = yoy_growth(cur, prev, metric_name="Revenue",
-                               current_period=latest, prior_period=prior)
-        elif metric in ("revenue", "net_income"):
-            concept = "revenues" if metric == "revenue" else "netincomeloss"
-            val = g(concept)
-            if val is not None:
-                out.update(value=float(val), ok=True)
-            return out
-
-        if r is not None:
-            out.update(value=float(r.value), ok=True)
+        # Use the shared metric router
+        result = route_metric(metric, ex, latest, prior)
+        if result:
+            out.update(value=float(result.value), ok=True)
     except Exception as e:
         logger.warning(f"compute_metric({ticker}, {metric}) failed: {e}")
     return out
