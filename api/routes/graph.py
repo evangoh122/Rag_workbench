@@ -6,12 +6,13 @@ metadata so the UI can show *where in the filing* a graph edge came from.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 
 from api.db.database import db_manager
+from api.middleware.auth import get_read_api_key
 
-router = APIRouter(prefix="/api/graph", tags=["graph"])
+router = APIRouter(prefix="/api/graph", tags=["graph"], dependencies=[Depends(get_read_api_key)])
 
 
 def _parse_chunk_id(chunk_id: str) -> tuple[str, str, int | None]:
@@ -105,7 +106,10 @@ def triples(ticker: str | None = None, limit: int = 300):
     Optionally filtered to one company. Capped (default 300) so the force
     graph stays legible. Highest-confidence edges first.
     """
-    limit = max(1, min(int(limit), 1000))
+    try:
+        limit = max(1, min(int(limit), 1000))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="limit must be an integer between 1 and 1000")
     sql = (
         "SELECT subject, predicate, object, subject_type, object_type, "
         "chunk_id, source_file, source_loc, confidence, ticker "

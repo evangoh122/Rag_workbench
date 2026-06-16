@@ -194,11 +194,12 @@ def _graph_competitors(subject: str, conn) -> Tuple[List[str], List[str]]:
             if mapped and mapped != subject:
                 covered_peers.append(mapped)
         # Incoming: another covered company names the subject as a competitor
+        # Use exact match or word-boundary match to avoid false positives on short tickers
         rows2 = conn.execute(
             "SELECT DISTINCT ticker FROM graph_triples "
             "WHERE predicate = 'COMPETES_WITH' AND ticker <> ? "
-            "AND lower(object) LIKE ?",
-            [subject, f"%{subject.lower()}%"],
+            "AND (lower(object) = ? OR lower(object) LIKE ? OR lower(object) LIKE ? OR lower(object) LIKE ?)",
+            [subject, subject.lower(), f"{subject.lower()},%", f"%, {subject.lower()}%", f"%, {subject.lower()}"],
         ).fetchall()
         for (tk,) in rows2:
             if tk and tk != subject:

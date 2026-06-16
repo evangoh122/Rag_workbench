@@ -361,7 +361,7 @@ def math_node(state: GraphState) -> Dict[str, Any]:
                 assets = extractor.get("assets",      period=latest)
                 liabs  = extractor.get("liabilities",  period=latest)
                 eq     = extractor.get("stockholdersequity", period=latest)
-                if assets and liabs and eq:
+                if assets is not None and liabs is not None and eq is not None:
                     identity = check_balance_sheet(assets, liabs, eq, period=latest)
                     steps.append(f"Balance sheet identity: {identity.verdict} "
                                  f"(delta {identity.delta_pct:.2f}%)")
@@ -1135,6 +1135,10 @@ def _generate_educational_layers(query: str, answer: str, ticker: str) -> dict:
             max_tokens=600,
         )
         raw = (resp.choices[0].message.content or "").strip()
+        # Cap response size to prevent runaway LLM output
+        if len(raw) > 10_000:
+            logger.warning("Educational layers response exceeded 10KB — truncating")
+            raw = raw[:10_000]
         # Tolerate a ```json fence if the model adds one despite instructions.
         if raw.startswith("```"):
             raw = raw.strip("`")
@@ -1450,7 +1454,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
         return {
             "final_answer": "An error occurred while generating the answer. Please try again.",
             "verification_status": "SKIPPED",
-            "verification_reasoning": f"Qualitative output error: {e}",
+            "verification_reasoning": "Qualitative output generation failed — internal error.",
             "math_steps": [],
             "math_result": None,
             "status": {**state.get("status", {}), "output": "error"},
@@ -1639,11 +1643,14 @@ workflow.add_edge("abstention", "build_lineage")
 workflow.add_edge("build_lineage", END)
 
 _app = None
+_app_lock = __import__('threading').Lock()
 
 def get_app():
     global _app
     if _app is None:
-        _app = workflow.compile()
+        with _app_lock:
+            if _app is None:
+                _app = workflow.compile()
     return _app
 
 def _resolve_query_ticker(query: str, fallback: str) -> str:
