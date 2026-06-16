@@ -41,7 +41,7 @@ interface Message {
   chart?: ChartSpec;
 }
 
-type AppView = 'landing' | 'chat' | 'graph' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
+type AppView = 'chat' | 'graph' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
 
 type PipelineStatus = {
   input?: 'success' | 'error' | 'pending';
@@ -53,8 +53,9 @@ type PipelineStatus = {
 };
 
 import { getPosthog } from './utils/posthog'
+import { Routes, Route, useNavigate } from 'react-router-dom';
+import PortfolioHome from './pages/PortfolioHome';
 
-import Landing from './components/Landing';
 import ChartView from './components/ChartView';
 import GraphExplorer from './components/GraphExplorer';
 import KnowledgeGraph from './components/KnowledgeGraph';
@@ -62,12 +63,13 @@ import type { GraphSelection } from './components/KnowledgeGraph';
 import { getGraphEvidence, getGraphTriples, getGraphAnalytics, type GraphEvidence } from './api/graph';
 import { COMPANY_NAMES } from './components/GraphExplorer';
 
-function App() {
+function Workbench() {
+  const navigate = useNavigate();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [mode, _setMode] = useState<'sql' | 'rag' | 'auditable' | 'graph'>('auditable');
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState<AppView>('landing');
+  const [view, setView] = useState<AppView>('chat');
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
   const [ticker, _setTicker] = useState('MU');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -244,11 +246,6 @@ function App() {
     }
   };
 
-  // Full-bleed marketing landing (app front door); CTAs enter the workbench.
-  if (view === 'landing') {
-    return <Landing onEnter={() => setView('chat')} />;
-  }
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-primary font-sans">
       {/* Mobile Sidebar Overlay */}
@@ -265,11 +262,11 @@ function App() {
         transition-transform duration-300 ease-out lg:relative lg:translate-x-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        {/* Logo (returns to the landing page) */}
+        {/* Logo (returns to the portfolio home) */}
         <div className="flex items-center justify-between mb-7 px-1">
           <button
             type="button"
-            onClick={() => setView('landing')}
+            onClick={() => navigate('/')}
             title="Back to home"
             aria-label="Back to home"
             className="flex items-center gap-3 bg-transparent border-0 p-0 cursor-pointer text-left"
@@ -1183,6 +1180,15 @@ function App() {
         </div>
       )}
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<PortfolioHome />} />
+      <Route path="/rag/*" element={<Workbench />} />
+    </Routes>
   );
 }
 
