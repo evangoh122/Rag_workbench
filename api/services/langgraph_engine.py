@@ -361,7 +361,7 @@ def math_node(state: GraphState) -> Dict[str, Any]:
                 assets = extractor.get("assets",      period=latest)
                 liabs  = extractor.get("liabilities",  period=latest)
                 eq     = extractor.get("stockholdersequity", period=latest)
-                if assets and liabs and eq:
+                if assets is not None and liabs is not None and eq is not None:
                     identity = check_balance_sheet(assets, liabs, eq, period=latest)
                     steps.append(f"Balance sheet identity: {identity.verdict} "
                                  f"(delta {identity.delta_pct:.2f}%)")
@@ -599,6 +599,8 @@ def _safe_numeric(value) -> float | None:
 
 # Maps query keywords → XBRL concept substrings to surface in comparisons.
 # Each entry is a list so multiple query signals map to the same concept set.
+# NOTE: Keywords containing regex metacharacters (e.g. "long[- ]?term debt") are
+# intentional and used with re.search(). Do NOT add unescaped (, ), *, +, etc.
 _CONCEPT_MAP: list[tuple[tuple[str, ...], list[str]]] = [
     (("gross margin", "gross profit"),             ["GrossProfit", "Revenues", "RevenueFromContractWithCustomer", "CostOfGoodsAndServicesSold", "CostOfRevenue"]),
     (("revenue", "sales", "net sales"),            ["Revenues", "RevenueFromContractWithCustomer"]),
@@ -608,7 +610,8 @@ _CONCEPT_MAP: list[tuple[tuple[str, ...], list[str]]] = [
     # FCF = operating cash flow − CapEx; surface both so caller can derive it
     (("free cash", "fcf"),                         ["NetCashProvidedByUsedInOperatingActivities",
                                                     "PaymentsToAcquirePropertyPlantAndEquipment"]),
-    (("long[- ]?term debt", "debt"),                 ["LongTermDebt"]),
+    # This entry uses a regex character class [- ]? intentionally — do not escape
+    (("long[- ]?term debt", "debt"),               ["LongTermDebt"]),
     (("assets",),                                  ["Assets"]),
 ]
 
@@ -678,7 +681,8 @@ def output_node(state: GraphState) -> Dict[str, Any]:
             rows: list[tuple[str, str, float]] = []
             for f in facts:
                 concept = f.get("concept", "")
-                if not any(c.lower() in concept.lower() for c in concept_priority):
+                # Use word-boundary match to avoid false positives (e.g. "Gross" matching "GrossProfit")
+                if not any(re.search(r"\b" + re.escape(c) + r"\b", concept, re.IGNORECASE) for c in concept_priority):
                     continue
                 period = f.get("period_end", "")
                 # fix: value=0 is valid — must not use `or` (falsy)
@@ -1135,6 +1139,10 @@ def _generate_educational_layers(query: str, answer: str, ticker: str) -> dict:
             max_tokens=600,
         )
         raw = (resp.choices[0].message.content or "").strip()
+        # Cap response size to prevent runaway LLM output
+        if len(raw) > 10_000:
+            logger.warning("Educational layers response exceeded 10KB — truncating")
+            raw = raw[:10_000]
         # Tolerate a ```json fence if the model adds one despite instructions.
         if raw.startswith("```"):
             raw = raw.strip("`")
@@ -1450,7 +1458,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
         return {
             "final_answer": "An error occurred while generating the answer. Please try again.",
             "verification_status": "SKIPPED",
-            "verification_reasoning": f"Qualitative output error: {e}",
+            "verification_reasoning": "Qualitative output generation failed — internal error.",
             "math_steps": [],
             "math_result": None,
             "status": {**state.get("status", {}), "output": "error"},
@@ -1460,11 +1468,8 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
 def _execute_tool(metric: str, state: GraphState) -> dict:
     """Execute a financial calculation tool and return the result as a dict."""
     import polars as pl
-    from api.services.financial_calc import (
-        FactExtractor, gross_margin, gross_margin_growth, operating_margin,
-        net_margin, free_cash_flow, current_ratio, debt_to_equity, rd_intensity,
-        yoy_growth,
-    )
+    from api.services.financial_calc import FactExtractor
+    from api.services.metric_router import route_metric
 
     facts_list = state.get("xbrl_facts", [])
     if not facts_list:
@@ -1476,89 +1481,11 @@ def _execute_tool(metric: str, state: GraphState) -> dict:
     latest = periods[-1] if periods else ""
     prior = periods[-2] if len(periods) >= 2 else None
 
-    try:
-        if metric == "gross_margin":
-            rev = extractor.get("revenues", period=latest)
-            gp = extractor.get("grossprofit", period=latest)
-            cogs = extractor.get("costofrevenue", period=latest)
-            if rev is not None and gp is not None:
-                # Prefer the filed GrossProfit tag (GrossProfit / Revenue).
-                r = gross_margin(rev, cogs, period=latest, gross_profit=gp)
-                return {"value": r.value, "display": r.display(), "unit": r.unit}
-            if rev is not None and cogs is not None:
-                r = gross_margin(rev, cogs, period=latest)
-                return {"value": r.value, "display": r.display(), "unit": r.unit}
+    result = route_metric(metric, extractor, latest, prior)
+    if result:
+        return {"value": result.value, "display": result.display(), "unit": result.unit}
 
-        elif metric == "gross_margin_growth" and prior:
-            rc = extractor.get("revenues", period=latest)
-            cc = extractor.get("costofrevenue", period=latest)
-            rp = extractor.get("revenues", period=prior)
-            cp = extractor.get("costofrevenue", period=prior)
-            if all(v is not None for v in (rc, cc, rp, cp)):
-                r = gross_margin_growth(rc, cc, rp, cp, current_period=latest, prior_period=prior)
-                return {"value": r.value, "display": r.display(), "unit": r.unit}
-
-        elif metric == "operating_margin":
-            rev = extractor.get("revenues", period=latest)
-            oi = extractor.get("operatingincomeloss", period=latest)
-            if rev is not None and oi is not None:
-                r = operating_margin(rev, oi, period=latest)
-                return {"value": r.value, "display": r.display(), "unit": r.unit}
-
-        elif metric == "net_margin":
-            rev = extractor.get("revenues", period=latest)
-            ni = extractor.get("netincomeloss", period=latest)
-            if rev is not None and ni is not None:
-                r = net_margin(rev, ni, period=latest)
-                return {"value": r.value, "display": r.display(), "unit": r.unit}
-
-        elif metric == "free_cash_flow":
-            ocf = extractor.get("netcashoperating", period=latest)
-            capex = extractor.get("capitalexpenditures", period=latest)
-            if ocf is not None and capex is not None:
-                r = free_cash_flow(ocf, capex, period=latest)
-                return {"value": r.value, "display": r.display(), "unit": r.unit}
-
-        elif metric == "current_ratio":
-            ca = extractor.get("currentassets", period=latest)
-            cl = extractor.get("currentliabilities", period=latest)
-            if ca is not None and cl is not None:
-                r = current_ratio(ca, cl, period=latest)
-                return {"value": r.value, "display": r.display(), "unit": r.unit}
-
-        elif metric == "debt_to_equity":
-            debt = extractor.get("longtermdebt", period=latest)
-            eq = extractor.get("stockholdersequity", period=latest)
-            if debt is not None and eq is not None:
-                r = debt_to_equity(debt, eq, period=latest)
-                return {"value": r.value, "display": r.display(), "unit": r.unit}
-
-        elif metric == "rd_intensity":
-            rev = extractor.get("revenues", period=latest)
-            rd = extractor.get("researchanddevelopment", period=latest)
-            if rev is not None and rd is not None:
-                r = rd_intensity(rev, rd, period=latest)
-                return {"value": r.value, "display": r.display(), "unit": r.unit}
-
-        elif metric in ("revenue", "net_income"):
-            concept = "revenues" if metric == "revenue" else "netincomeloss"
-            val = extractor.get(concept, period=latest)
-            if val is not None:
-                return {"value": val, "display": f"{metric}: ${val:,.0f}", "unit": "USD"}
-
-        elif metric == "revenue_yoy_growth" and prior:
-            # Generic YoY growth on revenue by default; LLM can clarify in answer
-            curr_val = extractor.get("revenues", period=latest)
-            prev_val = extractor.get("revenues", period=prior)
-            if curr_val is not None and prev_val is not None:
-                r = yoy_growth(curr_val, prev_val, metric_name="Revenue",
-                               current_period=latest, prior_period=prior)
-                return {"value": r.value, "display": r.display(), "unit": r.unit}
-
-        return {"error": f"Could not compute {metric} — missing data", "display": f"{metric}: data unavailable"}
-
-    except Exception as e:
-        return {"error": str(e), "display": f"{metric}: calculation error"}
+    return {"error": f"Could not compute {metric} — missing data", "display": f"{metric}: data unavailable"}
 
 
 # ---------------------------------------------------------------------------
@@ -1639,11 +1566,14 @@ workflow.add_edge("abstention", "build_lineage")
 workflow.add_edge("build_lineage", END)
 
 _app = None
+_app_lock = __import__('threading').Lock()
 
 def get_app():
     global _app
     if _app is None:
-        _app = workflow.compile()
+        with _app_lock:
+            if _app is None:
+                _app = workflow.compile()
     return _app
 
 def _resolve_query_ticker(query: str, fallback: str) -> str:
@@ -1713,6 +1643,7 @@ def _abstain_response(company: str) -> Dict[str, Any]:
     done["output"] = "success"
     return {
         "final_answer": msg,
+        "resolved_ticker": "",  # No ticker — company is out of coverage
         "xbrl_facts": [], "relevant_xbrl": [], "retrieved_docs": [], "polygon_data": [],
         "math_result": None, "math_steps": [],
         "verification_status": "ABSTAIN",

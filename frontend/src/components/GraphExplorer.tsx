@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Share2, ExternalLink, Loader2, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { Share2, ExternalLink, Loader2, X, Check } from 'lucide-react';
 import KnowledgeGraph, { type GraphSelection } from './KnowledgeGraph';
 import {
   getGraphTriples,
@@ -11,13 +11,14 @@ import type { Triple } from '../api/chat';
 
 /**
  * Dedicated Knowledge Graph tab. Loads filing-derived triples (optionally
- * filtered to one company), renders the force graph, and shows click-to-source
- * evidence in a side panel so every edge stays auditable back to the filing.
+ * filtered to selected companies), renders the force graph, and shows
+ * click-to-source evidence in a side panel so every edge stays auditable.
  */
 const GraphExplorer: React.FC = () => {
   const [triples, setTriples] = useState<Triple[]>([]);
   const [companies, setCompanies] = useState<string[]>([]);
-  const [ticker, setTicker] = useState<string>('');
+  const [selectedTickers, setSelectedTickers] = useState<string[]>(['MU']);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,11 +37,30 @@ const GraphExplorer: React.FC = () => {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    getGraphTriples(ticker || undefined, 300)
-      .then((t) => setTriples(t))
-      .catch(() => setError('Could not load the knowledge graph.'))
-      .finally(() => setLoading(false));
-  }, [ticker]);
+
+    if (selectedTickers.length === 0) {
+      // No selection = all companies
+      getGraphTriples(undefined, 300)
+        .then((t) => setTriples(t))
+        .catch(() => setError('Could not load the knowledge graph.'))
+        .finally(() => setLoading(false));
+    } else if (selectedTickers.length === 1) {
+      // Single company — use the API filter
+      getGraphTriples(selectedTickers[0], 300)
+        .then((t) => setTriples(t))
+        .catch(() => setError('Could not load the knowledge graph.'))
+        .finally(() => setLoading(false));
+    } else {
+      // Multiple companies — fetch all and filter client-side
+      getGraphTriples(undefined, 1000)
+        .then((all) => {
+          const set = new Set(selectedTickers);
+          setTriples(all.filter((t) => set.has(t.ticker)));
+        })
+        .catch(() => setError('Could not load the knowledge graph.'))
+        .finally(() => setLoading(false));
+    }
+  }, [selectedTickers]);
 
   const handleSelect = (s: GraphSelection) => {
     setSel(s);
@@ -53,6 +73,16 @@ const GraphExplorer: React.FC = () => {
       .finally(() => setEvLoading(false));
   };
 
+  const toggleTicker = useCallback((t: string) => {
+    setSelectedTickers((prev) =>
+      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+    );
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedTickers([]);
+  }, []);
+
   const edgeCount = triples.length;
   const nodeCount = useMemo(() => {
     const s = new Set<string>();
@@ -62,6 +92,13 @@ const GraphExplorer: React.FC = () => {
     });
     return s.size;
   }, [triples]);
+
+  const filterLabel =
+    selectedTickers.length === 0
+      ? 'All companies'
+      : selectedTickers.length === 1
+        ? selectedTickers[0]
+        : `${selectedTickers.length} companies`;
 
   return (
     <div className="flex-1 flex flex-col h-full animate-in fade-in duration-200">
@@ -79,18 +116,53 @@ const GraphExplorer: React.FC = () => {
           <span className="text-[11px] text-muted tabular-nums">
             {nodeCount} nodes · {edgeCount} edges
           </span>
-          <select
-            value={ticker}
-            onChange={(e) => setTicker(e.target.value)}
-            className="glass-sm text-xs text-primary bg-transparent px-2.5 py-1.5 rounded-lg outline-none cursor-pointer"
-          >
-            <option value="">All companies</option>
-            {companies.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+
+          {/* Multi-select dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              onBlur={() => setTimeout(() => setDropdownOpen(false), 200)}
+              className="glass-sm text-xs text-primary bg-transparent px-2.5 py-1.5 rounded-lg outline-none cursor-pointer flex items-center gap-1.5"
+            >
+              {filterLabel}
+              <span className="text-[10px] text-muted">{dropdownOpen ? '\u25B2' : '\u25BC'}</span>
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full mt-1 w-48 fintech-card p-1.5 z-50 shadow-lg max-h-64 overflow-y-auto">
+                {/* All companies option */}
+                <button
+                  onClick={selectAll}
+                  className={`w-full text-left text-xs px-2 py-1.5 rounded flex items-center gap-2 hover:bg-surface/60 ${
+                    selectedTickers.length === 0 ? 'text-accent' : 'text-primary'
+                  }`}
+                >
+                  <span className="w-3.5 h-3.5 flex items-center justify-center">
+                    {selectedTickers.length === 0 && <Check size={12} />}
+                  </span>
+                  All companies
+                </button>
+
+                <div className="border-t border-border/30 my-1" />
+
+                {/* Individual tickers */}
+                {companies.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => toggleTicker(c)}
+                    className={`w-full text-left text-xs px-2 py-1.5 rounded flex items-center gap-2 hover:bg-surface/60 ${
+                      selectedTickers.includes(c) ? 'text-accent' : 'text-primary'
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 flex items-center justify-center">
+                      {selectedTickers.includes(c) && <Check size={12} />}
+                    </span>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

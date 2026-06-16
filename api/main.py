@@ -130,9 +130,13 @@ if os.path.exists(frontend_path):
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str, request: Request):
+        from pathlib import Path
         file_path = os.path.join(frontend_path, full_path)
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
+        resolved = Path(file_path).resolve()
+        if not str(resolved).startswith(str(Path(frontend_path).resolve())):
+            return FileResponse(os.path.join(frontend_path, "index.html"))
+        if resolved.is_file():
+            return FileResponse(str(resolved))
         return FileResponse(os.path.join(frontend_path, "index.html"))
 
 if __name__ == "__main__":

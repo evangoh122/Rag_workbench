@@ -105,7 +105,10 @@ def triples(ticker: str | None = None, limit: int = 300):
     Optionally filtered to one company. Capped (default 300) so the force
     graph stays legible. Highest-confidence edges first.
     """
-    limit = max(1, min(int(limit), 1000))
+    try:
+        limit = max(1, min(int(limit), 1000))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="limit must be an integer between 1 and 1000")
     sql = (
         "SELECT subject, predicate, object, subject_type, object_type, "
         "chunk_id, source_file, source_loc, confidence, ticker "
