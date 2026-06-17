@@ -39,3 +39,8 @@ The following violations existed before the frontend mandate was declared. They 
 | `frontend/src/App.tsx:13` | `data?: any[]` — untyped | Type as `Record<string, unknown>[]` |
 | `frontend/src/App.tsx:60` | `catch (err: any)` — untyped | Type as `catch (err: unknown)` |
 | `frontend/src/App.tsx:147` | `(val: any, j)` — untyped | Derive type from row type |
+
+## Deployment Mandates
+- **Frontend Changes:** Direct pushes to production are permitted for changes limited strictly to the client-side frontend (i.e. files in the `frontend/` directory).
+- **All Other Changes:** Any changes affecting the backend (such as Python code, database schemas, API routes, or scripts) must never be pushed to production directly. They must be developed on a separate branch and undergo the full peer-review and approval workflow before integration.
+
