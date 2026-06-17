@@ -206,7 +206,7 @@ export default function PortfolioHome() {
                     </div>
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-bullish/20 bg-bullish/10 text-emerald-400">
-                    Production
+                    UAT
                   </span>
                 </div>
                 <p className="text-sm text-secondary leading-relaxed mb-6 font-light">
