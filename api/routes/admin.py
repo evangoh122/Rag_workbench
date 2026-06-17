@@ -116,9 +116,13 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS ticker_embeddings (
-            ticker VARCHAR PRIMARY KEY, description TEXT,
+            ticker VARCHAR, description TEXT,
             sector VARCHAR, industry VARCHAR
         )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_te_ticker
+        ON ticker_embeddings (ticker)
     """)
     for col, col_type in [
         ("text",       "TEXT"),

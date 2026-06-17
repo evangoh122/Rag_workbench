@@ -157,11 +157,15 @@ def create_tables(conn: duckdb.DuckDBPyConnection) -> None:
     # Ticker embeddings placeholder
     conn.execute("""
         CREATE TABLE IF NOT EXISTS ticker_embeddings (
-            ticker      VARCHAR PRIMARY KEY,
+            ticker      VARCHAR,
             description TEXT,
             sector      VARCHAR,
             industry    VARCHAR
         )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_te_ticker
+        ON ticker_embeddings (ticker)
     """)
     for col, col_type in [
         ("text",       "TEXT"),
@@ -228,12 +232,11 @@ def bootstrap(tickers: list[str], db_path: str) -> None:
             ])
             total_facts += 1
 
-        # Insert ticker metadata
         company_name = data.get("entityName", ticker)
+        conn.execute("DELETE FROM ticker_embeddings WHERE ticker = ?", [ticker])
         conn.execute("""
             INSERT INTO ticker_embeddings (ticker, description, sector, industry)
             VALUES (?, ?, ?, ?)
-            ON CONFLICT (ticker) DO UPDATE SET description = excluded.description
         """, [ticker, company_name, "", ""])
 
     conn.close()

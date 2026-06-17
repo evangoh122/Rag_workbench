@@ -144,6 +144,13 @@ _TICKER_CIK: dict[str, str] = {
     "VECO": "0000103145",  # Veeco Instruments
 }
 
+# Merge central config mappings to prevent CIK divergence
+try:
+    from api.config import TICKER_TO_CIK as _CONFIG_TICKER_CIK
+    _TICKER_CIK.update(_CONFIG_TICKER_CIK)
+except ImportError:
+    pass
+
 # All tickers for ingestion
 DEMO_TICKERS: List[str] = [
     # Aerospace / Launch (IPO prospectus, not a 10-K filer yet)

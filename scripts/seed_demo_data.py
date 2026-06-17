@@ -95,11 +95,15 @@ def seed(db_path: str) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_xbrl_ticker_period ON xbrl_facts (ticker, period_end)")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS ticker_embeddings (
-            ticker      VARCHAR PRIMARY KEY,
+            ticker      VARCHAR,
             description TEXT,
             sector      VARCHAR,
             industry    VARCHAR
         )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_te_ticker
+        ON ticker_embeddings (ticker)
     """)
     for col, col_type in [
         ("text",       "TEXT"),
@@ -151,10 +155,10 @@ def seed(db_path: str) -> None:
         ("TER", "Teradyne Inc.", "Technology", "Semiconductor Equipment"),
     ]
     for ticker, name, sector, industry in semis:
+        conn.execute("DELETE FROM ticker_embeddings WHERE ticker = ?", [ticker])
         conn.execute("""
             INSERT INTO ticker_embeddings (ticker, description, sector, industry)
             VALUES (?, ?, ?, ?)
-            ON CONFLICT (ticker) DO UPDATE SET description = excluded.description
         """, [ticker, name, sector, industry])
 
     count = conn.execute("SELECT COUNT(*) FROM xbrl_facts").fetchone()[0]

@@ -104,13 +104,20 @@ def run_embed_tickers_etl(batch_size: int = 100) -> int:
             try:
                 vecs = embeddings.embed_documents(texts)
 
-                for j, row in enumerate(batch):
-                    conn.execute("DELETE FROM ticker_embeddings WHERE ticker = ?", [row["ticker"]])
-                    conn.execute("""
-                        INSERT INTO ticker_embeddings
-                            (ticker, text, embedding, updated_at)
-                        VALUES (?, ?, ?, ?)
-                    """, [row["ticker"], texts[j], vecs[j], ts])
+                # Wrap in a transaction to make the batch delete-then-insert atomic
+                conn.execute("BEGIN TRANSACTION")
+                try:
+                    for j, row in enumerate(batch):
+                        conn.execute("DELETE FROM ticker_embeddings WHERE ticker = ?", [row["ticker"]])
+                        conn.execute("""
+                            INSERT INTO ticker_embeddings
+                                (ticker, text, embedding, updated_at)
+                            VALUES (?, ?, ?, ?)
+                        """, [row["ticker"], texts[j], vecs[j], ts])
+                    conn.execute("COMMIT")
+                except Exception as tx_err:
+                    conn.execute("ROLLBACK")
+                    raise tx_err
 
                 total += len(batch)
                 logger.debug(f"Embedded {total}/{len(rows)} tickers")
