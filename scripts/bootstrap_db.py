@@ -32,46 +32,7 @@ EDGAR_USER_AGENT = os.getenv("EDGAR_USER_AGENT", "RAGWorkbench/1.0 (research@exa
 SEC_RATE_LIMIT_DELAY = 0.15  # 10 req/s max -> 100ms + margin
 
 # CIK lookup for covered tickers
-TICKER_TO_CIK = {
-    # Aerospace / Launch. SpaceX has filed only an S-1/424B4 IPO prospectus — no
-    # 10-K and no XBRL companyfacts yet — so today this registers company metadata
-    # only (ticker_embeddings); XBRL facts auto-populate once it files its first
-    # 10-K. Prospectus *text* is ingested separately via embed_edgar.py.
-    "SPCX": "0001181412",  # Space Exploration Technologies (SpaceX)
-    # Semiconductor Design & IP
-    "ADI": "0000006607",   # Analog Devices
-    "AMD": "0000002488",   # Advanced Micro Devices
-    "AVGO": "0001730168",  # Broadcom
-    "INTC": "0000050863",  # Intel
-    "MU": "0000723125",    # Micron Technology
-    "NVDA": "0001045810",  # Nvidia
-    "QCOM": "0000804328",  # Qualcomm
-    "TXN": "0000097476",   # Texas Instruments
-    "TSM": "0001046179",   # Taiwan Semiconductor
-    "MRVL": "0000721938",  # Marvell Technology
-    "NXPI": "0001109168",  # NXP Semiconductors
-    "MCHP": "0000831368",  # Microchip Technology
-    "MPWR": "0001267902",  # Monolithic Power Systems
-    "SWKS": "0000412700",  # Skyworks Solutions
-    "QRVO": "0001603872",  # Qorvo
-    "ON": "0001666635",    # ON Semiconductor (if needed)
-    # Semiconductor Equipment & Materials
-    "AMAT": "0000069515",  # Applied Materials
-    "LRCX": "0000707549",  # Lam Research
-    "KLAC": "0000799167",  # KLA Corporation
-    "TER": "0000097210",   # Teradyne
-    "ENTG": "0001170010",  # Entegris
-    "ONTO": "0001055605",  # Onto Innovation
-    "FORM": "0001003485",  # FormFactor
-    "PLAB": "0000867840",  # Photronics
-    "COHU": "0000021539",  # Cohu
-    "KLIC": "0000031277",  # Kulicke & Soffa
-    "ICHR": "0001680247",  # Ichor
-    "VECO": "0000707478",  # Veeco Instruments
-    "AEHR": "0001049521",  # Aehr Test Systems
-    "ACLS": "0000897077",  # Axcelis Technologies
-    "AMKR": "0001057887",  # Amkor Technology
-}
+from api.config import TICKER_TO_CIK
 
 # Key financial concepts to extract
 KEY_CONCEPTS = [

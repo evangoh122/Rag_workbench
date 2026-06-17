@@ -10,6 +10,7 @@ interface CoveredStock {
 
 const COVERED_STOCKS: CoveredStock[] = [
   { ticker: 'SPCX', name: 'Space Exploration Technologies (SpaceX)', segment: 'Aerospace & Launch — IPO prospectus (S-1 / 424B4)', icon: <Rocket size={14} /> },
+  { ticker: 'RKLB', name: 'Rocket Lab USA, Inc.',                      segment: 'Aerospace & Launch — 10-K filings',                     icon: <Rocket size={14} /> },
   { ticker: 'MU',   name: 'Micron Technology',        segment: 'Memory (DRAM / NAND Flash)',        icon: <HardDrive size={14} /> },
   { ticker: 'NVDA', name: 'NVIDIA',                   segment: 'AI GPUs & Data Center',             icon: <Cpu size={14} /> },
   { ticker: 'AMD',  name: 'Advanced Micro Devices',    segment: 'CPUs, GPUs & Accelerators',         icon: <Cpu size={14} /> },
@@ -22,9 +23,26 @@ const COVERED_STOCKS: CoveredStock[] = [
   { ticker: 'ON',   name: 'ON Semiconductor',          segment: 'Power Management & Sensors',        icon: <Zap size={14} /> },
   { ticker: 'MCHP', name: 'Microchip Technology',      segment: 'Microcontrollers & FPGAs',          icon: <Cpu size={14} /> },
   { ticker: 'STM',  name: 'STMicroelectronics',        segment: 'Automotive & Power Semiconductors', icon: <Cog size={14} /> },
+  { ticker: 'TSM',  name: 'Taiwan Semiconductor (TSMC)', segment: 'Foundry Services & Advanced Packaging', icon: <CircuitBoard size={14} /> },
+  { ticker: 'NXPI', name: 'NXP Semiconductors',        segment: 'Automotive, Industrial & IoT ICs',  icon: <Cpu size={14} /> },
+  { ticker: 'MPWR', name: 'Monolithic Power Systems',  segment: 'High-Performance Power Solutions',  icon: <Zap size={14} /> },
+  { ticker: 'SWKS', name: 'Skyworks Solutions',        segment: 'Mobile RF & Mixed-Signal',          icon: <Wifi size={14} /> },
+  { ticker: 'QRVO', name: 'Qorvo',                     segment: 'RF Solutions & Power Management',   icon: <Wifi size={14} /> },
   { ticker: 'AMAT', name: 'Applied Materials',         segment: 'Semiconductor Equipment',           icon: <Microscope size={14} /> },
   { ticker: 'LRCX', name: 'Lam Research',              segment: 'Wafer Fabrication Equipment',       icon: <Microscope size={14} /> },
   { ticker: 'KLAC', name: 'KLA Corporation',           segment: 'Process Control & Metrology',       icon: <Microscope size={14} /> },
+  { ticker: 'TER',  name: 'Teradyne',                  segment: 'Automated Test Equipment',          icon: <Microscope size={14} /> },
+  { ticker: 'ENTG', name: 'Entegris',                  segment: 'Materials & Contamination Control', icon: <Microscope size={14} /> },
+  { ticker: 'ONTO', name: 'Onto Innovation',           segment: 'Metrology & Inspection Equipment',  icon: <Microscope size={14} /> },
+  { ticker: 'FORM', name: 'FormFactor',                segment: 'Semiconductor Test Probe Cards',    icon: <Microscope size={14} /> },
+  { ticker: 'PLAB', name: 'Photronics',                segment: 'Photomask Technology & Solutions',  icon: <Microscope size={14} /> },
+  { ticker: 'COHU', name: 'Cohu',                      segment: 'Semiconductor Test Handlers',        icon: <Microscope size={14} /> },
+  { ticker: 'KLIC', name: 'Kulicke & Soffa',           segment: 'Semiconductor Assembly Equipment',  icon: <Microscope size={14} /> },
+  { ticker: 'ICHR', name: 'Ichor Holdings',            segment: 'Gas Delivery Subsystems',           icon: <Microscope size={14} /> },
+  { ticker: 'VECO', name: 'Veeco Instruments',         segment: 'Thin Film & Epitaxy Equipment',     icon: <Microscope size={14} /> },
+  { ticker: 'AEHR', name: 'Aehr Test Systems',         segment: 'Semiconductor Test & Burn-In',      icon: <Microscope size={14} /> },
+  { ticker: 'ACLS', name: 'Axcelis Technologies',      segment: 'Ion Implantation Equipment',         icon: <Microscope size={14} /> },
+  { ticker: 'AMKR', name: 'Amkor Technology',          segment: 'OSAT: Assembly & Test Services',    icon: <Cpu size={14} /> },
 ];
 
 function StocksList() {
@@ -34,7 +52,7 @@ function StocksList() {
         <h2 className="text-lg font-bold text-primary">Company Coverage</h2>
         <p className="text-sm text-secondary mt-1">
           {COVERED_STOCKS.length} companies tracked — semiconductor memory, logic, analog, and
-          equipment segments, plus SpaceX's IPO prospectus.
+          equipment segments, plus aerospace and launch filers.
         </p>
       </div>
 

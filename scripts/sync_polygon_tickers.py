@@ -23,7 +23,7 @@ DB_PATH = Config.DB_PATH
 
 TICKERS = [
     "MU", "NVDA", "AMD", "AVGO", "INTC", "QCOM", "TXN",
-    "LRCX", "KLAC", "ACLS", "AEHR", "ENTG", "ICHR", "KLIC", "PLAB", "TER",
+    "LRCX", "KLAC", "ACLS", "AEHR", "ENTG", "ICHR", "KLIC", "PLAB", "TER", "RKLB",
 ]
 
 CREATE_TABLE_SQL = """

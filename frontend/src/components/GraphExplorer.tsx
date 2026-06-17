@@ -10,7 +10,10 @@ import {
 import type { Triple } from '../api/chat';
 
 export const COMPANY_NAMES: Record<string, string> = {
+  // Aerospace
   SPCX: 'SpaceX',
+  RKLB: 'Rocket Lab',
+  // Memory, Logic & Analog Design
   MU: 'Micron Technology',
   NVDA: 'NVIDIA',
   AMD: 'Advanced Micro Devices',
@@ -23,9 +26,27 @@ export const COMPANY_NAMES: Record<string, string> = {
   ON: 'ON Semiconductor',
   MCHP: 'Microchip Technology',
   STM: 'STMicroelectronics',
+  NXPI: 'NXP Semiconductors',
+  MPWR: 'Monolithic Power Systems',
+  SWKS: 'Skyworks Solutions',
+  QRVO: 'Qorvo',
+  // Equipment, Metrology, Materials & OSAT
   AMAT: 'Applied Materials',
   LRCX: 'Lam Research',
   KLAC: 'KLA Corporation',
+  TSM: 'TSMC',
+  TER: 'Teradyne',
+  ENTG: 'Entegris',
+  ONTO: 'Onto Innovation',
+  FORM: 'FormFactor',
+  PLAB: 'Photronics',
+  COHU: 'Cohu',
+  KLIC: 'Kulicke & Soffa',
+  ICHR: 'Ichor',
+  VECO: 'Veeco Instruments',
+  AEHR: 'Aehr Test Systems',
+  ACLS: 'Axcelis Technologies',
+  AMKR: 'Amkor Technology',
 };
 
 /**
