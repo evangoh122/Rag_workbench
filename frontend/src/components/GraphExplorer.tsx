@@ -150,7 +150,7 @@ const GraphExplorer: React.FC = () => {
             Knowledge Graph
           </h1>
           <p className="text-xs text-secondary mt-0.5">
-            Filing-derived entities and relationships. Click any edge or node to see its source in the filing.
+            Filing-derived entities and relationships. Click to view source; double-click a node to expand or collapse its connections.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -245,7 +245,7 @@ const GraphExplorer: React.FC = () => {
           </div>
         )}
         {!loading && !error && triples.length > 0 && (
-          <KnowledgeGraph triples={triples} onSelect={handleSelect} />
+          <KnowledgeGraph triples={triples} onSelect={handleSelect} maxNodes={30} />
         )}
 
         {/* Evidence panel — side panel on md+, bottom sheet on mobile */}

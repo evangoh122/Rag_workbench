@@ -50,7 +50,14 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
     return () => ro.disconnect();
   }, []);
 
-  const { nodes, edges, truncated, totalNodes } = useMemo(() => {
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
+
+  // Reset expanded nodes when the source triples change (e.g. changing company filter)
+  useEffect(() => {
+    setExpandedNodeIds(new Set());
+  }, [triples]);
+
+  const { nodes, edges, truncated } = useMemo(() => {
     const nodeMap = new Map<string, Node>();
     const graphEdges: Edge[] = [];
 
@@ -78,8 +85,25 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
       .map(([entity]) => entity);
     
     const totalNodes = entities.length;
-    const truncated = totalNodes > maxNodes;
-    const displayEntities = truncated ? entities.slice(0, maxNodes) : entities;
+    
+    // Seed nodes: limit initial set to maxNodes (e.g. 35) for legibility and speed.
+    const seedNodes = entities.slice(0, maxNodes);
+    
+    // Gather all entities that should be displayed
+    const displayEntitiesSet = new Set<string>(seedNodes);
+    
+    // Expand to include immediate neighbors of expanded nodes
+    triples.forEach((t) => {
+      if (expandedNodeIds.has(t.subject)) {
+        displayEntitiesSet.add(t.object);
+      }
+      if (expandedNodeIds.has(t.object)) {
+        displayEntitiesSet.add(t.subject);
+      }
+    });
+    
+    const displayEntities = Array.from(displayEntitiesSet);
+    const truncated = totalNodes > displayEntities.length;
 
     // Responsive center and radius - use force-directed-like spacing
     const cx = size.w / 2;
@@ -98,19 +122,31 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
       const bg = (type && TYPE_COLORS[type]) || DEFAULT_NODE;
       const connections = connectionCount.get(entity) || 0;
 
+      // Determine if there are connections that are hidden
+      const displayedConnections = triples.filter(
+        (t) => (t.subject === entity && displayEntitiesSet.has(t.object)) ||
+               (t.object === entity && displayEntitiesSet.has(t.subject))
+      ).length;
+      
+      const isExpanded = expandedNodeIds.has(entity);
+      const hiddenCount = connections - displayedConnections;
+      const label = entity + (isExpanded ? ' ▾' : hiddenCount > 0 ? ` (+${hiddenCount})` : '');
+
       nodeMap.set(entity, {
         id: entity,
         data: { 
-          label: entity, 
+          label, 
           type, 
           connections,
+          isExpanded,
           ...nodeSource.get(entity) 
         },
         position: { x, y },
         style: {
           background: bg,
           color: '#FFFFFF',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
+          border: isExpanded ? '2px solid #10B981' : '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: isExpanded ? '0 0 10px rgba(16, 185, 129, 0.4)' : 'none',
           borderRadius: '12px',
           padding: '10px 16px',
           fontSize: '12px',
@@ -126,9 +162,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
     });
 
     // Only include edges where both nodes are displayed
-    const displayNodeIds = new Set(displayEntities);
     triples.forEach((t, i) => {
-      if (displayNodeIds.has(t.subject) && displayNodeIds.has(t.object)) {
+      if (displayEntitiesSet.has(t.subject) && displayEntitiesSet.has(t.object)) {
         graphEdges.push({
           id: `e-${i}`,
           source: t.subject,
@@ -152,8 +187,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
       }
     });
 
-    return { nodes: Array.from(nodeMap.values()), edges: graphEdges, truncated, totalNodes };
-  }, [triples, size, maxNodes]);
+    return { nodes: Array.from(nodeMap.values()), edges: graphEdges, truncated };
+  }, [triples, size, maxNodes, expandedNodeIds]);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     if (!onSelect) return;
@@ -165,6 +200,18 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
       source_loc: d.source_loc as string | undefined,
     });
   }, [onSelect]);
+
+  const handleNodeDoubleClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setExpandedNodeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(node.id)) {
+        next.delete(node.id);
+      } else {
+        next.add(node.id);
+      }
+      return next;
+    });
+  }, []);
 
   const handleEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
     if (!onSelect) return;
@@ -184,10 +231,10 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
     <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: 300 }} className="relative bg-background">
       <GraphAnalytics />
       
-      {/* Warning for large graphs */}
+      {/* Helper for large graphs */}
       {truncated && (
-        <div className="absolute top-3 left-3 z-20 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-2 text-xs text-yellow-400 max-w-xs">
-          Showing {maxNodes} of {totalNodes} nodes. Use the company filter to see fewer, more relevant nodes.
+        <div className="absolute top-3 left-3 z-20 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 text-xs text-emerald-400 max-w-xs">
+          Double-click nodes with a <strong>(+N)</strong> indicator to expand hidden connections.
         </div>
       )}
       
@@ -200,6 +247,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
         nodesConnectable={false}
         elementsSelectable={true}
         onNodeClick={handleNodeClick}
+        onNodeDoubleClick={handleNodeDoubleClick}
         onEdgeClick={handleEdgeClick}
         panOnDrag
         zoomOnPinch
