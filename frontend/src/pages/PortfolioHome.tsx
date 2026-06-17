@@ -285,6 +285,36 @@ export default function PortfolioHome() {
                       </span>
                     </div>
 
+                    {/* Business Case & Challenge Section */}
+                    <div className="mb-5 bg-surface-elevated/20 border border-border/20 rounded-xl p-4">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary mb-2 font-mono uppercase tracking-wider">
+                        <span className="w-1.5 h-1.5 rounded-full bg-secondary/50" />
+                        Business Case & Challenge
+                      </div>
+                      <p className="text-xs text-secondary/80 leading-relaxed mb-3 font-light">
+                        Customers and trading systems require high-performance queries on historical stock OHLCV data to analyze market patterns and price action:
+                      </p>
+                      
+                      <div className="grid grid-cols-3 gap-2 text-center mb-3">
+                        <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
+                          <div className="text-xs font-mono font-bold text-secondary">10B+</div>
+                          <div className="text-[9px] text-secondary/60">OHLCV Bars</div>
+                        </div>
+                        <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
+                          <div className="text-xs font-mono font-bold text-secondary">&lt; 15ms</div>
+                          <div className="text-[9px] text-secondary/60">Query Latency</div>
+                        </div>
+                        <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
+                          <div className="text-xs font-mono font-bold text-secondary">Sub-Sec</div>
+                          <div className="text-[9px] text-secondary/60">Aggregations</div>
+                        </div>
+                      </div>
+                      
+                      <p className="text-xs text-secondary/70 leading-relaxed font-light m-0">
+                        Our solution: build a partitioned, column-oriented database layout optimized for fast time-series analytical scans.
+                      </p>
+                    </div>
+
                     {/* Infrastructure Blueprint Details */}
                     <div className="mb-5 bg-surface-elevated/20 border border-border/20 rounded-xl p-4">
                       <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary mb-2 font-mono uppercase tracking-wider">
