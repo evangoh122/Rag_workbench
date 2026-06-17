@@ -267,7 +267,8 @@ export default function PortfolioHome() {
               {/* Slide 3: Enterprise Infrastructure */}
               <div className="w-full flex-shrink-0 px-1">
                 <div
-                  className="border border-border/40 rounded-2xl bg-surface/10 hover:bg-surface-elevated/10 transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden opacity-90 min-h-[460px]"
+                  onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}
+                  className="border border-accent/20 hover:border-accent/50 rounded-2xl bg-surface/40 hover:bg-surface-elevated/40 transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer shadow-[0_4px_20px_rgba(16,185,129,0.02)] hover:shadow-[0_4px_25px_rgba(16,185,129,0.08)] min-h-[460px]"
                 >
                   <div>
                     <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
@@ -280,8 +281,8 @@ export default function PortfolioHome() {
                           <p className="text-[11px] font-mono text-secondary">Data Platforms & High-Availability Scalability</p>
                         </div>
                       </div>
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-border/30 bg-surface text-secondary">
-                        Coming Soon
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-border/25 bg-accent/8 text-[11px] font-semibold text-emerald-400">
+                        Live App Link
                       </span>
                     </div>
 
@@ -326,7 +327,7 @@ export default function PortfolioHome() {
                     </div>
 
                     <p className="text-xs text-secondary/70 leading-relaxed mb-6 font-light">
-                      Architectural blueprint designs for large-scale data platforms. Focuses on high-throughput streaming pipelines, distributed databases, and cloud infrastructure patterns tailored for enterprise scalability and high availability.
+                      Architectural blueprint designs for large-scale data platforms. Directly feeds historical market pricing data into our AI RAG Workbench sandbox to enable price-performance analysis and charting.
                     </p>
 
                     <div className="grid grid-cols-2 gap-4 mb-6">
@@ -354,6 +355,10 @@ export default function PortfolioHome() {
                       <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">AWS</span>
                       <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">ClickHouse</span>
                     </div>
+                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-emerald-300 transition-colors group-hover:underline">
+                      Explore Charts
+                      <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+                    </span>
                   </div>
                 </div>
               </div>
