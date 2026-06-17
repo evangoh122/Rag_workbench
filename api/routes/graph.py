@@ -47,29 +47,38 @@ def _edgar_url(ticker: str) -> str:
     )
 
 
+_analytics_cache: dict | None = None
+
 @router.get("/analytics")
 def analytics():
     """Aggregate stats for the knowledge graph: totals, relation types, entity
-    types, and per-company coverage. Powers the graph-view analytics panel."""
+    types, and per-company coverage. Powers the graph-view analytics panel.
+
+    Cached in-process since the restored DB is immutable during a session.
+    """
+    global _analytics_cache
+    if _analytics_cache is not None:
+        return _analytics_cache
+
     try:
-        totals = db_manager.execute(
+        totals = db_manager.execute_readonly(
             "SELECT count(*), count(DISTINCT ticker), count(DISTINCT predicate), "
             "count(DISTINCT object) FROM graph_triples WHERE ticker <> ''"
         ).fetchone()
-        predicates = db_manager.execute(
+        predicates = db_manager.execute_readonly(
             "SELECT predicate, count(*) c, round(avg(confidence), 2) "
             "FROM graph_triples WHERE ticker <> '' GROUP BY predicate ORDER BY c DESC"
         ).fetchall()
-        entities = db_manager.execute(
+        entities = db_manager.execute_readonly(
             "SELECT object_type, count(*) c FROM graph_triples "
             "WHERE ticker <> '' AND object_type IS NOT NULL AND object_type <> '' "
             "GROUP BY object_type ORDER BY c DESC"
         ).fetchall()
-        per_company = db_manager.execute(
+        per_company = db_manager.execute_readonly(
             "SELECT ticker, count(*) c, count(DISTINCT predicate) p "
             "FROM graph_triples WHERE ticker <> '' GROUP BY ticker ORDER BY c DESC"
         ).fetchall()
-        xbrl_linked = db_manager.execute(
+        xbrl_linked = db_manager.execute_readonly(
             "SELECT count(*) FROM graph_triples "
             "WHERE ticker <> '' AND (predicate = 'VERIFIED_BY' OR object_type = 'XBRL')"
         ).fetchone()
@@ -78,7 +87,7 @@ def analytics():
         raise HTTPException(status_code=500, detail="graph analytics failed") from e
 
     t = totals or (0, 0, 0, 0)
-    return {
+    _analytics_cache = {
         "totals": {
             "triples": t[0],
             "companies": t[1],
@@ -96,6 +105,7 @@ def analytics():
             for r in per_company
         ],
     }
+    return _analytics_cache
 
 
 @router.get("/triples")
@@ -122,7 +132,7 @@ def triples(ticker: str | None = None, limit: int = 300):
     params.append(limit)
 
     try:
-        rows = db_manager.execute(sql, params).fetchall()
+        rows = db_manager.execute_readonly(sql, params).fetchall()
     except Exception as e:
         logger.exception("graph triples fetch failed")
         raise HTTPException(status_code=500, detail="graph triples fetch failed") from e
@@ -166,7 +176,7 @@ def evidence(chunk_id: str):
     sql += " LIMIT 1"
 
     try:
-        row = db_manager.execute(sql, params).fetchone()
+        row = db_manager.execute_readonly(sql, params).fetchone()
     except Exception as e:
         logger.exception("evidence lookup failed")
         raise HTTPException(status_code=500, detail="evidence lookup failed") from e

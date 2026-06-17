@@ -26,8 +26,13 @@ class DatabaseManager:
         """
         with self._conn_lock:
             if self._conn is None:
-                # Open read-write so init scripts can create tables.
                 self._conn = duckdb.connect(Config.DB_PATH)
+                # Limit memory/CPU on constrained HF Spaces (prevents SIGSEGV).
+                try:
+                    self._conn.execute("SET memory_limit='1GB'")
+                    self._conn.execute("SET threads=2")
+                except Exception:
+                    pass
                 try:
                     self._conn.execute("LOAD vss")
                 except (duckdb.IOException, Exception):
@@ -48,6 +53,11 @@ class DatabaseManager:
                 self._conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_gt_ticker_subj
                     ON graph_triples (ticker, subject)
+                """)
+                # Speed up /api/graph/triples ORDER BY confidence DESC
+                self._conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_gt_ticker_confidence
+                    ON graph_triples (ticker, confidence DESC)
                 """)
                 # Phase B: typed nodes + source-ref columns for the Evidence Graph.
                 # Idempotent migration so existing DBs expose them to Phase C.
@@ -81,6 +91,15 @@ class DatabaseManager:
             if params:
                 return conn.execute(sql, list(params))
             return conn.execute(sql)
+
+    def execute_readonly(self, sql: str, params=None):
+        """Execute SQL with thread-safe access (alias for execute).
+
+        DuckDB's file-level locking prevents opening a second connection
+        to the same DB file, so this uses the shared connection with the
+        same lock. The name documents read-only intent for callers.
+        """
+        return self.execute(sql, params)
 
     def close(self):
         with self._conn_lock:
