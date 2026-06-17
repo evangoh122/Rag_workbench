@@ -53,8 +53,9 @@ type PipelineStatus = {
 };
 
 import { getPosthog } from './utils/posthog'
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import PortfolioHome from './pages/PortfolioHome';
+import RagOverview from './pages/RagOverview';
 
 import ChartView from './components/ChartView';
 import GraphExplorer from './components/GraphExplorer';
@@ -69,11 +70,17 @@ function Workbench() {
   }, []);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [mode, _setMode] = useState<'sql' | 'rag' | 'auditable' | 'graph'>('auditable');
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState<AppView>('chat');
+  const [view, setView] = useState<AppView>(() => {
+    if (location.state && (location.state as any).initialView) {
+      return (location.state as any).initialView as AppView;
+    }
+    return 'chat';
+  });
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
   const [ticker, _setTicker] = useState('MU');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1191,6 +1198,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<PortfolioHome />} />
+      <Route path="/rag-overview" element={<RagOverview />} />
       <Route path="/rag/*" element={<Workbench />} />
     </Routes>
   );
