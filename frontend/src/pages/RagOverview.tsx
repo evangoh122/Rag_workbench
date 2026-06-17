@@ -37,7 +37,7 @@ export default function RagOverview() {
               <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-primary m-0">
                 RAG Workbench
               </h1>
-              <p className="text-xs font-mono text-emerald-400 mt-1">Auditable SEC Filing-QA & Verification</p>
+              <p className="text-xs font-mono text-emerald-400 mt-1">Helping investors and analysts find answers faster without sacrificing trust</p>
             </div>
           </div>
           <p className="text-secondary text-base leading-relaxed font-light mt-2 max-w-3xl">
