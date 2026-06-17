@@ -76,8 +76,9 @@ function Workbench() {
   const [mode, _setMode] = useState<'sql' | 'rag' | 'auditable' | 'graph'>('auditable');
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<AppView>(() => {
-    if (location.state && (location.state as any).initialView) {
-      return (location.state as any).initialView as AppView;
+    const state = location.state as { initialView?: string } | null;
+    if (state && state.initialView) {
+      return state.initialView as AppView;
     }
     return 'chat';
   });
