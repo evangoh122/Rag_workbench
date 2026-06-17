@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Mail, ArrowRight, Cpu, Network, Database, Search, Terminal } from 'lucide-react';
-import Presentation from './Presentation';
+
+import { Mail, ArrowRight, Cpu, Network, Database, Search } from 'lucide-react';
+
 
 
 const LinkedinIcon = ({ size = 20 }: { size?: number }) => (
@@ -70,7 +70,7 @@ export default function PortfolioHome() {
             Hi, I'm <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 bg-clip-text text-transparent">Evan Goh</span>.
           </h1>
           <p className="text-secondary text-base md:text-lg lg:text-xl leading-relaxed max-w-2xl font-light">
-            I design and build resilient, auditable data systems and multi-agent AI frameworks that solve complex business and governance challenges. By bridging deep technical engineering with strategic product management, I help enterprises transition AI capabilities from experimental playpens to robust, compliant production deployments.
+            I sit at the intersection of technology, data, and business. As a solutions architect and product manager, I design and build resilient, auditable AI frameworks that solve complex business and governance challenges.
           </p>
           <div className="flex flex-wrap gap-4 mt-8">
             <button
@@ -80,12 +80,6 @@ export default function PortfolioHome() {
               Walkthrough My Profile
               <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
             </button>
-            <Link
-              to="/rag"
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-border bg-surface/40 hover:bg-emerald-400/10 hover:border-accent/40 text-primary font-semibold transition-all duration-200 active:scale-[0.98] group"
-            >
-              Launch RAG Workbench
-            </Link>
           </div>
         </section>
 
@@ -157,6 +151,78 @@ export default function PortfolioHome() {
           </div>
         </section>
 
+        {/* Portfolios Section */}
+        <section id="portfolios" className="mb-16 md:mb-24 scroll-mt-20">
+          <div className="flex items-center gap-2.5 mb-8">
+            <div className="w-1 bg-accent h-6 rounded animate-pulse" />
+            <h2 className="text-lg md:text-xl font-bold tracking-tight text-primary">My Portfolios</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl">
+            {/* Card 1: RAG & AI Portfolio (First Portfolio) */}
+            <div className="border border-accent/30 rounded-2xl bg-surface/40 hover:bg-surface-elevated/40 transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden shadow-[0_4px_20px_rgba(16,185,129,0.05)]">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors pointer-events-none" />
+              <div>
+                <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-accent/8 border border-accent/15 rounded-xl text-accent animate-pulse">
+                      <Cpu size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-primary tracking-tight">RAG & AI Portfolio</h3>
+                      <p className="text-[10px] font-mono text-emerald-400">Agentic & Auditable Systems</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-accent/30 bg-accent/10 text-emerald-400">
+                    Active
+                  </span>
+                </div>
+                <p className="text-xs text-secondary leading-relaxed mb-6 font-light">
+                  A curated showcase of secure agentic frameworks, multi-agent control logic, and deterministic math validation built for financial and regulatory compliance analysis.
+                </p>
+              </div>
+              <div className="flex items-center justify-between border-t border-border/30 pt-4 mt-2 flex-wrap gap-3">
+                <div className="flex flex-wrap gap-1">
+                  <span className="text-[9px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">React</span>
+                  <span className="text-[9px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">FastAPI</span>
+                  <span className="text-[9px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">DuckDB</span>
+                </div>
+                <span className="text-xs font-semibold text-accent group-hover:underline">Current space</span>
+              </div>
+            </div>
+
+            {/* Card 2: Enterprise Data & Solutions (Placeholder for next portfolio) */}
+            <div className="border border-border/40 rounded-2xl bg-surface/10 hover:bg-surface-elevated/10 transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden opacity-60 hover:opacity-80">
+              <div>
+                <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-border/20 border border-border/35 rounded-xl text-secondary">
+                      <Database size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-primary tracking-tight">Enterprise Infrastructure</h3>
+                      <p className="text-[10px] font-mono text-secondary">Data Platforms & Scalability</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-border/30 bg-surface text-secondary">
+                    Coming Soon
+                  </span>
+                </div>
+                <p className="text-xs text-secondary/70 leading-relaxed mb-6 font-light">
+                  High-throughput streaming pipelines, distributed databases, and cloud infrastructure patterns tailored for enterprise scalability and high availability.
+                </p>
+              </div>
+              <div className="flex items-center justify-between border-t border-border/30 pt-4 mt-2 flex-wrap gap-3">
+                <div className="flex flex-wrap gap-1">
+                  <span className="text-[9px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">Kafka</span>
+                  <span className="text-[9px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">Kubernetes</span>
+                  <span className="text-[9px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">AWS</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Projects Section */}
         <section id="projects" className="mb-16 md:mb-24 scroll-mt-20">
           <div className="flex items-center gap-2.5 mb-8">
@@ -166,9 +232,10 @@ export default function PortfolioHome() {
 
           <div className="flex flex-col gap-10 max-w-3xl">
             {/* 1. Slide Deck Project */}
-            <div className="border border-border/40 rounded-2xl bg-surface/20 overflow-hidden shadow-[0_12px_40px_rgba(0,0,0,0.35)] relative group">
-              <div className="p-6 sm:p-8 border-b border-border/40">
-                <div className="flex items-start justify-between mb-3 flex-wrap gap-2">
+            <div className="border border-border/80 rounded-2xl bg-surface/40 hover:bg-surface-elevated/40 transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors pointer-events-none" />
+              <div>
+                <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 bg-accent/8 border border-accent/15 rounded-xl text-accent animate-pulse">
                       <Network size={20} />
@@ -178,16 +245,13 @@ export default function PortfolioHome() {
                       <p className="text-[11px] font-mono text-emerald-400">Model Risk Management Strategy</p>
                     </div>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-accent/20 bg-accent/10 text-emerald-400">
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-border/25 bg-accent/8 text-[11px] font-semibold text-emerald-400">
                     Case Study
                   </span>
                 </div>
-                <p className="text-sm text-secondary leading-relaxed font-light m-0">
+                <p className="text-sm text-secondary leading-relaxed mb-6 font-light">
                   Before building, a successful product requires strategic alignment. This presentation outlines the design methodology, model risk management principles (SR 11-7, MAS AI Guidelines), and architectural layout used to pitch this auditable RAG system to executive and compliance stakeholders.
                 </p>
-              </div>
-              <div className="w-full bg-surface-elevated/20">
-                <Presentation />
               </div>
             </div>
 
@@ -238,57 +302,12 @@ export default function PortfolioHome() {
                   <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">DuckDB</span>
                   <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">LangGraph</span>
                 </div>
-                <Link
-                  to="/rag"
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:text-emerald-300 transition-colors group-hover:underline"
-                >
-                  Launch RAG Workbench
-                  <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-                </Link>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Technical Approach */}
-        <section className="mb-16 md:mb-24">
-          <div className="flex items-center gap-2.5 mb-8">
-            <div className="w-1 bg-accent h-6 rounded" />
-            <h2 className="text-lg md:text-xl font-bold tracking-tight text-primary">Technical Approach</h2>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div className="glass-sm p-5 border border-border/40">
-              <div className="text-accent mb-3">
-                <Cpu size={20} />
-              </div>
-              <h3 className="text-sm font-bold text-primary mb-2">Multi-Agent Control</h3>
-              <p className="text-xs text-secondary leading-relaxed font-light m-0">
-                Utilizing stateful multi-agent engines (LangGraph) for planning, query decomposition, execution verification, and self-correction loop.
-              </p>
-            </div>
-
-            <div className="glass-sm p-5 border border-border/40">
-              <div className="text-accent mb-3">
-                <Terminal size={20} />
-              </div>
-              <h3 className="text-sm font-bold text-primary mb-2">Deterministic Math</h3>
-              <p className="text-xs text-secondary leading-relaxed font-light m-0">
-                Integrating LLMs with deterministic calculation engines to avoid hallucinated metrics and ground every calculation on XBRL.
-              </p>
-            </div>
-
-            <div className="glass-sm p-5 border border-border/40">
-              <div className="text-accent mb-3">
-                <Database size={20} />
-              </div>
-              <h3 className="text-sm font-bold text-primary mb-2">Durability & Restore</h3>
-              <p className="text-xs text-secondary leading-relaxed font-light m-0">
-                Designing snapshots, boot restore systems, and automated persistence cycles to guarantee runtime stability across restarts.
-              </p>
-            </div>
-          </div>
-        </section>
       </main>
 
       {/* Footer */}
