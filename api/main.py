@@ -15,6 +15,7 @@ from api.routes.admin import router as admin_router
 from api.routes.audit import router as audit_router
 from api.routes.analytics import router as analytics_router
 from api.routes.graph import router as graph_router
+from api.routes.discovery import router as discovery_router
 from api.config import config, Config
 from api.middleware.rate_limit import rate_limit_middleware
 from api.middleware.cors_config import configure_cors
@@ -59,6 +60,7 @@ app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 app.include_router(audit_router)
 app.include_router(analytics_router)
 app.include_router(graph_router)
+app.include_router(discovery_router)
 
 
 @app.get("/api/health")
@@ -130,6 +132,13 @@ if os.path.exists(frontend_path):
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str, request: Request):
+        # Content negotiation for markdown agents requesting the landing or app pages
+        if "text/markdown" in request.headers.get("accept", ""):
+            if not full_path or full_path.rstrip("/") in ("", "rag"):
+                summary_path = os.path.join(os.path.dirname(__file__), "static", "portfolio_summary.md")
+                if os.path.exists(summary_path):
+                    return FileResponse(summary_path, media_type="text/markdown")
+
         from pathlib import Path
         file_path = os.path.join(frontend_path, full_path)
         resolved = Path(file_path).resolve()
