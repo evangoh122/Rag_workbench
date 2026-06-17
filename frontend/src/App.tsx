@@ -64,6 +64,10 @@ import { getGraphEvidence, getGraphTriples, getGraphAnalytics, type GraphEvidenc
 import { COMPANY_NAMES } from './components/GraphExplorer';
 
 function Workbench() {
+  useEffect(() => {
+    document.title = "RAG Workbench";
+  }, []);
+
   const navigate = useNavigate();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
