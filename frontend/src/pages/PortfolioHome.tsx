@@ -185,7 +185,7 @@ export default function PortfolioHome() {
                         </div>
                         <div>
                           <h3 className="text-base sm:text-lg font-bold text-primary tracking-tight">RAG Workbench & Strategic Slide Deck</h3>
-                          <p className="text-[11px] font-mono text-emerald-400">Auditable SEC Filing-QA & Model Risk Strategy</p>
+                          <p className="text-[11px] font-mono text-emerald-400">Helping investors and analysts find answers faster without sacrificing trust</p>
                         </div>
                       </div>
                       <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-border/25 bg-accent/8 text-[11px] font-semibold text-emerald-400">
