@@ -101,7 +101,7 @@ export default function PortfolioHome() {
             Hi, I'm <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 bg-clip-text text-transparent">Evan Goh</span>.
           </h1>
           <p className="text-secondary text-base md:text-lg lg:text-xl leading-relaxed max-w-2xl font-light">
-            I sit at the intersection of technology, data, and business. As a solutions architect, product manager, and AI transformation leader, I design and build resilient, auditable AI frameworks that solve complex business and governance challenges.
+            I enjoy working where data, AI, and product meet. I build systems that help people understand complex information, trust the insights they see, and make better decisions.
           </p>
           <div className="flex flex-wrap gap-4 mt-8">
             <button
