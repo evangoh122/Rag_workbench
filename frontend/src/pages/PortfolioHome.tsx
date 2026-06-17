@@ -93,10 +93,6 @@ export default function PortfolioHome() {
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-12 md:py-20 flex flex-col justify-center">
         {/* Hero Section */}
         <section className="mb-16 md:mb-24 max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-accent/25 bg-accent/8 text-xs font-semibold text-emerald-400 mb-6 tracking-wide">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Solutions Architect, Product Manager & AI Transformation Leader
-          </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-primary tracking-tight leading-[1.1] mb-6">
             Hi, I'm <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 bg-clip-text text-transparent">Evan Goh</span>.
           </h1>
