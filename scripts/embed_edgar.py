@@ -387,7 +387,10 @@ def _extract_sections_with_labels(text: str) -> List[tuple[str, str]]:
     Returns a list of (section_label, section_text) tuples.
 
     Finds each target section's start via regex, then reads until the next
-    Item header appears. Falls back to the full text under label 'full_text' if none found.
+    Item header appears. Uses the LONGEST match per section to avoid picking
+    table-of-contents entries over the actual section body.
+
+    Falls back to the full text under label 'full_text' if none found.
     """
     extracted: List[tuple[str, str]] = []
 
@@ -398,10 +401,18 @@ def _extract_sections_with_labels(text: str) -> List[tuple[str, str]]:
             r"(?:^|\n)(\s*" + pattern + r"[^\n]*(?:\n(?!\s*item\s+\d)[^\n]*)*)",
             re.IGNORECASE | re.MULTILINE,
         )
-        match = section_re.search(text)
-        if match:
-            section_text = match.group(1).strip()
-            # Drop sections that are mostly whitespace or very short (table-of-contents refs)
+        # Pick the longest match — TOC entries are short, real sections are long.
+        # re.search() would return the TOC entry first; re.finditer() lets us
+        # compare all matches and keep the one with the most content.
+        best_match = None
+        best_len = 0
+        for m in section_re.finditer(text):
+            match_len = len(m.group(1))
+            if match_len > best_len:
+                best_match = m
+                best_len = match_len
+        if best_match:
+            section_text = best_match.group(1).strip()
             if len(section_text) > 200:
                 extracted.append((label, section_text))
 

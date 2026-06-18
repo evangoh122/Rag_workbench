@@ -183,3 +183,21 @@ def test_shadow_main(mock_file, mock_report_json, mock_pipeline, mock_db):
         
         mock_pipeline.assert_called_once()
         mock_file().write.assert_called_once_with("{}")
+
+
+def test_extract_sections_longest_match():
+    from scripts.embed_edgar import _extract_sections_with_labels
+    # Simulating a Table of Contents entry followed by the actual section body
+    fake_text = """
+    TABLE OF CONTENTS
+    Item 7. Management's Discussion and Analysis of Financial Condition .... 35
+    ...
+    Item 7. Management's Discussion and Analysis of Financial Condition
+    This is the actual section body which contains a lot of text and details about the company's financial performance. It is much longer than the table of contents entry.
+    """
+    sections = _extract_sections_with_labels(fake_text)
+    # Check if Item 7 was extracted and matches the longer body
+    item_7_sections = [text for label, text in sections if label == "item_7"]
+    assert len(item_7_sections) == 1
+    assert "actual section body" in item_7_sections[0]
+    assert "35" not in item_7_sections[0]
