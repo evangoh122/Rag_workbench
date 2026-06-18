@@ -63,6 +63,7 @@ COPY --from=python-builder /install /usr/local
 # Copy application code
 COPY api/ ./api/
 COPY scripts/ ./scripts/
+COPY data/sentiment_dict/ ./data/sentiment_dict/
 COPY main.py run.py ./
 
 # Copy React build from Stage 1

@@ -1832,8 +1832,14 @@ def run_auditable_rag(query: str, ticker: str,
     # Sentiment / management tone analysis (Phase B) — best-effort, cached,
     # gated by SENTIMENT_LLM_ENABLED env var.  Returns {} on failure.
     # Skipped on abstentions (no filing data available).
+    # Only generated for qualitative questions or when explicitly asking for risks, tone, or sentiment.
     try:
-        if result.get("verification_status") != "ABSTAIN":
+        query_lower = query.lower()
+        is_qualitative_ask = (
+            result.get("query_type") == "qualitative"
+            or any(kw in query_lower for kw in ("risk", "sentiment", "tone", "discussion", "md&a", "outlook"))
+        )
+        if result.get("verification_status") != "ABSTAIN" and is_qualitative_ask:
             from api.services.sentiment import generate_tone_analysis, compute_tone_shift
             tone = generate_tone_analysis(ticker)
             if tone:
