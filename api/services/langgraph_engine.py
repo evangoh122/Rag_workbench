@@ -1633,7 +1633,7 @@ _OUT_OF_UNIVERSE = {
     "jpmorgan", "goldman sachs", "berkshire", "coca cola", "pepsi", "disney",
     "boeing", "ford", "general motors", "exxon", "chevron", "pfizer", "moderna",
     "palantir", "uber", "airbnb", "spotify", "openai", "anthropic", "stripe",
-    "blue origin", "rocket lab", "rivian", "lucid", "snowflake",
+    "blue origin", "rivian", "lucid", "snowflake",
 }
 
 

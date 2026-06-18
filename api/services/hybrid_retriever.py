@@ -232,6 +232,8 @@ _COMPANY_ALIASES: dict[str, str] = {
     "space exploration technologies": "SPCX",
     "space exploration": "SPCX",
     "space x": "SPCX",
+    "rocket lab": "RKLB",
+    "rocketlab": "RKLB",
     # Single-word aliases — unambiguous, >= 5 chars, not common English words
     "spacex": "SPCX",
     "broadcom": "AVGO",
@@ -256,6 +258,8 @@ _COMPANY_ALIASES: dict[str, str] = {
     "amkor": "AMKR",
     "cohu": "COHU",
     "aehr": "AEHR",
+    "rklb": "RKLB",
+    "mu": "MU",
 }
 
 # Pre-compile regex patterns sorted longest-first so multi-word phrases match

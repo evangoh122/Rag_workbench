@@ -38,6 +38,11 @@ _TICKER_TO_NAMES: Dict[str, List[str]] = {
     "MCHP": ["microchip"],
     "ADI":  ["analog devices"],
     "SPCX": ["spacex", "space exploration"],
+    "RKLB": ["rocket lab", "rocketlab", "rocket lab usa", "rklb"],
+    "ON":   ["on semi", "on semiconductor", "onsemi", "on"],
+    "STM":  ["stmicroelectronics", "stmicro", "stm"],
+    "TSM":  ["tsmc", "taiwan semiconductor", "tsm"],
+    "PLAB": ["photronics", "plab"],
 }
 
 # Curated sector peers — used when the graph has no covered-ticker competitor,
