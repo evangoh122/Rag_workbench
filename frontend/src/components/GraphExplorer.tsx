@@ -3,7 +3,6 @@ import { Share2, ExternalLink, Loader2, X, Check, Search } from 'lucide-react';
 import KnowledgeGraph, { type GraphSelection } from './KnowledgeGraph';
 import {
   getGraphTriples,
-  getGraphAnalytics,
   getGraphEvidence,
   type GraphEvidence,
 } from '../api/graph';
@@ -70,9 +69,8 @@ const GraphExplorer: React.FC = () => {
 
   // Company list for the filter (once).
   useEffect(() => {
-    getGraphAnalytics()
-      .then((a) => setCompanies(a.per_company.map((c) => c.ticker)))
-      .catch(() => setCompanies([]));
+    const allTickers = Object.keys(COMPANY_NAMES).sort();
+    setCompanies(allTickers);
   }, []);
 
   // Close dropdown on outside click.

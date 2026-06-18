@@ -18,7 +18,11 @@ def test_verify_numeric_zero():
     assert not verifier.verify_numeric(0.1, 0.0)
 
 def test_verify_entailment_no_model():
-    # Should return ERROR if model not loaded
+    # Should return ERROR if model not loaded (or SKIPPED if sentence-transformers is missing)
     v = Verifier(model_name="non-existent-model")
     res, reason = v.verify_entailment("claim", "source")
-    assert res == "ERROR"
+    from api.services.verifier import CrossEncoder
+    if CrossEncoder is None:
+        assert res == "SKIPPED"
+    else:
+        assert res == "ERROR"

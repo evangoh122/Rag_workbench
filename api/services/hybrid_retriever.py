@@ -233,6 +233,7 @@ _COMPANY_ALIASES: dict[str, str] = {
     "space exploration": "SPCX",
     "space x": "SPCX",
     "rocket lab": "RKLB",
+    "rocket labs": "RKLB",
     "rocketlab": "RKLB",
     # Single-word aliases — unambiguous, >= 5 chars, not common English words
     "spacex": "SPCX",

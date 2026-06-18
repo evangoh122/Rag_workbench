@@ -97,3 +97,63 @@ class ChatResponse(BaseModel):
 
     # Lineage / audit
     lineage: Optional[Dict[str, Any]] = None
+
+    # Sentiment / management tone (Phase B — populated post-processing)
+    tone_analysis: Optional[Dict[str, Any]] = None
+
+
+# ── Sentiment Analysis Models ────────────────────────────────────────────────
+
+class SectionSentiment(BaseModel):
+    """Loughran-McDonald sentiment counts for a single filing section."""
+    section_type: str
+    total_words: int = 0
+    positive: int = 0
+    negative: int = 0
+    uncertainty: int = 0
+    litigious: int = 0
+    constraining: int = 0
+    strong_modal: int = 0
+    weak_modal: int = 0
+    net_sentiment: float = 0.0
+    tone_score: float = 0.0
+
+
+class FilingSentiment(BaseModel):
+    """Full sentiment analysis result for a filing."""
+    ticker: str
+    accession: str = ""
+    form_type: str = ""
+    period_of_report: str = ""
+    sections: List[SectionSentiment] = Field(default_factory=list)
+    totals: Dict[str, int] = Field(default_factory=dict)
+    total_words: int = 0
+    overall_net_sentiment: float = 0.0
+    overall_tone_score: float = 0.0
+
+
+class SentimentDelta(BaseModel):
+    """Per-category change between two filings."""
+    previous: int = 0
+    current: int = 0
+    delta: int = 0
+    pct_change: float = 0.0
+
+
+class FilingSentimentCompare(BaseModel):
+    """Comparison of sentiment between two filings."""
+    ticker: str
+    filing_a: Dict[str, str] = Field(default_factory=dict)
+    filing_b: Dict[str, str] = Field(default_factory=dict)
+    changes: Dict[str, SentimentDelta] = Field(default_factory=dict)
+    tone_shift: float = 0.0
+
+
+class ToneShiftResult(BaseModel):
+    """Embedding-based cosine similarity between MD&A sections."""
+    ticker: str
+    filing_a: Dict[str, str] = Field(default_factory=dict)
+    filing_b: Dict[str, str] = Field(default_factory=dict)
+    similarity: float = 0.0
+    interpretation: str = ""
+    thresholds: Dict[str, str] = Field(default_factory=dict)

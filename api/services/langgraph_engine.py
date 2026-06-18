@@ -1753,4 +1753,22 @@ def run_auditable_rag(query: str, ticker: str,
     result["what_it_means"] = layers.get("what_it_means", "")
     result["how_to_interpret"] = layers.get("how_to_interpret", "")
     result["follow_ups"] = layers.get("follow_ups", [])
+
+    # Sentiment / management tone analysis (Phase B) — best-effort, cached,
+    # gated by SENTIMENT_LLM_ENABLED env var.  Returns {} on failure.
+    # Skipped on abstentions (no filing data available).
+    try:
+        if result.get("verification_status") != "ABSTAIN":
+            from api.services.sentiment import generate_tone_analysis, compute_tone_shift
+            tone = generate_tone_analysis(ticker)
+            if tone:
+                # Enrich with embedding-based tone shift (Phase D) when available
+                shift = compute_tone_shift(ticker)
+                if shift:
+                    tone["tone_shift_similarity"] = shift.get("similarity")
+                    tone["tone_shift_interpretation"] = shift.get("interpretation", "")
+                result["tone_analysis"] = tone
+    except Exception as e:
+        logger.debug("Tone analysis skipped (non-fatal): {}", e)
+
     return result

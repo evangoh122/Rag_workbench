@@ -65,6 +65,8 @@ export interface ChatResponse {
   // Optional chart spec (recharts), built from XBRL when the LLM uses the
   // charting tool.
   chart?: ChartSpec;
+  // Sentiment / management tone analysis (Phase B)
+  tone_analysis?: ToneAnalysis;
 }
 
 // A chart the backend built from filed XBRL facts (recharts-ready).
@@ -93,6 +95,28 @@ export interface Triple {
   source_loc?: string;
   confidence?: number;
   ticker?: string;
+}
+
+// Sentiment / management tone analysis from Loughran-McDonald + LLM synthesis.
+export interface ToneAnalysis {
+  tone_label: string;
+  tone_direction: 'up' | 'down' | 'flat';
+  tone_summary: string;
+  key_drivers: string[];
+  positive_terms?: number;
+  negative_terms?: number;
+  uncertainty_terms?: number;
+  positive_change_pct?: number | null;
+  negative_change_pct?: number | null;
+  uncertainty_change_pct?: number | null;
+  section_scores?: {
+    section_type: string;
+    net_sentiment: number;
+    tone_score: number;
+  }[];
+  // Embedding-based tone shift (Phase D)
+  tone_shift_similarity?: number | null;
+  tone_shift_interpretation?: string;
 }
 
 interface HistoryEntry {

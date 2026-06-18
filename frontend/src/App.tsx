@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck, Menu, X, Lightbulb, Info, ChevronDown, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
-import type { ChatResponse, Source, XBRLFact, Triple, ChartSpec } from './api/chat';
+import type { ChatResponse, Source, XBRLFact, Triple, ChartSpec, ToneAnalysis as ToneAnalysisData } from './api/chat';
 import { submitChatFeedback } from './api/review';
 import ReviewQueue from './pages/ReviewQueue';
 import MetricsDashboard from './pages/MetricsDashboard';
@@ -16,6 +16,7 @@ import AuditTrail from './components/AuditTrail';
 import PipelineFlow from './components/PipelineFlow';
 import FinancialChart from './components/FinancialChart';
 import ChartErrorBoundary from './components/ChartErrorBoundary';
+import ToneAnalysis from './components/ToneAnalysis';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -39,6 +40,7 @@ interface Message {
   how_to_interpret?: string;
   follow_ups?: string[];
   chart?: ChartSpec;
+  tone_analysis?: ToneAnalysisData;
 }
 
 type AppView = 'chat' | 'graph' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
@@ -61,7 +63,7 @@ import ChartView from './components/ChartView';
 import GraphExplorer from './components/GraphExplorer';
 import KnowledgeGraph from './components/KnowledgeGraph';
 import type { GraphSelection } from './components/KnowledgeGraph';
-import { getGraphEvidence, getGraphTriples, getGraphAnalytics, type GraphEvidence } from './api/graph';
+import { getGraphEvidence, getGraphTriples, type GraphEvidence } from './api/graph';
 import { COMPANY_NAMES } from './components/GraphExplorer';
 
 function Workbench() {
@@ -134,9 +136,8 @@ function Workbench() {
   };
 
   useEffect(() => {
-    getGraphAnalytics()
-      .then((a) => setGraphCompanies(a.per_company.map((c) => c.ticker)))
-      .catch(() => {});
+    const allTickers = Object.keys(COMPANY_NAMES).sort();
+    setGraphCompanies(allTickers);
   }, []);
 
   const scrollToBottom = () => {
@@ -224,6 +225,7 @@ function Workbench() {
         how_to_interpret: data.how_to_interpret,
         follow_ups: data.follow_ups,
         chart: data.chart,
+        tone_analysis: data.tone_analysis,
       };
 
       setMessages(prev => [...prev, assistantMsg]);
@@ -867,6 +869,13 @@ function Workbench() {
                             </p>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* Management Tone Analysis */}
+                    {msg.role === 'assistant' && msg.tone_analysis && Object.keys(msg.tone_analysis).length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-border/40">
+                        <ToneAnalysis tone={msg.tone_analysis} />
                       </div>
                     )}
 
