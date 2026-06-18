@@ -42,7 +42,7 @@ _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 _TICKER_CIK: dict[str, str] = {
     # ── Aerospace / Launch ──
     "SPCX": "0001181412",  # Space Exploration Technologies (SpaceX) — IPO'd 2026, S-1 / 424B4 prospectus
-    "RKLB": "0001813660",  # Rocket Lab USA, Inc.
+    "RKLB": "0001819994",  # Rocket Lab USA, Inc.
     # ── Semiconductor Design & IP ──
     "ADI":  "0000006281",  # Analog Devices
     "AIP":  "0001861842",  # Arteris
