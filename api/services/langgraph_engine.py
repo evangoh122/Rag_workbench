@@ -174,6 +174,18 @@ def extraction_node(state: GraphState) -> Dict[str, Any]:
         logger.error(f"Extraction failed: {e}")
         return {"status": {**state.get('status', {}), "extraction": "error"}}
 
+
+def _extract_cogs(extractor: FactExtractor, period: str) -> Optional[float]:
+    """Helper to retrieve COGS for a period, falling back to Revenue - GrossProfit if COGS is missing."""
+    cogs = extractor.get("costofrevenue", period=period)
+    if cogs is None:
+        rev = extractor.get("revenues", period=period)
+        gp = extractor.get("grossprofit", period=period)
+        if rev is not None and gp is not None:
+            cogs = rev - gp
+    return cogs
+
+
 def math_node(state: GraphState) -> Dict[str, Any]:
     """
     Node 3: Route to the right Polars financial calculator based on query intent.
@@ -225,16 +237,9 @@ def math_node(state: GraphState) -> Dict[str, Any]:
             prior = periods[-2] if len(periods) >= 2 else None
             if prior:
                 rev_cur  = extractor.get("revenues",      period=latest)
-                cogs_cur = extractor.get("costofrevenue",  period=latest)
-                gp_cur   = extractor.get("grossprofit",    period=latest)
+                cogs_cur = _extract_cogs(extractor, latest)
                 rev_pri  = extractor.get("revenues",      period=prior)
-                cogs_pri = extractor.get("costofrevenue",  period=prior)
-                gp_pri   = extractor.get("grossprofit",    period=prior)
-
-                if cogs_cur is None and gp_cur is not None and rev_cur is not None:
-                    cogs_cur = rev_cur - gp_cur
-                if cogs_pri is None and gp_pri is not None and rev_pri is not None:
-                    cogs_pri = rev_pri - gp_pri
+                cogs_pri = _extract_cogs(extractor, prior)
 
                 if all(v is not None for v in (rev_cur, cogs_cur, rev_pri, cogs_pri)):
                     calc = gross_margin_growth(
@@ -703,7 +708,6 @@ def output_node(state: GraphState) -> Dict[str, Any]:
         try:
             facts = state.get("xbrl_facts", [])
             if isinstance(facts, list) and facts:
-                import polars as pl
                 xbrl_df = pl.DataFrame(facts)
                 extractor = FactExtractor(xbrl_df)
                 periods = extractor.periods()
@@ -711,16 +715,9 @@ def output_node(state: GraphState) -> Dict[str, Any]:
                     latest_p = periods[-1]
                     prior_p = periods[-2]
                     rev_cur = extractor.get("revenues", period=latest_p)
-                    cogs_cur = extractor.get("costofrevenue", period=latest_p)
-                    gp_cur = extractor.get("grossprofit", period=latest_p)
+                    cogs_cur = _extract_cogs(extractor, latest_p)
                     rev_pri = extractor.get("revenues", period=prior_p)
-                    cogs_pri = extractor.get("costofrevenue", period=prior_p)
-                    gp_pri = extractor.get("grossprofit", period=prior_p)
-
-                    if cogs_cur is None and gp_cur is not None and rev_cur is not None:
-                        cogs_cur = rev_cur - gp_cur
-                    if cogs_pri is None and gp_pri is not None and rev_pri is not None:
-                        cogs_pri = rev_pri - gp_pri
+                    cogs_pri = _extract_cogs(extractor, prior_p)
 
                     if all(v is not None for v in (rev_cur, cogs_cur, rev_pri, cogs_pri)):
                         current_gm = (rev_cur - cogs_cur) / rev_cur * 100
@@ -778,7 +775,7 @@ def output_node(state: GraphState) -> Dict[str, Any]:
             else:
                 math_result = state.get("math_result")
                 if natural_yoy_summary:
-                    answer = natural_yoy_summary
+                    answer = f"Comparison requested but no matching periods found. {natural_yoy_summary}"
                 else:
                     answer = f"Comparison requested but no matching periods found. Latest: {math_result}"
         else:

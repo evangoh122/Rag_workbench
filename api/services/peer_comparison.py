@@ -134,6 +134,14 @@ def _tickers_named_in_query(query: str) -> List[str]:
         if ticker not in covered:
             continue
         for n in names:
+            if n == "on":
+                # Special-case "on" to be uppercase-only to avoid false-positive match on the English word "on"
+                m = re.search(r"\bON\b", q)
+                if m:
+                    name_hits.append((m.start(), ticker))
+                    break
+                else:
+                    continue
             # Use word boundary to prevent matching substrings of other words (e.g. 'on' in 'micron')
             m = re.search(r"\b" + re.escape(n) + r"\b", ql)
             if m:
