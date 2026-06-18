@@ -134,9 +134,10 @@ def _tickers_named_in_query(query: str) -> List[str]:
         if ticker not in covered:
             continue
         for n in names:
-            idx = ql.find(n)
-            if idx != -1:
-                name_hits.append((idx, ticker))
+            # Use word boundary to prevent matching substrings of other words (e.g. 'on' in 'micron')
+            m = re.search(r"\b" + re.escape(n) + r"\b", ql)
+            if m:
+                name_hits.append((m.start(), ticker))
                 break
     # Explicit symbols (>=3 chars, word boundary)
     for ticker in covered:

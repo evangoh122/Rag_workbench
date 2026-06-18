@@ -209,13 +209,33 @@ def math_node(state: GraphState) -> Dict[str, Any]:
         # ── Route by question intent ────────────────────────────────────────
         # Fix #2: all guards use explicit `is not None` to handle zero-valued facts
         # Gross margin growth (must check before gross margin — substring match)
-        if any(k in query for k in ("gross margin growth", "gross margin change", "gross margin yoy")):
+        is_gm_growth = (
+            any(k in query for k in (
+                "gross margin growth", "gross margin change", "gross margin yoy",
+                "gross margin y-o-y", "gross margin year over year", "gross margin year-over-year",
+                "gross profit margin growth", "gross profit margin yoy", "gross profit margin year over year",
+                "gross profit margin year-over-year",
+            ))
+            or (
+                any(g in query for g in ("growth", "change", "grew", "grow", "increase", "decrease", "decline", "improve", "worse", "better", "yoy", "year over year", "year-over-year", "y-o-y"))
+                and any(r in query for r in ("gross margin", "gross profit margin"))
+            )
+        )
+        if is_gm_growth:
             prior = periods[-2] if len(periods) >= 2 else None
             if prior:
                 rev_cur  = extractor.get("revenues",      period=latest)
                 cogs_cur = extractor.get("costofrevenue",  period=latest)
+                gp_cur   = extractor.get("grossprofit",    period=latest)
                 rev_pri  = extractor.get("revenues",      period=prior)
                 cogs_pri = extractor.get("costofrevenue",  period=prior)
+                gp_pri   = extractor.get("grossprofit",    period=prior)
+
+                if cogs_cur is None and gp_cur is not None and rev_cur is not None:
+                    cogs_cur = rev_cur - gp_cur
+                if cogs_pri is None and gp_pri is not None and rev_pri is not None:
+                    cogs_pri = rev_pri - gp_pri
+
                 if all(v is not None for v in (rev_cur, cogs_cur, rev_pri, cogs_pri)):
                     calc = gross_margin_growth(
                         rev_cur, cogs_cur, rev_pri, cogs_pri,
@@ -671,11 +691,56 @@ def output_node(state: GraphState) -> Dict[str, Any]:
         intent = "general"
 
     ticker = state["ticker"]
+    query_lower = state.get("query", "").lower()
+
+    # Pre-build natural language YoY gross margin summary if applicable
+    is_yoy_gm_ask = (
+        any(k in query_lower for k in ("gross margin", "gross profit margin"))
+        and any(k in query_lower for k in ("growth", "change", "grew", "grow", "increase", "decrease", "decline", "improve", "worse", "better", "yoy", "year over year", "year-over-year", "y-o-y"))
+    )
+    natural_yoy_summary = ""
+    if is_yoy_gm_ask:
+        try:
+            facts = state.get("xbrl_facts", [])
+            if isinstance(facts, list) and facts:
+                import polars as pl
+                xbrl_df = pl.DataFrame(facts)
+                extractor = FactExtractor(xbrl_df)
+                periods = extractor.periods()
+                if len(periods) >= 2:
+                    latest_p = periods[-1]
+                    prior_p = periods[-2]
+                    rev_cur = extractor.get("revenues", period=latest_p)
+                    cogs_cur = extractor.get("costofrevenue", period=latest_p)
+                    gp_cur = extractor.get("grossprofit", period=latest_p)
+                    rev_pri = extractor.get("revenues", period=prior_p)
+                    cogs_pri = extractor.get("costofrevenue", period=prior_p)
+                    gp_pri = extractor.get("grossprofit", period=prior_p)
+
+                    if cogs_cur is None and gp_cur is not None and rev_cur is not None:
+                        cogs_cur = rev_cur - gp_cur
+                    if cogs_pri is None and gp_pri is not None and rev_pri is not None:
+                        cogs_pri = rev_pri - gp_pri
+
+                    if all(v is not None for v in (rev_cur, cogs_cur, rev_pri, cogs_pri)):
+                        current_gm = (rev_cur - cogs_cur) / rev_cur * 100
+                        prior_gm = (rev_pri - cogs_pri) / rev_pri * 100
+                        delta = current_gm - prior_gm
+                        improved = "improved" if delta > 0 else "declined" if delta < 0 else "remained unchanged"
+                        direction = "an increase" if delta > 0 else "a decrease" if delta < 0 else "no change"
+                        natural_yoy_summary = (
+                            f"Based on the SEC filings for {ticker}, "
+                            f"gross margin {improved} year-over-year. "
+                            f"The gross margin was {current_gm:.2f}% for the period ending {latest_p}, "
+                            f"compared to {prior_gm:.2f}% for the period ending {prior_p}, "
+                            f"representing {direction} of {abs(delta):.2f} percentage points."
+                        )
+        except Exception as ex:
+            logger.warning(f"Failed to build natural YoY gross margin summary: {ex}")
 
     if intent == "comparison":
         facts = state.get("xbrl_facts", [])
         if isinstance(facts, list) and facts:
-            query_lower = state.get("query", "").lower()
             concept_priority = _pick_concepts(query_lower)
 
             rows: list[tuple[str, str, float]] = []
@@ -699,7 +764,11 @@ def output_node(state: GraphState) -> Dict[str, Any]:
                 rows = rows[-MAX_PERIODS:]
 
             if rows:
-                lines = [f"Multi-period comparison for {ticker} (values in reported units):\n"]
+                lines = []
+                if natural_yoy_summary:
+                    lines.append(natural_yoy_summary)
+                    lines.append("")
+                lines.append(f"Multi-period comparison for {ticker} (values in reported units):\n")
                 for period, concept, num in rows:
                     lines.append(f"  {period}  {concept}: {_fmt_num(num)}")
                 math_result = state.get("math_result")
@@ -708,11 +777,20 @@ def output_node(state: GraphState) -> Dict[str, Any]:
                 answer = "\n".join(lines)
             else:
                 math_result = state.get("math_result")
-                answer = f"Comparison requested but no matching periods found. Latest: {math_result}"
+                if natural_yoy_summary:
+                    answer = natural_yoy_summary
+                else:
+                    answer = f"Comparison requested but no matching periods found. Latest: {math_result}"
+        else:
+            if natural_yoy_summary:
+                answer = natural_yoy_summary
+            else:
+                answer = f"Based on the SEC filing for {ticker}, the answer is {state.get('math_result')}."
+    else:
+        if natural_yoy_summary:
+            answer = natural_yoy_summary
         else:
             answer = f"Based on the SEC filing for {ticker}, the answer is {state.get('math_result')}."
-    else:
-        answer = f"Based on the SEC filing for {ticker}, the answer is {state.get('math_result')}."
 
     if state["verification_status"] == "PASS":
         answer += f"\n(Verified: {state['verification_reasoning']})"
@@ -957,10 +1035,10 @@ _QUALITATIVE_SIGNALS = [
 
 _COMPARISON_SIGNALS = [
     "compare", "comparison", "versus", " vs ", " vs.",
-    "over the years", "year over year", "yoy", "trend", "historically",
+    "over the years", "year over year", "year-over-year", "y-o-y", "yoy", "trend", "historically",
     "history", "last 3 years", "last 5 years", "last two years", "last three years",
     "how has", "changed over", "change over", "growth over",
-    "quarter over quarter", "qoq", "multi-year", "multiyear",
+    "quarter over quarter", "quarter-over-quarter", "q-o-q", "qoq", "multi-year", "multiyear",
 ]
 
 _LATEST_SIGNALS = [

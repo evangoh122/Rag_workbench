@@ -52,6 +52,10 @@ class TestNameResolution:
     def test_named_tickers_in_query_order(self):
         assert _tickers_named_in_query("TXN then NVDA") == ["TXN", "NVDA"]
 
+    def test_substring_company_names_ignored(self):
+        # 'on' is a name for ON Semiconductor, but shouldn't match inside 'micron'
+        assert _tickers_named_in_query("What is Micron's gross margin?") == ["MU"]
+
 
 class TestMetricMapping:
     def test_growth_phrasing(self):
