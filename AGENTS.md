@@ -56,3 +56,24 @@ This document defines the roles, responsibilities, and ownership model for the A
 4. **Review verdict:** Reviewer returns `APPROVED` or `CHANGES NEEDED`. If changes needed, author fixes on their branch and requests re-review.
 5. **Integration:** Only approved branches merge to `main`. Claude resolves architectural conflicts; Gemini resolves security/perf conflicts; MiMo resolves optimization conflicts.
 6. **Worktree base:** When dispatching agents with `isolation: "worktree"`, always verify the worktree is branched from `main` (not a stale specialist branch). Check with `git log --oneline <worktree-branch> | head -3` before dispatching review.
+
+## Known Issues & Operational Gotchas
+
+### DuckDB Version Mismatch (RESOLVED 2026-06-18)
+- **Issue:** Local DuckDB (1.5.3) created database files incompatible with the Hugging Face Docker image (which initially capped DuckDB at `<1.1.0` in `requirements.txt`).
+- **Symptom:** `Serialization Error: Failed to deserialize: expected end of object, but found field id: 103` on the space side when loading the database.
+- **Fix:** Removed the `<1.1.0` upper cap constraint on `duckdb` in `requirements.txt` to align the Hugging Face Docker environment with the local database generation version (1.5.3). This permanently resolves the cross-platform serialization mismatch.
+- **Venv Status:** The `.venv_duck10` virtual environment (previously used for backwards compatibility) is now obsolete. Development and deployment tasks utilize the main `.venv` (running DuckDB 1.5.3+) going forward.
+
+### Section Extraction TOC Bug (FIXED 2026-06-18)
+- **Issue:** `_extract_sections_with_labels()` used `re.search()` which matched TOC entries first. The 15% coverage guard then fell back to `full_text`, so ALL chunks got tagged `full_text`.
+- **Fix:** Changed to `re.finditer()` + longest match. Retag script `scripts/retag_sections.py` fixed existing data.
+- **Lesson:** When regex extraction has fallback logic, always test with real data — TOC entries look like section headers but are much shorter.
+
+### Review Queue Empty
+- **Issue:** `review_decisions` table is empty because all queries route to `AUTO` (confidence ≥ 0.85).
+- **Not a bug:** High-confidence XBRL queries auto-accept. To populate the queue, run narrative-heavy queries that produce `SAMPLED_REVIEW` or `ESCALATE` routes.
+
+### Orphaned Reviewer Verdicts
+- **Issue:** 2 verdicts in `reviewer_verdicts` reference decision IDs that don't exist in `review_decisions`.
+- **Cause:** Submitted via `/api/chat/feedback` endpoint (uses message timestamp as fake `decision_id`), not through the review queue.
