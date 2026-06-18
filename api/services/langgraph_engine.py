@@ -995,6 +995,7 @@ _NUMERIC_KEYWORDS = [
 # Only include terms that are clearly non-numeric and unlikely to appear
 # in queries that actually want a computed metric.
 _QUALITATIVE_SIGNALS = [
+    "sentiment", "sentiment analysis", "tone", "management tone",
     "risk", "risks", "risk factor",
     "management discussion", "md&a", "highlighted by management",
     "strategy", "outlook", "competitive landscape", "threat", "challenge",
