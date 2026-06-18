@@ -533,7 +533,7 @@ def generate_tone_analysis(ticker: str) -> dict:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            temperature=0.3,
+            temperature=0.15,
             max_tokens=512,
         )
 

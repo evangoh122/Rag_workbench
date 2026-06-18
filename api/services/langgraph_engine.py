@@ -1216,7 +1216,7 @@ def _generate_educational_layers(query: str, answer: str, ticker: str) -> dict:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            temperature=0.3,
+            temperature=0.15,
             max_tokens=600,
         )
         raw = (resp.choices[0].message.content or "").strip()
@@ -1319,6 +1319,24 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                 facts_text = "\n\nAvailable XBRL facts:\n" + "\n".join(facts_lines)
 
         ticker = state.get("ticker", "")
+        # Retrieve computed Loughran-McDonald sentiment for context if available
+        sentiment_context_text = ""
+        try:
+            from api.services.sentiment import get_filing_sentiment
+            sentiment = get_filing_sentiment(ticker)
+            if sentiment:
+                totals = sentiment.get("totals", {})
+                sentiment_context_text = (
+                    f"\n\nLoughran-McDonald Sentiment analysis for {ticker} (Period: {sentiment.get('period_of_report')}):\n"
+                    f"  - Positive words: {totals.get('positive', 0)}\n"
+                    f"  - Negative words: {totals.get('negative', 0)}\n"
+                    f"  - Uncertainty words: {totals.get('uncertainty', 0)}\n"
+                    f"  - Net sentiment score: {sentiment.get('overall_net_sentiment', 0.0):.6f}\n"
+                    f"  - Overall tone score: {sentiment.get('overall_tone_score', 0.0):.6f}\n"
+                )
+        except Exception as se:
+            logger.debug("Failed to pull sentiment for qualitative context: {}", se)
+
         # Constrain to safe literals before interpolating into system prompt
         intent = state.get("query_intent", "general")
         if intent not in ("latest", "comparison", "general"):
@@ -1413,15 +1431,15 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                     "calculate_financial_metric tool to compute it precisely. "
                     "Use Polars, never Pandas for any data operations. "
                     "Do not fabricate numbers, statistics, or claims not present in the context. "
-                    "GROUNDING — company and competitor names: only name competitors, peers, "
-                    "customers, suppliers, or other companies if that name explicitly appears in "
-                    "the provided filing context above. Never introduce company, product, or "
-                    "startup names from your own general knowledge (for example, do not list "
-                    "specific competitors, chips, or AI startups that are not mentioned in the "
-                    "context). If asked who the competitors or peers are and the provided filings "
-                    "do not name them, say plainly that the filings under review do not enumerate "
-                    "specific competitors — do not fill the gap with names from outside the filings. "
-                    f"If the context is insufficient, say so clearly. {intent_instruction}"
+                    "GROUNDING — strict dataset constraint: do not rely on outside information or general "
+                    "knowledge. If the retrieved context or facts are insufficient to answer the question, or if "
+                    "the information is not in the provided dataset, you MUST state politely and clearly that the "
+                    "requested information is not available in the dataset or filings under review (do not guess "
+                    "or extrapolate using outside knowledge). "
+                    "Only name competitors, peers, customers, suppliers, or other companies if that name explicitly "
+                    "appears in the provided filing context. If asked about competitors and the filings do not name them, "
+                    "state politely that the filings under review do not enumerate specific competitors. "
+                    f"If the context is insufficient, say so clearly and politely. {intent_instruction}"
                 ),
             },
         ]
@@ -1438,7 +1456,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
 
         messages.append({
             "role": "user",
-            "content": f"Context from SEC filings:\n\n{context}{facts_text}\n\nQuestion: {state['query']}",
+            "content": f"Context from SEC filings:\n\n{context}{facts_text}{sentiment_context_text}\n\nQuestion: {state['query']}",
         })
 
         cfg = Config.get_provider_config()
@@ -1454,7 +1472,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
             messages=messages,
             tools=tools,
             tool_choice="auto",
-            temperature=cfg.get("temperature", 0.3),
+            temperature=cfg.get("temperature", 0.15),
             max_tokens=cfg.get("max_tokens", 4096),
         )
 
@@ -1504,7 +1522,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
             resp2 = client.chat.completions.create(
                 model=cfg["model"],
                 messages=messages,
-                temperature=cfg.get("temperature", 0.3),
+                temperature=cfg.get("temperature", 0.15),
                 max_tokens=cfg.get("max_tokens", 4096),
             )
             answer = (resp2.choices[0].message.content or "").strip()
