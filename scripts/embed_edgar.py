@@ -449,16 +449,29 @@ def _clean_text(text: str) -> str:
 
 def parse_html_file(file_path: str) -> tuple[str, str]:
     """
-    Parse HTML once: strip script/style/iXBRL tags, extract visible text, clean
-    whitespace. Returns (clean_full_text, raw_html_content). Section splitting is
-    left to the caller (it is form-aware), and period_of_report is read from the
-    raw HTML — so we deliberately do NOT pre-extract sections here.
+    Parse document once: supports PDF, XML, and HTML. Strip script/style/iXBRL tags,
+    extract visible text, clean whitespace. Returns (clean_full_text, raw_content).
     """
     try:
+        path_lower = file_path.lower()
+        if path_lower.endswith(".pdf"):
+            try:
+                import pypdf
+                reader = pypdf.PdfReader(file_path)
+                clean_text = ""
+                for page in reader.pages:
+                    clean_text += (page.extract_text() or "") + "\n"
+                return _clean_text(clean_text), ""
+            except Exception as pdf_err:
+                logger.warning(f"Failed to parse PDF {file_path}: {pdf_err}")
+                return "", ""
+
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        soup = BeautifulSoup(content, "lxml")
+        is_xml = path_lower.endswith(".xml") or content.strip().startswith("<?xml")
+        parser = "xml" if is_xml else "lxml"
+        soup = BeautifulSoup(content, parser)
 
         # Remove script/style/XBRL inline elements that pollute get_text()
         for tag in soup(["script", "style", "ix:nonnumeric", "ix:nonfraction", "ix:header"]):

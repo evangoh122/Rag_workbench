@@ -1,16 +1,6 @@
 import os
 from loguru import logger
-from langchain_ollama import OllamaEmbeddings
 from api.config import Config
-
-
-class PrefixedOllamaEmbeddings(OllamaEmbeddings):
-    """OllamaEmbeddings wrapper that prepends a prefix to queries."""
-    def embed_query(self, text: str) -> list[float]:
-        prefix = Config.EMBEDDING_QUERY_PREFIX
-        if prefix:
-            text = f"{prefix}{text}"
-        return super().embed_query(text)
 
 
 class HFInferenceEmbeddings:
@@ -134,26 +124,6 @@ class LocalSTEmbeddings:
 
 
 _embeddings = None
-_ollama_available = None  # None = not checked, True/False = checked
-
-
-def is_ollama_available() -> bool:
-    """Check if Ollama is reachable. Caches the result."""
-    global _ollama_available
-    if _ollama_available is not None:
-        return _ollama_available
-    try:
-        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        base_url = base_url.rstrip("/").removesuffix("/v1")
-        model = Config.EMBEDDING_MODEL
-        test = PrefixedOllamaEmbeddings(model=model, base_url=base_url)
-        test.embed_query("test")
-        _ollama_available = True
-        logger.info(f"Ollama available at {base_url}")
-    except Exception as e:
-        _ollama_available = False
-        logger.warning(f"Ollama not available: {e}")
-    return _ollama_available
 
 
 def get_embeddings():
@@ -164,13 +134,12 @@ def get_embeddings():
       - \"sentence-transformers\" / \"local\" — in-process ST model, no network
         inference call (model from ST_EMBEDDING_MODEL). Used on the HF Space.
       - \"huggingface\" — HF Inference API (direct HTTP), model from HF_EMBEDDING_MODEL
-      - \"ollama\"       (default) — local Ollama, model from OLLAMA_EMBED_MODEL
     """
     global _embeddings
     if _embeddings is not None:
         return _embeddings
 
-    provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+    provider = os.getenv("EMBEDDING_PROVIDER", "huggingface").lower()
 
     if provider in ("sentence-transformers", "sentence_transformers", "local", "st"):
         model_name = Config.ST_EMBEDDING_MODEL
@@ -190,19 +159,9 @@ def get_embeddings():
             logger.error(f"Failed to init HuggingFace embeddings '{model_name}': {e}")
             return None
 
-    # default: ollama
-    if not is_ollama_available():
-        return None
-
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    base_url = base_url.rstrip("/").removesuffix("/v1")
-    model = Config.EMBEDDING_MODEL
-
-    try:
-        _embeddings = PrefixedOllamaEmbeddings(model=model, base_url=base_url)
-        logger.info(f"Ollama embeddings initialized ({model})")
-    except Exception as e:
-        _embeddings = None
-        logger.error(f"Failed to initialize Ollama embeddings: {e}")
-
-    return _embeddings
+    logger.error(
+        "Unsupported EMBEDDING_PROVIDER '{}'. Use 'huggingface' or "
+        "'sentence-transformers'.",
+        provider,
+    )
+    return None

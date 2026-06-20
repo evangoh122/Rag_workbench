@@ -56,6 +56,14 @@ function StocksList() {
         </p>
       </div>
 
+      <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex gap-3 text-xs text-amber-200 leading-relaxed shadow-sm">
+        <div className="mt-0.5 shrink-0 w-2 h-2 rounded-full bg-amber-500 status-pulse" />
+        <div>
+          <strong className="font-semibold text-amber-300 block mb-0.5">Filing Range Restrictions</strong>
+          Qualitative search (embeddings) is currently limited to the <strong>latest 10-K and 20-F</strong> filings by default (plus the latest 1 year of 10-Q filings for MU). Older or historical filings are not loaded by default.
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-2">
         {COVERED_STOCKS.map((stock) => (
           <div

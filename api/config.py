@@ -166,11 +166,7 @@ class Config:
     # Embedding Settings
     @property
     def EMBEDDING_PROVIDER(self) -> str:
-        return os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
-
-    @property
-    def EMBEDDING_MODEL(self) -> str:
-        return os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+        return os.getenv("EMBEDDING_PROVIDER", "huggingface").lower()
 
     @property
     def HF_EMBEDDING_MODEL(self) -> str:
@@ -186,14 +182,12 @@ class Config:
     @property
     def ACTIVE_EMBEDDING_MODEL(self) -> str:
         """The embedding model actually in use, per the configured provider.
-        (EMBEDDING_MODEL always returns the Ollama var, which is misleading
-        when a different provider is active — use this for display/telemetry.)"""
-        provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+        Use this for display/telemetry instead of reading provider-specific
+        env vars directly."""
+        provider = os.getenv("EMBEDDING_PROVIDER", "huggingface").lower()
         if provider in ("sentence-transformers", "sentence_transformers", "local", "st"):
             return self.ST_EMBEDDING_MODEL
-        if provider == "huggingface":
-            return self.HF_EMBEDDING_MODEL
-        return self.EMBEDDING_MODEL
+        return self.HF_EMBEDDING_MODEL
 
     @property
     def EMBEDDING_QUERY_PREFIX(self) -> str:
@@ -205,12 +199,12 @@ class Config:
         explicit = os.getenv("EMBEDDING_DIM")
         if explicit:
             return int(explicit)
-        provider = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+        provider = os.getenv("EMBEDDING_PROVIDER", "huggingface").lower()
         if provider in ("sentence-transformers", "sentence_transformers", "local", "st"):
             return 1024  # Qwen/Qwen3-Embedding-0.6B
         if provider == "huggingface":
             return 4096  # Qwen/Qwen3-Embedding-8B
-        return 768       # nomic-embed-text (ollama)
+        return 4096
 
     def get_provider_config(self):
         providers = {
@@ -235,13 +229,6 @@ class Config:
                 "max_tokens": int(os.getenv("ANTHROPIC_MAX_TOKENS", "4096")),
                 "temperature": float(os.getenv("ANTHROPIC_TEMPERATURE", "0.1")),
             },
-            "ollama": {
-                "base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
-                "default_model": os.getenv("OLLAMA_MODEL", "llama3.2"),
-                "api_key": "ollama",
-                "max_tokens": int(os.getenv("OLLAMA_MAX_TOKENS", "4096")),
-                "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.1")),
-            },
             "mimo": {
                 "base_url": os.getenv("MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
                 "default_model": os.getenv("MIMO_MODEL", "mimo-v2.5-pro"),
@@ -257,7 +244,7 @@ class Config:
 
         cfg = providers[self.CHAT_PROVIDER]
 
-        if not cfg.get("api_key") and self.CHAT_PROVIDER != "ollama":
+        if not cfg.get("api_key"):
             logger.warning(f"No API key set for provider '{self.CHAT_PROVIDER}'")
 
         return {
@@ -280,7 +267,7 @@ class Config:
         elif provider == "mimo" and not self.MIMO_API_KEY:
             logger.warning("MIMO_API_KEY/XIAOMI_API_KEY not set — mimo provider will fail")
 
-        if not self.GOOGLE_API_KEY and provider not in ("ollama", "mimo", "openai", "anthropic"):
+        if not self.GOOGLE_API_KEY and provider not in ("mimo", "openai", "anthropic"):
             logger.warning("GOOGLE_API_KEY/GEMINI_API_KEY not set — embeddings may fail if using default")
 
     def init_langsmith(self):

@@ -671,6 +671,14 @@ function Workbench() {
                     </button>
                   </form>
 
+                  <div className="w-full max-w-2xl mx-auto p-3.5 mb-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex gap-3 text-xs text-amber-200 leading-relaxed shadow-sm text-left animate-in fade-in duration-300">
+                    <div className="mt-0.5 shrink-0 w-2 h-2 rounded-full bg-amber-500 status-pulse" />
+                    <div>
+                      <strong className="font-semibold text-amber-300 block mb-0.5">Filing Range Notice</strong>
+                      Qualitative search is limited to the <strong>latest 10-K and 20-F</strong> filings by default (plus the latest 1 year of 10-Q filings for MU). Older or historical filings are not loaded by default.
+                    </div>
+                  </div>
+
                   {mode === 'auditable' && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-full mb-6 text-left">
                       <div className="glass p-3.5">

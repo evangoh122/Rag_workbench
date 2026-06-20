@@ -165,7 +165,7 @@ export default function RagOverview() {
               <h2 className="text-lg md:text-xl font-bold tracking-tight text-primary m-0">Strategic Buy-In Slide Deck</h2>
             </div>
             <a
-              href="https://docs.google.com/presentation/d/13ziiVDNATFpEPlh-tU24JFdmzaYr1qGe/edit?slide=id.g3f11adbf2af_0_507#slide=id.g3f11adbf2af_0_507"
+              href="https://docs.google.com/presentation/d/1X0Bh06yYY2zbRe7yh7f0itSyiwb0ubVe/edit?usp=sharing&ouid=100592629992248688729&rtpof=true&sd=true"
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-accent hover:text-emerald-300 font-semibold"
