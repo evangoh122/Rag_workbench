@@ -414,6 +414,12 @@ def record_response(body: ResponseIn):
     try:
         conn = db_manager.get_review_connection()
         _ensure_tables(conn)
+        # Reject choices for unknown sessions so fabricated session_ids can't
+        # pollute the aggregate results (review hardening).
+        if not conn.execute(
+            "SELECT 1 FROM conjoint_sessions WHERE session_id = ?", [body.session_id]
+        ).fetchone():
+            raise HTTPException(status_code=404, detail="Session not found")
         conn.execute(
             "INSERT INTO conjoint_responses (session_id, task_index, profile_a, profile_b, chosen, ts) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -426,6 +432,8 @@ def record_response(body: ResponseIn):
                 _now(),
             ],
         )
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("conjoint response record failed")
         raise HTTPException(status_code=500, detail="Failed to record response")
@@ -444,18 +452,26 @@ def complete_session(body: CompleteIn):
         # Verify the session exists and isn't already finalized — prevents
         # completing unknown sessions and double-submits that skew aggregates.
         existing = conn.execute(
-            "SELECT completed_at FROM conjoint_sessions WHERE session_id = ?",
+            "SELECT completed_at, arm FROM conjoint_sessions WHERE session_id = ?",
             [body.session_id],
         ).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Session not found")
         if existing[0] is not None:
             raise HTTPException(status_code=409, detail="Session already completed")
-        rows = conn.execute(
-            "SELECT profile_a, profile_b, chosen FROM conjoint_responses WHERE session_id = ?",
-            [body.session_id],
-        ).fetchall()
-        prefs = _preferred_levels(rows)
+        # Only treatment sessions have choices to derive preferences from.
+        # Control = standard app: persist NO applied_prefs, so the frontend keeps
+        # the default (standard) rendering. Deriving _preferred_levels([]) for
+        # control would yield index-0 defaults (direct / text_only) and wrongly
+        # strip evidence + explanation for standard users.
+        if existing[1] == "treatment":
+            rows = conn.execute(
+                "SELECT profile_a, profile_b, chosen FROM conjoint_responses WHERE session_id = ?",
+                [body.session_id],
+            ).fetchall()
+            prefs = _preferred_levels(rows)
+        else:
+            prefs = {}
         conn.execute(
             "UPDATE conjoint_sessions SET completed_at = ?, usefulness = ?, "
             "usefulness_comment = ?, applied_prefs = ? WHERE session_id = ?",

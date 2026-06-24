@@ -117,9 +117,11 @@ export default function ConjointSurvey({ arm, role = null, onComplete, onClose, 
     setError(null);
     try {
       const { applied_prefs } = await completeConjointSession(sessionId, usefulness, comment);
-      // Control keeps standard rendering (no answer_* keys); treatment applies
-      // its derived levels on top of the chosen arm + role.
-      const prefs: ConjointPrefs = { arm, role, ...applied_prefs };
+      // Only treatment applies derived answer_* levels. Control keeps the
+      // default (standard) rendering — never spread applied_prefs for it, so no
+      // answer_style/evidence keys can strip evidence/explanation for standard users.
+      const prefs: ConjointPrefs =
+        arm === 'treatment' ? { arm, role, ...applied_prefs } : { arm, role };
       saveConjointPrefs(prefs);
       markConjointCompleted();
       setAppliedPrefs(prefs);
