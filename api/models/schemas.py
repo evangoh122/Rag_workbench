@@ -6,6 +6,15 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     ticker: Optional[str] = Field(default="NVDA", max_length=10)
     history: Optional[List[Dict[str, str]]] = Field(default=None, max_length=50)
+    # Conjoint `role_based` personalization: when set to one of the role keys
+    # (compliance_officer, equity_research_analyst, credit_analyst,
+    # relationship_manager), the answer's tone/emphasis is tailored to it.
+    # None (the default) → role-agnostic answer.
+    role: Optional[str] = Field(
+        default=None,
+        max_length=40,
+        pattern="^(compliance_officer|equity_research_analyst|credit_analyst|relationship_manager)?$",
+    )
 
 
 # ── Structured Output Models ─────────────────────────────────────────────────

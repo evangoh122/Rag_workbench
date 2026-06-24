@@ -67,6 +67,10 @@ class GraphState(TypedDict):
     eval_triggers: Optional[List[str]]  # always-escalate triggers that fired
     # Audit lineage (populated by lineage_node, always present in output)
     lineage: Optional[Dict[str, Any]]
+    # Role-based personalization: when set, an instruction appended to the answer
+    # system prompt to tailor tone/emphasis to the respondent's professional role.
+    # Empty/None is a no-op (the default, role-agnostic answer).
+    role_guidance: Optional[str]
 
 # ---------------------------------------------------------------------------
 # Node Functions
@@ -1343,6 +1347,14 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
         if intent not in ("latest", "comparison", "general"):
             intent = "general"
 
+        # Role-based personalization (conjoint). Appended to the system prompt to
+        # tailor tone/emphasis to the respondent's role; never changes the numbers.
+        _rg = (state.get("role_guidance") or "").strip()
+        role_instruction = (
+            f" Tailor the answer's tone, emphasis, and depth to this reader: {_rg[:1000]}"
+            if _rg else ""
+        )
+
         tools = [
             {
                 "type": "function",
@@ -1440,7 +1452,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
                     "Only name competitors, peers, customers, suppliers, or other companies if that name explicitly "
                     "appears in the provided filing context. If asked about competitors and the filings do not name them, "
                     "state politely that the filings under review do not enumerate specific competitors. "
-                    f"If the context is insufficient, say so clearly and politely. {intent_instruction}"
+                    f"If the context is insufficient, say so clearly and politely. {intent_instruction}{role_instruction}"
                 ),
             },
         ]
@@ -1764,13 +1776,19 @@ def _abstain_response(company: str) -> Dict[str, Any]:
 
 
 def run_auditable_rag(query: str, ticker: str,
-                      history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+                      history: Optional[List[Dict[str, str]]] = None,
+                      role_guidance: Optional[str] = None) -> Dict[str, Any]:
     """
     Run the LangGraph DAG for a given query and ticker.
 
     `history` carries prior conversation turns ([{role, content}, ...]) so
     follow-up questions ("what about its net income?", "over the same period")
     are answered with the earlier context, not in isolation.
+
+    `role_guidance` (optional) tailors the answer to a professional role
+    (conjoint `role_based` personalization). It is appended to the answer system
+    prompt only; when None/empty the answer is role-agnostic. It never alters
+    retrieval, ticker resolution, or the audited numbers — purely tone/emphasis.
     """
     # Ground on the company named in the question, not the UI's default ticker.
     # If the query names a company we DON'T cover, abstain rather than answering
@@ -1821,6 +1839,7 @@ def run_auditable_rag(query: str, ticker: str,
         "eval_confidence":     None,
         "eval_triggers":       None,
         "lineage":             None,
+        "role_guidance":       role_guidance or None,
         "status": {
             "input":        "success",
             "retrieval":    "pending",

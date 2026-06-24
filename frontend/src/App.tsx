@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck, Menu, X, Lightbulb, Info, ChevronDown, ArrowRight } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck, Menu, X, Lightbulb, Info, ChevronDown, ArrowRight, FlaskConical } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse, Source, XBRLFact, Triple, ChartSpec, ToneAnalysis as ToneAnalysisData } from './api/chat';
@@ -8,6 +8,14 @@ import ReviewQueue from './pages/ReviewQueue';
 import MetricsDashboard from './pages/MetricsDashboard';
 import SystemDashboard from './pages/SystemDashboard';
 import ProductAnalytics from './pages/ProductAnalytics';
+import ConjointStudy from './pages/ConjointStudy';
+import ConjointGate from './components/ConjointGate';
+import ConjointSurvey from './components/ConjointSurvey';
+import {
+  loadConjointPrefs,
+  hasCompletedConjoint,
+  type ConjointPrefs,
+} from './api/conjoint';
 import Methodology from './pages/Methodology';
 import StocksList from './pages/StocksList';
 import AuditLog from './pages/AuditLog';
@@ -43,7 +51,7 @@ interface Message {
   tone_analysis?: ToneAnalysisData;
 }
 
-type AppView = 'chat' | 'graph' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics';
+type AppView = 'chat' | 'graph' | 'traceability' | 'results' | 'metrics' | 'system' | 'methodology' | 'stocks' | 'audit' | 'analytics' | 'conjoint';
 
 type PipelineStatus = {
   input?: 'success' | 'error' | 'pending';
@@ -88,6 +96,18 @@ function Workbench() {
   const [ticker, _setTicker] = useState('MU');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<Set<number>>(new Set());
+  // Conjoint personalization. `prefs` (arm/role/answer-experience levels) drives
+  // both the chat presentation and whether role-based answers are requested.
+  const [prefs, setPrefs] = useState<ConjointPrefs | null>(() => loadConjointPrefs());
+  const [gateOpen, setGateOpen] = useState<boolean>(() => loadConjointPrefs() === null);
+  const [surveyOpen, setSurveyOpen] = useState(false);
+  const [surveyPrompted, setSurveyPrompted] = useState<boolean>(() => hasCompletedConjoint());
+  // Personalization toggles derived from prefs (standard/control => all shown).
+  const showEvidence = prefs?.evidence !== 'text_only';
+  const showExplain = prefs?.answer_style !== 'direct';
+  const promptsGuided = prefs?.prompts === 'guided';
+  const roleArg =
+    prefs?.arm === 'treatment' && prefs?.answer_basis === 'role_based' ? prefs?.role ?? null : null;
   const [graphModalOpen, setGraphModalOpen] = useState(false);
   const [activeTriples, setActiveTriples] = useState<any[]>([]);
   const [originalTriples, setOriginalTriples] = useState<any[]>([]);
@@ -148,6 +168,17 @@ function Workbench() {
     scrollToBottom();
   }, [messages]);
 
+  // Once the user has engaged (≥3 assistant answers), prompt the end-of-session
+  // study a single time — unless they've already completed it or the gate is up.
+  useEffect(() => {
+    if (surveyPrompted || gateOpen || prefs === null) return;
+    const answers = messages.filter((m) => m.role === 'assistant').length;
+    if (answers >= 3) {
+      setSurveyPrompted(true);
+      setSurveyOpen(true);
+    }
+  }, [messages, surveyPrompted, gateOpen, prefs]);
+
   useEffect(() => {
     if (import.meta.env.VITE_POSTHOG_KEY) {
       getPosthog().then(p => p.capture('$pageview', { view }))
@@ -185,7 +216,7 @@ function Workbench() {
       } else if (mode === 'graph') {
         data = await sendGraphRagMessage(currentInput, ticker);
       } else {
-        data = await sendAuditableRagMessage(currentInput, ticker, history);
+        data = await sendAuditableRagMessage(currentInput, ticker, history, roleArg);
       }
 
       // Persist the company the backend resolved to, so a follow-up that names
@@ -440,6 +471,21 @@ function Workbench() {
                 <Server size={16} className={view === 'system' ? 'text-orange-400' : 'text-secondary'} />
                 System Overview
               </button>
+
+              <button
+                className={`nav-item ${
+                  view === 'conjoint'
+                    ? 'active !text-pink-400 [&>svg]:text-pink-400'
+                    : ''
+                }`}
+                onClick={() => {
+                  setView('conjoint');
+                  setSidebarOpen(false);
+                }}
+              >
+                <FlaskConical size={16} className={view === 'conjoint' ? 'text-pink-400' : 'text-secondary'} />
+                Answer Study
+              </button>
             </div>
           </div>
         </nav>
@@ -513,6 +559,13 @@ function Workbench() {
         {view === 'analytics' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-200">
             <ProductAnalytics />
+          </div>
+        )}
+
+        {/* VIEW: CONJOINT / ANSWER EXPERIENCE STUDY */}
+        {view === 'conjoint' && (
+          <div className="flex-1 flex flex-col h-full animate-in fade-in duration-200">
+            <ConjointStudy />
           </div>
         )}
 
@@ -799,17 +852,17 @@ function Workbench() {
                     </div>
 
                     <ChartErrorBoundary>
-                      {msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
+                      {showEvidence && msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
                         <ChartView chart={msg.chart} />
                       )}
 
                       {/* Only show raw XBRL chart when no backend chart is present */}
-                      {msg.role === 'assistant' && !msg.chart && ((msg.relevant_xbrl?.length ?? 0) > 0 || (msg.xbrl_facts?.length ?? 0) > 0) && (
+                      {showEvidence && msg.role === 'assistant' && !msg.chart && ((msg.relevant_xbrl?.length ?? 0) > 0 || (msg.xbrl_facts?.length ?? 0) > 0) && (
                         <FinancialChart facts={(msg.relevant_xbrl?.length ?? 0) > 0 ? msg.relevant_xbrl : msg.xbrl_facts} />
                       )}
                     </ChartErrorBoundary>
 
-                    {msg.role === 'assistant' && (msg.sources || msg.verification || msg.xbrl_facts?.length || msg.relevant_xbrl?.length || msg.xbrl_badge || msg.math_steps?.length) && (
+                    {showEvidence && msg.role === 'assistant' && (msg.sources || msg.verification || msg.xbrl_facts?.length || msg.relevant_xbrl?.length || msg.xbrl_badge || msg.math_steps?.length) && (
                       <div className="mt-3 pt-3 border-t border-border/40">
                         <AuditTrail
                           sources={msg.sources}
@@ -823,10 +876,10 @@ function Workbench() {
                       </div>
                     )}
 
-                    {msg.role === 'assistant' && (msg.what_it_means || msg.how_to_interpret || (msg.follow_ups && msg.follow_ups.length > 0)) && (
+                    {msg.role === 'assistant' && ((showExplain && (msg.what_it_means || msg.how_to_interpret)) || (msg.follow_ups && msg.follow_ups.length > 0)) && (
                       <div className="mt-3 pt-3 border-t border-border/40 space-y-2.5">
                         {/* Section 3 — What This Means */}
-                        {msg.what_it_means && (
+                        {showExplain && msg.what_it_means && (
                           <div className="glass-sm p-3.5">
                             <div className="flex items-center gap-2 mb-1.5">
                               <Lightbulb size={13} className="text-amber-400" />
@@ -837,7 +890,7 @@ function Workbench() {
                         )}
 
                         {/* Section 4 — How to Interpret This (collapsible) */}
-                        {msg.how_to_interpret && (
+                        {showExplain && msg.how_to_interpret && (
                           <details className="glass-sm p-3.5 group">
                             <summary className="flex items-center gap-2 cursor-pointer list-none select-none">
                               <Info size={13} className="text-accent" />
@@ -853,7 +906,7 @@ function Workbench() {
                           <div>
                             <div className="flex items-center gap-2 mb-1.5">
                               <ArrowRight size={13} className="text-bullish" />
-                              <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">Suggested Follow-Ups</span>
+                              <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">{promptsGuided ? 'Guided Next Steps' : 'Suggested Follow-Ups'}</span>
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                               {msg.follow_ups.map((q, i) => (
@@ -1205,6 +1258,38 @@ function Workbench() {
             <footer className="px-5 py-3 border-t border-border bg-surface/20 text-[11px] text-muted">
               Interactive node-edge graph. Drag nodes to rearrange. Click an edge/node for its filing source. Scroll to zoom.
             </footer>
+          </div>
+        </div>
+      )}
+
+      {/* Conjoint entry gate — first visit: standard vs personalized-by-role */}
+      {gateOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg glass rounded-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
+            <ConjointGate
+              onChosen={(p) => {
+                setPrefs(p);
+                setGateOpen(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* End-of-session study (usefulness vote; conjoint tasks for treatment) */}
+      {surveyOpen && prefs && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-2xl glass rounded-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
+            <ConjointSurvey
+              arm={prefs.arm ?? 'treatment'}
+              role={prefs.role}
+              onComplete={(p) => setPrefs(p)}
+              onClose={() => setSurveyOpen(false)}
+              onViewResults={() => {
+                setSurveyOpen(false);
+                setView('conjoint');
+              }}
+            />
           </div>
         </div>
       )}

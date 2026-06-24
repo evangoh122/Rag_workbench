@@ -161,11 +161,13 @@ export async function sendAuditableRagMessage(
   message: string,
   ticker: string = 'MU',
   history: HistoryEntry[] = [],
+  role?: string | null,
 ): Promise<ChatResponse> {
   const response = await client.post<ChatResponse>('/chat/auditable-rag', {
     message,
     ticker,
     history,
+    role: role ?? null,
   });
   return response.data;
 }
