@@ -1,0 +1,25 @@
+C:\Users\jianj\AppData\Roaming\Python\Python314\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.2) or chardet (7.4.3)/charset_normalizer (3.4.4) doesn't match a supported version!
+  warnings.warn(
+[reembed] torch threads=16
+[reembed] loading Qwen/Qwen3-Embedding-0.6B ...
+Loading weights:   0%|          | 0/310 [00:00<?, ?it/s]Loading weights: 100%|##########| 310/310 [00:00<00:00, 5163.18it/s]
+[reembed] 4554 rows total, 2949 need re-embedding (already 1024-dim: 1605)
+[reembed] 160/2949  (0.1/s, eta 311.6 min)
+[reembed] 320/2949  (0.2/s, eta 282.0 min)
+[reembed] 480/2949  (0.1/s, eta 279.0 min)
+[reembed] 640/2949  (0.2/s, eta 238.7 min)
+[reembed] 800/2949  (0.2/s, eta 230.8 min)
+[reembed] 960/2949  (0.2/s, eta 214.4 min)
+[reembed] 1120/2949  (0.2/s, eta 192.0 min)
+[reembed] 1280/2949  (0.2/s, eta 178.6 min)
+[reembed] 1440/2949  (0.2/s, eta 155.6 min)
+[reembed] 1600/2949  (0.2/s, eta 141.2 min)
+[reembed] 1760/2949  (0.2/s, eta 121.7 min)
+[reembed] 1920/2949  (0.2/s, eta 106.8 min)
+[reembed] 2080/2949  (0.2/s, eta 87.6 min)
+[reembed] 2240/2949  (0.2/s, eta 72.3 min)
+[reembed] 2400/2949  (0.2/s, eta 56.5 min)
+[reembed] 2560/2949  (0.2/s, eta 39.8 min)
+[reembed] 2720/2949  (0.2/s, eta 23.5 min)
+[reembed] 2880/2949  (0.2/s, eta 7.1 min)
+[reembed] DONE — 2949 re-embedded in 303.3 min. vector dims now: [1024]

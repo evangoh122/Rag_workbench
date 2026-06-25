@@ -1,0 +1,18 @@
+{
+  // Point the editor at the project's virtual environment.
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+
+  // Auto-activate .venv in every new integrated terminal.
+  "python.terminal.activateEnvironment": true,
+  "python.terminal.activateEnvInCurrentTerminal": true,
+
+  // Make PowerShell the default terminal and avoid the execution-policy prompt
+  // that can block .venv\Scripts\Activate.ps1.
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.profiles.windows": {
+    "PowerShell": {
+      "source": "PowerShell",
+      "args": ["-ExecutionPolicy", "Bypass", "-NoExit"]
+    }
+  }
+}

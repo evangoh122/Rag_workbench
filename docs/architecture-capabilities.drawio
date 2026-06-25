@@ -1,0 +1,56 @@
+<mxfile host="app.diagrams.net" agent="Claude Code">
+  <diagram id="rag-workbench-capabilities" name="Capability Map">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="940" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Header -->
+        <mxCell id="title" value="RAG Workbench — what it does" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#1F2933;" vertex="1" parent="1">
+          <mxGeometry x="40" y="30" width="900" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Auditable question-answering over SEC filings: the AI retrieves and explains, Python does the math, XBRL verifies it — and the system abstains when it can't stand behind an answer." style="text;html=1;fontSize=13;align=left;verticalAlign=middle;fontColor=#52606D;" vertex="1" parent="1">
+          <mxGeometry x="40" y="66" width="1000" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- User -->
+        <mxCell id="persona" value="&lt;b&gt;Financial Analyst&lt;/b&gt;&lt;br&gt;asks filing questions,&lt;br&gt;needs answers they can defend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#08427B;fontColor=#ffffff;strokeColor=#073B6F;fontSize=12;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="30" width="240" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Capability cards: 3 cols x 2 rows -->
+        <!-- Row 1 -->
+        <mxCell id="cap1" value="&lt;b style=&quot;font-size:15px&quot;&gt;Ask filings in plain English&lt;/b&gt;&lt;br&gt;&lt;br&gt;• Conversational Q&amp;amp;A over SEC filings&lt;br&gt;• Multiple answer modes:&lt;br&gt;&amp;nbsp;&amp;nbsp;auditable-RAG · graph-RAG · SQL&lt;br&gt;• Plain-language, non-expert friendly" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1168BD;fontColor=#0B2A4A;fontSize=12;align=left;verticalAlign=top;spacing=12;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="420" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="cap2" value="&lt;b style=&quot;font-size:15px&quot;&gt;Numbers you can trust&lt;/b&gt;&lt;br&gt;&lt;br&gt;• Python computes ALL arithmetic&lt;br&gt;&amp;nbsp;&amp;nbsp;— the LLM never does math&lt;br&gt;• Margins, YoY growth, ratios&lt;br&gt;• Shows the calculation steps" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;fontColor=#1B3D1E;fontSize=12;align=left;verticalAlign=top;spacing=12;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="490" y="150" width="420" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="cap3" value="&lt;b style=&quot;font-size:15px&quot;&gt;Verifies — or it abstains&lt;/b&gt;&lt;br&gt;&lt;br&gt;• XBRL cross-check (1% tolerance)&lt;br&gt;• Independent NLI entailment check&lt;br&gt;• Per-answer confidence score&lt;br&gt;• Refuses to answer when unsure" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E65100;fontColor=#4A2400;fontSize=12;align=left;verticalAlign=top;spacing=12;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="940" y="150" width="420" height="190" as="geometry" />
+        </mxCell>
+
+        <!-- Row 2 -->
+        <mxCell id="cap4" value="&lt;b style=&quot;font-size:15px&quot;&gt;Every answer is auditable&lt;/b&gt;&lt;br&gt;&lt;br&gt;• Inline citations to the source filing&lt;br&gt;• Underlying XBRL facts shown&lt;br&gt;• Full pipeline trace + audit trail&lt;br&gt;• Click an answer back to its evidence" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#6A1B9A;fontColor=#311340;fontSize=12;align=left;verticalAlign=top;spacing=12;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="360" width="420" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="cap5" value="&lt;b style=&quot;font-size:15px&quot;&gt;Explains like an analyst&lt;/b&gt;&lt;br&gt;&lt;br&gt;• 3-layer answer:&lt;br&gt;&amp;nbsp;&amp;nbsp;Answer → What it means → Follow-ups&lt;br&gt;• Sentiment &amp;amp; tone of filing language&lt;br&gt;• Turns disclosures into insight" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;fontColor=#0A3338;fontSize=12;align=left;verticalAlign=top;spacing=12;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="490" y="360" width="420" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="cap6" value="&lt;b style=&quot;font-size:15px&quot;&gt;Governed in production&lt;/b&gt;&amp;nbsp;&lt;span style=&quot;font-size:10px;color:#607D8B&quot;&gt;(separate service)&lt;/span&gt;&lt;br&gt;&lt;br&gt;• Drift alerts: answer↔XBRL agreement&lt;br&gt;&amp;nbsp;&amp;nbsp;rate drops, or a metric spikes&lt;br&gt;• Shadow runs to test changes safely&lt;br&gt;• Human-in-the-loop review queue + dashboards" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECEFF1;strokeColor=#546E7A;fontColor=#263238;fontSize=12;align=left;verticalAlign=top;spacing=12;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="940" y="360" width="420" height="190" as="geometry" />
+        </mxCell>
+
+        <!-- Foundation strip -->
+        <mxCell id="foundation" value="&lt;b&gt;Grounded in&lt;/b&gt;&amp;nbsp;&amp;nbsp;SEC EDGAR filings + XBRL company facts&amp;nbsp;&amp;nbsp;·&amp;nbsp;&amp;nbsp;hybrid retrieval over an embeddings corpus&amp;nbsp;&amp;nbsp;·&amp;nbsp;&amp;nbsp;knowledge graph of entities &amp;amp; relationships" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1F2933;strokeColor=#1F2933;fontColor=#FFFFFF;fontSize=13;align=center;verticalAlign=middle;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="580" width="1320" height="56" as="geometry" />
+        </mxCell>
+
+        <!-- Footnote pointer to detail -->
+        <mxCell id="footnote" value="Implementation detail: see architecture-c4.drawio (Context → Container → Component → Runtime)" style="text;html=1;fontSize=11;align=left;verticalAlign=middle;fontColor=#7B8794;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="650" width="900" height="24" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  </mxfile>

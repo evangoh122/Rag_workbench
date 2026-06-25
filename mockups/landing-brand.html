@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Auditable Filing-QA: answers from SEC filings you can audit</title>
+<meta name="description" content="Ask questions about 10-K filings and get answers with clickable citations and figures verified against XBRL." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+  /* ============================================================
+     Auditable Filing-QA. Brand-skinned landing mockup.
+     Re-skinned to the app's real dark theme tokens (index.css):
+       bg #0A0A0A, surface #141414, elevated #1A1A1A, text #fff/#888,
+       bullish green #2E8B57 / #4ADE80, border rgba(255,255,255,.08),
+       Inter + JetBrains Mono, radii 12px / 8px.
+     Accent: white = primary action, green = accent + verified state.
+     Evidence Graph uses the app's real node-type colors.
+     ============================================================ */
+
+  :root {
+    --bg:        #0A0A0A;
+    --surface:   #141414;
+    --elev:      #1A1A1A;
+    --line:      rgba(255,255,255,.08);
+    --line-2:    rgba(255,255,255,.14);
+    --ink:       #FFFFFF;
+    --ink-soft:  #A2A2A2;
+    --ink-mute:  #888888;
+    --ink-faint: #6A6A6A;
+
+    --accent:      #2E8B57;   /* bullish green */
+    --accent-br:   #4ADE80;   /* bright green (edges, highlights) */
+    --accent-tint: rgba(74,222,128,.10);
+    --accent-line: rgba(74,222,128,.32);
+
+    /* real Evidence Graph node colors */
+    --n-company: #1D4ED8;
+    --n-metric:  #7c3aed;
+    --n-xbrl:    #059669;
+    --n-filing:  #4b5563;
+
+    --radius-card: 12px;
+    --radius-btn: 8px;
+    --radius-inset: 8px;
+
+    --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 24px 50px -30px rgba(0,0,0,.8);
+    --maxw: 1180px;
+    --ease: cubic-bezier(.16,1,.3,1);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; background: var(--bg); }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", "SF Pro Display", system-ui, -apple-system, sans-serif;
+    font-size: 17px; line-height: 1.6; letter-spacing: -.01em;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  }
+
+  .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  h1, h2, h3 { margin: 0; font-weight: 700; line-height: 1.06; letter-spacing: -.025em; }
+  p { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+
+  .eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent-br);
+  }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font: inherit; font-weight: 600; font-size: 15px; letter-spacing: -.01em;
+    padding: 12px 20px; border-radius: var(--radius-btn); border: 1px solid transparent;
+    cursor: pointer; white-space: nowrap;
+    transition: transform .18s var(--ease), background .2s var(--ease), border-color .2s var(--ease), opacity .2s var(--ease);
+  }
+  .btn:active { transform: translateY(1px) scale(.99); }
+  .btn-primary { background: var(--ink); color: #0A0A0A; }
+  .btn-primary:hover { transform: translateY(-1px); opacity: .9; }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
+  .btn-ghost:hover { border-color: rgba(255,255,255,.4); transform: translateY(-1px); }
+
+  /* ---------- nav ---------- */
+  header.nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(10,10,10,.72);
+    backdrop-filter: saturate(140%) blur(10px); -webkit-backdrop-filter: saturate(140%) blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner { height: 64px; display: flex; align-items: center; gap: 28px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15.5px; letter-spacing: -.02em; }
+  .brand .mark { width: 26px; height: 26px; border-radius: 7px; background: var(--accent); display: grid; place-items: center; flex: none; }
+  .brand .mark svg { width: 15px; height: 15px; }
+  .nav-links { display: flex; gap: 26px; margin-left: 8px; }
+  .nav-links a { font-size: 14px; color: var(--ink-mute); font-weight: 500; transition: color .15s var(--ease); }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-cta { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .nav-cta .signin { font-size: 14px; font-weight: 600; color: var(--ink-mute); }
+  .nav-cta .signin:hover { color: var(--ink); }
+  @media (max-width: 860px) { .nav-links, .nav-cta .signin { display: none; } }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 76px 0 36px; position: relative; }
+  .hero::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: -1;
+    background: radial-gradient(60% 60% at 78% 18%, rgba(46,139,87,.10), transparent 70%);
+  }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; }
+  .hero h1 { font-size: clamp(40px, 5.4vw, 64px); }
+  .hero .lede { margin-top: 22px; font-size: 19px; color: var(--ink-soft); max-width: 30ch; }
+  .hero .cta-row { margin-top: 30px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .hero .eyebrow { display: inline-block; margin-bottom: 18px; }
+  @media (max-width: 920px) {
+    .hero { padding: 48px 0 24px; }
+    .hero-grid { grid-template-columns: 1fr; gap: 36px; }
+    .hero .lede { max-width: 46ch; }
+  }
+
+  /* ---------- answer card (hero asset) ---------- */
+  .answer-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow); padding: 22px; }
+  .ac-q { display: flex; gap: 10px; align-items: flex-start; color: var(--ink-soft); font-size: 14.5px; }
+  .ac-q .role { flex: none; width: 26px; height: 26px; border-radius: 999px; background: var(--elev); display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--ink-mute); }
+  .ac-divider { height: 1px; background: var(--line); margin: 16px 0; }
+  .ac-label { font-family: "JetBrains Mono", monospace; font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .ac-answer { margin-top: 8px; font-size: 17px; line-height: 1.5; color: var(--ink-soft); }
+  .ac-answer b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 14px;
+    background: var(--accent-tint); color: var(--accent-br); border: 1px solid var(--accent-line);
+    font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
+  }
+  .badge svg { width: 14px; height: 14px; }
+  .ac-means { margin-top: 16px; color: var(--ink-soft); font-size: 14.5px; line-height: 1.55; }
+  .ac-means strong { color: var(--ink); }
+  .chips { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 500; color: var(--ink);
+    background: var(--elev); border: 1px solid var(--line-2);
+    padding: 6px 11px; border-radius: var(--radius-inset); cursor: pointer;
+    transition: transform .15s var(--ease), border-color .15s var(--ease);
+  }
+  .chip:hover { transform: translateY(-1px); border-color: var(--accent-line); }
+  .ac-hint { margin-top: 14px; font-size: 12.5px; color: var(--ink-faint); display: flex; align-items: center; gap: 7px; }
+  .ac-hint svg { width: 13px; height: 13px; }
+
+  .source-pop {
+    margin-top: 12px; border-left: 2px solid var(--accent-br); background: var(--bg);
+    border-radius: 0 var(--radius-inset) var(--radius-inset) 0;
+    padding: 0 14px; font-size: 13.5px; color: var(--ink-soft); line-height: 1.5;
+    max-height: 0; opacity: 0; overflow: hidden;
+    transition: max-height .4s var(--ease), opacity .3s var(--ease), padding .3s var(--ease);
+  }
+  .source-pop.open { max-height: 220px; opacity: 1; padding: 12px 14px; }
+  .source-pop .src-meta { font-family: "JetBrains Mono", monospace; font-size: 11px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--accent-br); margin-bottom: 6px; }
+
+  /* ---------- coverage ---------- */
+  .coverage { padding: 30px 0 8px; }
+  .coverage .cap { text-align: center; font-size: 12.5px; color: var(--ink-faint); font-weight: 500; letter-spacing: .04em; font-family: "JetBrains Mono", monospace; text-transform: uppercase; }
+  .logos { margin-top: 22px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 40px; }
+  .logos img { height: 24px; opacity: .42; filter: grayscale(1) brightness(2.4); transition: opacity .2s var(--ease); }
+  .logos img:hover { opacity: .8; }
+
+  /* ---------- section scaffolding ---------- */
+  section { padding: 84px 0; }
+  .sec-head { max-width: 60ch; }
+  .sec-head h2 { font-size: clamp(30px, 3.6vw, 42px); }
+  .sec-head p { margin-top: 16px; color: var(--ink-soft); font-size: 18px; max-width: 56ch; }
+
+  /* ---------- how it works ---------- */
+  .steps { margin-top: 44px; border-top: 1px solid var(--line); }
+  .step { display: grid; grid-template-columns: 64px 1fr auto; gap: 28px; align-items: center; padding: 26px 0; border-bottom: 1px solid var(--line); }
+  .step .num { font-family: "JetBrains Mono", monospace; font-size: 22px; color: var(--accent-br); font-weight: 500; }
+  .step h3 { font-size: 23px; font-weight: 600; letter-spacing: -.02em; }
+  .step p { margin-top: 6px; color: var(--ink-soft); font-size: 15.5px; max-width: 52ch; }
+  .step .ico { width: 44px; height: 44px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; }
+  .step .ico svg { width: 21px; height: 21px; stroke: var(--ink-mute); }
+  @media (max-width: 760px) { .step { grid-template-columns: 40px 1fr; } .step .ico { display: none; } }
+
+  /* ---------- bento ---------- */
+  .bento { margin-top: 44px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .cell { border-radius: var(--radius-card); padding: 26px; border: 1px solid var(--line); background: var(--surface); }
+  .cell h3 { font-size: 21px; font-weight: 600; letter-spacing: -.02em; }
+  .cell p { margin-top: 10px; color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
+  .cell.span2 { grid-column: span 2; }
+  .cell.glow { position: relative; overflow: hidden; }
+  .cell.glow::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(70% 80% at 80% 110%, rgba(74,222,128,.12), transparent 70%); }
+  .cell.accent { border-color: var(--accent-line); background: linear-gradient(160deg, var(--accent-tint), transparent 60%), var(--surface); }
+  .cell .kicker { font-family: "JetBrains Mono", monospace; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-br); margin-bottom: 12px; }
+  .mini-list { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .mini-list li { display: flex; gap: 9px; align-items: flex-start; font-size: 14.5px; color: var(--ink-soft); }
+  .mini-list .dot { color: var(--accent-br); font-weight: 700; }
+
+  .cite-demo { margin-top: 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .cite-demo .from { font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 500; color: var(--ink); background: var(--elev); padding: 7px 11px; border-radius: var(--radius-inset); border: 1px solid var(--line-2); }
+  .cite-demo .arrow { color: var(--ink-faint); }
+  .cite-demo .to { font-size: 13.5px; color: var(--ink-soft); font-style: italic; background: var(--bg); padding: 8px 13px; border-radius: var(--radius-inset); border: 1px solid var(--line); }
+
+  .nodemotif { margin-top: 20px; width: 100%; height: 116px; position: relative; }
+  @media (max-width: 860px) { .bento { grid-template-columns: 1fr; } .cell.span2 { grid-column: span 1; } }
+
+  /* ---------- evidence graph spotlight ---------- */
+  .spot { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .spot-grid { display: grid; grid-template-columns: .95fr 1.05fr; gap: 56px; align-items: center; }
+  .spot .panel { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 26px; }
+  .spot .panel .gcap { color: var(--ink-mute); font-size: 13px; margin-top: 14px; display: flex; gap: 8px; align-items: center; }
+  .spot .panel .gcap svg { width: 14px; height: 14px; stroke: var(--accent-br); flex: none; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--ink-mute); }
+  .legend i { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
+  @media (max-width: 920px) { .spot-grid { grid-template-columns: 1fr; gap: 34px; } }
+
+  /* ---------- quote ---------- */
+  .quote-sec { text-align: center; }
+  .quote { font-weight: 600; font-size: clamp(25px, 3.3vw, 36px); line-height: 1.3; letter-spacing: -.025em; max-width: 24ch; margin: 0 auto; }
+  .quote .hl { color: var(--accent-br); }
+  .attrib { margin-top: 26px; display: flex; flex-direction: column; gap: 2px; align-items: center; }
+  .attrib .who { font-weight: 700; font-size: 15px; }
+  .attrib .what { color: var(--ink-mute); font-size: 14px; }
+
+  /* ---------- final CTA ---------- */
+  .cta-band { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 56px; text-align: center; }
+  .cta-band::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 120% at 50% 0%, rgba(46,139,87,.14), transparent 60%); }
+  .cta-band > * { position: relative; z-index: 1; }
+  .cta-band h2 { font-size: clamp(30px, 4vw, 44px); }
+  .cta-band p { margin: 16px auto 0; color: var(--ink-soft); max-width: 48ch; font-size: 17px; }
+  .cta-band .cta-row { margin-top: 30px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  /* ---------- footer ---------- */
+  footer { padding: 56px 0 48px; border-top: 1px solid var(--line); margin-top: 28px; }
+  .foot-grid { display: flex; justify-content: space-between; align-items: flex-start; gap: 40px; flex-wrap: wrap; }
+  .foot-links { display: flex; gap: 56px; flex-wrap: wrap; }
+  .foot-col h4 { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 14px; }
+  .foot-col a { display: block; color: var(--ink-mute); font-size: 14.5px; margin-bottom: 10px; transition: color .15s var(--ease); }
+  .foot-col a:hover { color: var(--ink); }
+  .foot-bottom { margin-top: 40px; padding-top: 22px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--ink-faint); font-size: 13px; }
+  .foot-note { max-width: 40ch; color: var(--ink-soft); font-size: 14px; }
+
+  /* ---------- reveal ---------- */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .source-pop, .btn, .chip, .cell, .logos img { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== NAV ===================== -->
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top">
+      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#0A0A0A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      Auditable Filing-QA
+    </a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#features">Capabilities</a>
+      <a href="#graph">Evidence Graph</a>
+      <a href="#coverage">Coverage</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="signin" href="#">Sign in</a>
+      <a class="btn btn-primary" href="#try">Try a query</a>
+    </div>
+  </div>
+</header>
+
+<!-- ===================== HERO ===================== -->
+<section class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div class="reveal">
+      <span class="eyebrow">SEC filing intelligence</span>
+      <h1>Every answer traces back to the filing.</h1>
+      <p class="lede">Ask questions about 10-K filings and get answers with clickable citations and figures checked against XBRL.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#try">Try a query</a>
+        <a class="btn btn-ghost" href="#how">See the audit trail</a>
+      </div>
+    </div>
+
+    <div class="answer-card reveal" aria-label="Example answer">
+      <div class="ac-q">
+        <span class="role">Q</span>
+        <span>How did Micron&rsquo;s revenue change year over year?</span>
+      </div>
+      <div class="ac-divider"></div>
+
+      <div class="ac-label">Direct answer</div>
+      <p class="ac-answer">Micron reported revenue of <b>$15.54B</b> in fiscal 2023, down <b>49%</b> from <b>$30.76B</b> in fiscal 2022.</p>
+
+      <span class="badge"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Verified against XBRL</span>
+
+      <p class="ac-means"><strong>What this means.</strong> Revenue nearly halved as memory prices fell sharply through the 2023 downcycle.</p>
+
+      <div class="chips">
+        <button class="chip" data-src="rev23">10-K FY2023 &middot; Item 7</button>
+        <button class="chip" data-src="rev22">10-K FY2022 &middot; Item 8</button>
+      </div>
+
+      <div class="source-pop" id="src-rev23">
+        <div class="src-meta">10-K FY2023 &middot; Item 7 &middot; MD&amp;A</div>
+        &ldquo;Total revenue for fiscal 2023 was $15.54 billion, a decrease of 49% compared to fiscal 2022, primarily due to declines in average selling prices for DRAM and NAND.&rdquo;
+      </div>
+      <div class="source-pop" id="src-rev22">
+        <div class="src-meta">10-K FY2022 &middot; Item 8 &middot; Financial Statements</div>
+        &ldquo;Total revenue for fiscal 2022 was $30.76 billion, an increase of 11% compared to fiscal 2021.&rdquo;
+      </div>
+
+      <div class="ac-hint">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Click a citation to open the exact source text
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== COVERAGE ===================== -->
+<div class="coverage" id="coverage">
+  <div class="wrap reveal">
+    <p class="cap">Reads filings from leading semiconductor companies</p>
+    <div class="logos">
+      <img src="https://cdn.simpleicons.org/nvidia/ffffff" alt="NVIDIA" loading="lazy" />
+      <img src="https://cdn.simpleicons.org/amd/ffffff" alt="AMD" loading="lazy" />
+      <img src="https://cdn.simpleicons.org/intel/ffffff" alt="Intel" loading="lazy" />
+      <img src="https://cdn.simpleicons.org/qualcomm/ffffff" alt="Qualcomm" loading="lazy" />
+      <img src="https://cdn.simpleicons.org/broadcom/ffffff" alt="Broadcom" loading="lazy" />
+      <img src="https://cdn.simpleicons.org/arm/ffffff" alt="Arm" loading="lazy" />
+    </div>
+  </div>
+</div>
+
+<!-- ===================== HOW IT WORKS ===================== -->
+<section id="how">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">How it works</span>
+      <h2 style="margin-top:14px">Built so you can check the work, not just read it.</h2>
+      <p>Retrieval, calculation, and verification each leave a trail you can follow back to the original 10-K.</p>
+    </div>
+
+    <div class="steps reveal">
+      <div class="step">
+        <span class="num">01</span>
+        <div>
+          <h3>Ask in plain language</h3>
+          <p>Type a question about a company. No query syntax, no ticker codes, no spreadsheet hunting.</p>
+        </div>
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 11-3.2-6.4M21 5v4h-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+      <div class="step">
+        <span class="num">02</span>
+        <div>
+          <h3>Retrieve and cite</h3>
+          <p>Hybrid search pulls the relevant filing passages and attaches a citation to every claim in the answer.</p>
+        </div>
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16M4 12h16M4 19h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+      </div>
+      <div class="step">
+        <span class="num">03</span>
+        <div>
+          <h3>Verify and route</h3>
+          <p>Numbers are cross-checked against XBRL. Low-confidence answers escalate to a human reviewer instead of guessing.</p>
+        </div>
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l8 4v5c0 4.4-3.1 7.7-8 9-4.9-1.3-8-4.6-8-9V7l8-4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FEATURES (BENTO, 5 cells) ===================== -->
+<section id="features" style="padding-top:24px">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <h2>What makes an answer auditable.</h2>
+      <p>Five things separate a citation you can trust from a confident guess.</p>
+    </div>
+
+    <div class="bento">
+      <div class="cell span2 reveal">
+        <div class="kicker">Click-through evidence</div>
+        <h3>Every citation opens the source text</h3>
+        <p>Click a citation and read the exact passage it came from, with the filing, section, and period attached. Nothing is paraphrased away from its origin.</p>
+        <div class="cite-demo">
+          <span class="from">10-K FY2023 &middot; Item 1A</span>
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+          <span class="to">&ldquo;Our business is subject to highly cyclical memory market conditions&hellip;&rdquo;</span>
+        </div>
+      </div>
+
+      <div class="cell glow reveal">
+        <div class="kicker">Evidence Graph</div>
+        <h3>See how facts connect</h3>
+        <p>Entities and figures are linked in a graph. Click an edge to jump to the filing text behind it.</p>
+        <svg class="nodemotif" viewBox="0 0 240 116" fill="none" aria-hidden="true">
+          <line x1="58" y1="58" x2="150" y2="30" stroke="#4ADE80" stroke-width="1.6"/>
+          <line x1="58" y1="58" x2="150" y2="86" stroke="rgba(255,255,255,.18)" stroke-width="1.6"/>
+          <line x1="150" y1="30" x2="210" y2="58" stroke="rgba(255,255,255,.18)" stroke-width="1.6"/>
+          <circle cx="58" cy="58" r="14" fill="#1D4ED8"/>
+          <circle cx="150" cy="30" r="11" fill="#7c3aed"/>
+          <circle cx="150" cy="86" r="11" fill="#059669"/>
+          <circle cx="210" cy="58" r="9" fill="#4b5563"/>
+        </svg>
+      </div>
+
+      <div class="cell accent reveal">
+        <div class="kicker">Numbers checked</div>
+        <h3>Verified against XBRL</h3>
+        <p>Every figure is reconciled to the company&rsquo;s structured XBRL data, so a stated number matches what was actually filed.</p>
+        <span class="badge" style="margin-top:16px"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Verified against XBRL</span>
+      </div>
+
+      <div class="cell reveal">
+        <div class="kicker">Three-layer answers</div>
+        <h3>Answer, meaning, next step</h3>
+        <ul class="mini-list">
+          <li><span class="dot">&bull;</span> The direct, cited answer</li>
+          <li><span class="dot">&bull;</span> What it means in plain English</li>
+          <li><span class="dot">&bull;</span> Suggested follow-up questions</li>
+        </ul>
+      </div>
+
+      <div class="cell reveal">
+        <div class="kicker">Knows its limits</div>
+        <h3>Confidence and human review</h3>
+        <p>When evidence is thin or numbers do not reconcile, the answer is flagged and routed to a reviewer rather than presented as fact.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== EVIDENCE GRAPH SPOTLIGHT ===================== -->
+<section class="spot" id="graph">
+  <div class="wrap spot-grid">
+    <div class="reveal">
+      <span class="eyebrow">Evidence Graph</span>
+      <h2 style="margin-top:14px">Follow the thread from claim to source.</h2>
+      <p style="margin-top:16px;color:var(--ink-soft);font-size:18px;max-width:46ch">
+        Each answer is backed by a small graph of the entities, metrics, and filings it drew on. Select any connection to open the passage that supports it, so a reviewer can confirm a number in seconds instead of re-reading the report.
+      </p>
+      <div class="cta-row" style="margin-top:26px;display:flex;gap:12px;flex-wrap:wrap">
+        <a class="btn btn-primary" href="#try">Try a query</a>
+      </div>
+    </div>
+
+    <div class="panel reveal">
+      <svg viewBox="0 0 420 230" width="100%" height="auto" role="img" aria-label="Evidence graph linking Micron to revenue and a 10-K filing">
+        <line x1="90" y1="115" x2="240" y2="60" stroke="#4ADE80" stroke-width="2"/>
+        <line x1="240" y1="60" x2="350" y2="120" stroke="rgba(255,255,255,.16)" stroke-width="1.6"/>
+        <line x1="90" y1="115" x2="230" y2="175" stroke="rgba(255,255,255,.16)" stroke-width="1.6"/>
+        <line x1="230" y1="175" x2="350" y2="120" stroke="rgba(255,255,255,.16)" stroke-width="1.6"/>
+        <g font-family="Inter, sans-serif" font-size="12" font-weight="600">
+          <circle cx="90" cy="115" r="30" fill="#1D4ED8"/>
+          <text x="90" y="119" text-anchor="middle" fill="#FFFFFF">Micron</text>
+          <circle cx="240" cy="60" r="26" fill="#7c3aed"/>
+          <text x="240" y="64" text-anchor="middle" fill="#FFFFFF">Revenue</text>
+          <circle cx="230" cy="175" r="26" fill="#059669"/>
+          <text x="230" y="179" text-anchor="middle" fill="#FFFFFF">XBRL</text>
+          <circle cx="350" cy="120" r="30" fill="#4b5563"/>
+          <text x="350" y="116" text-anchor="middle" fill="#FFFFFF">10-K</text>
+          <text x="350" y="130" text-anchor="middle" fill="#FFFFFF" font-size="10">FY2023</text>
+        </g>
+      </svg>
+      <div class="gcap">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        The green edge is the cited fact. Selecting it opens Item 7 of the FY2023 filing.
+      </div>
+      <div class="legend">
+        <span><i style="background:#1D4ED8"></i> Company</span>
+        <span><i style="background:#7c3aed"></i> Metric</span>
+        <span><i style="background:#059669"></i> XBRL fact</span>
+        <span><i style="background:#4b5563"></i> Filing</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FINAL CTA ===================== -->
+<section id="try" style="padding-top:24px">
+  <div class="wrap">
+    <div class="cta-band reveal">
+      <h2>Ask a filing a question.</h2>
+      <p>See the answer, the citation, and the XBRL check side by side on your first query.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#top">Try a query</a>
+        <a class="btn btn-ghost" href="#how">See the audit trail</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <a class="brand" href="#top">
+          <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#0A0A0A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          Auditable Filing-QA
+        </a>
+        <p class="foot-note" style="margin-top:14px">Question answering over SEC filings, with citations and XBRL verification built in.</p>
+      </div>
+      <div class="foot-links">
+        <div class="foot-col">
+          <h4>Product</h4>
+          <a href="#how">How it works</a>
+          <a href="#features">Capabilities</a>
+          <a href="#graph">Evidence Graph</a>
+          <a href="#coverage">Coverage</a>
+        </div>
+        <div class="foot-col">
+          <h4>Resources</h4>
+          <a href="#">Documentation</a>
+          <a href="#">Methodology</a>
+          <a href="#">Changelog</a>
+        </div>
+        <div class="foot-col">
+          <h4>Company</h4>
+          <a href="#">About</a>
+          <a href="#">Contact</a>
+          <a href="#">Privacy</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>&copy; 2026 Auditable Filing-QA</span>
+      <span>Not investment advice. Filing data is for research and analysis.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var els = document.querySelectorAll(".reveal");
+    if (reduce || !("IntersectionObserver" in window)) { els.forEach(function (e) { e.classList.add("in"); }); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+    }, { threshold: 0.16 });
+    els.forEach(function (e) { io.observe(e); });
+  })();
+
+  (function () {
+    document.querySelectorAll(".chip[data-src]").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var pop = document.getElementById("src-" + chip.getAttribute("data-src"));
+        if (!pop) return;
+        var isOpen = pop.classList.contains("open");
+        document.querySelectorAll(".source-pop.open").forEach(function (p) { p.classList.remove("open"); });
+        if (!isOpen) pop.classList.add("open");
+      });
+    });
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+{
+  "nodes": [
+    {
+      "id": "asset_hero_png",
+      "label": "hero.png \u2014 Landing Page Hero Asset",
+      "file_type": "image",
+      "source_file": "frontend/src/assets/hero.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "rationale_hero_png_identity",
+      "label": "hero.png is a frontend image asset in the landing page directory. ~13 KB PNG. Likely a hero illustration, decorative gradient, or design mockup for the dark-themed Auditable Filing-QA landing page. NOT referenced in any source code (Ambiguous: either orphaned/unused, dynamically loaded, or pre-rendered by a build tool).",
+      "file_type": "rationale",
+      "source_file": "frontend/src/assets/hero.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "landing_component",
+      "label": "Landing.tsx \u2014 Marketing Landing Page",
+      "file_type": "code",
+      "source_file": "frontend/src/components/Landing.tsx",
+      "source_location": "L1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "landing_hero_section",
+      "label": "Hero Section \u2014 Landing Page (text-only, SVG inline, answer card)",
+      "file_type": "code",
+      "source_file": "frontend/src/components/Landing.tsx",
+      "source_location": "L70-117",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "project_branding",
+      "label": "Auditable Filing-QA \u2014 SEC Filing Intelligence Platform",
+      "file_type": "rationale",
+      "source_file": "frontend/src/components/Landing.tsx",
+      "source_location": "L54",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "asset_hero_png",
+      "target": "landing_component",
+      "relation": "asset_for",
+      "confidence": "AMBIGUOUS",
+      "confidence_score": 0.3,
+      "source_file": "frontend/src/assets/hero.png",
+      "source_location": null,
+      "weight": 0.3
+    },
+    {
+      "source": "asset_hero_png",
+      "target": "landing_hero_section",
+      "relation": "depicts_or_belongs_to",
+      "confidence": "AMBIGUOUS",
+      "confidence_score": 0.3,
+      "source_file": "frontend/src/assets/hero.png",
+      "source_location": null,
+      "weight": 0.3
+    },
+    {
+      "source": "asset_hero_png",
+      "target": "project_branding",
+      "relation": "branding_asset_of",
+      "confidence": "AMBIGUOUS",
+      "confidence_score": 0.3,
+      "source_file": "frontend/src/assets/hero.png",
+      "source_location": null,
+      "weight": 0.3
+    },
+    {
+      "source": "asset_hero_png",
+      "target": "rationale_hero_png_identity",
+      "relation": "described_by",
+      "confidence": "AMBIGUOUS",
+      "confidence_score": 0.5,
+      "source_file": "frontend/src/assets/hero.png",
+      "source_location": null,
+      "weight": 0.5
+    },
+    {
+      "source": "landing_hero_section",
+      "target": "landing_component",
+      "relation": "part_of",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "frontend/src/components/Landing.tsx",
+      "source_location": "L70",
+      "weight": 1.0
+    },
+    {
+      "source": "landing_component",
+      "target": "project_branding",
+      "relation": "branded_as",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "frontend/src/components/Landing.tsx",
+      "source_location": "L54",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

@@ -1,0 +1,254 @@
+{
+  "name": "PostHog → Google Slides (daily)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Every day 07:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-160, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "posthogHost",
+              "value": "https://us.posthog.com",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "posthogProjectId",
+              "value": "REPLACE_WITH_PROJECT_ID",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "spreadsheetId",
+              "value": "REPLACE_WITH_SPREADSHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "sheetTab",
+              "value": "data",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "presentationId",
+              "value": "REPLACE_WITH_PRESENTATION_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [60, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.posthogHost }}/api/projects/{{ $('Config').item.json.posthogProjectId }}/query/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": {\n    \"kind\": \"HogQLQuery\",\n    \"query\": \"SELECT toDate(timestamp) AS day, count() AS events, count(DISTINCT person_id) AS users FROM events WHERE timestamp >= now() - INTERVAL 30 DAY GROUP BY day ORDER BY day\"\n  }\n}",
+        "options": {}
+      },
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "PostHog Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [280, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE",
+          "name": "PostHog API (Authorization: Bearer <key>)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// PostHog query API returns { columns: [...], results: [[...], ...] }\nconst res = $input.first().json;\nconst columns = res.columns || [];\nconst rows = res.results || [];\nconst values = [columns, ...rows];\nreturn [{ json: { values } }];"
+      },
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "Build Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Config').item.json.spreadsheetId }}/values/{{ $('Config').item.json.sheetTab }}!A:Z:clear",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "id": "55555555-5555-5555-5555-555555555555",
+      "name": "Clear Sheet",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Config').item.json.spreadsheetId }}/values/{{ $('Config').item.json.sheetTab }}!A1?valueInputOption=RAW",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ values: $('Build Rows').item.json.values }) }}",
+        "options": {}
+      },
+      "id": "66666666-6666-6666-6666-666666666666",
+      "name": "Write Rows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://slides.googleapis.com/v1/presentations/{{ $('Config').item.json.presentationId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSlidesOAuth2Api",
+        "options": {}
+      },
+      "id": "77777777-7777-7777-7777-777777777777",
+      "name": "Get Presentation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 300],
+      "credentials": {
+        "googleSlidesOAuth2Api": {
+          "id": "REPLACE",
+          "name": "Google Slides account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Walk every slide + page element, collect linked Sheets charts\nconst pres = $input.first().json;\nconst requests = [];\nfor (const slide of (pres.slides || [])) {\n  for (const el of (slide.pageElements || [])) {\n    if (el.sheetsChart) {\n      requests.push({ refreshSheetsChart: { objectId: el.objectId } });\n    }\n  }\n}\nreturn [{ json: { requests, chartCount: requests.length } }];"
+      },
+      "id": "88888888-8888-8888-8888-888888888888",
+      "name": "Build Refresh Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.chartCount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "99999999-9999-9999-9999-999999999999",
+      "name": "Has charts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1600, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://slides.googleapis.com/v1/presentations/{{ $('Config').item.json.presentationId }}:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSlidesOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $json.requests }) }}",
+        "options": {}
+      },
+      "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "name": "Refresh Charts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1820, 220],
+      "credentials": {
+        "googleSlidesOAuth2Api": {
+          "id": "REPLACE",
+          "name": "Google Slides account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every day 07:00": {
+      "main": [[{ "node": "Config", "type": "main", "index": 0 }]]
+    },
+    "Config": {
+      "main": [[{ "node": "PostHog Query", "type": "main", "index": 0 }]]
+    },
+    "PostHog Query": {
+      "main": [[{ "node": "Build Rows", "type": "main", "index": 0 }]]
+    },
+    "Build Rows": {
+      "main": [[{ "node": "Clear Sheet", "type": "main", "index": 0 }]]
+    },
+    "Clear Sheet": {
+      "main": [[{ "node": "Write Rows", "type": "main", "index": 0 }]]
+    },
+    "Write Rows": {
+      "main": [[{ "node": "Get Presentation", "type": "main", "index": 0 }]]
+    },
+    "Get Presentation": {
+      "main": [[{ "node": "Build Refresh Requests", "type": "main", "index": 0 }]]
+    },
+    "Build Refresh Requests": {
+      "main": [[{ "node": "Has charts?", "type": "main", "index": 0 }]]
+    },
+    "Has charts?": {
+      "main": [[{ "node": "Refresh Charts", "type": "main", "index": 0 }], []]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

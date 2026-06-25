@@ -1,0 +1,36 @@
+{
+  "nodes": [
+    {"id": "icons.svg", "type": "svg_sprite_sheet", "file_type": "image", "file_path": "frontend/public/icons.svg", "description": "SVG sprite sheet bundling all frontend icons as <symbol> definitions for <use> href references; served as a static asset from frontend/public/"},
+    {"id": "bluesky-icon", "type": "svg_symbol", "description": "Bluesky social media brand mark (butterfly logo), monochrome fill #08060d, viewBox 0 0 16 17"},
+    {"id": "discord-icon", "type": "svg_symbol", "description": "Discord community platform brand mark (gamepad/chat bubble silhouette), monochrome fill #08060d, viewBox 0 0 20 19"},
+    {"id": "documentation-icon", "type": "svg_symbol", "description": "Documentation/knowledge-base icon combining document pages and a sparkle/star motif, stroked in purple #aa3bff, viewBox 0 0 21 20 — likely links to project docs or knowledge base"},
+    {"id": "github-icon", "type": "svg_symbol", "description": "GitHub brand mark (Octocat silhouette), monochrome fill #08060d, viewBox 0 0 19 19"},
+    {"id": "social-icon", "type": "svg_symbol", "description": "Social/community icon combining a person silhouette and a sparkle/edit badge, stroked in purple #aa3bff, viewBox 0 0 20 20 — likely represents community features or user social actions"},
+    {"id": "x-icon", "type": "svg_symbol", "description": "X (formerly Twitter) brand mark, monochrome fill #08060d, viewBox 0 0 19 19"},
+    {"id": "frontend_ui", "type": "application_component", "description": "The RAG Workbench frontend web application that consumes this sprite sheet for its iconography"},
+    {"id": "bluesky_platform", "type": "external_platform", "description": "Bluesky — decentralized social network that the Bluesky icon links to"},
+    {"id": "discord_platform", "type": "external_platform", "description": "Discord — community/chat platform that the Discord icon links to"},
+    {"id": "github_platform", "type": "external_platform", "description": "GitHub — code hosting platform; the project repository that the GitHub icon links to"},
+    {"id": "x_platform", "type": "external_platform", "description": "X (formerly Twitter) — social media platform that the X icon links to"},
+    {"id": "documentation_feature", "type": "ui_feature", "description": "Documentation/knowledge-base access point within the frontend, indicated by the documentation-icon"},
+    {"id": "community_feature", "type": "ui_feature", "description": "Community or social-interaction feature within the frontend, indicated by the social-icon"}
+  ],
+  "edges": [
+    {"source": "bluesky-icon", "target": "icons.svg", "relation": "PART_OF", "confidence_score": 1.0},
+    {"source": "discord-icon", "target": "icons.svg", "relation": "PART_OF", "confidence_score": 1.0},
+    {"source": "documentation-icon", "target": "icons.svg", "relation": "PART_OF", "confidence_score": 1.0},
+    {"source": "github-icon", "target": "icons.svg", "relation": "PART_OF", "confidence_score": 1.0},
+    {"source": "social-icon", "target": "icons.svg", "relation": "PART_OF", "confidence_score": 1.0},
+    {"source": "x-icon", "target": "icons.svg", "relation": "PART_OF", "confidence_score": 1.0},
+    {"source": "icons.svg", "target": "frontend_ui", "relation": "USED_BY", "confidence_score": 1.0},
+    {"source": "bluesky-icon", "target": "bluesky_platform", "relation": "REPRESENTS", "confidence_score": 0.95},
+    {"source": "discord-icon", "target": "discord_platform", "relation": "REPRESENTS", "confidence_score": 0.95},
+    {"source": "github-icon", "target": "github_platform", "relation": "REPRESENTS", "confidence_score": 1.0},
+    {"source": "x-icon", "target": "x_platform", "relation": "REPRESENTS", "confidence_score": 1.0},
+    {"source": "documentation-icon", "target": "documentation_feature", "relation": "REPRESENTS", "confidence_score": 0.9},
+    {"source": "social-icon", "target": "community_feature", "relation": "REPRESENTS", "confidence_score": 0.85}
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

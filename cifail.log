@@ -1,0 +1,116 @@
+embed-data	UNKNOWN STEP	﻿2026-06-14T03:58:36.7247592Z Current runner version: '2.335.1'
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7295746Z ##[group]Runner Image Provisioner
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7297306Z Hosted Compute Agent
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7298425Z Version: 20260527.539
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7299948Z Commit: a891dd388383b896fa6ac04a82c0b75cec981078
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7301440Z Build Date: 2026-05-27T21:39:57Z
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7302724Z Worker ID: {b7b2ba1d-1534-413c-af2c-f5cfc5ff695e}
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7304183Z Azure Region: westcentralus
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7305366Z ##[endgroup]
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7307929Z ##[group]Operating System
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7309180Z Ubuntu
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7310657Z 24.04.4
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7311658Z LTS
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7312597Z ##[endgroup]
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7313612Z ##[group]Runner Image
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7314914Z Image: ubuntu-24.04
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7315986Z Version: 20260607.184.1
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7318267Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260607.184/images/ubuntu/Ubuntu2404-Readme.md
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7321503Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260607.184
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7323417Z ##[endgroup]
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7325541Z ##[group]GITHUB_TOKEN Permissions
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7328484Z Contents: read
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7329523Z Metadata: read
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7331134Z Packages: read
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7332180Z ##[endgroup]
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7335750Z Secret source: Actions
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.7337401Z Prepare workflow directory
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.8036467Z Prepare all required actions
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.8332171Z Complete job name: embed-data
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9946791Z ##[group]Run SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9948873Z [36;1mSLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9950799Z [36;1mSPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9952648Z [36;1m# The Space restores the prebuilt Qwen DuckDB from the HF dataset at[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9954529Z [36;1m# boot (fetch_db_from_dataset.py); no re-embedding happens in CI. This[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9956334Z [36;1m# gate just confirms the NEW container is serving the right DB, not a[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9958140Z [36;1m# stale one left over during HF's rebuild swap:[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9960014Z [36;1m#   - active model == expected (defeats config drift)[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9961853Z [36;1m#   - ALL stored chunk-vector dims == expected (defeats stale 768-dim[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9963490Z [36;1m#     rows AND the old container still serving mid-swap)[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9965175Z [36;1m#   - coverage >= TARGET companies[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9966758Z [36;1m# (Ticker-level summary embeddings aren't part of the curated dataset,[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9968585Z [36;1m# so they're intentionally NOT checked here.)[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9970252Z [36;1mEXPECTED_MODEL="Qwen/Qwen3-Embedding-0.6B"[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9971657Z [36;1mEXPECTED_DIM=1024[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9973224Z [36;1mTARGET=12   # curated dataset = 14 companies (semis + SPCX); floor allows slack[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9975115Z [36;1mecho "Waiting 30s for the Space to finish initialising..."[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9976682Z [36;1msleep 30[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9978574Z [36;1mecho "Polling $SPACE_URL/api/stats — require model=$EXPECTED_MODEL, all stored dims=$EXPECTED_DIM, >=$TARGET companies..."[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9981354Z [36;1mfor i in $(seq 1 20); do   # 20 * 20s = ~7 min budget[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9983262Z [36;1m  STATS=$(curl -sS --max-time 30 "$SPACE_URL/api/stats" || echo '{"error": "curl failed"}')[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9985815Z [36;1m  RESULT=$(echo "$STATS" | EXPECTED_MODEL="$EXPECTED_MODEL" EXPECTED_DIM="$EXPECTED_DIM" TARGET="$TARGET" python3 -c "[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9987937Z [36;1mimport sys, json, os[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9988958Z [36;1mtry:[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9990309Z [36;1m    line = sys.stdin.read().strip()[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9991984Z [36;1m    if not line:[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9993267Z [36;1m        print('status=empty-response'); sys.exit(1)[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9994589Z [36;1m    d = json.loads(line)[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9995857Z [36;1mexcept Exception as e:[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9997220Z [36;1m    print(f'status=parse-error: {e}'); sys.exit(1)[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:36.9998507Z [36;1mif 'error' in d:[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0000285Z [36;1m    print(f'status=api-error: {d[\"error\"]}'); sys.exit(0)[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0002160Z [36;1mdata = d.get('data', {}) or {}[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0003775Z [36;1mcfg = d.get('config', {}) or {}[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0004988Z [36;1mmodel = cfg.get('embedding_model')[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0006340Z [36;1mcfg_dim = cfg.get('embedding_dim')[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0007664Z [36;1mdim_min = data.get('embedding_dim_min')[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0008957Z [36;1mdim_max = data.get('embedding_dim_max')[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0010950Z [36;1mdim_variants = data.get('embedding_dim_variants') or 0[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0012541Z [36;1mticker_dim_min = data.get('ticker_embedding_dim_min')[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0014248Z [36;1mticker_dim_max = data.get('ticker_embedding_dim_max')[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0015956Z [36;1mticker_dim_variants = data.get('ticker_embedding_dim_variants') or 0[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0017946Z [36;1mticker_vectors = data.get('ticker_embeddings_with_vectors') or 0[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0020061Z [36;1mcompanies = data.get('companies_with_chunks') or 0[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0021448Z [36;1mtry:[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0022891Z [36;1m    exp_model = os.environ['EXPECTED_MODEL'][0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0024345Z [36;1m    exp_dim = int(os.environ['EXPECTED_DIM'])[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0025824Z [36;1m    target = int(os.environ['TARGET'])[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0027101Z [36;1mexcept KeyError as e:[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0028371Z [36;1m    print(f'status=env-error: missing {e}'); sys.exit(1)[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0030123Z [36;1m[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0033327Z [36;1mprint(f'status=model={model} cfg_dim={cfg_dim} dim_min={dim_min} dim_max={dim_max} dim_variants={dim_variants} ticker_dim_min={ticker_dim_min} ticker_dim_max={ticker_dim_max} ticker_dim_variants={ticker_dim_variants} ticker_vectors={ticker_vectors} companies={companies}')[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0036934Z [36;1m[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0038146Z [36;1mif (model == exp_model and cfg_dim == exp_dim and dim_min == exp_dim[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0040196Z [36;1m        and dim_max == exp_dim and dim_variants == 1[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0041594Z [36;1m        and companies >= target):[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0042840Z [36;1m    print('READY')[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0044075Z [36;1m")[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0045401Z [36;1m  echo "Attempt $i/20 — $(echo "$RESULT" | grep '^status=' | sed 's/^status=//')"[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0047228Z [36;1m  if echo "$RESULT" | grep -q '^READY$'; then[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0048822Z [36;1m    echo "New deployment verified (model + stored dim + coverage)."[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0050662Z [36;1m    exit 0[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0051714Z [36;1m  fi[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0052735Z [36;1m  sleep 20[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0053670Z [36;1mdone[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0055578Z [36;1mecho "ERROR: new deployment not confirmed after ~7 min (model=$EXPECTED_MODEL, all stored dims=$EXPECTED_DIM, >=$TARGET companies)."[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0057846Z [36;1mecho "Last stats: $RESULT"[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0059027Z [36;1mexit 1[0m
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0526577Z shell: /usr/bin/bash -e {0}
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0528311Z env:
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0529469Z   HF_USERNAME: ***
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0531125Z   HF_SPACE_NAME: ***
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.0532162Z ##[endgroup]
+embed-data	UNKNOWN STEP	2026-06-14T03:58:37.1055286Z Waiting 30s for the Space to finish initialising...
+embed-data	UNKNOWN STEP	2026-06-14T03:59:07.1056287Z Polling https://***-auditable-filing-qa.hf.space/api/stats — require model=Qwen/Qwen3-Embedding-0.6B, all stored dims=1024, >=12 companies...
+embed-data	UNKNOWN STEP	2026-06-14T03:59:37.1071701Z curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received
+embed-data	UNKNOWN STEP	2026-06-14T03:59:37.1346995Z Attempt 1/20 — api-error: curl failed
+embed-data	UNKNOWN STEP	2026-06-14T04:00:27.1471466Z curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received
+embed-data	UNKNOWN STEP	2026-06-14T04:00:27.1754414Z Attempt 2/20 — api-error: curl failed
+embed-data	UNKNOWN STEP	2026-06-14T04:01:17.1853082Z curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received
+embed-data	UNKNOWN STEP	2026-06-14T04:01:17.2138804Z Attempt 3/20 — api-error: curl failed
+embed-data	UNKNOWN STEP	2026-06-14T04:02:07.2256547Z curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received
+embed-data	UNKNOWN STEP	2026-06-14T04:02:07.2544230Z Attempt 4/20 — api-error: curl failed
+embed-data	UNKNOWN STEP	2026-06-14T04:02:57.2681320Z curl: (28) Operation timed out after 30002 milliseconds with 0 bytes received
+embed-data	UNKNOWN STEP	2026-06-14T04:02:57.2965768Z Attempt 5/20 — api-error: curl failed
+embed-data	UNKNOWN STEP	2026-06-14T04:03:25.4860888Z ##[error]Process completed with exit code 1.
+embed-data	UNKNOWN STEP	2026-06-14T04:03:25.5012897Z Cleaning up orphan processes

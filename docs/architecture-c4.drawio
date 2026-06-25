@@ -1,0 +1,344 @@
+<mxfile host="app.diagrams.net" modified="2026-06-20T00:00:00.000Z" agent="Claude Code" version="24.0.0">
+
+  <!-- ============================================================ -->
+  <!-- PAGE 1 — C4 LEVEL 1: SYSTEM CONTEXT                          -->
+  <!-- ============================================================ -->
+  <diagram id="c4-context" name="1 · Context">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="p1_title" value="System Context — RAG Workbench (Auditable Filing QA)" style="text;html=1;fontSize=15;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="700" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p1_analyst" value="Financial Analyst&#10;[Person]&#10;Asks questions about SEC filings; needs auditable, source-traced answers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#08427B;fontColor=#ffffff;strokeColor=#073B6F;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="380" y="70" width="240" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p1_system" value="RAG Workbench&#10;[Software System]&#10;Retrieval-augmented QA over SEC filings. AI retrieves and explains, Python calculates, XBRL verifies, pipeline can abstain." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1168BD;fontColor=#ffffff;strokeColor=#0B4884;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="360" y="280" width="280" height="150" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p1_edgar" value="SEC EDGAR&#10;[External System]&#10;Filings + XBRL companyfacts API (ground truth)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="560" width="210" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_llm" value="LLM Providers&#10;[External System]&#10;DeepSeek / MiMo / OpenAI / Anthropic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="285" y="560" width="210" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_poly" value="Polygon&#10;[External System]&#10;Market data for numeric cross-check" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="530" y="560" width="210" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_hf" value="Hugging Face Dataset&#10;[External System]&#10;Prebuilt DuckDB + Parquet snapshots (persistence)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="775" y="560" width="210" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_obs" value="LangSmith + PostHog&#10;[External System]&#10;Tracing + product analytics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="560" width="210" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p1_e1" value="Asks filing questions&#10;[HTTPS]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p1_analyst" target="p1_system"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p1_e2" value="Fetches filings + XBRL&#10;[REST]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p1_system" target="p1_edgar"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p1_e3" value="Generation + classification&#10;[HTTPS]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p1_system" target="p1_llm"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p1_e4" value="Cross-checks numbers&#10;[REST]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p1_system" target="p1_poly"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p1_e5" value="Snapshot + restore DB&#10;[HTTPS]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p1_system" target="p1_hf"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p1_e6" value="Traces + events" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p1_system" target="p1_obs"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 2 — C4 LEVEL 2: CONTAINERS                              -->
+  <!-- App container and Governance+Verification service deploy separately -->
+  <!-- ============================================================ -->
+  <diagram id="c4-container" name="2 · Container">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1480" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="p2_title" value="Container View — two independently deployable units" style="text;html=1;fontSize=15;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="700" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p2_analyst" value="Financial Analyst&#10;[Person]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#08427B;fontColor=#ffffff;strokeColor=#073B6F;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="120" y="60" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- App container boundary (this is what gets redeployed) -->
+        <mxCell id="p2_boundary" value="RAG Workbench App  —  Single Docker container (Nginx + Uvicorn + Supervisor), HF Space :7860&#10;◆ this is the only unit redeployed on an app change" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=none;strokeColor=#0B4884;verticalAlign=top;fontStyle=2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="150" width="640" height="600" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p2_react" value="Single-Page App&#10;[React + Vite + Tailwind]&#10;Chat, audit trail, pipeline viz, knowledge graph, dashboards" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;fontColor=#ffffff;strokeColor=#2E6295;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="100" y="210" width="250" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_nginx" value="Reverse Proxy&#10;[Nginx]&#10;Serves the SPA, proxies /api/* to the API, port 7860" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;fontColor=#ffffff;strokeColor=#2E6295;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="390" y="210" width="250" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_api" value="API + RAG Orchestration&#10;[Python · FastAPI · Uvicorn :8000]&#10;Routes, guardrails, retrieval, the LangGraph answer pipeline, and deterministic financial calculation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;fontColor=#ffffff;strokeColor=#2E6295;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="360" width="540" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_ragdb" value="Corpus Store&#10;[DuckDB · rag.duckdb]&#10;chunks + embeddings + xbrl_facts + graph_triples&#10;(restored fresh from HF dataset each boot)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#438DD5;fontColor=#ffffff;strokeColor=#2E6295;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="220" y="520" width="300" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Governance + Verification service boundary (deployed separately) -->
+        <mxCell id="p2_gov_boundary" value="Governance + Verification Service  —  separate deployable&#10;◆ updated independently; the app calls it over HTTP" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=none;strokeColor=#6A1B9A;verticalAlign=top;fontStyle=2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="740" y="150" width="420" height="600" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p2_verify" value="Verification&#10;[Service]&#10;XBRL cross-check (1% tolerance) + independent NLI entailment + confidence scoring; decides accept / re-loop / abstain" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9C4DCC;fontColor=#ffffff;strokeColor=#6A1B9A;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="770" y="210" width="360" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_monitor" value="Monitoring&#10;[Service]&#10;Drift detection (alerts when answer↔XBRL agreement rate drops or a metric spikes), threshold recalibration, shadow runs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9C4DCC;fontColor=#ffffff;strokeColor=#6A1B9A;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="770" y="350" width="360" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_revdb" value="Runtime Store&#10;[DuckDB · review_queue.duckdb]&#10;audit log · HITL decisions · eval results&#10;(persisted via Parquet snapshot to HF)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#9C4DCC;fontColor=#ffffff;strokeColor=#6A1B9A;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="790" y="510" width="320" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- External systems -->
+        <mxCell id="p2_edgar" value="SEC EDGAR&#10;[External System]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="170" width="210" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_llm" value="LLM Providers&#10;[External System]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="270" width="210" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_poly" value="Polygon&#10;[External System]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="370" width="210" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_hf" value="HF Dataset&#10;[External System]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="470" width="210" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_obs" value="LangSmith + PostHog&#10;[External System]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="570" width="210" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p2_e1" value="Uses&#10;[HTTPS]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p2_analyst" target="p2_react"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p2_e2" value="API calls" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p2_react" target="p2_nginx"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p2_e3" value="Proxies /api/*" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p2_nginx" target="p2_api"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p2_e4" value="Reads corpus [SQL]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p2_api" target="p2_ragdb"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p2_e5" value="Verify / governance&#10;[HTTP]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;fontStyle=1;strokeColor=#6A1B9A;fontColor=#6A1B9A;" edge="1" parent="1" source="p2_api" target="p2_verify"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p2_e6" value="filings / XBRL" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p2_api" target="p2_edgar"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p2_e7" value="generation" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p2_api" target="p2_llm"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p2_e8" value="market data" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p2_verify" target="p2_poly"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p2_e9" value="reads/writes audit + HITL [SQL]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p2_monitor" target="p2_revdb"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p2_e10" value="snapshot / restore" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p2_revdb" target="p2_hf"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p2_e11" value="traces / events" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p2_monitor" target="p2_obs"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 3 — C4 LEVEL 3: COMPONENTS                              -->
+  <!-- described by what they do, no .py filenames                  -->
+  <!-- ============================================================ -->
+  <diagram id="c4-component" name="3 · Component">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1320" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="p3_title" value="Component View — described by responsibility, not by file" style="text;html=1;fontSize=15;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="800" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- App boundary -->
+        <mxCell id="p3_boundary" value="API + RAG Orchestration  [App container · FastAPI]" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=none;strokeColor=#2E6295;verticalAlign=top;fontStyle=2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="600" height="770" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p3_routes" value="Chat Routes&#10;Entry point for /api/chat: auditable-rag, graph-rag, rag, sql" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#85BBF0;fontColor=#000000;strokeColor=#5D82A8;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_rails" value="Guardrails&#10;Screens input, dialog and output (incl. PII masking)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#85BBF0;fontColor=#000000;strokeColor=#5D82A8;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="350" y="120" width="250" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p3_orchestrator" value="Answer Pipeline Orchestrator&#10;Runs the auditable RAG DAG end to end" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#85BBF0;fontColor=#000000;strokeColor=#5D82A8;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="240" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_router" value="Question Classifier&#10;Routes numeric vs qualitative questions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#85BBF0;fontColor=#000000;strokeColor=#5D82A8;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="350" y="240" width="250" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p3_retriever" value="Hybrid Retriever + Reranker&#10;Dense + BM25 (RRF) then cross-encoder rerank; local embeddings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#85BBF0;fontColor=#000000;strokeColor=#5D82A8;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="360" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_graphrag" value="Graph-RAG Engine&#10;Retrieves entities + relationship triples from the knowledge graph" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#85BBF0;fontColor=#000000;strokeColor=#5D82A8;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="350" y="360" width="250" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p3_extract" value="Fact Extraction&#10;Pulls XBRL company facts for the asked metrics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#85BBF0;fontColor=#000000;strokeColor=#5D82A8;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="480" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_calc" value="Deterministic Financial Calc&#10;Performs ALL arithmetic in Python — the LLM never computes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#85BBF0;fontColor=#000000;strokeColor=#5D82A8;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="350" y="480" width="250" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p3_sent" value="Sentiment / Tone&#10;Scores the tone of filing language (finance lexicon)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#85BBF0;fontColor=#000000;strokeColor=#5D82A8;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="600" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_lineage" value="Lineage Builder&#10;Assembles the audit trail after a verified answer is accepted" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#85BBF0;fontColor=#000000;strokeColor=#5D82A8;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="350" y="600" width="250" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Governance + Verification service boundary (separate deployable) -->
+        <mxCell id="p3_gov_boundary" value="Governance + Verification Service  [separate deployable]" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=none;strokeColor=#6A1B9A;verticalAlign=top;fontStyle=2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="680" y="70" width="380" height="770" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p3_numverify" value="Numeric Verifier&#10;Checks each computed figure against XBRL ground truth within 1% tolerance" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C58AE1;fontColor=#000000;strokeColor=#6A1B9A;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="710" y="120" width="320" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_entail" value="Entailment Verifier&#10;Independent NLI model checks the answer is supported by the sources" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C58AE1;fontColor=#000000;strokeColor=#6A1B9A;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="710" y="220" width="320" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_market" value="Market-data Cross-check&#10;Validates figures against Polygon market data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C58AE1;fontColor=#000000;strokeColor=#6A1B9A;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="710" y="320" width="320" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_conf" value="Confidence Scorer&#10;Combines the checks into a score that drives accept / re-loop / abstain" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C58AE1;fontColor=#000000;strokeColor=#6A1B9A;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="710" y="420" width="320" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_drift" value="Drift Detection&#10;Alerts when the answer↔XBRL agreement rate drops, or a specific metric/concept spikes vs baseline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C58AE1;fontColor=#000000;strokeColor=#6A1B9A;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="710" y="520" width="320" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_calib" value="Calibration + Shadow Runs&#10;Retunes thresholds; replays changes offline before they go live" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C58AE1;fontColor=#000000;strokeColor=#6A1B9A;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="710" y="620" width="320" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_snap" value="Audit Store + Snapshot&#10;Audit log / HITL / eval results; Parquet snapshot &amp; restore" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C58AE1;fontColor=#000000;strokeColor=#6A1B9A;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="710" y="720" width="320" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- External + stores -->
+        <mxCell id="p3_edgar" value="SEC EDGAR&#10;[External]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="120" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_llm" value="LLM Providers&#10;[External]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="220" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_poly" value="Polygon&#10;[External]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="330" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_ragdb" value="Corpus Store&#10;rag.duckdb" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#438DD5;fontColor=#ffffff;strokeColor=#2E6295;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="430" width="170" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_revdb" value="Runtime Store&#10;review_queue.duckdb" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#9C4DCC;fontColor=#ffffff;strokeColor=#6A1B9A;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="720" width="170" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- edges inside app -->
+        <mxCell id="p3_r1" value="validates" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_routes" target="p3_rails"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p3_r2" value="runs" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_routes" target="p3_orchestrator"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p3_r3" value="routes via" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_orchestrator" target="p3_router"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p3_r4" value="retrieves" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_orchestrator" target="p3_retriever"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p3_r5" value="extracts facts" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_orchestrator" target="p3_extract"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p3_r6" value="computes" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_orchestrator" target="p3_calc"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p3_r7" value="builds trail" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_orchestrator" target="p3_lineage"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- app -> governance service (the key call) -->
+        <mxCell id="p3_r8" value="verify answer&#10;[HTTP]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;fontStyle=1;strokeColor=#6A1B9A;fontColor=#6A1B9A;" edge="1" parent="1" source="p3_orchestrator" target="p3_numverify"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- external/store edges -->
+        <mxCell id="p3_r9" value="generation" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_orchestrator" target="p3_llm"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p3_r10" value="companyfacts" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_extract" target="p3_edgar"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p3_r11" value="reads [SQL]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_retriever" target="p3_ragdb"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p3_r12" value="market data" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_market" target="p3_poly"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="p3_r13" value="reads/writes [SQL]" style="endArrow=open;html=1;dashed=1;fontSize=9;endFill=0;" edge="1" parent="1" source="p3_snap" target="p3_revdb"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 4 — RUNTIME / DYNAMIC VIEW                              -->
+  <!-- output first, then eval+verification decides re-loop/abstain/accept -->
+  <!-- ============================================================ -->
+  <diagram id="runtime-dag" name="4 · Runtime (answer + verify loop)">
+    <mxGraphModel dx="1000" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="980" pageHeight="1080" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="p4_title" value="Runtime View — POST /api/chat/auditable-rag: produce an answer, then verify and re-loop if needed" style="text;html=1;fontSize=14;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="900" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="d_rails_in" value="Input + Dialog guardrails" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="340" y="70" width="260" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="d_retrieval" value="1 · retrieval&#10;dense + BM25 + rerank (local embeddings)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="330" y="140" width="280" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="d_classifier" value="2 · classifier&#10;numeric vs qualitative" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="340" y="220" width="260" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- numeric branch -->
+        <mxCell id="d_extraction" value="3a · extraction&#10;pull XBRL facts for the asked metrics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="120" y="310" width="230" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="d_math" value="4a · math&#10;Python does all arithmetic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="120" y="390" width="230" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- qualitative branch -->
+        <mxCell id="d_qual" value="3b · qualitative answer&#10;LLM over retrieved docs&#10;(+ sentiment / tone)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="590" y="310" width="260" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- draft output (merge point) -->
+        <mxCell id="d_output" value="5 · draft output&#10;candidate answer assembled" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="490" width="280" height="56" as="geometry" />
+        </mxCell>
+
+        <!-- eval + verification AFTER output (the loop controller) -->
+        <mxCell id="d_verify" value="6 · eval + verification&#10;XBRL cross-check (1%) + NLI entailment + confidence&#10;→ decides: accept · re-loop · abstain" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="310" y="580" width="320" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="d_abstain" value="abstain&#10;(fail · no retries left)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="690" y="588" width="200" height="56" as="geometry" />
+        </mxCell>
+
+        <!-- accept -> lineage AFTER verification passes -->
+        <mxCell id="d_lineage" value="7 · build_lineage&#10;assemble the audit trail for the accepted answer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="690" width="280" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="d_rails_out" value="8 · Output guardrails (PII mask)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="340" y="780" width="260" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="d_response" value="Response&#10;answer · sources · xbrl_facts · verification badge · math_steps · what_it_means · follow_ups · confidence · lineage" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="290" y="860" width="360" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- edges -->
+        <mxCell id="d_e0" style="endArrow=block;html=1;rounded=1;" edge="1" parent="1" source="d_rails_in" target="d_retrieval"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d_e1" style="endArrow=block;html=1;rounded=1;" edge="1" parent="1" source="d_retrieval" target="d_classifier"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d_e2" value="numeric" style="endArrow=block;html=1;rounded=1;fontSize=9;" edge="1" parent="1" source="d_classifier" target="d_extraction"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d_e3" value="qualitative" style="endArrow=block;html=1;rounded=1;fontSize=9;" edge="1" parent="1" source="d_classifier" target="d_qual"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d_e4" style="endArrow=block;html=1;rounded=1;" edge="1" parent="1" source="d_extraction" target="d_math"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d_e5" style="endArrow=block;html=1;rounded=1;" edge="1" parent="1" source="d_math" target="d_output"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d_e6" style="endArrow=block;html=1;rounded=1;" edge="1" parent="1" source="d_qual" target="d_output"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d_e7" style="endArrow=block;html=1;rounded=1;" edge="1" parent="1" source="d_output" target="d_verify"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- re-loop back to retrieval -->
+        <mxCell id="d_e8" value="re-loop&#10;(fail · retries left)" style="endArrow=block;html=1;rounded=1;fontSize=9;strokeColor=#b85450;fontColor=#b85450;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="d_verify" target="d_retrieval">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="60" y="616" />
+              <mxPoint x="60" y="165" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="d_e9" value="fail · no retries" style="endArrow=block;html=1;rounded=1;fontSize=9;" edge="1" parent="1" source="d_verify" target="d_abstain"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d_e10" value="accept" style="endArrow=block;html=1;rounded=1;fontSize=9;" edge="1" parent="1" source="d_verify" target="d_lineage"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d_e11" style="endArrow=block;html=1;rounded=1;" edge="1" parent="1" source="d_abstain" target="d_lineage"><mxGeometry relative="1" as="geometry">
+          <Array as="points"><mxPoint x="790" y="718" /><mxPoint x="610" y="718" /></Array>
+        </mxGeometry></mxCell>
+        <mxCell id="d_e12" style="endArrow=block;html=1;rounded=1;" edge="1" parent="1" source="d_lineage" target="d_rails_out"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d_e13" style="endArrow=block;html=1;rounded=1;" edge="1" parent="1" source="d_rails_out" target="d_response"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+</mxfile>
