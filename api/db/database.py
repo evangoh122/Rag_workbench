@@ -85,19 +85,31 @@ class DatabaseManager:
             return self._review_conn
 
     def get_new_review_connection(self):
-        """Open a NEW, independent connection to the review DB.
+        """Open a NEW, independent review-DB connection for a background thread.
 
         For background threads (e.g. the fire-and-forget consensus rail) that must
         not share the singleton connection object with request handlers. DuckDB
         connections are not safe to use concurrently across threads, so each thread
-        opens its own. Within one process, connecting to the same file returns a
-        connection to the same database instance, so it sees the same tables.
-        Caller owns the connection and must close it.
+        gets its own handle.
+
+        Returns ``self._review_conn.cursor()`` — an independent connection on the
+        *same* underlying database instance — rather than a fresh
+        ``duckdb.connect(REVIEW_DB_PATH)``. The singleton already holds the file
+        open read-write, and DuckDB's file-level lock forbids a *second*
+        ``connect()`` to the same file from the same process (see
+        ``execute_readonly``). A second connect would raise, the consensus worker's
+        fail-open try/except would swallow it, and audit persistence + review-queue
+        escalation would silently never land. ``.cursor()`` shares the instance
+        (same tables, no re-lock).
+
+        Caller owns the connection and must close it; closing a cursor connection
+        does not close the parent singleton.
         """
         # Ensure the singleton (and its table init) has run at least once so the
-        # base tables exist before a fresh connection touches them.
-        self.get_review_connection()
-        return duckdb.connect(Config.REVIEW_DB_PATH)
+        # base tables exist before the cursor connection touches them.
+        parent = self.get_review_connection()
+        with self._review_conn_lock:
+            return parent.cursor()
 
     def execute(self, sql: str, params=None):
         """Execute SQL with thread-safe access. Returns the cursor."""

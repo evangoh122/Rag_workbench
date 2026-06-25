@@ -125,3 +125,82 @@ lane and append a round-2 verdict.
 - [ ] Trigger count + enumeration now matches `ALL_TRIGGERS`.
 - [ ] §1 routing scope and §2 persistence statement are now accurate vs code.
 - [ ] `should_run_consensus` logic is sound (year regex, signal lists, route gate).
+
+---
+
+# REVIEW-REQUEST — mindforge — round 7
+
+**Coordinator:** DeepSeek (Claude orchestrating, per process note in SUMMARY)
+**Author of change:** Claude (architect)
+**Gate:** No commit until **MiMo** + **DeepSeek** = `APPROVED`. (User then routes to
+**Codex** + **Gemini** before any push to prod. **Codex re-verify is specifically
+requested this round** — see finding #1, it reverses a round-5 Codex decision.)
+
+## What triggered this round
+The change was run through the **no-mistakes** pipeline. Its automated review lane
+(architecture/correctness) read the **full branch diff** and returned **5 findings**
+(1 error, 2 warning, 2 info) on the now-**wired** consensus rail and the dialog/input
+guardrails. Four are addressed below; the fifth is a documented v1 limitation left
+as-is. No findings were about the docs. (Note: the earlier pipeline failures were a
+Windows `cmd.exe` arg-length limit in how the daemon spawned the review agent — not a
+code issue; fixed via `agent_path_override → claude.exe`.)
+
+## Findings addressed (no-mistakes review → fix)
+| # | Sev | File | Finding | Fix |
+| :-- | :-- | :-- | :-- | :-- |
+| 1 | **error** | `api/db/database.py:100` | `get_new_review_connection()` opens a **2nd** `duckdb.connect(REVIEW_DB_PATH)` while the singleton `_review_conn` already holds the file open RW. DuckDB's file-lock (see `execute_readonly` docstring) forbids a 2nd same-file connect in-process → it raises, the consensus worker's fail-open `try/except` swallows it, and **audit persistence + AUTO→SAMPLED_REVIEW escalation silently never land** (rail is a no-op). | Return `self._review_conn.cursor()` — an independent connection on the **same** instance (no re-lock, same tables). |
+| 2 | warning | `api/services/guardrails/input_rails.py:133` | `check_input()` makes a **blocking** MiMo call (5s timeout) on **every** chat turn — undercuts the async design of the consensus rail. | **Gate** the call: only invoke MiMo when `len(message) > 200` **or** the message is multi-line (`\n` ≥ 2). Short single-line inputs that already cleared the cheap regex/keyword layers skip the 5s call. |
+| 3 | warning | `api/services/guardrails/dialog_rails.py:179` | Financial-keyword allowlist (round-6 reorder) uses **substring** match (`kw in msg_lower`); short keys false-positive: `eps`→"st**eps**", `ipo`→"**ipo**d", `roa`→"ab**roa**d", `fab`→"**fab**ulous", `asic`→"b**asic**". Off-topic queries ("steps to bake a cake") get routed into the RAG pipeline. | Precompiled **word-boundary** regex `_FINANCIAL_KEYWORD_RE` (longest-first alternation, `re.escape`'d). |
+| 4 | info | `api/models/schemas.py:6` | `check_input` rejects > 1500 chars but `ChatRequest.message` allowed `max_length=8000` → dual limit; 1501–8000 passes pydantic then 400s at runtime. | Schema `max_length` 8000 → **1500** to match the runtime cap (reject once at the boundary). |
+| 5 | info | `consensus_rails.py` | Numeric normalisation treats `1,200` vs `1.2 billion` as uncorroborated (false DISAGREE). | **Left as-is** — documented v1 limitation; fails in the conservative (over-escalate) direction. |
+
+## ⚠️ IMPORTANT — finding #1 reverses a round-5 decision (Codex, please re-verify)
+Round 5 (per SUMMARY) **deliberately** made the worker open its **own** DuckDB
+connection via `get_new_review_connection()` "(not a shared/cursor connection)" to
+resolve the **Codex r2** concurrency blocker (don't share one connection object across
+threads). The no-mistakes review shows that approach is a **silent no-op** because the
+file-lock rejects the second connect. The `.cursor()` fix **reconciles both
+constraints**: `conn.cursor()` returns a **distinct connection object** (so request and
+worker threads never share one handle — satisfies the Codex r2 intent) on the **same
+database instance** (so no second file-lock — satisfies the no-mistakes finding). This
+is the idiomatic DuckDB per-thread pattern. Please confirm this reading.
+
+## Files changed (uncommitted; +47 / −13 across 4 files)
+- `api/db/database.py` — `get_new_review_connection()` → `parent.cursor()` under
+  `_review_conn_lock`; docstring rewritten to explain the lock/cursor rationale.
+- `api/services/guardrails/input_rails.py` — `needs_llm_check` gate before the MiMo call.
+- `api/services/guardrails/dialog_rails.py` — `_FINANCIAL_KEYWORD_RE` word-boundary
+  matcher; `check_dialog` uses `.search()` instead of substring `any(...)`.
+- `api/models/schemas.py` — `ChatRequest.message` `max_length` 1500.
+
+## Verification already done by author
+- Both rail files + schema parse clean.
+- Regex validated both directions: false positives (`steps`, `ipod`, `abroad`,
+  `fabulous`, `basic`) → no match; real terms (`eps`, `roa`, `roe`, `ipo`, `r&d`,
+  `free cash flow`) → match.
+- Gate logic confirmed: short single-line → skip MiMo; >200 chars or multi-line → check.
+- **`tests/test_guardrails.py` 15/15 pass.**
+- `database.py` `.cursor()` change is logic-only (cannot exercise the worker without a
+  live secondary); reasoning above + DuckDB cursor semantics.
+
+## Per-agent re-check checklist
+### MiMo (usability + performance + latency) — REQUIRED
+- [ ] #2 gate (`len>200` or multi-line) is a sound latency/security trade-off — does
+      skipping the MiMo analyzer on short single-line inputs (already past regex +
+      keyword layers) leave an acceptable residual risk? Is the 200-char threshold sane?
+- [ ] #1 `.cursor()` introduces no per-disagreement write-lock contention beyond the
+      existing design.
+
+### DeepSeek (correctness + API/schema) — REQUIRED
+- [ ] #1 `.cursor()` reconciliation is correct (distinct handle, same instance, no
+      re-lock) and the round-5/Codex-r2 intent is preserved. **In-lane: the crux.**
+- [ ] #3 word-boundary regex is correct for all keyword shapes (multi-word phrases,
+      `r&d`, `p/e`, `10-k`, `non-gaap`) — no regex-escaping or boundary bugs.
+- [ ] #4 schema `max_length=1500` is consistent with `check_input` and doesn't break
+      any longer legitimate flow.
+
+## Prompt to hand each agent
+> Read `.deepseek/coordination/REVIEW-REQUEST-mindforge.md` (round 7). Review only the
+> files in your lane against the round-7 checklist, reading the actual files. Append your
+> verdict to your lane file (`.<agent>/VERDICT-mindforge.md`) using the PROTOCOL.md
+> format (round 7). Do not modify source; report findings.

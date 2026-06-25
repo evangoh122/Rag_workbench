@@ -86,3 +86,20 @@ avoids the false-positive traps. Patterns narrow by design ("should i buy" needs
 first-person "i"; "recommend" needs "you recommend"), so "the board recommends
 buying back shares" passes. Dedicated DB connection per thread + explicit close in
 `finally` cleanly solves the cross-thread concurrency issue.
+
+
+---
+
+# VERDICT — mindforge — MiMo — round 7
+Status: APPROVED
+Reviewed: api/db/database.py (get_new_review_connection -> parent.cursor()), api/services/guardrails/input_rails.py (needs_llm_check gate), api/services/langgraph_engine.py (worker conn lifecycle)
+
+## Findings
+- none
+
+## Notes
+- #2 gate (input_rails.py): latency/security trade-off is sound; the 200-char threshold is sane for typical single-line financial queries. Novel injections that evade the regex+keyword layers overwhelmingly run long or multi-line and still get deep-checked. Residual risk (a sub-200-char single-line novel injection) is acceptable for this threat surface (worst case is an off-topic/leaked-prompt answer, not code exec); consensus/output rails remain downstream. The gate is pure string arithmetic (negligible cost).
+- #1 (.cursor()): no per-disagreement write-lock contention or churn beyond the existing design. parent.cursor() is a lightweight independent connection on the same DuckDB instance (no file re-open, no second file-lock); _review_conn_lock is held only for the microsecond .cursor() call; the worker fires only on a rare gated disagreement and closes the cursor in a finally -- no handle/connection leak.
+- minor (non-blocking): count("
+") >= 2 requires >=3 lines, so a 2-line sub-200-char message skips the LLM check. Within the accepted trade-off; matches the request text ("
+ >= 2"). No change required for this lane.

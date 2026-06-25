@@ -71,3 +71,26 @@ a Codex re-verify to flip the Codex lane to APPROVED and fully close the push ga
 The MiMo + DeepSeek reviews were driven directly via their APIs (Claude
 orchestrated) on user instruction, rather than via separate CLI sessions. Verdict
 files remain the audit artifacts.
+
+
+## Round 7 — no-mistakes automated-review findings
+Triggered by the no-mistakes pipeline's automated review (architecture/correctness lane), which read the full branch diff and returned 5 findings (1 error, 2 warning, 2 info) on the now-wired consensus rail + dialog/input guardrails. (The earlier pipeline failures were a Windows cmd.exe arg-length limit in how the daemon spawned the review agent -- fixed via `agent_path_override -> claude.exe` in ~/.no-mistakes/config.yaml -- not a code issue.)
+
+Fixes (4 files, +47/-13):
+- **#1 (error) database.py** -- `get_new_review_connection()` now returns `_review_conn.cursor()` (independent connection on the same DuckDB instance) instead of a 2nd `duckdb.connect()` the file-lock rejected. **Reverses the round-5 "dedicated connect" decision**: the second connect was a silent no-op (raised -> swallowed by fail-open -> consensus persistence + AUTO->SAMPLED_REVIEW escalation never landed). `.cursor()` reconciles Codex-r2's "don't share a handle across threads" intent (distinct object) with the lock constraint (same instance, no re-lock).
+- **#2 (warning) input_rails.py** -- gated the blocking ~5s MiMo injection check to messages >200 chars or multi-line; short single-line inputs (already past regex+keyword layers) skip it.
+- **#3 (warning) dialog_rails.py** -- replaced substring financial-keyword matching with a word-boundary regex (kills eps->"steps", ipo->"ipod", roa->"abroad", fab->"fabulous", asic->"basic" false positives).
+- **#4 (info) schemas.py** -- `ChatRequest.message` max_length 8000->1500 to match the check_input runtime cap.
+- **#5 (info)** left as-is -- documented v1 numeric-normalization limitation, fails safe.
+
+Verification: `tests/test_guardrails.py` 15/15; regex validated both directions; gate logic confirmed.
+
+**Re-review (round 7, run via the Claude API per prior process): MiMo = APPROVED, DeepSeek = APPROVED, no findings.** MiMo confirmed the gate latency/security trade-off and `.cursor()` non-contention; DeepSeek confirmed #1 cursor reconciliation, #3 regex correctness for all keyword shapes, and #4 schema-cap consistency, and explicitly retracted its round-5 "independent connect is the stronger fix" note.
+
+**All four lanes round 7 = APPROVED, no findings:**
+- MiMo (usability/perf/latency) -- gate trade-off + `.cursor()` non-contention confirmed.
+- DeepSeek (correctness/schema) -- #1 cursor reconciliation, #3 regex (all keyword shapes), #4 schema-cap consistency confirmed; retracted its round-5 note.
+- Codex -- re-verified #1: `.cursor()` returns a distinct handle (Codex-r2 thread-isolation intent preserved) while reusing the same instance to avoid the file-lock violation; reverses the round-5 "dedicated connect" decision it had originally approved.
+- Gemini (security) -- #2 gate sound (short-form attacks already caught by regex+keyword; novel injections run long/multi-line), #3 regex mitigates regex-injection + closes false positives, #4 schema cap matches runtime.
+
+Commit gate (MiMo + DeepSeek) [check] **CLEARED TO COMMIT**. Push gate (all lanes incl. Codex + Gemini) [check] **CLEARED** -- the Codex re-verify requested for #1 (it reverses the round-5 Codex-r2 concurrency decision) is in and APPROVED.

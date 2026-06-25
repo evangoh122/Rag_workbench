@@ -94,3 +94,18 @@ Advice rail patterns precise and fire before the financial-keyword allowlist;
 financial allowlist now precedes the off-topic denylist (fixes Codex r3 "test"
 false positive). Concurrency fix uses an independent per-thread DuckDB connection.
 Doc-vs-code accuracy holds across all claims.
+
+
+---
+
+# VERDICT — mindforge — DeepSeek — round 7
+Status: APPROVED
+Reviewed: api/db/database.py (get_new_review_connection); api/models/schemas.py (ChatRequest); api/services/guardrails/dialog_rails.py (_FINANCIAL_KEYWORD_RE + check_dialog); api/services/guardrails/input_rails.py (check_input length cap)
+
+## Findings
+- none
+
+## Notes
+- #1 (crux, database.py): parent.cursor() is the correct reconciliation -- a distinct connection object bound to the same DatabaseInstance, so the worker never shares the singleton handle (Codex-r2 / round-5 intent preserved) while avoiding a second duckdb.connect(REVIEW_DB_PATH) the file-level lock would reject in-process (no-mistakes finding). Confirms the round-5 "independent connect" was a silent no-op (second connect raises -> swallowed by the worker's fail-open try/except -> audit + AUTO->SAMPLED_REVIEW never land); my round-5 note wrongly called it the stronger fix. .cursor() sees the same tables (no re-init); closing it does not close the parent. Lock usage sound: get_review_connection() releases _review_conn_lock before .cursor() re-acquires it (non-reentrant, no deadlock).
+- #3 (dialog_rails.py): word-boundary regex correct for ALL keyword shapes -- verified r&d, p/e, 10-k, 8-k, 10-q, non-gaap, md&a, and multi-word "free cash flow" (re.escape renders the space as a literal space). Every keyword starts/ends with a word char, so the shared ... is well-defined; interior &, /, - are never anchored. False positives (steps/ipod/abroad/fabulous/basic) confirmed closed. Longest-first ordering is irrelevant to the boolean .search() (harmless). No re.escape or boundary bug.
+- #4 (schemas.py): max_length=1500 exactly matches check_input's >1500 cap; closes the 1501-8000 dual-limit window (pydantic-pass-then-runtime-400); no legitimate flow broken (those were already runtime-rejected). history field unaffected.

@@ -146,6 +146,19 @@ _COMPILED_OFF_TOPIC: list[tuple[re.Pattern, str]] = [
     for pattern, refusal in _OFF_TOPIC_PATTERNS
 ]
 
+# Word-boundary matcher for the financial allowlist. Plain substring matching
+# (`kw in msg_lower`) produced false positives on short keys — "eps"→"st**eps**",
+# "ipo"→"**ipo**d", "roa"→"ab**roa**d", "fab"→"**fab**ulous", "asic"→"b**asic**" —
+# which classified off-topic queries ("what are the steps to bake a cake") as
+# on-topic and routed them into the RAG pipeline. \b boundaries close this.
+# Longest-first so multi-word phrases ("free cash flow") win over their parts;
+# every keyword starts/ends with a word char, so \b…\b is well-defined.
+_FINANCIAL_KEYWORD_RE = re.compile(
+    r"\b(?:"
+    + "|".join(re.escape(kw) for kw in sorted(_FINANCIAL_KEYWORDS, key=len, reverse=True))
+    + r")\b"
+)
+
 
 def check_dialog(message: str) -> DialogVerdict:
     """Check if the user query is on-topic for a financial SEC filing assistant.
@@ -176,9 +189,7 @@ def check_dialog(message: str) -> DialogVerdict:
     # because a generic education term matches an incidental word — e.g. "test" in
     # "impairment test" / "test equipment". A genuine financial question wins.
     msg_lower = message.lower()
-    has_financial_keyword = any(
-        kw in msg_lower for kw in _FINANCIAL_KEYWORDS
-    )
+    has_financial_keyword = bool(_FINANCIAL_KEYWORD_RE.search(msg_lower))
     if has_financial_keyword:
         return DialogVerdict(on_topic=True)
 

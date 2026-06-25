@@ -50,3 +50,15 @@ Reviewed: 4a897ba0; api/services/guardrails/dialog_rails.py; tests/test_guardrai
 - Codex round 2 remains resolved by `_consensus_worker()` using a dedicated DuckDB review connection via `get_new_review_connection()` and closing it in `finally`.
 - Codex round 3 is resolved: `check_dialog()` now runs advice refusal first, then the financial-keyword allowlist, then the generic off-topic denylist; bare `test` was removed from the education/off-topic pattern. Direct check now allows "Is goodwill overvalued per the impairment test?", "How much test equipment revenue did Teradyne report?", and "What were the stress test results disclosed?" while still refusing investment-advice prompts and off-topic cake/weather-style prompts.
 - Verification: `python -m pytest tests/test_guardrails.py` -> 15 passed. Pytest emitted the existing `.pytest_cache` permission warning.
+
+---
+
+# VERDICT — mindforge — Codex — round 7
+Status: APPROVED
+Reviewed: api/db/database.py
+
+## Findings
+- none
+
+## Notes
+- Confirmed finding #1: the `.cursor()` approach in `get_new_review_connection()` correctly satisfies both constraints. It returns a distinct handle (cursor) to ensure thread isolation for the background worker (preserving the Codex r2 intent), and it reuses the same database instance to avoid the `duckdb.connect()` file-lock violation flagged by the no-mistakes review. The lock `_review_conn_lock` is appropriately held during cursor generation.

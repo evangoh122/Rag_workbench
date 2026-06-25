@@ -130,8 +130,16 @@ def check_input(message: str) -> InputVerdict:
                 pattern_matched=keyword,
             )
 
-    # LLM-based Intent Check (Dual-LLM Pattern using MiMo)
-    if OpenAI and Config and Config.MIMO_API_KEY:
+    # LLM-based Intent Check (Dual-LLM Pattern using MiMo).
+    # Gated to avoid paying ~5s of blocking latency on every turn: the regex and
+    # keyword layers above already catch known-shape injections cheaply, so the
+    # LLM analyzer only needs to run as the catch-all for novel phrasings — which
+    # overwhelmingly hide in longer or multi-line free text. Short, single-line
+    # messages that already cleared the cheap layers are low risk, so we skip the
+    # expensive call for them. Threshold mirrors typical benign queries (well
+    # under 200 chars); multi-line input is always deep-checked regardless.
+    needs_llm_check = len(message) > 200 or message.count("\n") >= 2
+    if needs_llm_check and OpenAI and Config and Config.MIMO_API_KEY:
         try:
             mimo_base_url = os.getenv("MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1")
             mimo_model = os.getenv("MIMO_MODEL", "mimo-v2.5-pro")
