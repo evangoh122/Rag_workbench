@@ -35,3 +35,20 @@ should_run_consensus(); fail-open + deterministic divergence appropriate.
 - r2 perf nits (per-disagreement ALTER write-lock; conn acquired twice; hard
   context chop) → FIXED: process-level _CONSENSUS_COLUMNS_ENSURED guard; single
   shared connection; paragraph-boundary truncation.
+
+---
+
+# VERDICT — mindforge — MiMo — round 4 (final, async + risk/compliance)
+Status: APPROVED
+Reviewed: consensus_rails.py (async-aware), _spawn_consensus / _consensus_worker /
+_ensure_consensus_columns in langgraph_engine.py
+
+## Findings
+- none
+
+## Notes
+Hot-path cost is trivial (gating string/regex + one Thread.start()). Background
+worker is fail-open with 8s timeout, serializes DB writes under the shared
+review_conn_lock, DDL guarded to one ALTER per process, context capped at 12k.
+No blocking/synchronous/unbounded work on the response path. Resolves the r3
+latency major (sync→async fire-and-forget per user direction).

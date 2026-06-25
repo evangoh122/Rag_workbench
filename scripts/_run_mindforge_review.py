@@ -27,7 +27,7 @@ doc = read("docs/mindforge-risk-alignment.md")
 engine = read("api/services/langgraph_engine.py")
 wiring = slice_between(engine, "def _ensure_consensus_columns", "def run_auditable_rag")
 # Include the actual call site so reviewers can see the rail IS invoked.
-ci = engine.index("_apply_consensus_rail(query, result)")
+ci = engine.index("_spawn_consensus(query, result)")
 wiring += (
     "\n\n# ---- call site inside run_auditable_rag (context) ----\n"
     + engine[engine.rfind("\n", 0, ci - 200):ci + 60]
@@ -45,11 +45,18 @@ VERDICT_FORMAT = (
 INTENT = (
     "CONTEXT: A risk-gated dual-model consensus rail for an auditable SEC-filing RAG app. "
     "The DeepSeek+MiMo pairing is a DELIBERATE EXAMPLE (production swaps the secondary to a "
-    "different-lineage frontier model — documented, not a bug). The rail is gated by "
-    "should_run_consensus() to ONLY hard multi-year / comparison / already-high-stakes "
-    "questions (NOT every answer) by explicit user direction, to avoid doubling latency. "
-    "It is fail-open by design (any error -> SKIPPED, never breaks chat). On material numeric "
-    "disagreement it escalates AUTO->SAMPLED_REVIEW and persists consensus_* to audit_runs.\n\n"
+    "different-lineage frontier model via CONSENSUS_SECONDARY_MODEL — documented, not a bug). "
+    "By explicit user direction the rail runs ASYNCHRONOUSLY (fire-and-forget): _spawn_consensus "
+    "snapshots what it needs and starts a background daemon thread (_consensus_worker), so it adds "
+    "ZERO latency to the response; the live response intentionally does NOT carry the consensus "
+    "result, and the audit_runs row + review queue converge AFTER the response (eventual "
+    "consistency by design — this is intended, not a bug). It is risk-gated by should_run_consensus() "
+    "to high-risk questions only: already-high-stakes routes, hard multi-year/trend, peer "
+    "comparison, and RISK/COMPLIANCE questions (litigation, material weakness, going concern, "
+    "covenants, regulatory, etc.). Fail-open (any error -> SKIPPED, never breaks chat). The "
+    "background worker serializes review-DB writes under db_manager.review_conn_lock; on material "
+    "numeric disagreement it escalates AUTO->SAMPLED_REVIEW, inserts a review-queue entry, and "
+    "persists consensus_* to audit_runs.\n\n"
 )
 
 MIMO_PROMPT = (

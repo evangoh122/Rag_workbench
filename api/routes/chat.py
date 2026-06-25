@@ -273,7 +273,6 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
             lineage=result.get("lineage"),
             chart=result.get("chart"),
             tone_analysis=result.get("tone_analysis"),
-            consensus=result.get("consensus"),
         )
     except HTTPException:
         raise

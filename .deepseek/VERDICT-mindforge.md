@@ -41,3 +41,23 @@ disclosed in both code comments and doc.
   clarifies primary_answer is passed in.
 - r2 major (call site not shown) → FALSE POSITIVE from a truncated review excerpt;
   call confirmed at langgraph_engine.py:2009. Re-reviewed with call site → APPROVED.
+
+---
+
+# VERDICT — mindforge — DeepSeek — round 4 (final, async + risk/compliance)
+Status: APPROVED
+Reviewed: consensus_rails.py (should_run_consensus risk/compliance category);
+_spawn_consensus / _consensus_worker + call site in langgraph_engine.py;
+docs/mindforge-risk-alignment.md (async + risk/compliance rewrite)
+
+## Findings
+- none
+
+## Notes
+Code correctly implements the documented design: fail-open, risk-gating via
+should_run_consensus (incl. the new risk/compliance category), async fire-and-forget
+with zero response latency, eventual consistency for audit/review updates, and the
+divergence threshold logic. All doc claims in mindforge-risk-alignment.md are
+supported by the code, including the correlated-model caveat and planned frontier
+swap. (Codex r1 lineage finding is moot under async — response carries its
+pre-consensus route, no contradiction within a single response.)

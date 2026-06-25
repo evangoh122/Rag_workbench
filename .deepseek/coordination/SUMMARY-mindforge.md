@@ -25,7 +25,24 @@ push to prod.
   truncation.
 - Docstring clarified that the primary answer is passed in, not produced here.
 
+## Round 4 — async fire-and-forget + risk/compliance gating
+After the Codex (push-gate) finding and a product decision, the rail was
+restructured:
+- **Async fire-and-forget**: `_spawn_consensus` runs `_consensus_worker` in a
+  background daemon thread — zero latency on the response; audit/review converge
+  after (eventual consistency). This makes the **Codex r1 lineage finding moot**
+  (response carries its pre-consensus route; no in-response contradiction).
+- **Risk/compliance added to the high-risk gate** (litigation, material weakness,
+  going concern, covenants, regulatory, restatement, impairment, etc.) per user
+  direction.
+- Gemini (security) round 1 = APPROVED (timeout-default-arg minor → fixed by
+  moving the env read into the body).
+- **Re-review (round 4): MiMo = APPROVED, DeepSeek = APPROVED, no findings.**
+
+Commit gate remains ✅ CLEARED. Codex finding addressed-by-design (async); a Codex
+re-verify or explicit waive closes the push gate.
+
 ## Note on process
-This round of MiMo + DeepSeek review was driven directly via their APIs (Claude
+The MiMo + DeepSeek reviews were driven directly via their APIs (Claude
 orchestrated) on user instruction, rather than via separate CLI sessions. Verdict
 files remain the audit artifacts.

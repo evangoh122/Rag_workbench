@@ -72,6 +72,18 @@ class DatabaseManager:
                         pass
             return self._conn
 
+    @property
+    def review_conn_lock(self):
+        """Public handle to the review-connection lock.
+
+        The review DuckDB connection is a shared singleton; background writers
+        (e.g. the fire-and-forget consensus rail) acquire the connection via
+        get_review_connection() first, then hold this lock around their writes to
+        serialize with other acquisitions. The lock is non-reentrant, so never
+        call get_review_connection() while holding it.
+        """
+        return self._review_conn_lock
+
     def get_review_connection(self):
         """Get or create the writable DuckDB connection for review queue tables (thread-safe).
 

@@ -63,10 +63,24 @@ _MULTIYEAR_SIGNALS = (
     "trajectory", "each year", "every year", "from 20",
 )
 
-# Phrases that signal peer / multi-company comparison.
+# Phrases that signal peer / multi-company comparison. NB: kept narrow on purpose
+# — bare "against" was removed because it also matches "litigation against",
+# "penalties against", etc., which are risk/compliance, not comparisons.
 _COMPARISON_SIGNALS = (
-    "vs", "versus", "compare", "comparison", "peers", "competitors",
-    "relative to", "against", "industry average",
+    " vs ", " vs.", "versus", "compare", "comparison", "peers", "competitors",
+    "relative to", "compared against", "industry average",
+)
+
+# Phrases that signal a risk / compliance question — high-consequence topics where
+# a wrong figure or misread carries regulatory/legal weight, so they warrant the
+# independent second opinion. (Substring match; e.g. "regulat" covers
+# regulatory/regulation, "contingenc" covers contingency/contingencies.)
+_RISK_COMPLIANCE_SIGNALS = (
+    "risk factor", "compliance", "regulat", "litigation", "lawsuit",
+    "investigation", "material weakness", "internal control",
+    "controls and procedures", "going concern", "covenant", "restatement",
+    "non-reliance", "impairment", "contingenc", "sanction", "penalt", "default",
+    "fraud", "related party", "disclosure control", "sec inquiry", "subpoena",
 )
 
 # Eval routes that are already deemed high-stakes by the eval layer.
@@ -96,6 +110,10 @@ def should_run_consensus(query: str, eval_route: Optional[str] = None) -> tuple[
     # 3. Peer / multi-company comparison.
     if any(sig in q for sig in _COMPARISON_SIGNALS):
         return True, "comparison question"
+
+    # 4. Risk / compliance questions — high-consequence regulatory/legal topics.
+    if any(sig in q for sig in _RISK_COMPLIANCE_SIGNALS):
+        return True, "risk/compliance question"
 
     # Otherwise: low-risk (single-period, single-metric) — skip the second model.
     return False, "low-risk single-period question"
@@ -149,18 +167,29 @@ def check_consensus(
     primary_answer: str,
     *,
     divergence_threshold: float = 0.5,
-    timeout: float = float(os.getenv("CONSENSUS_TIMEOUT", "8.0")),
+    timeout: Optional[float] = None,
 ) -> ConsensusVerdict:
     """Run the secondary model and compare against the primary answer.
 
     Args:
         query:          the user's question.
         context:        the retrieved filing context the primary answer was grounded on.
+                        Truncated to ~12k chars (on a paragraph boundary) to keep the
+                        secondary call bounded; figures near the end of a very long
+                        context may fall outside the window — a known limitation.
         primary_answer: the audited answer from the primary provider (DeepSeek).
         divergence_threshold: fraction of uncorroborated figures above which the
                               verdict is `agree=False`.
-        timeout:        secondary-model call timeout (seconds).
+        timeout:        secondary-model call timeout (seconds). When None, read from
+                        CONSENSUS_TIMEOUT at call time (default 8.0) — read inside
+                        the body so the env var is runtime-mutable and a malformed
+                        value degrades gracefully instead of crashing at import.
     """
+    if timeout is None:
+        try:
+            timeout = float(os.getenv("CONSENSUS_TIMEOUT", "8.0"))
+        except (TypeError, ValueError):
+            timeout = 8.0
     # Nothing to compare against → nothing to do.
     if not primary_answer or not primary_answer.strip():
         return ConsensusVerdict(agree=True, skipped=True, reason="empty primary answer")
@@ -170,7 +199,10 @@ def check_consensus(
         return ConsensusVerdict(agree=True, skipped=True, reason="secondary model not configured")
 
     mimo_base_url = os.getenv("MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1")
-    mimo_model = os.getenv("MIMO_MODEL", "mimo-v2.5-pro")
+    # CONSENSUS_SECONDARY_MODEL is the forward-looking name (the production swap
+    # points it at a different-lineage frontier model); falls back to MIMO_MODEL
+    # for the current DeepSeek+MiMo example.
+    secondary_model = os.getenv("CONSENSUS_SECONDARY_MODEL") or os.getenv("MIMO_MODEL", "mimo-v2.5-pro")
 
     # Context can be large; cap it so the secondary call stays bounded. Cut on a
     # paragraph boundary when possible so we don't slice mid-figure/mid-sentence.
@@ -192,10 +224,11 @@ def check_consensus(
     try:
         client = OpenAI(api_key=Config.MIMO_API_KEY, base_url=mimo_base_url, timeout=timeout)
         resp = client.chat.completions.create(
-            model=mimo_model,
+            model=secondary_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
             max_tokens=600,
+            timeout=timeout,  # bound the request explicitly, not just the client
         )
         secondary = (resp.choices[0].message.content or "").strip()
     except Exception as e:
@@ -219,7 +252,7 @@ def check_consensus(
         skipped=False,
         divergence_score=round(score, 4),
         secondary_answer=secondary,
-        secondary_model=mimo_model,
+        secondary_model=secondary_model,
         disagreements=unconfirmed,
         reason=(
             "Models agree on material figures"

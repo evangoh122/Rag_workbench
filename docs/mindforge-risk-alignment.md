@@ -97,33 +97,45 @@ the *response*, not the stored prompt).
 - **Dual-model consensus rail** (`api/services/guardrails/consensus_rails.py`):
   the audited answer is produced by the primary model; a second, independent model
   answers the **same question from the same retrieved context**; their material
-  numeric claims are compared. Material divergence → lower confidence / route to
-  human review, and the disagreement is surfaced for transparency. Fail-open: any
-  error or missing key returns a SKIPPED verdict so it can never break chat.
+  numeric claims are compared. Material divergence → escalate the audit/review
+  tier and record the disagreement. Fail-open: any error or missing key returns a
+  SKIPPED verdict so it can never break chat.
 
-  > **Status:** the rail is **wired and active** on the auditable-RAG path
-  > (`_apply_consensus_rail` in `langgraph_engine.py`, called from
-  > `run_auditable_rag`). It is risk-gated (below), fail-open, and on material
-  > disagreement it escalates `AUTO→SAMPLED_REVIEW`, opens a review-queue entry,
-  > and persists `consensus_*` to `audit_runs`. The remaining open item is the
-  > **frontier-model swap** for the secondary (see Planned hardening).
+  > **Status:** the rail is **wired and active** on the auditable-RAG path, and runs
+  > **asynchronously (fire-and-forget)** — `_spawn_consensus` in
+  > `langgraph_engine.py` snapshots what it needs and starts a background daemon
+  > thread (`_consensus_worker`), so it adds **zero latency** to the user-facing
+  > answer. On material disagreement the worker escalates `AUTO→SAMPLED_REVIEW`,
+  > opens a review-queue entry, and persists `consensus_*` to `audit_runs` **after**
+  > the response is sent. Consequence: the **live response keeps its pre-consensus
+  > route** and does not carry the consensus result; the audit row + review queue
+  > converge a moment later (eventual consistency by design). The remaining open
+  > item is the **frontier-model swap** for the secondary (see Planned hardening).
 
 #### Risk-gating: which questions get the dual model
 
-The consensus rail adds a second LLM call, so it must **not** run on every answer
-(that would ~double base latency/cost — flagged in review). It is **risk-gated**:
-the rail fires only on **high-risk questions**, defined as:
+The second model is gated to **high-risk questions** so it isn't spent on every
+answer (cost, not latency — the call is off the response path). The rail fires
+only on:
 
 | Gate | Run dual model? | Rationale |
 | :--- | :--- | :--- |
 | Already `SAMPLED_REVIEW` / `ESCALATE` route | **Yes** | The eval layer already judged it high-stakes |
 | **Hard, multi-year questions** (spans ≥2 fiscal years / trend / CAGR / YoY / "since 20XX") | **Yes** | Cross-period reasoning compounds extraction + math error; highest payoff for a second opinion |
 | Peer / multi-company comparison | **Yes** | Multiple extractions multiply the chance of a single bad figure |
+| **Risk / compliance questions** (risk factors, litigation, regulatory, material weakness, going concern, covenants, restatement, impairment, related-party, etc.) | **Yes** | High regulatory/legal consequence — a misread carries the most weight, so it gets an independent second opinion |
 | Single-period, single-metric `AUTO` answer | **No** | Low risk; the cost of a second call is not justified |
 | Conversational / non-scored paths | **No** | No audited figures to cross-check |
 
 The gate is encoded in `should_run_consensus(query, eval_route)` so the policy is
-auditable and testable, not buried in route code.
+auditable and testable, not buried in route code. The "high-stakes route" row
+*inherits* the eval layer's trigger-driven `SAMPLED_REVIEW`/`ESCALATE` decision —
+the gate checks the route, it does not re-evaluate the §4.3 triggers. The
+"conversational / non-scored" exclusion is enforced **upstream**, not inside
+`should_run_consensus`: the conversational fast path returns in `chat.py` before
+the rail is reached, and `_spawn_consensus` additionally bails when there are no
+retrieved docs or the answer is an abstention — so such turns never invoke the
+secondary model.
 - **Domain-appropriate fairness = even-handedness across companies.** For SEC-
   filing Q&A, protected-class fairness is largely N/A; the live risk is treating
   some tickers more favorably than others, or letting sentiment skew leak into
@@ -131,11 +143,18 @@ auditable and testable, not buried in route code.
   management-tone analysis, and the deterministic, ticker-agnostic numeric path.
 
 **Already implemented:**
-- Risk-gated rail wired into the live auditable-RAG path.
-- `AUTO→SAMPLED_REVIEW` escalation + review-queue entry on material disagreement.
+- Risk-gated rail wired into the live auditable-RAG path, running off the response
+  path in a background daemon thread (fire-and-forget — zero added latency).
+- `AUTO→SAMPLED_REVIEW` escalation + review-queue entry on material disagreement,
+  applied to the audit row + review queue **after** the response is sent. The
+  background worker serializes its review-DB writes under `review_conn_lock`.
 - `consensus_status` / `consensus_divergence` / `consensus_secondary_model`
-  persisted to `audit_runs` (columns added idempotently by
-  `_ensure_consensus_columns`).
+  persisted to `audit_runs` — columns are added at runtime via
+  `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (`_ensure_consensus_columns`,
+  guarded to run once per process). **Only the divergence score and the secondary
+  model name are persisted**; the full secondary answer is not stored. The **live
+  response does not carry the consensus result** (it returns before the worker
+  finishes) — the audit trail is the system of record.
 
 **Planned hardening (remaining):**
 1. Swap secondary model to a frontier, different-lineage model (the key one — the
