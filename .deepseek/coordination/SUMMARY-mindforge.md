@@ -94,3 +94,15 @@ Verification: `tests/test_guardrails.py` 15/15; regex validated both directions;
 - Gemini (security) -- #2 gate sound (short-form attacks already caught by regex+keyword; novel injections run long/multi-line), #3 regex mitigates regex-injection + closes false positives, #4 schema cap matches runtime.
 
 Commit gate (MiMo + DeepSeek) [check] **CLEARED TO COMMIT**. Push gate (all lanes incl. Codex + Gemini) [check] **CLEARED** -- the Codex re-verify requested for #1 (it reverses the round-5 Codex-r2 concurrency decision) is in and APPROVED.
+
+
+## Round 8 — blocking-LLM-on-event-loop fix (no-mistakes review)
+A re-run of the no-mistakes pipeline on the round-7 commit (0aa34586) surfaced a real finding the round-7 fixes missed: `_apply_input_rails` (chat.py) was SYNC and called the now-blocking `check_input` (~5s MiMo HTTP call, gated by #2) synchronously inside the async chat endpoints -- stalling the asyncio event loop and freezing all concurrent requests on the live Space. The branch introduced it (check_input was pure regex before); #2's gate reduced frequency but not the blocking nature.
+
+Fix (chat.py): `_apply_input_rails` -> async; `check_input` offloaded via `fastapi.concurrency.run_in_threadpool`; `check_dialog` (regex) kept on the loop; awaited at all 4 endpoints. tests/test_guardrails.py 15/15; module imports; iscoroutinefunction True. (The `--yes` pipeline auto-fixed this identically in its worktree but un-gated -- aborted so it didn't push; re-applied and gated here.)
+
+**Re-review (round 8, via Claude API): MiMo = APPROVED, DeepSeek = APPROVED.** Both nits are pre-existing/out-of-scope: MiMo -- sync engine calls also on the loop; DeepSeek -- /sec-analyzer applies no input rails.
+
+Commit gate (MiMo + DeepSeek) [check] **CLEARED**. Codex + Gemini already APPROVED round 7; round 8 changes only chat.py async wiring (not the guardrail/consensus logic they reviewed), so a Codex/Gemini re-glance on the offload is optional, not blocking for the commit gate.
+
+**Follow-ups (out of scope, not blocking):** (1) /sec-analyzer endpoint applies no input rails; (2) the sync engine calls (chat_sql/ask_rag/run_graph_rag) still run on the loop and could be thread-pooled too.

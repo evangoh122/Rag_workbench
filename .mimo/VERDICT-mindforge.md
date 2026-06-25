@@ -103,3 +103,18 @@ Reviewed: api/db/database.py (get_new_review_connection -> parent.cursor()), api
 - minor (non-blocking): count("
 ") >= 2 requires >=3 lines, so a 2-line sub-200-char message skips the LLM check. Within the accepted trade-off; matches the request text ("
  >= 2"). No change required for this lane.
+
+
+---
+
+# VERDICT — mindforge — MiMo — round 8 (blocking-llm-on-event-loop fix)
+Status: APPROVED
+Reviewed: api/routes/chat.py, api/services/guardrails/input_rails.py
+
+## Findings
+- [SEVERITY: nit] chat.py — pre-existing/out-of-scope: the sync engine calls (chat_sql/ask_rag/run_graph_rag) also run on the event loop; not introduced by this branch. The check_input offload is the correct targeted fix for the regression this branch added.
+
+## Notes
+- Event-loop stall removed: `run_in_threadpool(check_input, message)` dispatches the blocking ~5s MiMo call to AnyIO's worker pool and awaits it, freeing the loop; concurrent requests are no longer serialized. `_apply_input_rails` is async and awaited at all 4 endpoints (chat.py:118/139/161/187); check_input is plain sync -- a valid threadpool target.
+- Default threadpool (40 tokens) acceptable: the expensive path is gated to >200char/multi-line + MIMO key; the 1500-char cap and cheap regex/keyword layers short-circuit first; the 5s timeout bounds hold time; excess burst queues on the limiter gracefully rather than stalling the loop. A dedicated limiter would be optional hardening, not required.
+- check_dialog correctly kept on the loop (pure regex).

@@ -204,3 +204,27 @@ is the idiomatic DuckDB per-thread pattern. Please confirm this reading.
 > files in your lane against the round-7 checklist, reading the actual files. Append your
 > verdict to your lane file (`.<agent>/VERDICT-mindforge.md`) using the PROTOCOL.md
 > format (round 7). Do not modify source; report findings.
+
+
+---
+
+# REVIEW-REQUEST — mindforge — round 8
+
+**Coordinator:** DeepSeek (Claude orchestrating). **Gate:** MiMo + DeepSeek APPROVED before commit.
+
+## What triggered this round
+A re-run of the no-mistakes pipeline on the round-7 commit (0aa34586) surfaced one **real, still-unfixed** finding the round-7 fixes missed:
+
+**`blocking-llm-on-event-loop` (chat.py)** — `_apply_input_rails` was a SYNC function calling the now-blocking `check_input` (~5s MiMo HTTP call, gated by round-7 #2) synchronously inside the `async def` chat endpoints. When the call fires it stalls the asyncio event loop and freezes ALL concurrent requests on the live Space. The branch introduced this (check_input was pure regex before); #2's gate reduced frequency but not the blocking nature.
+
+The pipeline's `--yes` auto-fix applied the same fix in its worktree but **un-gated**; that run was aborted before push, and the fix was re-applied and gated here.
+
+## Fix under review (api/routes/chat.py only)
+- `_apply_input_rails` -> `async`; offload `check_input` via `fastapi.concurrency.run_in_threadpool`; keep `check_dialog` (regex) on the loop; `await` at all 4 endpoints (/sql, /rag, /graph-rag, /auditable-rag).
+- Verified: module imports; `iscoroutinefunction(_apply_input_rails)` True; `tests/test_guardrails.py` 15/15.
+
+## Checklists
+### MiMo (perf/latency/throughput) — REQUIRED
+- [ ] Offload removes the event-loop stall; default threadpool acceptable for the gated load profile; check_dialog correctly kept inline.
+### DeepSeek (correctness/API) — REQUIRED
+- [ ] sync->async conversion correct/complete; all 4 awaited; run_in_threadpool import + signature correct; check_input contract (returns InputVerdict, never raises) preserved; HTTPException(400) propagation unchanged.

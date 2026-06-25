@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 import os
 from loguru import logger
@@ -62,9 +63,14 @@ def _is_conversational(message: str) -> bool:
     return False
 
 
-def _apply_input_rails(message: str) -> None:
-    """Apply input + dialog rails. Raises 400 if blocked."""
-    input_verdict = check_input(message)
+async def _apply_input_rails(message: str) -> None:
+    """Apply input + dialog rails. Raises 400 if blocked.
+
+    check_input may issue a blocking ~5s LLM injection check, so it runs in a
+    threadpool to avoid stalling the asyncio event loop for all concurrent
+    requests. check_dialog is pure regex and stays on the loop.
+    """
+    input_verdict = await run_in_threadpool(check_input, message)
     if input_verdict.blocked:
         raise HTTPException(status_code=400, detail=input_verdict.reason)
     dialog_verdict = check_dialog(message)
@@ -109,7 +115,7 @@ def _conversational_llm_call(message: str) -> str:
 
 @router.post("/sql", response_model=ChatResponse)
 async def chat_sql_endpoint(req: ChatRequest):
-    _apply_input_rails(req.message)
+    await _apply_input_rails(req.message)
     try:
         result = chat_sql(req.message, req.history)
         if "answer" in result:
@@ -130,7 +136,7 @@ async def chat_sql_endpoint(req: ChatRequest):
 
 @router.post("/rag", response_model=ChatResponse)
 async def chat_rag_endpoint(req: ChatRequest):
-    _apply_input_rails(req.message)
+    await _apply_input_rails(req.message)
     try:
         answer = ask_rag(req.message)
         answer = _apply_output_rails(answer)
@@ -152,7 +158,7 @@ async def chat_rag_endpoint(req: ChatRequest):
 
 @router.post("/graph-rag", response_model=ChatResponse)
 async def chat_graph_rag_endpoint(req: ChatRequest):
-    _apply_input_rails(req.message)
+    await _apply_input_rails(req.message)
     try:
         if not req.ticker:
             raise HTTPException(status_code=400, detail="Ticker is required for Graph RAG")
@@ -178,7 +184,7 @@ async def chat_graph_rag_endpoint(req: ChatRequest):
 
 @router.post("/auditable-rag", response_model=ChatResponse)
 async def chat_auditable_rag_endpoint(req: ChatRequest):
-    _apply_input_rails(req.message)
+    await _apply_input_rails(req.message)
     try:
         # Fast path: conversational messages bypass the full RAG pipeline
         if _is_conversational(req.message):
