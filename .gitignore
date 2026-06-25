@@ -33,3 +33,8 @@ scripts/_*_out.txt
 graphify-out/
 no-mistakes/
 no-mistakes.zip
+
+.venv_duck10/
+.agents/
+.claude/skills/
+.claude/VERDICT-*.md
