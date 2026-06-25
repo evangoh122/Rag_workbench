@@ -42,6 +42,19 @@ restructured:
 Commit gate remains ✅ CLEARED. Codex finding addressed-by-design (async); a Codex
 re-verify or explicit waive closes the push gate.
 
+## Round 5 — investment-advice rail + concurrency hardening
+- **Advice rail (Legal & Regulatory)**: `dialog_rails.py` hard-refuses
+  recommendation/personal-action/price-prediction questions with a "not a licensed
+  investment adviser" disclaimer; wired into `chat._apply_input_rails` (all chat
+  endpoints). Patterns narrowed after MiMo review (no false positives on
+  goodwill-impairment "overvalued" or board-buyback "recommend buying").
+- **Concurrency (Codex r2 + MiMo)**: background worker opens its OWN DuckDB
+  connection via `get_new_review_connection()` (not a shared/cursor connection).
+- **Re-review (round 5): MiMo = APPROVED, DeepSeek = APPROVED, no findings.**
+
+Commit gate ✅ CLEARED for round 5. Codex r2 concurrency blocker resolved with the
+dedicated-connection fix (Codex re-verify or waive to fully close the push gate).
+
 ## Note on process
 The MiMo + DeepSeek reviews were driven directly via their APIs (Claude
 orchestrated) on user instruction, rather than via separate CLI sessions. Verdict

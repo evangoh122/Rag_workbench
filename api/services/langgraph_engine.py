@@ -1833,10 +1833,14 @@ def _consensus_worker(
         final_route = "SAMPLED_REVIEW" if escalate else prior_route
         review_id: Optional[str] = None
 
-        # Acquire the shared review connection FIRST (its getter takes the lock),
-        # then hold the (non-reentrant) lock around our writes to serialize them.
-        conn = db_manager.get_review_connection()
-        with db_manager.review_conn_lock:
+        # Concurrency (Codex r2 / MiMo): the request paths execute on the shared
+        # singleton review connection WITHOUT a shared lock, so a background thread
+        # must NOT use that same connection object. Open a DEDICATED, independent
+        # connection for this thread (DuckDB connections are not safe to use
+        # concurrently across threads; a separate connect() to the same file in the
+        # same process attaches to the same DB instance and sees the same tables).
+        conn = db_manager.get_new_review_connection()
+        try:
             if escalate:
                 try:
                     review_id = insert_decision(conn, {
@@ -1874,6 +1878,12 @@ def _consensus_worker(
                     )
                 except Exception as exc:
                     logger.warning(f"Consensus audit update failed (non-fatal): {exc}")
+        finally:
+            # Always close this thread's dedicated connection.
+            try:
+                conn.close()
+            except Exception:
+                pass
     except Exception as exc:
         logger.warning(f"Consensus worker failed (non-fatal): {exc}")
 

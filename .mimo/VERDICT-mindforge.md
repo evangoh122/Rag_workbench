@@ -52,3 +52,21 @@ worker is fail-open with 8s timeout, serializes DB writes under the shared
 review_conn_lock, DDL guarded to one ALTER per process, context capped at 12k.
 No blocking/synchronous/unbounded work on the response path. Resolves the r3
 latency major (sync→async fire-and-forget per user direction).
+
+---
+
+# VERDICT — mindforge — MiMo — round 5 (advice rail + concurrency)
+Status: APPROVED
+Reviewed: dialog_rails.py (investment-advice rail), consensus_rails.py,
+_consensus_worker + get_new_review_connection wiring
+
+## Findings
+- none
+
+## Notes
+Advice rail patterns well-narrowed (excluded bare "recommend buying" → avoids the
+board-buyback false positive; excluded bare "overvalued" → avoids impairment-test
+questions). Gating still tight; 8s timeout + fail-open clean; daemon-thread
+fire-and-forget = zero hot-path latency. The dedicated DuckDB connection in
+_consensus_worker correctly avoids cross-thread connection sharing (resolves the
+r-prior `.cursor()` concern and Codex r2).

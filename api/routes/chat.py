@@ -68,6 +68,10 @@ def _apply_input_rails(message: str) -> None:
     if input_verdict.blocked:
         raise HTTPException(status_code=400, detail=input_verdict.reason)
     dialog_verdict = check_dialog(message)
+    # Investment-advice questions are hard-refused (Legal & Regulatory): we are not
+    # a licensed investment adviser. The refusal message carries the disclaimer.
+    if dialog_verdict.advice:
+        raise HTTPException(status_code=400, detail=dialog_verdict.refusal_message)
     if dialog_verdict.off_topic:
         raise HTTPException(status_code=400, detail=dialog_verdict.refusal_message)
 

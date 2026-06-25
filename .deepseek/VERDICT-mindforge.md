@@ -61,3 +61,20 @@ divergence threshold logic. All doc claims in mindforge-risk-alignment.md are
 supported by the code, including the correlated-model caveat and planned frontier
 swap. (Codex r1 lineage finding is moot under async — response carries its
 pre-consensus route, no contradiction within a single response.)
+
+---
+
+# VERDICT — mindforge — DeepSeek — round 5 (advice rail + concurrency)
+Status: APPROVED
+Reviewed: dialog_rails.py (advice rail), consensus_rails.py, _consensus_worker +
+get_new_review_connection in langgraph_engine.py, docs/mindforge-risk-alignment.md
+
+## Findings
+- none
+
+## Notes
+Advice rail runs before the on-topic financial-keyword check; patterns precise, no
+catastrophic backtracking. Concurrency fix uses a dedicated per-thread review
+connection. Doc claims align with implementation. (Note: an earlier DeepSeek note
+referenced ".cursor()"; the final code uses db_manager.get_new_review_connection()
+— an independent connection — which is the stronger fix.)

@@ -23,6 +23,7 @@ def slice_between(text, start_marker, end_marker):
 
 
 consensus = read("api/services/guardrails/consensus_rails.py")
+dialog = read("api/services/guardrails/dialog_rails.py")
 doc = read("docs/mindforge-risk-alignment.md")
 engine = read("api/services/langgraph_engine.py")
 wiring = slice_between(engine, "def _ensure_consensus_columns", "def run_auditable_rag")
@@ -53,10 +54,17 @@ INTENT = (
     "consistency by design — this is intended, not a bug). It is risk-gated by should_run_consensus() "
     "to high-risk questions only: already-high-stakes routes, hard multi-year/trend, peer "
     "comparison, and RISK/COMPLIANCE questions (litigation, material weakness, going concern, "
-    "covenants, regulatory, etc.). Fail-open (any error -> SKIPPED, never breaks chat). The "
-    "background worker serializes review-DB writes under db_manager.review_conn_lock; on material "
-    "numeric disagreement it escalates AUTO->SAMPLED_REVIEW, inserts a review-queue entry, and "
-    "persists consensus_* to audit_runs.\n\n"
+    "covenants, regulatory, etc.). Fail-open (any error -> SKIPPED, never breaks chat). On "
+    "material numeric disagreement it escalates AUTO->SAMPLED_REVIEW, inserts a review-queue "
+    "entry, and persists consensus_* to audit_runs.\n\n"
+    "NEW THIS ROUND: (1) An investment-ADVICE dialog rail (dialog_rails.py) HARD-REFUSES "
+    "questions seeking recommendations/personal-actions/price-predictions ('should I buy?', "
+    "'price target', 'is X a good investment', 'will it go up') with a 'not a licensed "
+    "investment adviser' disclaimer, while letting factual filing questions through. Wired "
+    "into chat._apply_input_rails (covers all chat endpoints). (2) CONCURRENCY FIX (Codex r2 + "
+    "MiMo): the background consensus worker opens its OWN independent DuckDB connection via "
+    "db_manager.get_new_review_connection() (a fresh duckdb.connect to the same review DB file) "
+    "and closes it when done, so it never shares a connection object with request handlers.\n\n"
 )
 
 MIMO_PROMPT = (
@@ -65,9 +73,11 @@ MIMO_PROMPT = (
     "Review ONLY for your lane. Checklist: (1) latency/cost of the gated second LLM call; "
     "(2) timeout=8.0 worst-case before fail-open; (3) gating logic actually prevents running "
     "on every answer; (4) any blocking/synchronous heavy work on the chat hot path; "
-    "(5) DB cost of the audit UPDATE / review insert.\n\n"
+    "(5) DB cost of the audit UPDATE / review insert; (6) ADVICE RAIL precision — does it "
+    "refuse advice questions WITHOUT false-positiving on factual filing questions? clear UX?\n\n"
     f"=== consensus_rails.py ===\n{consensus}\n\n"
-    f"=== wiring in langgraph_engine.py (_apply_consensus_rail etc.) ===\n{wiring}\n\n"
+    f"=== dialog_rails.py (investment-advice rail) ===\n{dialog}\n\n"
+    f"=== wiring in langgraph_engine.py (_consensus_worker etc.) ===\n{wiring}\n\n"
     + VERDICT_FORMAT
 )
 
@@ -77,9 +87,12 @@ DEEPSEEK_PROMPT = (
     "Review ONLY for your lane. Checklist: (1) check_consensus contract + ConsensusVerdict shape; "
     "(2) divergence/threshold logic correctness + edge cases (no numbers, formatting like $1,200 vs 1200); "
     "(3) the wiring's route override + audit UPDATE + review insert correctness and non-fatal handling; "
-    "(4) DOC ACCURACY: do the file/section references and claims in mindforge-risk-alignment.md match the "
-    "code? Flag any claim the code does not support (e.g. trigger counts, what is persisted, routing scope).\n\n"
+    "(4) CONCURRENCY: is the per-thread .cursor() use correct + safe (Codex r2)? "
+    "(5) ADVICE RAIL correctness: regex precision, no catastrophic backtracking, advice caught before "
+    "the on-topic financial-keyword check; "
+    "(6) DOC ACCURACY: do claims in mindforge-risk-alignment.md match the code?\n\n"
     f"=== consensus_rails.py ===\n{consensus}\n\n"
+    f"=== dialog_rails.py (investment-advice rail) ===\n{dialog}\n\n"
     f"=== wiring in langgraph_engine.py ===\n{wiring}\n\n"
     f"=== docs/mindforge-risk-alignment.md ===\n{doc}\n\n"
     + VERDICT_FORMAT
@@ -87,7 +100,7 @@ DEEPSEEK_PROMPT = (
 
 
 def call(name, base_url, model, api_key, prompt, max_tokens):
-    client = OpenAI(api_key=api_key, base_url=base_url, timeout=120.0)
+    client = OpenAI(api_key=api_key, base_url=base_url, timeout=240.0)
     resp = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],

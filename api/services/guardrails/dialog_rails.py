@@ -21,8 +21,56 @@ from typing import Optional
 class DialogVerdict:
     on_topic: bool
     off_topic: bool = False
+    advice: bool = False          # True when the query seeks investment advice (hard-refused)
     topic: Optional[str] = None
     refusal_message: Optional[str] = None
+
+
+# ── Investment-advice rail (Legal & Regulatory) ──────────────────────────────
+# This product summarizes public SEC filings; it is NOT a licensed investment
+# adviser. Questions that ask for a recommendation, a personal action, or a price
+# prediction are HARD-REFUSED with the disclaimer below — we never answer "should
+# I buy/sell" style questions, even though they contain financial keywords.
+
+NOT_ADVICE_DISCLAIMER: str = (
+    "This assistant is not a licensed investment adviser and does not provide "
+    "investment advice, recommendations, or price predictions. Information is "
+    "for general informational purposes only, sourced from public SEC filings."
+)
+
+_ADVICE_REFUSAL: str = (
+    "I can't help with that — I'm not a licensed investment adviser, so I can't "
+    "give investment advice, recommendations, or price predictions. I can only "
+    "summarize what public SEC filings disclose — for example, what a company's "
+    "latest 10-K says about its revenue, margins, guidance, or risk factors. "
+    f"\n\n{NOT_ADVICE_DISCLAIMER}"
+)
+
+# High-precision patterns — every one contains an explicit advice/recommendation/
+# prediction cue, so factual queries ("what was revenue?", "gross margin?") are
+# never caught.
+_ADVICE_PATTERNS: list[str] = [
+    r"\bshould i (buy|sell|hold|invest|short|trade|purchase|dump|own|add)\b",
+    # "you recommend" only — bare "recommend buying" matches filing facts like
+    # "does the board recommend buying back shares?", so it's intentionally excluded.
+    r"\b(do|would|can|should) (you|u) recommend\b",
+    r"\bis (it|now|this|that|the stock)\b.{0,40}\b(a good|a bad)\b.{0,15}\b(buy|investment|time to (buy|sell|invest))\b",
+    r"\b(good|bad|great|smart|safe|risky) (investment|buy|stock to (buy|own|pick))\b",
+    r"\bworth (buying|investing|owning|the investment)\b",
+    r"\bprice target\b",
+    r"\bwhat should i do with my (money|portfolio|shares|investment|stocks|savings)\b",
+    r"\b(what|which|any) (stock|stocks|shares|companies)\b.{0,20}\b(should i |to )?(buy|invest in|pick)\b",
+    # NB: bare "overvalued/undervalued" was removed — it matches filing-analysis
+    # questions (e.g. "is goodwill overvalued per the impairment test?").
+    r"\b(buy or sell|sell or buy)\b",
+    r"\bshould i put my (money|cash|savings)\b",
+    r"\bwill (the |this )?(stock|price|share price|it)\b.{0,30}\b(go up|go down|rise|fall|drop|crash|tank|moon|double|skyrocket|rebound|recover)\b",
+    r"\b(is it|good time) (a good time )?to (buy|sell|invest)\b",
+]
+
+_COMPILED_ADVICE: list[re.Pattern] = [
+    re.compile(p, re.IGNORECASE) for p in _ADVICE_PATTERNS
+]
 
 
 # ── Financial topic keywords ─────────────────────────────────────────────────
@@ -107,6 +155,18 @@ def check_dialog(message: str) -> DialogVerdict:
     """
     if not message or not message.strip():
         return DialogVerdict(on_topic=True)
+
+    # Investment-advice rail runs FIRST: advice questions ("should I buy NVDA?")
+    # contain financial keywords, so they would otherwise pass as on-topic. They
+    # are hard-refused with the not-a-licensed-adviser disclaimer.
+    for compiled in _COMPILED_ADVICE:
+        if compiled.search(message):
+            return DialogVerdict(
+                on_topic=False,
+                advice=True,
+                topic="investment_advice",
+                refusal_message=_ADVICE_REFUSAL,
+            )
 
     # Check off-topic patterns
     for compiled, refusal in _COMPILED_OFF_TOPIC:

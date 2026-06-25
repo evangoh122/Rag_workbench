@@ -147,7 +147,10 @@ secondary model.
   path in a background daemon thread (fire-and-forget — zero added latency).
 - `AUTO→SAMPLED_REVIEW` escalation + review-queue entry on material disagreement,
   applied to the audit row + review queue **after** the response is sent. The
-  background worker serializes its review-DB writes under `review_conn_lock`.
+  background worker opens its **own dedicated DuckDB connection**
+  (`get_new_review_connection()`) so it never shares a connection object with
+  request handlers (DuckDB connections are not safe to use concurrently across
+  threads), and closes it when done.
 - `consensus_status` / `consensus_divergence` / `consensus_secondary_model`
   persisted to `audit_runs` — columns are added at runtime via
   `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (`_ensure_consensus_columns`,

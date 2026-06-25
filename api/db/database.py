@@ -72,18 +72,6 @@ class DatabaseManager:
                         pass
             return self._conn
 
-    @property
-    def review_conn_lock(self):
-        """Public handle to the review-connection lock.
-
-        The review DuckDB connection is a shared singleton; background writers
-        (e.g. the fire-and-forget consensus rail) acquire the connection via
-        get_review_connection() first, then hold this lock around their writes to
-        serialize with other acquisitions. The lock is non-reentrant, so never
-        call get_review_connection() while holding it.
-        """
-        return self._review_conn_lock
-
     def get_review_connection(self):
         """Get or create the writable DuckDB connection for review queue tables (thread-safe).
 
@@ -95,6 +83,21 @@ class DatabaseManager:
                 self._review_conn = duckdb.connect(Config.REVIEW_DB_PATH)
                 init_review_tables(self._review_conn)
             return self._review_conn
+
+    def get_new_review_connection(self):
+        """Open a NEW, independent connection to the review DB.
+
+        For background threads (e.g. the fire-and-forget consensus rail) that must
+        not share the singleton connection object with request handlers. DuckDB
+        connections are not safe to use concurrently across threads, so each thread
+        opens its own. Within one process, connecting to the same file returns a
+        connection to the same database instance, so it sees the same tables.
+        Caller owns the connection and must close it.
+        """
+        # Ensure the singleton (and its table init) has run at least once so the
+        # base tables exist before a fresh connection touches them.
+        self.get_review_connection()
+        return duckdb.connect(Config.REVIEW_DB_PATH)
 
     def execute(self, sql: str, params=None):
         """Execute SQL with thread-safe access. Returns the cursor."""
