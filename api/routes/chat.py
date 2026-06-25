@@ -273,6 +273,7 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
             lineage=result.get("lineage"),
             chart=result.get("chart"),
             tone_analysis=result.get("tone_analysis"),
+            consensus=result.get("consensus"),
         )
     except HTTPException:
         raise
@@ -290,6 +291,12 @@ async def chat_sec_analyzer_endpoint(req: ChatRequest):
     try:
         if not req.ticker:
             raise HTTPException(status_code=400, detail="Ticker is required for SEC Analyzer")
+            
+        # Strict Ticker Validation to prevent injection
+        import re
+        if not re.match(r"^[A-Z0-9.-]{1,10}$", req.ticker.upper()):
+            raise HTTPException(status_code=400, detail="Invalid Ticker format")
+            
         chunks = chunk_filing_sections(req.ticker)
         if not chunks:
             raise HTTPException(status_code=404, detail=f"No filing data found for {req.ticker}")

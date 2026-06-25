@@ -110,6 +110,12 @@ class ChatResponse(BaseModel):
     # Sentiment / management tone (Phase B — populated post-processing)
     tone_analysis: Optional[Dict[str, Any]] = None
 
+    # Dual-model consensus rail (Bias / Model-Risk). Populated only when the
+    # risk gate fires (high-stakes / hard multi-year / comparison questions);
+    # None otherwise. Shape: {ran, gate_reason, agree, skipped, divergence_score,
+    # secondary_model, disagreements, reason, route_override?}.
+    consensus: Optional[Dict[str, Any]] = None
+
 
 # ── Sentiment Analysis Models ────────────────────────────────────────────────
 

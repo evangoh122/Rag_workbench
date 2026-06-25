@@ -1775,6 +1775,119 @@ def _abstain_response(company: str) -> Dict[str, Any]:
     }
 
 
+def _ensure_consensus_columns(conn) -> None:
+    """Idempotently add the consensus columns to audit_runs (DuckDB)."""
+    for col, typ in (
+        ("consensus_status", "VARCHAR"),
+        ("consensus_divergence", "DOUBLE"),
+        ("consensus_secondary_model", "VARCHAR"),
+    ):
+        conn.execute(f"ALTER TABLE audit_runs ADD COLUMN IF NOT EXISTS {col} {typ}")
+
+
+def _apply_consensus_rail(query: str, result: Dict[str, Any]) -> None:
+    """Dual-model consensus rail (Bias / Model-Risk dimension). Mutates `result`.
+
+    Risk-gated: only high-stakes / hard multi-year / comparison questions get the
+    second model (see should_run_consensus + docs/mindforge-risk-alignment.md §3).
+    On material disagreement, escalates an AUTO answer to SAMPLED_REVIEW, creates a
+    review-queue entry, and persists the consensus outcome to audit_runs. Entirely
+    non-fatal and fail-open — never blocks or breaks the answer.
+    """
+    try:
+        from api.services.guardrails.consensus_rails import (
+            should_run_consensus, check_consensus,
+        )
+
+        if result.get("verification_status") == "ABSTAIN":
+            return
+        answer = result.get("final_answer") or ""
+        docs = result.get("retrieved_docs") or []
+        if not answer or not docs:
+            return
+
+        run, gate_reason = should_run_consensus(query, result.get("eval_route"))
+        if not run:
+            return
+
+        context = "\n\n".join(
+            d.get("chunk_text", "") for d in docs if d.get("chunk_text")
+        )
+        verdict = check_consensus(query, context, answer)
+
+        consensus: Dict[str, Any] = {
+            "ran": True,
+            "gate_reason": gate_reason,
+            "agree": verdict.agree,
+            "skipped": verdict.skipped,
+            "divergence_score": verdict.divergence_score,
+            "secondary_model": verdict.secondary_model,
+            "disagreements": verdict.disagreements,
+            "reason": verdict.reason,
+        }
+        result["consensus"] = consensus
+
+        if verdict.skipped or verdict.agree:
+            return
+
+        # ── Material disagreement ────────────────────────────────────────────
+        prior_route = (result.get("eval_route") or "").upper()
+        if prior_route not in ("SAMPLED_REVIEW", "ESCALATE"):
+            result["eval_route"] = "SAMPLED_REVIEW"
+            consensus["route_override"] = f"{prior_route or 'AUTO'}->SAMPLED_REVIEW"
+
+        # Persist + (if escalated) create a review-queue entry. Each step is
+        # independently non-fatal so a DB hiccup never loses the answer.
+        from api.db.database import db_manager
+        lineage = result.get("lineage") or {}
+        run_id = lineage.get("run_id")
+        source_docs = lineage.get("source_docs") or []
+
+        if consensus.get("route_override"):
+            try:
+                from api.db.review_queue import insert_decision
+                rconn = db_manager.get_review_connection()
+                review_id = insert_decision(rconn, {
+                    "cik": result.get("resolved_ticker") or "",
+                    "accession": source_docs[0] if source_docs else "unknown",
+                    "form_type": "10-K",
+                    "route": "SAMPLED_REVIEW",
+                    "confidence": result.get("eval_confidence") if result.get("eval_confidence") is not None else 0.0,
+                    "triggers_fired": ["consensus_divergence"],
+                })
+                consensus["review_id"] = review_id
+            except Exception as exc:
+                logger.warning(f"Consensus review-queue insert failed (non-fatal): {exc}")
+
+        if run_id:
+            try:
+                conn = db_manager.get_review_connection()
+                _ensure_consensus_columns(conn)
+                conn.execute(
+                    """
+                    UPDATE audit_runs
+                       SET consensus_status = ?,
+                           consensus_divergence = ?,
+                           consensus_secondary_model = ?,
+                           eval_route = ?,
+                           review_id = COALESCE(?, review_id)
+                     WHERE run_id = ?
+                    """,
+                    [
+                        "DISAGREE",
+                        verdict.divergence_score,
+                        verdict.secondary_model,
+                        result.get("eval_route"),
+                        consensus.get("review_id"),
+                        run_id,
+                    ],
+                )
+            except Exception as exc:
+                logger.warning(f"Consensus audit update failed (non-fatal): {exc}")
+    except Exception as exc:
+        logger.warning(f"Consensus rail failed (non-fatal): {exc}")
+
+
 def run_auditable_rag(query: str, ticker: str,
                       history: Optional[List[Dict[str, str]]] = None,
                       role_guidance: Optional[str] = None) -> Dict[str, Any]:
@@ -1889,5 +2002,9 @@ def run_auditable_rag(query: str, ticker: str,
                 result["tone_analysis"] = tone
     except Exception as e:
         logger.debug("Tone analysis skipped (non-fatal): {}", e)
+
+    # Dual-model consensus rail (Bias / Model-Risk) — risk-gated, non-fatal.
+    # Runs only on high-stakes / hard multi-year / comparison questions.
+    _apply_consensus_rail(query, result)
 
     return result
