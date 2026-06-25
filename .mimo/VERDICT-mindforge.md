@@ -118,3 +118,19 @@ Reviewed: api/routes/chat.py, api/services/guardrails/input_rails.py
 - Event-loop stall removed: `run_in_threadpool(check_input, message)` dispatches the blocking ~5s MiMo call to AnyIO's worker pool and awaits it, freeing the loop; concurrent requests are no longer serialized. `_apply_input_rails` is async and awaited at all 4 endpoints (chat.py:118/139/161/187); check_input is plain sync -- a valid threadpool target.
 - Default threadpool (40 tokens) acceptable: the expensive path is gated to >200char/multi-line + MIMO key; the 1500-char cap and cheap regex/keyword layers short-circuit first; the 5s timeout bounds hold time; excess burst queues on the limiter gracefully rather than stalling the loop. A dedicated limiter would be optional hardening, not required.
 - check_dialog correctly kept on the loop (pure regex).
+
+
+---
+
+# VERDICT — mindforge — MiMo — round 9 (conjoint write-triggered snapshot)
+Status: APPROVED
+Reviewed: api/services/runtime_snapshot.py, api/routes/conjoint.py
+
+## Findings
+- [SEVERITY: nit] runtime_snapshot.py — Thread.start() was outside try: if it raises, _snap_in_flight stays True and wedges all future snapshots. [APPLIED: wrapped in try/except — resets the flag under the lock + returns False.]
+- [SEVERITY: nit] _MIN_WRITE_SNAPSHOT_INTERVAL_S had no floor; a misconfigured env could disable the throttle. [APPLIED: max(60, ...).]
+- [SEVERITY: minor] throttle stamps at snapshot start, so trailing writes wait for the next window (best-effort). [APPLIED: docstring note.]
+
+## Notes
+- Survey path stays fast: the sync portion of maybe_snapshot_async is a few env reads + a lock acquire + thread spawn (sub-ms, no I/O); the whole-DB Parquet export + upload runs in the daemon thread, so the response returns before any network/disk work. Off-Space it is a single env check -> zero overhead in dev.
+- Throttle + single-in-flight is the right cost shape: <=1 whole-DB upload per interval, never >1 thread; a burst coalesces to one upload (verified). Write-triggered (vs a timer) avoids idle polling on a sleepy free Space and won't keep it awake; daemon=True so shutdown won't hang (graceful-shutdown snapshot still covers the final state).

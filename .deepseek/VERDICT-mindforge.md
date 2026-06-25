@@ -125,3 +125,21 @@ Reviewed: api/routes/chat.py, api/services/guardrails/input_rails.py
 - Behavior preserved: check_input always returns InputVerdict and never raises (its MiMo HTTP call is wrapped in try/except -> InputVerdict(blocked=False) on failure). `await run_in_threadpool(check_input, message)` yields the identical verdict, consumed identically (.blocked -> HTTPException(400, reason)). No semantic drift.
 - Exception propagation unchanged: run_in_threadpool re-raises threadpool exceptions on the awaiting coroutine; the two HTTPException(400) raises in _apply_input_rails (advice/off_topic, input-blocked) execute in the coroutine body and propagate to the endpoint exactly as before.
 - check_dialog correctly stays sync; all 4 call sites awaited; no unawaited coroutine remains.
+
+
+---
+
+# VERDICT — mindforge — DeepSeek — round 9 (conjoint write-triggered snapshot)
+Status: APPROVED
+Reviewed: api/services/runtime_snapshot.py, api/routes/conjoint.py, api/db/database.py
+
+## Findings
+- [SEVERITY: minor] runtime_snapshot.py — Thread.start() outside try/except: on RuntimeError it would (a) raise into record_response/complete_session AFTER the committed write (violates the "never raises / must not affect the survey response" contract — surfaces as a 500 on an already-committed write), and (b) wedge _snap_in_flight permanently. [APPLIED: try/except resets the flag under the lock + returns False.]
+- [SEVERITY: nit] snapshot_review_db's export cursor uses get_review_connection().cursor() with the lock released, vs the get_new_review_connection() safe pattern (holds _review_conn_lock during .cursor()). Pre-existing (also reachable via the daily cron); this change makes background-thread invocation routine. [NOTED as follow-up; DuckDB MVCC isolates the read so no corruption — only a brief cursor-creation race.]
+
+## Notes
+- Throttle race-free: check-then-set fully inside _snap_lock; reads/writes of the globals atomic under one acquisition. Computing now=monotonic() before the lock only makes the gate marginally conservative.
+- _snap_in_flight reset correct: _run resets it in a finally under the lock; snapshot_review_db never raises (broad except -> False). The only un-handled path was the start() edge, now guarded.
+- Fires only after a successful commit, never on the error path: both call sites sit after the route try/except; DuckDB autocommit makes the INSERT/UPDATE durable before the trigger, so the COPY sees it.
+- Independent cursor: the COPY runs on a .cursor() (independent connection on the same instance) -> MVCC isolates from concurrent parent writes; no query-level contention or corruption.
+- Module-global mutable state safe under GIL+threads — all access serialized by _snap_lock.

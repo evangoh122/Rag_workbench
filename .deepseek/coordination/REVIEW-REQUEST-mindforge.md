@@ -228,3 +228,23 @@ The pipeline's `--yes` auto-fix applied the same fix in its worktree but **un-ga
 - [ ] Offload removes the event-loop stall; default threadpool acceptable for the gated load profile; check_dialog correctly kept inline.
 ### DeepSeek (correctness/API) — REQUIRED
 - [ ] sync->async conversion correct/complete; all 4 awaited; run_in_threadpool import + signature correct; check_input contract (returns InputVerdict, never raises) preserved; HTTPException(400) propagation unchanged.
+
+
+---
+
+# REVIEW-REQUEST — mindforge — round 9
+
+**Gate:** MiMo + DeepSeek APPROVED before commit.
+
+## What / why
+The conjoint A/B tables (`conjoint_sessions`/`conjoint_responses`) already live in the snapshotted review DB (REVIEW_DB_PATH), so they persist across restarts via the existing daily-cron + shutdown snapshot. Gap: a hard Space restart (cpu-basic flap) loses everything written since the last DAILY snapshot — significant for a low-traffic experiment.
+
+## Change under review (api/services/runtime_snapshot.py, api/routes/conjoint.py)
+- New `maybe_snapshot_async()`: throttled (>=300s, floored 60s), single-in-flight, fire-and-forget, best-effort snapshot; no-op off-Space.
+- `conjoint.record_response` + `complete_session` call it after their durable writes, capturing experiment data promptly while the Space is awake.
+
+## Checklists
+### MiMo (perf/latency/cost) — REQUIRED
+- [ ] Fire-and-forget keeps the survey path fast; throttle + single-in-flight bounds whole-DB upload cost; write-triggered is sound on a sleepy free Space.
+### DeepSeek (correctness/concurrency) — REQUIRED
+- [ ] Throttle race-free; _snap_in_flight always reset; never raises into the request path; fires only after a successful commit; independent cursor avoids write contention.

@@ -106,3 +106,15 @@ Fix (chat.py): `_apply_input_rails` -> async; `check_input` offloaded via `fasta
 Commit gate (MiMo + DeepSeek) [check] **CLEARED**. Codex + Gemini already APPROVED round 7; round 8 changes only chat.py async wiring (not the guardrail/consensus logic they reviewed), so a Codex/Gemini re-glance on the offload is optional, not blocking for the commit gate.
 
 **Follow-ups (out of scope, not blocking):** (1) /sec-analyzer endpoint applies no input rails; (2) the sync engine calls (chat_sql/ask_rag/run_graph_rag) still run on the loop and could be thread-pooled too.
+
+
+## Round 9 — durable storage for the conjoint experiment (write-triggered snapshot)
+The conjoint A/B tables (conjoint_sessions/conjoint_responses) already live in the snapshotted review DB (REVIEW_DB_PATH), so they persist across restarts via the existing daily-cron + shutdown snapshot. Gap: a hard Space restart loses everything written since the last DAILY snapshot -- significant for a low-traffic experiment.
+
+Fix: added `runtime_snapshot.maybe_snapshot_async()` -- a throttled (>=300s, floored 60s), single-in-flight, fire-and-forget, best-effort snapshot that no-ops off-Space; `conjoint.record_response` and `complete_session` call it after their durable writes, so experiment data is captured promptly while the Space is awake (closing the daily-window loss) without per-write upload cost.
+
+Verified: parse; off-Space no-op; burst coalesces to 1 upload; thread-start failure resets the in-flight flag and returns False without raising into the request path; tests/test_guardrails.py 15/15.
+
+**Re-review (round 9, via Claude API): MiMo = APPROVED, DeepSeek = APPROVED.** Both flagged the Thread.start() robustness edge (would raise into the request path after the committed write + wedge the in-flight flag) -- **APPLIED** (try/except resets the flag + returns False). Also applied: interval floor `max(60, ...)` and a trailing-write doc note. **Follow-up noted** (out of scope, pre-existing, negligible): snapshot_review_db's export cursor could route through `get_new_review_connection()` for lock-safe cursor creation.
+
+Commit gate (MiMo + DeepSeek) [check] **CLEARED**.

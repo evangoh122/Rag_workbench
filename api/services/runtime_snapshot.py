@@ -33,6 +33,8 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 from loguru import logger
@@ -67,6 +69,61 @@ def _on_space() -> bool:
 def snapshot_enabled() -> bool:
     """Whether shutdown snapshots should run in this process."""
     return _on_space() and _token() is not None
+
+
+_snap_lock = threading.Lock()
+_last_snap_monotonic = 0.0
+_snap_in_flight = False
+# Coalesce write-triggered snapshots: at most one upload per this many seconds.
+# Floored at 60s so a misconfigured env can't turn the throttle off and let
+# sustained writes drive back-to-back whole-DB re-export+upload.
+_MIN_WRITE_SNAPSHOT_INTERVAL_S = max(60, int(os.getenv("RUNTIME_SNAPSHOT_MIN_INTERVAL_S", "300")))
+
+
+def maybe_snapshot_async(*, reason: str = "write") -> bool:
+    """Fire-and-forget, throttled snapshot after a durable write.
+
+    The daily cron + shutdown snapshot can lose everything written since the last
+    snapshot if the Space hard-restarts (cpu-basic Spaces flap). For low-traffic,
+    high-value data — e.g. the conjoint experiment responses — calling this right
+    after a write captures it promptly while the Space is awake. Throttled so a
+    burst of writes triggers at most one upload per RUNTIME_SNAPSHOT_MIN_INTERVAL_S
+    (default 300s), with never more than one snapshot in flight.
+
+    Returns True if a snapshot thread was started, else False (throttled/disabled).
+    Never raises; a no-op off-Space so local dev never uploads.
+
+    Note: the throttle window starts at snapshot *start*, so writes landing during
+    an in-flight snapshot are captured by the next eligible snapshot (>= interval
+    later) or the cron/shutdown path — this is best-effort durability, not a
+    guarantee that every individual write is uploaded immediately.
+    """
+    if not snapshot_enabled():
+        return False
+    global _last_snap_monotonic, _snap_in_flight
+    now = time.monotonic()
+    with _snap_lock:
+        if _snap_in_flight or (now - _last_snap_monotonic) < _MIN_WRITE_SNAPSHOT_INTERVAL_S:
+            return False
+        _snap_in_flight = True
+        _last_snap_monotonic = now
+
+    def _run() -> None:
+        global _snap_in_flight
+        try:
+            snapshot_review_db(reason=reason)
+        finally:
+            with _snap_lock:
+                _snap_in_flight = False
+
+    try:
+        threading.Thread(target=_run, name="runtime-snapshot-write", daemon=True).start()
+    except Exception as e:  # noqa: BLE001 — must never raise into the caller's request path
+        with _snap_lock:
+            _snap_in_flight = False  # release so future writes can retry
+        logger.error("[snapshot] could not start write-triggered snapshot thread: {}", e)
+        return False
+    return True
 
 
 def snapshot_review_db(*, reason: str = "periodic", force: bool = False) -> bool:

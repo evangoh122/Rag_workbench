@@ -28,6 +28,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from api.db.database import db_manager
+from api.services.runtime_snapshot import maybe_snapshot_async
 
 router = APIRouter(prefix="/api/conjoint", tags=["conjoint"])
 
@@ -437,6 +438,9 @@ def record_response(body: ResponseIn):
     except Exception:
         logger.exception("conjoint response record failed")
         raise HTTPException(status_code=500, detail="Failed to record response")
+    # Capture the new response durably while the Space is awake (throttled; no-op
+    # off-Space). Best-effort — must not affect the survey response.
+    maybe_snapshot_async(reason="conjoint-response")
 
 
 @router.post("/complete")
@@ -482,6 +486,9 @@ def complete_session(body: CompleteIn):
     except Exception:
         logger.exception("conjoint complete failed")
         raise HTTPException(status_code=500, detail="Failed to complete session")
+    # Persist the completed session (usefulness vote + prefs) promptly; throttled,
+    # no-op off-Space, best-effort.
+    maybe_snapshot_async(reason="conjoint-complete")
     return {"applied_prefs": prefs}
 
 
