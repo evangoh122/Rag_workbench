@@ -1,15 +1,0 @@
-C:\Users\jianj\AppData\Roaming\Python\Python314\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.2) or chardet (7.4.3)/charset_normalizer (3.4.4) doesn't match a supported version!
-  warnings.warn(
-[reembed] torch threads=16
-[reembed] loading Qwen/Qwen3-Embedding-0.6B ...
-Loading weights:   0%|          | 0/310 [00:00<?, ?it/s]Loading weights: 100%|##########| 310/310 [00:00<00:00, 4563.59it/s]
-[reembed] 4554 rows total, 1318 need re-embedding (already 1024-dim: 3236)
-[reembed] 160/1318  (0.1/s, eta 140.9 min)
-[reembed] 320/1318  (0.2/s, eta 93.9 min)
-[reembed] 480/1318  (0.2/s, eta 85.0 min)
-[reembed] 640/1318  (0.2/s, eta 68.4 min)
-[reembed] 800/1318  (0.2/s, eta 51.8 min)
-[reembed] 960/1318  (0.2/s, eta 35.5 min)
-[reembed] 1120/1318  (0.2/s, eta 19.6 min)
-[reembed] 1280/1318  (0.2/s, eta 3.7 min)
-[reembed] DONE — 1318 processed in 128.5 min. remaining NULL/non-1024: 0. vector dims now: [1024]

@@ -27,3 +27,9 @@ frontend/bundle-analysis.html
 scratch_*
 out_*.txt
 scripts/_*_out.txt
+
+# generated / binaries / logs (stripped from branch, kept on disk)
+*.log
+graphify-out/
+no-mistakes/
+no-mistakes.zip
