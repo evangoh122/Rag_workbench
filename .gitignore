@@ -22,3 +22,8 @@ graphify-out/cache/
 *.duckdb.wal
 ISSUES.md*.log
 frontend/bundle-analysis.html
+
+# scratch / debug (local only)
+scratch_*
+out_*.txt
+scripts/_*_out.txt

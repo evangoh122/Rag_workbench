@@ -35,3 +35,18 @@ Reviewed: e971863b; api/db/database.py; api/services/langgraph_engine.py; api/se
 - Codex round 2 concurrency finding is resolved: `_consensus_worker()` now opens and closes a dedicated DuckDB connection via `get_new_review_connection()` rather than sharing the singleton review connection with request handlers.
 - I directly checked the advertised advice cases: "Should I buy NVDA?", "What is your price target for AMD?", "Would you recommend buying Micron?", and "What should I do with my portfolio?" are refused as advice; "Does the board recommend buying back shares?" and "What was NVDA revenue in the latest 10-K?" are not refused.
 - I attempted `python -m pytest tests/test_guardrails.py tests/test_chat.py`; it did not run because `tests/test_chat.py` does not exist, and pytest emitted the existing `.pytest_cache` permission warning.
+
+---
+
+# VERDICT - mindforge - Codex - round 4
+Status: APPROVED
+Reviewed: 4a897ba0; api/services/guardrails/dialog_rails.py; tests/test_guardrails.py; api/db/database.py; api/services/langgraph_engine.py; .mimo/VERDICT-mindforge.md; .deepseek/VERDICT-mindforge.md; .deepseek/coordination/SUMMARY-mindforge.md
+
+## Findings
+- none
+
+## Notes
+- Codex round 1 remains resolved by async response/audit eventual consistency.
+- Codex round 2 remains resolved by `_consensus_worker()` using a dedicated DuckDB review connection via `get_new_review_connection()` and closing it in `finally`.
+- Codex round 3 is resolved: `check_dialog()` now runs advice refusal first, then the financial-keyword allowlist, then the generic off-topic denylist; bare `test` was removed from the education/off-topic pattern. Direct check now allows "Is goodwill overvalued per the impairment test?", "How much test equipment revenue did Teradyne report?", and "What were the stress test results disclosed?" while still refusing investment-advice prompts and off-topic cake/weather-style prompts.
+- Verification: `python -m pytest tests/test_guardrails.py` -> 15 passed. Pytest emitted the existing `.pytest_cache` permission warning.
