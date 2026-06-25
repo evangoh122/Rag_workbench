@@ -12,3 +12,32 @@ Reviewed: .deepseek/coordination/PROTOCOL.md; .deepseek/coordination/REVIEW-REQU
 `check_consensus` and `ConsensusVerdict` are coherent for the standalone contract. Fail-open paths return `agree=True, skipped=True`; the threshold logic is correct (`score <= divergence_threshold` agrees); numeric comparison is regex/set based with no eval/SQL execution; no-number and secondary-only-number cases produce no divergence; `$1,200` and `1200` normalize to the same token.
 
 The cited security/audit implementation mostly matches the doc: auth uses tiered keys and `hmac.compare_digest`; admin hard-fails without `ADMIN_API_KEY`; input/output/execution rails implement the referenced regex/heuristic checks; audit list/get use parameterized SQL branches; `audit_runs` columns match the cited source_docs/chunk_ids/xbrl_facts_cited/math_steps/confidence/eval_route/verification_status/model_used fields.
+
+---
+
+# VERDICT — mindforge — DeepSeek — round 3 (final)
+Status: APPROVED
+Reviewed: api/services/guardrails/consensus_rails.py; _apply_consensus_rail + call
+site (langgraph_engine.py:2009) in run_auditable_rag; docs/mindforge-risk-alignment.md
+(review driven via the DeepSeek API on user instruction)
+
+## Findings
+- none
+
+## Notes
+Code and doc consistent. Risk-gating, fail-open, divergence, route override
+(AUTO→SAMPLED_REVIEW), audit persistence (consensus_* columns), and review-queue
+insertion all match documented behavior. Correlated-model limitation honestly
+disclosed in both code comments and doc.
+
+## Resolution of round 1 + round 2
+- r1 major (routing "every answer" overstated) → FIXED: §1 scoped to auditable-RAG
+  path; non-scored paths listed.
+- r1 major (persistence vs "no persistent user data") → FIXED: §2 states audit_runs
+  persists question+answer as an audit trade-off; privacy claim scoped.
+- r1 minor (8 vs 10 triggers) → FIXED: doc now says 10, enumerated.
+- r1 minor (not-wired clarity) → then wired; doc §3 updated to "wired and active".
+- r2 major (docstring implied module produces primary answer) → FIXED: docstring
+  clarifies primary_answer is passed in.
+- r2 major (call site not shown) → FALSE POSITIVE from a truncated review excerpt;
+  call confirmed at langgraph_engine.py:2009. Re-reviewed with call site → APPROVED.

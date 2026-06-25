@@ -1,10 +1,10 @@
 """
 consensus_rails.py — Dual-model consensus check (Bias / Model-Risk rail).
 
-The audited answer is produced by the primary chat provider (DeepSeek). This rail
-asks an *independent* secondary model (MiMo) to answer the SAME question from the
-SAME retrieved context, then deterministically compares the material numeric
-claims of the two answers.
+The audited (primary) answer is produced upstream and passed IN as `primary_answer`
+— this module does not generate it. The rail asks an *independent* secondary model
+(MiMo) to answer the SAME question from the SAME retrieved context, then
+deterministically compares the material numeric claims of the two answers.
 
 Goal: reduce single-model dependence and surface answer-level divergence. When the
 two models disagree on a figure, that is a strong "lower-confidence / send to human
@@ -19,6 +19,11 @@ notes before relying on this for the Bias & Fairness story.
 
 The rail is fail-open: any error, timeout, or missing key returns a SKIPPED verdict
 (agree=True) so it can never break the chat path.
+
+NOTE: this module only *computes* the consensus verdict. The caller
+(`_apply_consensus_rail` in langgraph_engine.py) owns the side effects — route
+override (AUTO->SAMPLED_REVIEW), review-queue entry, and persisting consensus_* to
+audit_runs — on material disagreement.
 
 RISK-GATING (do not run on every answer): a second LLM call ~doubles base latency,
 so the rail is gated by `should_run_consensus()` to HIGH-RISK questions only —
@@ -144,7 +149,7 @@ def check_consensus(
     primary_answer: str,
     *,
     divergence_threshold: float = 0.5,
-    timeout: float = 8.0,
+    timeout: float = float(os.getenv("CONSENSUS_TIMEOUT", "8.0")),
 ) -> ConsensusVerdict:
     """Run the secondary model and compare against the primary answer.
 
@@ -167,8 +172,13 @@ def check_consensus(
     mimo_base_url = os.getenv("MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1")
     mimo_model = os.getenv("MIMO_MODEL", "mimo-v2.5-pro")
 
-    # Context can be large; cap it so the secondary call stays bounded.
+    # Context can be large; cap it so the secondary call stays bounded. Cut on a
+    # paragraph boundary when possible so we don't slice mid-figure/mid-sentence.
     ctx = context[:12000]
+    if len(context) > 12000:
+        boundary = ctx.rfind("\n\n")
+        if boundary > 6000:  # only honour the boundary if it keeps enough context
+            ctx = ctx[:boundary]
 
     prompt = (
         "You are an independent financial analyst. Answer the question using ONLY "

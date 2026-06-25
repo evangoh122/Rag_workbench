@@ -101,9 +101,12 @@ the *response*, not the stored prompt).
   human review, and the disagreement is surfaced for transparency. Fail-open: any
   error or missing key returns a SKIPPED verdict so it can never break chat.
 
-  > **Status:** the rail is implemented but **not yet wired into live routing** —
-  > it is the working example this doc references. The gating + wiring below is the
-  > production design, not current runtime behaviour.
+  > **Status:** the rail is **wired and active** on the auditable-RAG path
+  > (`_apply_consensus_rail` in `langgraph_engine.py`, called from
+  > `run_auditable_rag`). It is risk-gated (below), fail-open, and on material
+  > disagreement it escalates `AUTO→SAMPLED_REVIEW`, opens a review-queue entry,
+  > and persists `consensus_*` to `audit_runs`. The remaining open item is the
+  > **frontier-model swap** for the secondary (see Planned hardening).
 
 #### Risk-gating: which questions get the dual model
 
@@ -127,16 +130,23 @@ auditable and testable, not buried in route code.
   answers. Building blocks already present: `api/services/sentiment.py` +
   management-tone analysis, and the deterministic, ticker-agnostic numeric path.
 
-**Planned hardening:**
-1. Swap secondary model to a frontier, different-lineage model.
-2. Promote the consensus rail from response-only to **persisted in the audit log**
-   (add `consensus_*` columns to `audit_runs`).
+**Already implemented:**
+- Risk-gated rail wired into the live auditable-RAG path.
+- `AUTO→SAMPLED_REVIEW` escalation + review-queue entry on material disagreement.
+- `consensus_status` / `consensus_divergence` / `consensus_secondary_model`
+  persisted to `audit_runs` (columns added idempotently by
+  `_ensure_consensus_columns`).
+
+**Planned hardening (remaining):**
+1. Swap secondary model to a frontier, different-lineage model (the key one — the
+   current DeepSeek+MiMo pair is correlated; see the box above).
+2. Surface the persisted `consensus_*` fields in the `/api/audit` read API.
 3. Add **cross-company consistency tests** (same question across tickers; flag
    unjustified variance) as an offline eval feeding drift detection.
 
-**Honest status:** this is the least mature dimension. The consensus rail exists as
-a working example; the frontier-model swap, audit persistence, and consistency
-suite are the remaining work.
+**Honest status:** this is the least mature dimension. The rail is live and
+audited, but its bias value is limited until the secondary becomes a
+different-lineage frontier model; the consistency suite is still to come.
 
 ## 4. Transparency & Explainability
 
@@ -200,9 +210,9 @@ advice-blocking dialog rail yet. Recommended before any external/regulated use.
 
 ## Honest gaps (do not oversell)
 
-1. **Bias & Fairness** is partial — consensus rail exists, but uses correlated
-   models, isn't persisted to the audit log, and lacks a cross-company
-   consistency suite. *Frontier-model swap is the first fix.*
+1. **Bias & Fairness** is partial — the consensus rail is live and persisted to
+   the audit log, but it pairs **correlated models** (DeepSeek+MiMo) and lacks a
+   cross-company consistency suite. *Frontier-model swap is the first fix.*
 2. **Hallucination + PII checks are heuristic** (entity-overlap ratio, regex), not
    model-grade — they miss paraphrased fabrications and novel formats.
 3. **No financial-advice disclaimer / advice-blocking rail** (Legal & Regulatory).

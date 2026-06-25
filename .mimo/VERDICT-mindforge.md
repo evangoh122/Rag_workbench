@@ -10,3 +10,28 @@ Reviewed: api/services/guardrails/consensus_rails.py, docs/mindforge-risk-alignm
 - `max_tokens=600` and `context[:12000]` boundaries are sane and will protect against unbounded context length issues.
 - Confirmed no DB writes or review-DB costs are introduced in this module.
 - The `mindforge-risk-alignment.md` document is highly readable and well-structured for non-engineers and compliance reviewers.
+
+---
+
+# VERDICT — mindforge — MiMo — round 3 (final)
+Status: APPROVED
+Reviewed: api/services/guardrails/consensus_rails.py; _apply_consensus_rail +
+_ensure_consensus_columns wiring in api/services/langgraph_engine.py
+(review driven via the MiMo API on user instruction)
+
+## Findings
+- none
+
+## Notes
+Latency bounded by risk-gating + 8s timeout; DB cost minimal (single UPDATE/INSERT
+only on material disagreement); all synchronous work guarded by
+should_run_consensus(); fail-open + deterministic divergence appropriate.
+
+## Resolution of round 1
+- r1 major (gating not documented) → FIXED: should_run_consensus() gate + doc §3
+  table + docstring.
+- r1 minor (timeout 20s) → FIXED: timeout 20→8s, env-configurable via
+  CONSENSUS_TIMEOUT.
+- r2 perf nits (per-disagreement ALTER write-lock; conn acquired twice; hard
+  context chop) → FIXED: process-level _CONSENSUS_COLUMNS_ENSURED guard; single
+  shared connection; paragraph-boundary truncation.

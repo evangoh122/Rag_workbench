@@ -1775,14 +1775,25 @@ def _abstain_response(company: str) -> Dict[str, Any]:
     }
 
 
+_CONSENSUS_COLUMNS_ENSURED = False
+
+
 def _ensure_consensus_columns(conn) -> None:
-    """Idempotently add the consensus columns to audit_runs (DuckDB)."""
+    """Idempotently add the consensus columns to audit_runs (DuckDB).
+
+    Guarded by a process-level flag so the DDL (which takes a write lock) runs at
+    most once per process rather than on every disagreement.
+    """
+    global _CONSENSUS_COLUMNS_ENSURED
+    if _CONSENSUS_COLUMNS_ENSURED:
+        return
     for col, typ in (
         ("consensus_status", "VARCHAR"),
         ("consensus_divergence", "DOUBLE"),
         ("consensus_secondary_model", "VARCHAR"),
     ):
         conn.execute(f"ALTER TABLE audit_runs ADD COLUMN IF NOT EXISTS {col} {typ}")
+    _CONSENSUS_COLUMNS_ENSURED = True
 
 
 def _apply_consensus_rail(query: str, result: Dict[str, Any]) -> None:
@@ -1843,11 +1854,13 @@ def _apply_consensus_rail(query: str, result: Dict[str, Any]) -> None:
         run_id = lineage.get("run_id")
         source_docs = lineage.get("source_docs") or []
 
+        # One review-DB connection shared by the insert + the audit UPDATE below.
+        conn = db_manager.get_review_connection()
+
         if consensus.get("route_override"):
             try:
                 from api.db.review_queue import insert_decision
-                rconn = db_manager.get_review_connection()
-                review_id = insert_decision(rconn, {
+                review_id = insert_decision(conn, {
                     "cik": result.get("resolved_ticker") or "",
                     "accession": source_docs[0] if source_docs else "unknown",
                     "form_type": "10-K",
@@ -1861,7 +1874,6 @@ def _apply_consensus_rail(query: str, result: Dict[str, Any]) -> None:
 
         if run_id:
             try:
-                conn = db_manager.get_review_connection()
                 _ensure_consensus_columns(conn)
                 conn.execute(
                     """
