@@ -70,3 +70,19 @@ questions). Gating still tight; 8s timeout + fail-open clean; daemon-thread
 fire-and-forget = zero hot-path latency. The dedicated DuckDB connection in
 _consensus_worker correctly avoids cross-thread connection sharing (resolves the
 r-prior `.cursor()` concern and Codex r2).
+
+---
+
+# VERDICT — mindforge — MiMo — round 6 (Codex r3 fix)
+Status: APPROVED
+Reviewed: dialog_rails.py (reordered check_dialog), consensus_rails.py, wiring
+
+## Findings
+- none
+
+## Notes
+Advice rail ordering (advice → financial-keyword allowlist → off-topic denylist)
+avoids the false-positive traps. Patterns narrow by design ("should i buy" needs
+first-person "i"; "recommend" needs "you recommend"), so "the board recommends
+buying back shares" passes. Dedicated DB connection per thread + explicit close in
+`finally` cleanly solves the cross-thread concurrency issue.

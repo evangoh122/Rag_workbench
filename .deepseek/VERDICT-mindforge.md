@@ -78,3 +78,19 @@ catastrophic backtracking. Concurrency fix uses a dedicated per-thread review
 connection. Doc claims align with implementation. (Note: an earlier DeepSeek note
 referenced ".cursor()"; the final code uses db_manager.get_new_review_connection()
 — an independent connection — which is the stronger fix.)
+
+---
+
+# VERDICT — mindforge — DeepSeek — round 6 (Codex r3 fix)
+Status: APPROVED
+Reviewed: dialog_rails.py (financial-keyword allowlist now precedes off-topic),
+tests/test_guardrails.py, consensus_rails.py, langgraph_engine.py wiring, doc
+
+## Findings
+- none
+
+## Notes
+Advice rail patterns precise and fire before the financial-keyword allowlist;
+financial allowlist now precedes the off-topic denylist (fixes Codex r3 "test"
+false positive). Concurrency fix uses an independent per-thread DuckDB connection.
+Doc-vs-code accuracy holds across all claims.

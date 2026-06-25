@@ -21,3 +21,17 @@ Reviewed: 41279cbc; api/services/guardrails/consensus_rails.py; api/services/lan
 ## Notes
 - Codex round 1 finding is resolved by the async design: the response no longer includes `consensus`, and it intentionally returns the pre-consensus route while audit/review converge afterward.
 - I did not run the test suite for this review pass.
+
+---
+
+# VERDICT - mindforge - Codex - round 3
+Status: CHANGES NEEDED
+Reviewed: e971863b; api/db/database.py; api/services/langgraph_engine.py; api/services/guardrails/dialog_rails.py; api/routes/chat.py; docs/mindforge-risk-alignment.md; .mimo/VERDICT-mindforge.md; .deepseek/VERDICT-mindforge.md; .gemini/VERDICT-mindforge.md; .deepseek/coordination/SUMMARY-mindforge.md
+
+## Findings
+- [SEVERITY: major] api/services/guardrails/dialog_rails.py:171 - The claimed goodwill-impairment false-positive fix is incomplete: `check_dialog("Is goodwill overvalued per the impairment test?")` returns `off_topic=True` because the generic off-topic pattern `\b(homework|exam|test|quiz|assignment|essay)\b` runs before the financial-keyword allowlist and matches the word "test". This still blocks a factual SEC-filing/accounting question despite `goodwill` being in `_FINANCIAL_KEYWORDS` and despite the comment at lines 63-64 explicitly naming this as an allowed example. - Let financial-keyword/accounting queries bypass generic off-topic education terms, or narrow the off-topic pattern so bare "test" does not match accounting/impairment/test-equipment contexts.
+
+## Notes
+- Codex round 2 concurrency finding is resolved: `_consensus_worker()` now opens and closes a dedicated DuckDB connection via `get_new_review_connection()` rather than sharing the singleton review connection with request handlers.
+- I directly checked the advertised advice cases: "Should I buy NVDA?", "What is your price target for AMD?", "Would you recommend buying Micron?", and "What should I do with my portfolio?" are refused as advice; "Does the board recommend buying back shares?" and "What was NVDA revenue in the latest 10-K?" are not refused.
+- I attempted `python -m pytest tests/test_guardrails.py tests/test_chat.py`; it did not run because `tests/test_chat.py` does not exist, and pytest emitted the existing `.pytest_cache` permission warning.

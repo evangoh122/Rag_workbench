@@ -128,7 +128,10 @@ _OFF_TOPIC_PATTERNS: list[tuple[str, str]] = [
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
     (r"\b(joke|riddle|poem|story|tale|novel)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
-    (r"\b(homework|exam|test|quiz|assignment|essay)\b",
+    # NB: bare "test" intentionally excluded — it legitimately appears in filings
+    # ("impairment test", "test equipment", "stress test"). Education abuse is still
+    # caught by the other terms.
+    (r"\b(homework|exam|quiz|assignment|essay)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
     (r"\b(travel|hotel|flight|vacation|restaurant|food)\b",
      "I'm a financial analysis assistant. I can help with SEC filings, financial statements, and company analysis. What would you like to know?"),
@@ -168,7 +171,18 @@ def check_dialog(message: str) -> DialogVerdict:
                 refusal_message=_ADVICE_REFUSAL,
             )
 
-    # Check off-topic patterns
+    # Financial-keyword allowlist runs BEFORE the generic off-topic denylist
+    # (Codex r3): otherwise a legitimate accounting question is wrongly refused
+    # because a generic education term matches an incidental word — e.g. "test" in
+    # "impairment test" / "test equipment". A genuine financial question wins.
+    msg_lower = message.lower()
+    has_financial_keyword = any(
+        kw in msg_lower for kw in _FINANCIAL_KEYWORDS
+    )
+    if has_financial_keyword:
+        return DialogVerdict(on_topic=True)
+
+    # Check off-topic patterns (only for queries with NO financial keyword)
     for compiled, refusal in _COMPILED_OFF_TOPIC:
         if compiled.search(message):
             return DialogVerdict(
@@ -177,15 +191,6 @@ def check_dialog(message: str) -> DialogVerdict:
                 topic="off_topic",
                 refusal_message=refusal,
             )
-
-    # Check if query contains at least one financial keyword
-    msg_lower = message.lower()
-    has_financial_keyword = any(
-        kw in msg_lower for kw in _FINANCIAL_KEYWORDS
-    )
-
-    if has_financial_keyword:
-        return DialogVerdict(on_topic=True)
 
     # Short queries (commands, greetings) are allowed through
     if len(message.split()) <= 3:

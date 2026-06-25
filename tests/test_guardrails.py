@@ -65,6 +65,45 @@ def test_dialog_rails_short_query():
     assert check_dialog("Help me").on_topic
     assert check_dialog("AMD revenue").on_topic
 
+# ── Investment-advice rail (Legal & Regulatory) ──────────────────────────────
+
+def test_dialog_rails_advice_refused():
+    advice_queries = [
+        "Should I buy NVDA?",
+        "Is Micron a good investment?",
+        "What is your price target for AMD?",
+        "Would you recommend selling Intel?",
+        "What should I do with my portfolio?",
+        "Will the stock go up next quarter?",
+    ]
+    for q in advice_queries:
+        verdict = check_dialog(q)
+        assert verdict.advice, f"expected advice refusal for: {q}"
+        assert not verdict.on_topic
+        assert verdict.refusal_message is not None
+        assert "licensed investment adviser" in verdict.refusal_message.lower()
+
+def test_dialog_rails_advice_no_false_positives():
+    # Factual filing questions that contain advice-adjacent words must NOT be refused.
+    factual = [
+        "Is goodwill overvalued per the impairment test?",   # impairment "test" + "overvalued"
+        "Does the board recommend buying back shares?",       # board "recommend buying"
+        "How much test equipment revenue did Teradyne report?",
+        "What were the stress test results disclosed?",
+        "Are intangible assets undervalued in the latest 10-K?",
+    ]
+    for q in factual:
+        verdict = check_dialog(q)
+        assert not verdict.advice, f"false-positive advice refusal for: {q}"
+        assert not verdict.off_topic, f"false-positive off-topic refusal for: {q}"
+
+def test_dialog_rails_financial_keyword_beats_offtopic():
+    # A financial question must win over generic off-topic education terms (Codex r3):
+    # "impairment test" must not be refused because of the bare word "test".
+    verdict = check_dialog("Explain the goodwill impairment test methodology used.")
+    assert verdict.on_topic
+    assert not verdict.off_topic
+
 # ── Retrieval Rails Tests ────────────────────────────────────────────────────
 
 def test_retrieval_rails_filter():

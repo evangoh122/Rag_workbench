@@ -55,6 +55,18 @@ re-verify or explicit waive closes the push gate.
 Commit gate ✅ CLEARED for round 5. Codex r2 concurrency blocker resolved with the
 dedicated-connection fix (Codex re-verify or waive to fully close the push gate).
 
+## Round 6 — Codex r3 fix (off-topic precedence)
+- **Codex r3**: "Is goodwill overvalued per the impairment **test**?" was refused as
+  off-topic because the generic education pattern matched bare "test" before the
+  financial-keyword allowlist.
+- **Fix**: `check_dialog` reordered to advice → financial-keyword allowlist →
+  off-topic denylist; bare "test" removed from the education pattern. Added 3
+  guardrail tests; full `tests/test_guardrails.py` (15) passes.
+- **Re-review (round 6): MiMo = APPROVED, DeepSeek = APPROVED, no findings.**
+
+Codex r2 (concurrency) resolved; Codex r3 (off-topic precedence) now fixed — needs
+a Codex re-verify to flip the Codex lane to APPROVED and fully close the push gate.
+
 ## Note on process
 The MiMo + DeepSeek reviews were driven directly via their APIs (Claude
 orchestrated) on user instruction, rather than via separate CLI sessions. Verdict
