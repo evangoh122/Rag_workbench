@@ -19,7 +19,7 @@ def mock_guards():
          patch('api.routes.chat.check_output') as m_out:
         
         m_in.return_value = MagicMock(blocked=False)
-        m_dia.return_value = MagicMock(off_topic=False)
+        m_dia.return_value = MagicMock(off_topic=False, advice=False)
         m_out.return_value = MagicMock(masked_answer=None)
         yield (m_in, m_dia, m_out)
 
@@ -110,7 +110,7 @@ def test_output_rail_masking():
          patch('api.routes.chat.ask_rag') as mock_rag:
         
         m_in.return_value = MagicMock(blocked=False)
-        m_dia.return_value = MagicMock(off_topic=False)
+        m_dia.return_value = MagicMock(off_topic=False, advice=False)
         m_out.return_value = MagicMock(masked_answer="REDACTED ANSWER")
         mock_rag.return_value = "Sensitive answer with PII"
         
