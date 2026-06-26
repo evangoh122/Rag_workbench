@@ -1,44 +1,34 @@
-name: Embed Filings → Dataset
+name: Refresh Filings (scheduled) → Dataset
 
-# Manually-triggered ETL: download the live RAG DuckDB from the HF dataset, embed
-# additional SEC filings (2024+2025 annual 10-K/20-F by default, or 10-Q) with the
-# SAME local model the corpus already uses (Qwen/Qwen3-Embedding-0.6B, 1024-dim),
-# run a destructive-change guardrail, upload the updated DB back to the dataset,
-# restart the Space, and confirm it serves the new corpus. Runs entirely on
-# GitHub's runner — no local machine required. Independent of deploy.yml.
+# Ongoing freshness: on a weekly schedule (and on demand) pick up any newly-filed
+# 10-K / 20-F / 10-Q that isn't in the corpus yet, embed it with the same
+# Qwen/Qwen3-Embedding-0.6B (1024-dim) model, and publish — entirely on GitHub's
+# runner. embed_additional.py only fetches each company's latest annuals (2) and
+# latest quarterlies (3) and skips accessions already stored, so a scheduled run
+# is a cheap no-op until a new filing appears, then ingests just that filing.
 #
-# SAFETY: the dataset is overwritten ONLY if the guardrail passes — i.e. the DB
-# opens, every vector is 1024-dim with no nulls, row/ticker counts never shrink,
-# and no previously-present (ticker, accession) filing disappeared. Any violation
-# fails the job before upload, so prod is left untouched. The dataset is a git
-# repo, so the prior rag.duckdb is always one revert away (commit logged below).
+# SAFETY: identical guardrail to embed-annuals.yml (scripts/etl_guardrail.py) —
+# the dataset is overwritten only if the DB stays valid (uniform 1024-dim, no
+# nulls, no row/ticker shrink, no previously-present filing dropped) AND grew.
 
 on:
+  schedule:
+    - cron: '0 7 * * 1'   # Mondays 07:00 UTC
   workflow_dispatch:
     inputs:
-      forms:
-        description: 'Which filings to embed'
-        type: choice
-        options:
-          - annual   # 2 most recent 10-K (or 20-F for foreign filers) per company
-          - 10-Q     # most recent 10-Q per company
-        default: annual
       dry_run:
         description: 'Dry run (list what would be embedded; no embed/upload/restart)'
         type: boolean
         default: false
-      restart_space:
-        description: 'Restart the Space after upload so it serves the new corpus'
-        type: boolean
-        default: true
 
 concurrency:
-  # Never let two embed runs write the dataset at once.
+  # Share the embed-dataset lock so this never writes the dataset at the same
+  # time as a manual embed-annuals run.
   group: embed-dataset
   cancel-in-progress: false
 
 jobs:
-  embed:
+  refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     env:
@@ -47,10 +37,11 @@ jobs:
       HF_USERNAME: ${{ secrets.HF_USERNAME }}
       HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
       EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
-      # Match the corpus exactly — a different embedder/dim breaks retrieval.
       EMBEDDING_PROVIDER: sentence-transformers
       ST_EMBEDDING_MODEL: Qwen/Qwen3-Embedding-0.6B
       EMBEDDING_DIM: '1024'
+      # Real run unless explicitly dispatched as a dry run.
+      DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
     steps:
       - uses: actions/checkout@v4
 
@@ -83,19 +74,21 @@ jobs:
       - name: Snapshot corpus BEFORE embedding
         run: python scripts/etl_guardrail.py snapshot data/rag.duckdb /tmp/before.json
 
-      - name: Embed filings
+      - name: Embed new annual + quarterly filings
         run: |
           FLAGS=""
-          if [ "${{ inputs.dry_run }}" = "true" ]; then FLAGS="--dry-run"; fi
-          python scripts/embed_additional.py --forms ${{ inputs.forms }} $FLAGS
+          if [ "$DRY" = "true" ]; then FLAGS="--dry-run"; fi
+          # Annual (latest 2 x 10-K/20-F) then quarterly (latest 3 x 10-Q = ~1yr).
+          python scripts/embed_additional.py --forms annual $FLAGS
+          python scripts/embed_additional.py --forms 10-Q --quarters 3 $FLAGS
 
       - name: 'Guardrail: block any destructive change to the vector DB'
-        if: ${{ inputs.dry_run == false }}
+        if: ${{ env.DRY != 'true' }}
         id: guard
         run: python scripts/etl_guardrail.py verify data/rag.duckdb /tmp/before.json
 
       - name: Log current dataset commit (rollback target)
-        if: ${{ inputs.dry_run == false && steps.guard.outputs.changed == 'true' }}
+        if: ${{ env.DRY != 'true' && steps.guard.outputs.changed == 'true' }}
         run: |
           python - <<'PY'
           import os
@@ -106,7 +99,7 @@ jobs:
           PY
 
       - name: Upload updated DB to the HF dataset
-        if: ${{ inputs.dry_run == false && steps.guard.outputs.changed == 'true' }}
+        if: ${{ env.DRY != 'true' && steps.guard.outputs.changed == 'true' }}
         run: |
           python - <<'PY'
           import os
@@ -117,17 +110,17 @@ jobs:
               path_in_repo="rag.duckdb",
               repo_id=os.environ["DATASET_REPO"],
               repo_type="dataset",
-              commit_message="ETL: embed ${{ inputs.forms }} filings (${{ steps.guard.outputs.summary }})",
+              commit_message="ETL(refresh): new filings (${{ steps.guard.outputs.summary }})",
           )
           print("Uploaded: ${{ steps.guard.outputs.summary }}")
           PY
 
-      - name: No-op notice (nothing new to embed)
-        if: ${{ inputs.dry_run == false && steps.guard.outputs.changed != 'true' }}
-        run: echo "No new filings embedded; corpus unchanged — skipping upload + restart."
+      - name: No-op notice (corpus already current)
+        if: ${{ env.DRY != 'true' && steps.guard.outputs.changed != 'true' }}
+        run: echo "No new filings since last run; corpus current — skipping upload + restart."
 
       - name: Restart the Space to serve the new corpus
-        if: ${{ inputs.dry_run == false && inputs.restart_space && steps.guard.outputs.changed == 'true' }}
+        if: ${{ env.DRY != 'true' && steps.guard.outputs.changed == 'true' }}
         run: |
           python - <<'PY'
           import os
@@ -139,7 +132,7 @@ jobs:
           PY
 
       - name: 'Post-restart health check: live Space serves a valid 1024-dim corpus'
-        if: ${{ inputs.dry_run == false && inputs.restart_space && steps.guard.outputs.changed == 'true' }}
+        if: ${{ env.DRY != 'true' && steps.guard.outputs.changed == 'true' }}
         run: |
           python - <<'PY'
           import os, time, json, urllib.request
@@ -157,7 +150,8 @@ jobs:
                   variants = data.get("embedding_dim_variants")
                   companies = data.get("companies_with_chunks") or 0
                   last = f"model={cfg.get('embedding_model')} dim=[{dmin},{dmax}] variants={variants} companies={companies}"
-                  if cfg.get("embedding_model") == "Qwen/Qwen3-Embedding-0.6B" and dmin == 1024 and dmax == 1024 and variants == 1 and companies >= 12:
+                  if (cfg.get("embedding_model") == "Qwen/Qwen3-Embedding-0.6B"
+                          and dmin == 1024 and dmax == 1024 and variants == 1 and companies >= 12):
                       print(f"::notice::Live Space healthy on new corpus — {last}")
                       raise SystemExit(0)
               except SystemExit:
@@ -167,6 +161,5 @@ jobs:
               print(f"waiting… {last}")
               time.sleep(20)
           print(f"::error::Space did not confirm a healthy 1024-dim corpus in time. Last: {last}")
-          print("::error::The upload succeeded but the live check failed — revert the dataset to the commit logged above if needed.")
           raise SystemExit(1)
           PY

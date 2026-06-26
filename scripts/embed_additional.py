@@ -127,7 +127,16 @@ def main():
         "--forms",
         choices=["annual", "10-Q"],
         default="annual",
-        help='Which forms to fetch: "annual" (10-K + 20-F, latest 2) or "10-Q" (latest 1).',
+        help='Which forms to fetch: "annual" (10-K + 20-F, latest 2) or "10-Q".',
+    )
+    parser.add_argument(
+        "--quarters",
+        type=int,
+        default=3,
+        help="For --forms 10-Q: how many of the most recent 10-Qs to fetch per "
+        "company. Default 3 = ~1 fiscal year of quarterlies (Q4 is in the 10-K). "
+        "Already-stored accessions are skipped, so companies that already have "
+        "their quarterlies are no-ops.",
     )
     parser.add_argument(
         "--dry-run",
@@ -223,7 +232,7 @@ def main():
                     )
                     continue
             else:
-                form_plan = [("10-Q", 1)]
+                form_plan = [("10-Q", max(1, args.quarters))]
 
             for form_code, n_latest in form_plan:
                 # Pull a wider window, then keep only EXACT-form filings (drop
