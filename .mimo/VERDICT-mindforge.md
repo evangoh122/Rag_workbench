@@ -134,3 +134,16 @@ Reviewed: api/services/runtime_snapshot.py, api/routes/conjoint.py
 ## Notes
 - Survey path stays fast: the sync portion of maybe_snapshot_async is a few env reads + a lock acquire + thread spawn (sub-ms, no I/O); the whole-DB Parquet export + upload runs in the daemon thread, so the response returns before any network/disk work. Off-Space it is a single env check -> zero overhead in dev.
 - Throttle + single-in-flight is the right cost shape: <=1 whole-DB upload per interval, never >1 thread; a burst coalesces to one upload (verified). Write-triggered (vs a timer) avoids idle polling on a sleepy free Space and won't keep it awake; daemon=True so shutdown won't hang (graceful-shutdown snapshot still covers the final state).
+
+---
+
+# VERDICT — mindforge — MiMo — round 10 (no-mistakes fixes / merge-to-main gate)
+Status: APPROVED
+Reviewed: api/models/schemas.py, api/services/guardrails/input_rails.py, api/services/runtime_snapshot.py, api/services/guardrails/consensus_rails.py, api/services/guardrails/dialog_rails.py, api/services/langgraph_engine.py (wiring)
+
+## Findings
+none
+
+## Notes
+- Full re-review for the merge-to-main gate; covers the only deltas since round-9 APPROVED (the no-mistakes pipeline fixes): input cap 1500->4000 (schema + rail in sync), runtime_snapshot import-crash guard, stale test mock advice=False, obsolete scratch-script cleanup.
+- The 4000-char cap adds ~2.5KB to the worst-case MiMo injection prompt (still gated on >200 chars) — negligible on the ~5s call. The snapshot interval guard adds sub-microsecond overhead under the lock and prevents a real boot-crash regression. Nothing in the recap architecture (gating, async fire-and-forget, advice-rail ordering) warrants reconsideration.

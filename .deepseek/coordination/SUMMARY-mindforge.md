@@ -118,3 +118,17 @@ Verified: parse; off-Space no-op; burst coalesces to 1 upload; thread-start fail
 **Re-review (round 9, via Claude API): MiMo = APPROVED, DeepSeek = APPROVED.** Both flagged the Thread.start() robustness edge (would raise into the request path after the committed write + wedge the in-flight flag) -- **APPLIED** (try/except resets the flag + returns False). Also applied: interval floor `max(60, ...)` and a trailing-write doc note. **Follow-up noted** (out of scope, pre-existing, negligible): snapshot_review_db's export cursor could route through `get_new_review_connection()` for lock-safe cursor creation.
 
 Commit gate (MiMo + DeepSeek) [check] **CLEARED**.
+
+
+## Round 10 — no-mistakes pipeline fixes (merge-to-main gate)
+Triggered by re-running the no-mistakes pipeline ahead of merging the branch to `main`. Its automated review + test steps surfaced fixes on top of the round-9 HEAD (`1ab69b21`), landing as three commits (`c6eb12eb`, `05771c9c`, `f13e5833`):
+- **Input cap 1500 -> 4000** in BOTH `api/models/schemas.py` (ChatRequest.message max_length) and `input_rails.check_input`'s hard cap, kept in sync (per product decision — the 1500 cap was 400-ing legitimate long financial questions).
+- **Snapshot import-crash guard** (`runtime_snapshot.py`): the `int(os.getenv("RUNTIME_SNAPSHOT_MIN_INTERVAL_S","300"))` parse was at MODULE-IMPORT scope, so a malformed env value would `ValueError` during import and crash app boot. Moved into a `try/except`-guarded `_min_write_snapshot_interval_s()` defaulting to 300, mirroring how `consensus_rails` reads `CONSENSUS_TIMEOUT`; 60s floor preserved; call site updated.
+- **Stale test mock** (`tests/test_routes_chat.py`): the branch added the `dialog_verdict.advice` hard-refusal branch to `_apply_input_rails`, but the shared dialog mocks only stubbed `off_topic=False`, leaving `.advice` a truthy MagicMock that wrongly tripped the refusal. Stubbed `advice=False`. Production code unchanged.
+- **Cleanup**: removed obsolete one-off scratch/ops scripts from the tree (incl. `_fix_db.py`/`_revert_db.py`, which would clobber the live prod HF dataset + restart the Space if run — obsolete since the DuckDB version pin made both sides 1.5.x); now gitignored.
+
+Verification: full local suite **355 passed, 3 skipped** (independently re-run, not just via the pipeline).
+
+**Re-review (round 10, full re-review via the model APIs): MiMo = APPROVED (no findings), DeepSeek = APPROVED (no findings).** MiMo: 4000-char cap is negligible on the gated ~5s injection check; snapshot guard is sub-microsecond under the lock and prevents a real boot-crash regression; nothing in the approved architecture warrants reconsideration. DeepSeek: 4000 cap synchronized schema<->rail with no off-by-one and no stray 1500; snapshot guard defers env parse correctly with 300s default + 60s floor and all call sites updated; test mock `advice=False` matches the real attribute; previously-approved correctness items still hold; doc still matches code.
+
+Commit gate (MiMo + DeepSeek) [check] **CLEARED** for round 10 — branch is cleared to merge to `main`.

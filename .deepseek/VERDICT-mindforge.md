@@ -143,3 +143,16 @@ Reviewed: api/services/runtime_snapshot.py, api/routes/conjoint.py, api/db/datab
 - Fires only after a successful commit, never on the error path: both call sites sit after the route try/except; DuckDB autocommit makes the INSERT/UPDATE durable before the trigger, so the COPY sees it.
 - Independent cursor: the COPY runs on a .cursor() (independent connection on the same instance) -> MVCC isolates from concurrent parent writes; no query-level contention or corruption.
 - Module-global mutable state safe under GIL+threads — all access serialized by _snap_lock.
+
+---
+
+# VERDICT — mindforge — DeepSeek — round 10 (no-mistakes fixes / merge-to-main gate)
+Status: APPROVED
+Reviewed: api/models/schemas.py, api/services/guardrails/input_rails.py, api/services/runtime_snapshot.py, api/services/guardrails/consensus_rails.py, api/services/guardrails/dialog_rails.py, api/services/langgraph_engine.py (wiring), docs/mindforge-risk-alignment.md
+
+## Findings
+none
+
+## Notes
+- Full re-review for the merge-to-main gate; the round-10 deltas are correct and consistent. The 4000 cap is synchronized between schema (Field max_length=4000) and rail (len>4000) with no off-by-one and no second cap left at 1500.
+- The snapshot import-crash guard correctly defers env parsing to a try/except-wrapped _min_write_snapshot_interval_s() with 300s default and 60s floor; all call sites use the function; no import-time side effect remains. The test mock advice=False matches the real InputVerdict/dialog attribute name. Previously approved correctness items (check_consensus contract, divergence logic, per-thread .cursor(), advice regex precedence) remain sound; doc still matches code.
