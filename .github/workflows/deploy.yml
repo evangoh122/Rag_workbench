@@ -136,7 +136,19 @@ jobs:
           HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
           git remote add hf https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
-          git push hf main --force
+          # Flatten to a single orphan commit before pushing. The Space only needs
+          # the current working tree, but git history contains >10 MiB build
+          # artifacts (no-mistakes.exe/.zip, .venv_duck10 wheels) that HF's
+          # pre-receive hook rejects (10 MiB limit). Pushing full history therefore
+          # fails even though those files are deleted at HEAD. An orphan commit
+          # ships identical content with zero history, keeping the blobs out of
+          # prod. The Space doesn't need git history.
+          git config user.email "deploy@ci"
+          git config user.name "deploy-ci"
+          git checkout --orphan hf-deploy
+          git add -A
+          git commit -q -m "Deploy ${GITHUB_SHA::7}"
+          git push hf hf-deploy:main --force
 
 # ── 3. Wait for Space to accept traffic ─────────────────────────────────────
   await-space:
