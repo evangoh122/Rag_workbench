@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck, Menu, X, Lightbulb, Info, ChevronDown, ArrowRight, FlaskConical } from 'lucide-react';
+import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck, Menu, X, Lightbulb, Info, ChevronDown, ArrowRight, FlaskConical, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse, Source, XBRLFact, Triple, ChartSpec, ToneAnalysis as ToneAnalysisData } from './api/chat';
@@ -73,6 +73,9 @@ import KnowledgeGraph from './components/KnowledgeGraph';
 import type { GraphSelection } from './components/KnowledgeGraph';
 import { getGraphEvidence, getGraphTriples, type GraphEvidence } from './api/graph';
 import { COMPANY_NAMES } from './components/GraphExplorer';
+import { DisclaimerModal, DisclaimerFooter } from './components/Disclaimer';
+import CoachMarks, { useTour } from './components/CoachMarks';
+import { CHAT_TOUR, CHAT_TOUR_KEY } from './components/tourSteps';
 
 function Workbench() {
   useEffect(() => {
@@ -119,6 +122,10 @@ function Workbench() {
   const [evidenceSel, setEvidenceSel] = useState<GraphSelection | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  // Guided coach-mark tour for the chat workbench. Auto-runs once on the first
+  // visit to the chat view (after the disclaimer + conjoint gate are cleared);
+  // the header button replays it on demand.
+  const chatTour = useTour(CHAT_TOUR_KEY, view === 'chat' && !gateOpen && !surveyOpen);
 
   const handleGraphSelect = (sel: GraphSelection) => {
     setEvidenceSel(sel);
@@ -330,7 +337,7 @@ function Workbench() {
         </div>
 
         {/* Main Navigation */}
-        <nav className="flex flex-col gap-5 mb-8 overflow-y-auto">
+        <nav data-tour="nav" className="flex flex-col gap-5 mb-8 overflow-y-auto">
           {/* USER SECTION */}
           <div>
             <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.12em] px-2 mb-2.5">For Users</div>
@@ -641,10 +648,10 @@ function Workbench() {
         {view === 'chat' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-200">
               <header className="px-2 sm:px-3 md:px-4 lg:px-8 py-2 sm:py-3 md:py-4 glass-header z-10 flex-shrink-0 flex items-center justify-between gap-2">
-              <div>
-                <h1 className="text-sm sm:text-base md:text-lg font-semibold text-primary flex items-center gap-1.5 sm:gap-2">
-                  <MessageSquare className="text-accent" size={16} />
-                  Testing Interface
+              <div className="min-w-0 flex-1">
+                <h1 className="text-sm sm:text-base md:text-lg font-semibold text-primary flex items-center gap-1.5 sm:gap-2 truncate">
+                  <MessageSquare className="text-accent shrink-0" size={16} />
+                  <span className="truncate">Testing Interface</span>
                 </h1>
                 <div className="text-[10px] sm:text-xs text-secondary mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <div className="flex items-center gap-1 sm:gap-1.5">
@@ -660,19 +667,30 @@ function Workbench() {
                   </div>
                 </div>
               </div>
-              {/* Mini Pipeline Status Indicator */}
-              <div className="flex items-center gap-1.5 md:gap-2 glass-sm px-2.5 md:px-3 py-1.5 shrink-0">
-                 <div className="text-[9px] md:text-[10px] font-semibold text-secondary uppercase tracking-wider mr-1 hidden xs:block">Pipeline</div>
-                 {['input', 'retrieval', 'extraction', 'math', 'verification', 'output'].map(step => {
-                   const s = pipelineStatus[step as keyof PipelineStatus];
-                   return (
-                     <div key={step} className="group relative">
-                       <div className={`w-2.5 h-2.5 rounded-full transition-colors duration-500 ${
-                         s === 'success' ? 'bg-emerald-500' : s === 'error' ? 'bg-red-500' : s === 'pending' ? 'bg-blue-500 status-pulse' : 'bg-gray-600'
-                       }`} />
-                     </div>
-                   );
-                 })}
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Replay the guided tour */}
+                <button
+                  onClick={chatTour.start}
+                  title="Take a guided tour"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg glass-button text-[11px] sm:text-xs text-secondary hover:text-primary"
+                >
+                  <Sparkles size={13} className="text-emerald-400" />
+                  <span className="hidden sm:inline">Tour</span>
+                </button>
+                {/* Mini Pipeline Status Indicator */}
+                <div data-tour="pipeline" className="flex items-center gap-1.5 md:gap-2 glass-sm px-2.5 md:px-3 py-1.5">
+                   <div className="text-[9px] md:text-[10px] font-semibold text-secondary uppercase tracking-wider mr-1 hidden xs:block">Pipeline</div>
+                   {['input', 'retrieval', 'extraction', 'math', 'verification', 'output'].map(step => {
+                     const s = pipelineStatus[step as keyof PipelineStatus];
+                     return (
+                       <div key={step} className="group relative">
+                         <div className={`w-2.5 h-2.5 rounded-full transition-colors duration-500 ${
+                           s === 'success' ? 'bg-emerald-500' : s === 'error' ? 'bg-red-500' : s === 'pending' ? 'bg-blue-500 status-pulse' : 'bg-gray-600'
+                         }`} />
+                       </div>
+                     );
+                   })}
+                </div>
               </div>
             </header>
 
@@ -696,6 +714,7 @@ function Workbench() {
 
                    {/* Front-and-center query composer */}
                   <form
+                    data-tour="composer"
                     onSubmit={handleSubmit}
                     className="w-full max-w-2xl mx-auto flex items-center glass-input mb-5 sm:mb-7"
                   >
@@ -776,7 +795,7 @@ function Workbench() {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 w-full">
+                  <div data-tour="suggestions" className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 w-full">
                      {mode === 'graph' ? (
                        <>
                          <button onClick={() => {
@@ -1153,6 +1172,8 @@ function Workbench() {
           </div>
         )}
 
+        {/* Persistent disclaimer strip across every view */}
+        <DisclaimerFooter className="flex-shrink-0" />
       </main>
       {/* Knowledge Graph Modal */}
       {graphModalOpen && (
@@ -1293,17 +1314,23 @@ function Workbench() {
           </div>
         </div>
       )}
+
+      {/* Guided coach-mark tour for the chat workbench */}
+      <CoachMarks steps={CHAT_TOUR} run={chatTour.run} onClose={chatTour.close} />
     </div>
   );
 }
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<PortfolioHome />} />
-      <Route path="/rag-overview" element={<RagOverview />} />
-      <Route path="/rag/*" element={<Workbench />} />
-    </Routes>
+    <>
+      <DisclaimerModal />
+      <Routes>
+        <Route path="/" element={<PortfolioHome />} />
+        <Route path="/rag-overview" element={<RagOverview />} />
+        <Route path="/rag/*" element={<Workbench />} />
+      </Routes>
+    </>
   );
 }
 

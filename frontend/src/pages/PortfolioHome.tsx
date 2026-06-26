@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { Mail, ArrowRight, Cpu, Network, Database, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Mail, ArrowRight, Cpu, Network, Database, Search, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import CoachMarks, { useTour } from '../components/CoachMarks';
+import { LANDING_TOUR, LANDING_TOUR_KEY } from '../components/tourSteps';
+import { DisclaimerFooter } from '../components/Disclaimer';
 
 const LinkedinIcon = ({ size = 20 }: { size?: number }) => (
   <svg
@@ -24,6 +27,8 @@ export default function PortfolioHome() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  // First-visit guided tour for the landing page (replayable from the header).
+  const landingTour = useTour(LANDING_TOUR_KEY);
 
   const totalSlides = 2;
 
@@ -68,7 +73,14 @@ export default function PortfolioHome() {
             </div>
             <span className="font-semibold text-base tracking-tight">Evan Goh</span>
           </div>
-          <nav className="flex items-center gap-5 text-sm">
+          <nav className="flex items-center gap-4 sm:gap-5 text-sm">
+            <button
+              onClick={landingTour.start}
+              className="flex items-center gap-1.5 text-secondary hover:text-primary transition-colors bg-transparent border-0 cursor-pointer p-0"
+            >
+              <Sparkles size={15} className="text-emerald-400" />
+              <span className="hidden sm:inline">Tour</span>
+            </button>
             <a
               href="https://www.linkedin.com/in/eevangoh/"
               target="_blank"
@@ -101,6 +113,7 @@ export default function PortfolioHome() {
           </p>
           <div className="flex flex-wrap gap-4 mt-8">
             <button
+              data-tour="hero-cta"
               onClick={() => document.getElementById('profile')?.scrollIntoView({ behavior: 'smooth' })}
               className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-accent hover:bg-emerald-500 text-white font-semibold transition-all duration-200 active:scale-[0.98] shadow-[0_4px_20px_rgba(16,185,129,0.15)] group cursor-pointer"
             >
@@ -169,6 +182,7 @@ export default function PortfolioHome() {
               {/* Slide 1: RAG Workbench & Strategic Slide Deck */}
               <div className="w-full flex-shrink-0 px-1">
                 <div
+                  data-tour="project-card"
                   onClick={() => navigate('/rag-overview')}
                   className="border border-accent/20 hover:border-accent/50 rounded-2xl bg-surface/40 hover:bg-surface-elevated/40 transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer shadow-[0_4px_20px_rgba(16,185,129,0.02)] hover:shadow-[0_4px_25px_rgba(16,185,129,0.08)] min-h-[460px]"
                 >
@@ -377,8 +391,11 @@ export default function PortfolioHome() {
         </section>
       </main>
 
+      {/* Not-investment-advice strip (consistent with the workbench) */}
+      <DisclaimerFooter className="mt-auto" />
+
       {/* Footer */}
-      <footer className="border-t border-border/40 bg-surface/10 py-8 text-center text-xs text-secondary/50 mt-auto">
+      <footer className="border-t border-border/40 bg-surface/10 py-8 text-center text-xs text-secondary/50">
         <div className="max-w-5xl mx-auto px-6 flex flex-col items-center gap-4">
           <div className="flex w-full flex-col sm:flex-row items-center justify-between gap-4">
             <span>&copy; {new Date().getFullYear()} Evan Goh. All rights reserved.</span>
@@ -391,6 +408,9 @@ export default function PortfolioHome() {
           </p>
         </div>
       </footer>
+
+      {/* Guided coach-mark tour for the landing page */}
+      <CoachMarks steps={LANDING_TOUR} run={landingTour.run} onClose={landingTour.close} />
     </div>
   );
 }

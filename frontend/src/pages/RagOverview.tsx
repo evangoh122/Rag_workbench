@@ -1,9 +1,14 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Database, Network, BookOpen, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Play, Database, Network, BookOpen, Clock, AlertTriangle, CheckCircle, Sparkles } from 'lucide-react';
 import Presentation from './Presentation';
+import CoachMarks, { useTour } from '../components/CoachMarks';
+import { OVERVIEW_TOUR, OVERVIEW_TOUR_KEY } from '../components/tourSteps';
+import { DisclaimerFooter } from '../components/Disclaimer';
 
 export default function RagOverview() {
   const navigate = useNavigate();
+  // First-visit guided tour for the overview page (replayable from the header).
+  const tour = useTour(OVERVIEW_TOUR_KEY);
 
   return (
     <div className="min-h-screen bg-background text-primary font-sans selection:bg-accent/20 selection:text-white flex flex-col">
@@ -17,7 +22,14 @@ export default function RagOverview() {
             <ArrowLeft size={16} />
             Back to Portfolio
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={tour.start}
+              className="flex items-center gap-1.5 text-secondary hover:text-primary transition-colors bg-transparent border-0 cursor-pointer text-sm"
+            >
+              <Sparkles size={15} className="text-emerald-400" />
+              <span className="hidden sm:inline">Tour</span>
+            </button>
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-accent/25 bg-accent/8 text-emerald-400">
               Product Overview & Deck
             </span>
@@ -46,6 +58,7 @@ export default function RagOverview() {
 
           <div className="flex flex-wrap gap-4 mt-4">
             <button
+              data-tour="launch"
               onClick={() => navigate('/rag')}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent hover:bg-emerald-500 text-white font-semibold transition-all duration-200 active:scale-[0.98] shadow-[0_4px_20px_rgba(16,185,129,0.15)] group cursor-pointer"
             >
@@ -53,6 +66,7 @@ export default function RagOverview() {
               Launch Live App
             </button>
             <button
+              data-tour="methodology"
               onClick={() => navigate('/rag', { state: { initialView: 'methodology' } })}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border/80 hover:bg-surface-elevated/40 text-primary font-semibold transition-all duration-200 cursor-pointer"
             >
@@ -63,7 +77,7 @@ export default function RagOverview() {
         </section>
 
         {/* Business Case & Challenge Section */}
-        <section className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-4 duration-450">
+        <section data-tour="business-case" className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-4 duration-450">
           <div className="flex items-center gap-2.5 mb-6">
             <div className="w-1 bg-accent h-6 rounded animate-pulse" />
             <h2 className="text-lg md:text-xl font-bold tracking-tight text-primary m-0">The Business Case & Challenge</h2>
@@ -180,12 +194,18 @@ export default function RagOverview() {
         </section>
       </main>
 
+      {/* Not-investment-advice strip (consistent across the app) */}
+      <DisclaimerFooter className="mt-auto" />
+
       {/* Footer */}
-      <footer className="border-t border-border/40 bg-surface/10 py-8 text-center text-xs text-secondary/50 mt-auto">
+      <footer className="border-t border-border/40 bg-surface/10 py-8 text-center text-xs text-secondary/50">
         <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <span>&copy; {new Date().getFullYear()} Evan Goh. All rights reserved.</span>
         </div>
       </footer>
+
+      {/* Guided coach-mark tour for the overview page */}
+      <CoachMarks steps={OVERVIEW_TOUR} run={tour.run} onClose={tour.close} />
     </div>
   );
 }
