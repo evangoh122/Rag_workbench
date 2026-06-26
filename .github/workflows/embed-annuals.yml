@@ -1,0 +1,152 @@
+name: Embed Filings → Dataset
+
+# Manually-triggered ETL: download the live RAG DuckDB from the HF dataset, embed
+# additional SEC filings (2024+2025 annual 10-K/20-F by default, or 10-Q) with the
+# SAME local model the corpus already uses (Qwen/Qwen3-Embedding-0.6B, 1024-dim),
+# verify dimension consistency, upload the updated DB back to the dataset, and
+# restart the Space so it boots on the new corpus. Runs entirely on GitHub's
+# runner — no local machine required. Independent of deploy.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      forms:
+        description: 'Which filings to embed'
+        type: choice
+        options:
+          - annual   # 2 most recent 10-K (or 20-F for foreign filers) per company
+          - 10-Q     # most recent 10-Q per company
+        default: annual
+      dry_run:
+        description: 'Dry run (list what would be embedded; no embed/upload/restart)'
+        type: boolean
+        default: false
+      restart_space:
+        description: 'Restart the Space after upload so it serves the new corpus'
+        type: boolean
+        default: true
+
+concurrency:
+  # Never let two embed runs write the dataset at once.
+  group: embed-dataset
+  cancel-in-progress: false
+
+jobs:
+  embed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      DATASET_REPO: ${{ secrets.HF_USERNAME }}/Rag-workbench
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_USERNAME: ${{ secrets.HF_USERNAME }}
+      HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
+      EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+      # Match the corpus exactly — a different embedder/dim breaks retrieval.
+      EMBEDDING_PROVIDER: sentence-transformers
+      ST_EMBEDDING_MODEL: Qwen/Qwen3-Embedding-0.6B
+      EMBEDDING_DIM: '1024'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download current DB from the HF dataset
+        run: |
+          python - <<'PY'
+          import os, shutil
+          from huggingface_hub import hf_hub_download
+          os.makedirs("data", exist_ok=True)
+          path = hf_hub_download(
+              repo_id=os.environ["DATASET_REPO"],
+              filename="rag.duckdb",
+              repo_type="dataset",
+              token=os.environ["HF_TOKEN"],
+          )
+          shutil.copy(path, "data/rag.duckdb")
+          print(f"Downloaded rag.duckdb -> {os.path.getsize('data/rag.duckdb')/1e6:.1f} MB")
+          PY
+
+      - name: Count embeddings BEFORE
+        id: before
+        run: |
+          python - <<'PY'
+          import os, duckdb
+          con = duckdb.connect("data/rag.duckdb", read_only=True)
+          n = con.execute("select count(*) from edgar_embeddings").fetchone()[0]
+          con.close()
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"count={n}\n")
+          print("before:", n)
+          PY
+
+      - name: Embed filings
+        run: |
+          FLAGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then FLAGS="--dry-run"; fi
+          python scripts/embed_additional.py --forms ${{ inputs.forms }} $FLAGS
+
+      - name: Verify DB integrity (all vectors 1024-dim, single variant, no nulls)
+        if: ${{ inputs.dry_run == false }}
+        id: verify
+        run: |
+          python - <<'PY'
+          import os, duckdb, sys
+          con = duckdb.connect("data/rag.duckdb", read_only=True)
+          total = con.execute("select count(*) from edgar_embeddings").fetchone()[0]
+          dims = con.execute(
+              "select len(embedding) d, count(*) n from edgar_embeddings group by 1 order by 2 desc"
+          ).fetchall()
+          nulls = con.execute("select count(*) from edgar_embeddings where embedding is null").fetchone()[0]
+          tickers = con.execute("select count(distinct ticker) from edgar_embeddings").fetchone()[0]
+          con.close()
+          print("dims:", dims, "nulls:", nulls, "tickers:", tickers, "total:", total)
+          ok = (len(dims) == 1 and dims[0][0] == 1024 and nulls == 0)
+          if not ok:
+              print("::error::DB integrity check failed — refusing to upload a mixed/invalid-dimension DB.")
+              sys.exit(1)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"count={total}\n")
+          PY
+
+      - name: Upload updated DB to the HF dataset
+        if: ${{ inputs.dry_run == false && steps.verify.outputs.count != steps.before.outputs.count }}
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+          before = "${{ steps.before.outputs.count }}"
+          after = "${{ steps.verify.outputs.count }}"
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          api.upload_file(
+              path_or_fileobj="data/rag.duckdb",
+              path_in_repo="rag.duckdb",
+              repo_id=os.environ["DATASET_REPO"],
+              repo_type="dataset",
+              commit_message=f"ETL: embed ${{ inputs.forms }} filings ({before} -> {after} chunks)",
+          )
+          print(f"Uploaded rag.duckdb ({before} -> {after} chunks).")
+          PY
+
+      - name: No-op notice (nothing new to upload)
+        if: ${{ inputs.dry_run == false && steps.verify.outputs.count == steps.before.outputs.count }}
+        run: echo "No new filings embedded (corpus already complete for '${{ inputs.forms }}'); skipping upload + restart."
+
+      - name: Restart the Space to serve the new corpus
+        if: ${{ inputs.dry_run == false && inputs.restart_space && steps.verify.outputs.count != steps.before.outputs.count }}
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo = f"{os.environ['HF_USERNAME']}/{os.environ['HF_SPACE_NAME']}"
+          api.restart_space(repo)
+          print(f"Restarted Space {repo}; it will fetch the new DB at boot.")
+          PY
