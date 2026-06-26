@@ -77,7 +77,11 @@ _snap_in_flight = False
 # Coalesce write-triggered snapshots: at most one upload per this many seconds.
 # Floored at 60s so a misconfigured env can't turn the throttle off and let
 # sustained writes drive back-to-back whole-DB re-export+upload.
-_MIN_WRITE_SNAPSHOT_INTERVAL_S = max(60, int(os.getenv("RUNTIME_SNAPSHOT_MIN_INTERVAL_S", "300")))
+def _min_write_snapshot_interval_s() -> int:
+    try:
+        return max(60, int(os.getenv("RUNTIME_SNAPSHOT_MIN_INTERVAL_S", "300")))
+    except (TypeError, ValueError):
+        return 300
 
 
 def maybe_snapshot_async(*, reason: str = "write") -> bool:
@@ -103,7 +107,7 @@ def maybe_snapshot_async(*, reason: str = "write") -> bool:
     global _last_snap_monotonic, _snap_in_flight
     now = time.monotonic()
     with _snap_lock:
-        if _snap_in_flight or (now - _last_snap_monotonic) < _MIN_WRITE_SNAPSHOT_INTERVAL_S:
+        if _snap_in_flight or (now - _last_snap_monotonic) < _min_write_snapshot_interval_s():
             return False
         _snap_in_flight = True
         _last_snap_monotonic = now

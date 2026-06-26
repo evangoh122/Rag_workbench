@@ -105,10 +105,10 @@ def check_input(message: str) -> InputVerdict:
         return InputVerdict(blocked=False)
 
     # 1. Strict length limit
-    if len(message) > 1500:
+    if len(message) > 4000:
         return InputVerdict(
             blocked=True,
-            reason="Input too long. Max allowed length is 1500 characters."
+            reason="Input too long. Max allowed length is 4000 characters."
         )
 
     # Check regex patterns

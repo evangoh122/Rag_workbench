@@ -3,10 +3,10 @@ from typing import List, Optional, Dict, Any
 
 
 class ChatRequest(BaseModel):
-    # 1500 matches the hard cap enforced by input_rails.check_input; keep them in
+    # 4000 matches the hard cap enforced by input_rails.check_input; keep them in
     # sync so oversize input is rejected once at the schema boundary rather than
     # passing validation and then 400-ing at runtime.
-    message: str = Field(min_length=1, max_length=1500)
+    message: str = Field(min_length=1, max_length=4000)
     ticker: Optional[str] = Field(default="NVDA", max_length=10)
     history: Optional[List[Dict[str, str]]] = Field(default=None, max_length=50)
     # Conjoint `role_based` personalization: when set to one of the role keys
