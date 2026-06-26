@@ -27,6 +27,10 @@ frontend/bundle-analysis.html
 scratch_*
 out_*.txt
 scripts/_*_out.txt
+/_fix_db.py
+/_revert_db.py
+scripts/_*
+!scripts/__init__.py
 
 # generated / binaries / logs (stripped from branch, kept on disk)
 *.log
