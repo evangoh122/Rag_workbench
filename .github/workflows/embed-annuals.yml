@@ -3,9 +3,15 @@ name: Embed Filings → Dataset
 # Manually-triggered ETL: download the live RAG DuckDB from the HF dataset, embed
 # additional SEC filings (2024+2025 annual 10-K/20-F by default, or 10-Q) with the
 # SAME local model the corpus already uses (Qwen/Qwen3-Embedding-0.6B, 1024-dim),
-# verify dimension consistency, upload the updated DB back to the dataset, and
-# restart the Space so it boots on the new corpus. Runs entirely on GitHub's
-# runner — no local machine required. Independent of deploy.yml.
+# run a destructive-change guardrail, upload the updated DB back to the dataset,
+# restart the Space, and confirm it serves the new corpus. Runs entirely on
+# GitHub's runner — no local machine required. Independent of deploy.yml.
+#
+# SAFETY: the dataset is overwritten ONLY if the guardrail passes — i.e. the DB
+# opens, every vector is 1024-dim with no nulls, row/ticker counts never shrink,
+# and no previously-present (ticker, accession) filing disappeared. Any violation
+# fails the job before upload, so prod is left untouched. The dataset is a git
+# repo, so the prior rag.duckdb is always one revert away (commit logged below).
 
 on:
   workflow_dispatch:
@@ -74,17 +80,20 @@ jobs:
           print(f"Downloaded rag.duckdb -> {os.path.getsize('data/rag.duckdb')/1e6:.1f} MB")
           PY
 
-      - name: Count embeddings BEFORE
-        id: before
+      - name: Snapshot corpus BEFORE embedding
         run: |
           python - <<'PY'
-          import os, duckdb
+          import json, duckdb
           con = duckdb.connect("data/rag.duckdb", read_only=True)
-          n = con.execute("select count(*) from edgar_embeddings").fetchone()[0]
+          total = con.execute("select count(*) from edgar_embeddings").fetchone()[0]
+          tickers = con.execute("select count(distinct ticker) from edgar_embeddings").fetchone()[0]
+          pairs = sorted(
+              t + "|" + a for t, a in
+              con.execute("select distinct ticker, accession from edgar_embeddings").fetchall()
+          )
           con.close()
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"count={n}\n")
-          print("before:", n)
+          json.dump({"total": total, "tickers": tickers, "pairs": pairs}, open("/tmp/before.json", "w"))
+          print(f"BEFORE: {total} chunks, {tickers} tickers, {len(pairs)} filings")
           PY
 
       - name: Embed filings
@@ -93,54 +102,93 @@ jobs:
           if [ "${{ inputs.dry_run }}" = "true" ]; then FLAGS="--dry-run"; fi
           python scripts/embed_additional.py --forms ${{ inputs.forms }} $FLAGS
 
-      - name: Verify DB integrity (all vectors 1024-dim, single variant, no nulls)
+      - name: 'Guardrail: block any destructive change to the vector DB'
         if: ${{ inputs.dry_run == false }}
-        id: verify
+        id: guard
         run: |
           python - <<'PY'
-          import os, duckdb, sys
+          import json, os, sys, duckdb
+          before = json.load(open("/tmp/before.json"))
+          # Opening the DB at all proves it is not truncated/corrupt.
           con = duckdb.connect("data/rag.duckdb", read_only=True)
           total = con.execute("select count(*) from edgar_embeddings").fetchone()[0]
+          tickers = con.execute("select count(distinct ticker) from edgar_embeddings").fetchone()[0]
           dims = con.execute(
               "select len(embedding) d, count(*) n from edgar_embeddings group by 1 order by 2 desc"
           ).fetchall()
           nulls = con.execute("select count(*) from edgar_embeddings where embedding is null").fetchone()[0]
-          tickers = con.execute("select count(distinct ticker) from edgar_embeddings").fetchone()[0]
+          pairs = set(
+              t + "|" + a for t, a in
+              con.execute("select distinct ticker, accession from edgar_embeddings").fetchall()
+          )
           con.close()
-          print("dims:", dims, "nulls:", nulls, "tickers:", tickers, "total:", total)
-          ok = (len(dims) == 1 and dims[0][0] == 1024 and nulls == 0)
-          if not ok:
-              print("::error::DB integrity check failed — refusing to upload a mixed/invalid-dimension DB.")
+
+          errors = []
+          # 1. Dimension integrity — mixed/!=1024 vectors silently break retrieval.
+          if not (len(dims) == 1 and dims[0][0] == 1024):
+              errors.append(f"vectors not uniformly 1024-dim: {dims}")
+          if nulls:
+              errors.append(f"{nulls} null embeddings present")
+          # 2. No net row loss.
+          if total < before["total"]:
+              errors.append(f"row count SHRANK {before['total']} -> {total} (data loss)")
+          # 3. No ticker loss.
+          if tickers < before["tickers"]:
+              errors.append(f"distinct tickers SHRANK {before['tickers']} -> {tickers}")
+          # 4. Every pre-existing filing must still be present (nothing dropped).
+          missing = sorted(set(before["pairs"]) - pairs)
+          if missing:
+              errors.append(f"{len(missing)} previously-present filings vanished, e.g. {missing[:5]}")
+
+          print(f"AFTER:  {total} chunks, {tickers} tickers, {len(pairs)} filings; dims={dims} nulls={nulls}")
+          if errors:
+              for e in errors:
+                  print(f"::error::DESTRUCTIVE CHANGE BLOCKED — {e}")
+              print("Refusing to upload. Prod dataset left untouched.")
               sys.exit(1)
+
+          changed = "true" if total > before["total"] else "false"
+          summary = f"{before['total']} -> {total} chunks, {len(pairs)} filings"
+          print(f"Integrity OK ({summary}). New chunks: {total - before['total']}. changed={changed}")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"count={total}\n")
+              f.write(f"changed={changed}\n")
+              f.write(f"summary={summary}\n")
           PY
 
-      - name: Upload updated DB to the HF dataset
-        if: ${{ inputs.dry_run == false && steps.verify.outputs.count != steps.before.outputs.count }}
+      - name: Log current dataset commit (rollback target)
+        if: ${{ inputs.dry_run == false && steps.guard.outputs.changed == 'true' }}
         run: |
           python - <<'PY'
           import os
           from huggingface_hub import HfApi
-          before = "${{ steps.before.outputs.count }}"
-          after = "${{ steps.verify.outputs.count }}"
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          info = api.repo_info(os.environ["DATASET_REPO"], repo_type="dataset")
+          print(f"::notice::Pre-upload dataset commit (revert here to roll back): {info.sha}")
+          PY
+
+      - name: Upload updated DB to the HF dataset
+        if: ${{ inputs.dry_run == false && steps.guard.outputs.changed == 'true' }}
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
           api = HfApi(token=os.environ["HF_TOKEN"])
           api.upload_file(
               path_or_fileobj="data/rag.duckdb",
               path_in_repo="rag.duckdb",
               repo_id=os.environ["DATASET_REPO"],
               repo_type="dataset",
-              commit_message=f"ETL: embed ${{ inputs.forms }} filings ({before} -> {after} chunks)",
+              commit_message="ETL: embed ${{ inputs.forms }} filings (${{ steps.guard.outputs.summary }})",
           )
-          print(f"Uploaded rag.duckdb ({before} -> {after} chunks).")
+          print("Uploaded: ${{ steps.guard.outputs.summary }}")
           PY
 
-      - name: No-op notice (nothing new to upload)
-        if: ${{ inputs.dry_run == false && steps.verify.outputs.count == steps.before.outputs.count }}
-        run: echo "No new filings embedded (corpus already complete for '${{ inputs.forms }}'); skipping upload + restart."
+      - name: No-op notice (nothing new to embed)
+        if: ${{ inputs.dry_run == false && steps.guard.outputs.changed != 'true' }}
+        run: echo "No new filings embedded; corpus unchanged — skipping upload + restart."
 
       - name: Restart the Space to serve the new corpus
-        if: ${{ inputs.dry_run == false && inputs.restart_space && steps.verify.outputs.count != steps.before.outputs.count }}
+        if: ${{ inputs.dry_run == false && inputs.restart_space && steps.guard.outputs.changed == 'true' }}
         run: |
           python - <<'PY'
           import os
@@ -149,4 +197,37 @@ jobs:
           repo = f"{os.environ['HF_USERNAME']}/{os.environ['HF_SPACE_NAME']}"
           api.restart_space(repo)
           print(f"Restarted Space {repo}; it will fetch the new DB at boot.")
+          PY
+
+      - name: 'Post-restart health check: live Space serves a valid 1024-dim corpus'
+        if: ${{ inputs.dry_run == false && inputs.restart_space && steps.guard.outputs.changed == 'true' }}
+        run: |
+          python - <<'PY'
+          import os, time, json, urllib.request
+          slug = os.environ["HF_SPACE_NAME"].lower()
+          url = f"https://{os.environ['HF_USERNAME']}-{slug}.hf.space/api/stats"
+          deadline = time.time() + 9 * 60
+          last = None
+          while time.time() < deadline:
+              try:
+                  with urllib.request.urlopen(url, timeout=20) as r:
+                      d = json.load(r)
+                  data = d.get("data", {}) or {}
+                  cfg = d.get("config", {}) or {}
+                  dmin, dmax = data.get("embedding_dim_min"), data.get("embedding_dim_max")
+                  variants = data.get("embedding_dim_variants")
+                  companies = data.get("companies_with_chunks") or 0
+                  last = f"model={cfg.get('embedding_model')} dim=[{dmin},{dmax}] variants={variants} companies={companies}"
+                  if cfg.get("embedding_model") == "Qwen/Qwen3-Embedding-0.6B" and dmin == 1024 and dmax == 1024 and variants == 1 and companies >= 12:
+                      print(f"::notice::Live Space healthy on new corpus — {last}")
+                      raise SystemExit(0)
+              except SystemExit:
+                  raise
+              except Exception as e:
+                  last = f"warming: {e}"
+              print(f"waiting… {last}")
+              time.sleep(20)
+          print(f"::error::Space did not confirm a healthy 1024-dim corpus in time. Last: {last}")
+          print("::error::The upload succeeded but the live check failed — revert the dataset to the commit logged above if needed.")
+          raise SystemExit(1)
           PY
