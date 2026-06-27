@@ -297,6 +297,168 @@ def _format_value(metric: str, value: Optional[float]) -> str:
     return f"{value:.2f}"  # ratios (current_ratio, debt_to_equity)
 
 
+# ── Multi-year comparison support ─────────────────────────────────────────────
+_MAX_TREND_YEARS = 8  # keep the table/chart readable; mirrors chart_tool._MAX_YEARS
+
+# Comparison metrics with a clean annual series we can tabulate year-by-year
+# (reusing the deterministic, filing-derived chart builder). Other metrics
+# (ratios, growth, FCF, R&D intensity) keep the single-period snapshot.
+_MULTIYEAR_CHARTABLE = {
+    "revenue", "net_income", "gross_margin", "operating_margin", "net_margin",
+}
+
+# Phrases that signal the user wants a multi-year history, not a snapshot.
+_MULTIYEAR_SIGNALS = (
+    "over the years", "over time", "trend", "history", "historical", "each year",
+    "year by year", "year-by-year", "annually", "past few years", "last few years",
+    "over the past", "over the last",
+)
+
+_WRITTEN_NUMS = {
+    "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
+
+
+def _parse_year_horizon(query: str) -> Optional[int]:
+    """Parse an explicit N-year window from the query (e.g. "5 years", "5-year",
+    "last three years"). Returns N clamped to 2.._MAX_TREND_YEARS, or None."""
+    q = (query or "").lower()
+    n: Optional[int] = None
+    m = re.search(r"(\d+)\s*[-\s]?\s*(?:year|yr|fiscal year)", q)
+    if m:
+        n = int(m.group(1))
+    else:
+        for word, val in _WRITTEN_NUMS.items():
+            if re.search(rf"\b{word}\b[\s-]+(?:year|yr|fiscal)", q):
+                n = val
+                break
+    if n is None:
+        return None
+    return max(2, min(n, _MAX_TREND_YEARS))
+
+
+def _wants_multiyear(query: str) -> bool:
+    """True when the query asks for a multi-year history — an explicit N-year
+    horizon, or a trend/history signal word."""
+    if _parse_year_horizon(query) is not None:
+        return True
+    q = (query or "").lower()
+    return any(s in q for s in _MULTIYEAR_SIGNALS)
+
+
+def _annual_series_for_metric(ticker: str, metric: str) -> Dict[str, float]:
+    """{fiscal_year: value} for a chartable metric, via the deterministic chart
+    builder (so the numbers stay filing-derived XBRL). Empty if unavailable."""
+    try:
+        from api.services.chart_tool import build_chart_spec
+        spec = build_chart_spec(ticker, metric, "line")
+        pts = (spec or {}).get("annual") or (spec or {}).get("data") or []
+        return {
+            str(p["period"]): float(p["value"])
+            for p in pts if p.get("value") is not None
+        }
+    except Exception as exc:
+        logger.warning(f"_annual_series_for_metric({ticker}, {metric}) failed: {exc}")
+        return {}
+
+
+def _multiyear_comparison(
+    query: str, decision: Dict[str, Any], metric: str, label: str,
+    tickers: List[str], named_competitors: List[str], from_graph: List[str],
+    horizon: Optional[int],
+) -> Optional[Dict[str, Any]]:
+    """Year-by-year comparison table + multi-series trend chart for a chartable
+    metric. Returns None when fewer than 2 companies have a usable annual series,
+    so the caller falls back to the single-period snapshot."""
+    subject = decision["subject"]
+    series: Dict[str, Dict[str, float]] = {}
+    for tk in tickers:
+        s = _annual_series_for_metric(tk, metric)
+        if s:
+            series[tk] = s
+    have = [tk for tk in tickers if tk in series]
+    if len(have) < 2:
+        return None
+
+    # Year window: the union of available fiscal years, most-recent `horizon`
+    # (default 5). Companies with differing fiscal calendars show "—" for a year
+    # they didn't file.
+    all_years = sorted({y for s in series.values() for y in s})
+    window = horizon or 5
+    years = all_years[-window:]
+    is_pct = metric in _PERCENT_METRICS
+
+    # ── Table: one row per fiscal year, one column per company ──
+    span = f"{years[0]}–{years[-1]}" if years else ""
+    lines: List[str] = [f"**{label} — {' vs. '.join(have)} ({span})**\n"]
+    lines.append("| Fiscal Year | " + " | ".join(have) + " |")
+    lines.append("|---|" + "|".join("---" for _ in have) + "|")
+    for y in years:
+        cells = [
+            _format_value(metric, series[tk].get(y)) if series[tk].get(y) is not None else "—"
+            for tk in have
+        ]
+        lines.append(f"| {y} | " + " | ".join(cells) + " |")
+
+    # ── Read: change over the window (and CAGR for level metrics), per company ──
+    reads: List[str] = []
+    for tk in have:
+        pts = [(y, series[tk][y]) for y in years if y in series[tk]]
+        if len(pts) < 2 or not pts[0][1]:
+            continue
+        (first_y, first_v), (last_y, last_v) = pts[0], pts[-1]
+        if is_pct:
+            reads.append(
+                f"**{tk}** moved from {_format_value(metric, first_v)} ({first_y}) "
+                f"to {_format_value(metric, last_v)} ({last_y})"
+            )
+        else:
+            growth = (last_v - first_v) / abs(first_v) * 100
+            n_span = int(last_y) - int(first_y)
+            cagr = ((last_v / first_v) ** (1 / n_span) - 1) * 100 if n_span > 0 and first_v > 0 else None
+            cagr_txt = f", a {cagr:.0f}% CAGR" if cagr is not None else ""
+            reads.append(f"**{tk}** grew {growth:+.0f}% ({first_y}→{last_y}){cagr_txt}")
+    if reads:
+        lines.append("\n**What it means:** " + "; ".join(reads) + ".")
+
+    # Peer-mode provenance notes (same as the snapshot path).
+    if decision["mode"] == "peer":
+        if from_graph:
+            lines.append(
+                f"\n*Peers include competitors named in {subject}'s own filing "
+                f"(via the knowledge graph): {', '.join(from_graph)}.*"
+            )
+        extra = [n for n in named_competitors if not _name_to_ticker(n)]
+        if extra:
+            lines.append(
+                f"\n*{subject}'s filing also names competitors outside our coverage "
+                f"(no SEC data to compute): {'; '.join(extra[:5])}.*"
+            )
+    lines.append(
+        "\n*Figures computed from each company's annual 10-K XBRL facts. Fiscal "
+        "years may differ across companies; \"—\" = no comparable annual figure filed.*"
+    )
+
+    unit = "%" if is_pct else ("USD" if metric in _USD_METRICS else "")
+    trend_series = [
+        {"name": tk, "data": [{"period": y, "value": series[tk][y]} for y in years if y in series[tk]]}
+        for tk in have
+    ]
+    chart = {
+        "type": "line",
+        "title": f"{label} — {subject} vs. peers ({span})",
+        "metric": metric, "label": label, "unit": unit, "ticker": subject,
+        "data": [], "series": trend_series,
+    }
+    answer = "\n".join(lines)
+    reasoning = (
+        f"Multi-year peer comparison: {label} across {', '.join(have)} "
+        f"over {span} (mode={decision['mode']})."
+    )
+    return _shaped_response(answer, reasoning, chart=chart)
+
+
 def compute_metric(ticker: str, metric: str) -> Dict[str, Any]:
     """Compute one metric for one ticker from its latest 10-K XBRL facts.
 
@@ -372,6 +534,17 @@ def run_peer_comparison(query: str, decision: Dict[str, Any]) -> Dict[str, Any]:
             f"AMAT, LRCX, MRVL, MCHP, ADI) plus SpaceX.",
             reasoning="Peer comparison requested but no covered peers resolved.",
         )
+
+    # Multi-year request ("...over 5 years", "...trend"): build a year-by-year
+    # table + trend chart instead of a single-period snapshot, when the metric has
+    # a chartable annual series. Falls through to the snapshot otherwise.
+    if _wants_multiyear(query) and metric in _MULTIYEAR_CHARTABLE:
+        multi = _multiyear_comparison(
+            query, decision, metric, label, tickers,
+            named_competitors, from_graph, _parse_year_horizon(query),
+        )
+        if multi is not None:
+            return multi
 
     # Compute the metric per company.
     rows: List[Tuple[str, str, Optional[float], str]] = []

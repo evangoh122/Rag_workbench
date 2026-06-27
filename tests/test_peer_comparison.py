@@ -5,6 +5,10 @@ from api.services.peer_comparison import (
     _tickers_named_in_query,
     _name_to_ticker,
     _format_value,
+    _parse_year_horizon,
+    _wants_multiyear,
+    _MULTIYEAR_CHARTABLE,
+    _MAX_TREND_YEARS,
 )
 
 
@@ -71,6 +75,42 @@ class TestMetricMapping:
 
     def test_default_is_revenue(self):
         assert _metric_for_query("how do they compare")[0] == "revenue"
+
+
+class TestYearHorizon:
+    def test_parses_digit_horizon(self):
+        assert _parse_year_horizon("compare nvidia and amd revenue over 5 years") == 5
+        assert _parse_year_horizon("3-year revenue trend") == 3
+        assert _parse_year_horizon("revenue over the last 4 years") == 4
+
+    def test_parses_written_number(self):
+        assert _parse_year_horizon("revenue over the last three years") == 3
+
+    def test_clamps_to_bounds(self):
+        assert _parse_year_horizon("revenue over 20 years") == _MAX_TREND_YEARS
+        assert _parse_year_horizon("revenue over 1 year") == 2
+
+    def test_no_horizon_when_unstated(self):
+        assert _parse_year_horizon("compare nvidia and amd revenue") is None
+        assert _parse_year_horizon("") is None
+
+
+class TestMultiyearDetection:
+    def test_explicit_horizon_wants_multiyear(self):
+        assert _wants_multiyear("compare nvidia and amd revenue over 5 years")
+
+    def test_trend_signal_wants_multiyear(self):
+        assert _wants_multiyear("nvidia vs amd revenue trend")
+        assert _wants_multiyear("amd revenue history vs nvidia")
+
+    def test_snapshot_query_does_not_want_multiyear(self):
+        assert not _wants_multiyear("compare nvidia and amd revenue")
+
+    def test_revenue_is_chartable_for_multiyear(self):
+        assert "revenue" in _MULTIYEAR_CHARTABLE
+        # Growth / ratio metrics are not tabulated year-by-year (snapshot only).
+        assert "revenue_yoy_growth" not in _MULTIYEAR_CHARTABLE
+        assert "current_ratio" not in _MULTIYEAR_CHARTABLE
 
 
 class TestValueFormatting:
