@@ -747,7 +747,7 @@ function Workbench() {
                     <div className="mt-0.5 shrink-0 w-2 h-2 rounded-full bg-amber-500 status-pulse" />
                     <div>
                       <strong className="font-semibold text-amber-300 block mb-0.5">Filing Range Notice</strong>
-                      Qualitative search is limited to the <strong>latest 10-K and 20-F</strong> filings by default (plus the latest 1 year of 10-Q filings for MU). Older or historical filings are not loaded by default.
+                      Qualitative search covers the <strong>two most recent annual filings (10-K / 20-F)</strong> and the <strong>latest year of quarterly (10-Q)</strong> filings for covered companies. Older historical filings aren't loaded by default.
                     </div>
                   </div>
 
