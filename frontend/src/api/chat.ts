@@ -80,6 +80,8 @@ export interface ChartSpec {
   data: { period: string; value: number }[];
   annual?: { period: string; value: number }[];
   quarterly?: { period: string; value: number }[];
+  // Multi-series (e.g. peer comparison): one named line per company over time.
+  series?: { name: string; data: { period: string; value: number }[] }[];
 }
 
 // A knowledge-graph triple. Phase C adds source refs + node types (optional so

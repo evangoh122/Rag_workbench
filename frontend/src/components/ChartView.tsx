@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import type { ChartSpec } from '../api/chat';
 
 const ACCENT = '#2E8B57';
 const AXIS = '#888888';
 const GRID = 'rgba(255,255,255,0.06)';
+// Distinct line colours for multi-company comparison trends.
+const PALETTE = ['#2E8B57', '#60A5FA', '#F59E0B', '#A78BFA', '#F472B6', '#34D399'];
 
 function fmtUSD(v: number): string {
   const a = Math.abs(v);
@@ -34,12 +36,52 @@ const TooltipBox: React.FC<TooltipBoxProps> = ({ active, payload, label, formatt
   );
 };
 
+interface MultiTooltipProps {
+  active?: boolean;
+  payload?: { name: string; value: number; color: string }[];
+  label?: string;
+  formatter: (v: number) => string;
+}
+
+const MultiTooltipBox: React.FC<MultiTooltipProps> = ({ active, payload, label, formatter }) => {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div className="glass-sm px-3 py-2 text-xs space-y-0.5">
+      <div className="text-secondary mb-1">{label}</div>
+      {payload.map((p) => (
+        <div key={p.name} className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+          <span className="text-secondary">{p.name}</span>
+          <span className="text-primary font-semibold tabular-nums ml-auto">{formatter(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 type ViewMode = 'annual' | 'quarterly';
 
 const ChartView: React.FC<{ chart: ChartSpec }> = ({ chart }) => {
   const [mode, setMode] = useState<ViewMode>('annual');
   const isPct = chart.unit === '%';
   const fmt = (v: number) => (isPct ? `${v.toFixed(1)}%` : fmtUSD(v));
+
+  // Multi-series (peer-comparison trend): one line per company over shared periods.
+  const isMulti = !!(chart.series && chart.series.length);
+  const multiData = useMemo(() => {
+    if (!chart.series) return [];
+    const periods = Array.from(
+      new Set(chart.series.flatMap((s) => s.data.map((d) => d.period)))
+    ).sort();
+    return periods.map((period) => {
+      const row: Record<string, string | number> = { period };
+      for (const s of chart.series!) {
+        const pt = s.data.find((d) => d.period === period);
+        if (pt) row[s.name] = pt.value;
+      }
+      return row;
+    });
+  }, [chart.series]);
 
   const hasQuarterly = chart.quarterly && chart.quarterly.length > 0;
 
@@ -91,7 +133,20 @@ const ChartView: React.FC<{ chart: ChartSpec }> = ({ chart }) => {
           </div>
         ) : (
           <ResponsiveContainer>
-            {chart.type === 'bar' ? (
+            {isMulti ? (
+              <LineChart data={multiData} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+                <CartesianGrid stroke={GRID} vertical={false} />
+                <XAxis dataKey="period" stroke={AXIS} fontSize={11} tickLine={false} interval={0} />
+                <YAxis stroke={AXIS} fontSize={11} tickLine={false} width={52} tickFormatter={fmt} />
+                <Tooltip content={<MultiTooltipBox formatter={fmt} />} cursor={{ stroke: 'rgba(255,255,255,0.12)' }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {chart.series!.map((s, i) => (
+                  <Line key={s.name} type="monotone" dataKey={s.name}
+                        stroke={PALETTE[i % PALETTE.length]} strokeWidth={2}
+                        dot={{ r: 2.5 }} activeDot={{ r: 5 }} connectNulls />
+                ))}
+              </LineChart>
+            ) : chart.type === 'bar' ? (
               <BarChart data={chartData} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
                 <CartesianGrid stroke={GRID} vertical={false} />
                 <XAxis 

@@ -432,25 +432,46 @@ def run_peer_comparison(query: str, decision: Dict[str, Any]) -> Dict[str, Any]:
         f"(mode={decision['mode']})."
     )
 
-    # Bar chart: one bar per company (only those with a computed value), ranked
-    # the same way as the table. The ChartSpec uses `period` as the category
-    # label, so we put the ticker there and the metric value on the bar.
     unit = "%" if metric in _PERCENT_METRICS else ("USD" if metric in _USD_METRICS else "")
-    chart_points = [
-        {"period": tk, "value": float(val)}
-        for tk, _disp, val, _period in ranked
-        if val is not None
-    ]
+
+    # Prefer a multi-year TREND line — one line per company over time — when the
+    # metric has a chartable annual history (reuses the single-company chart
+    # builder per ticker). Fall back to a single-period BAR snapshot for metrics
+    # with no annual series (rd_intensity, free_cash_flow, ratios, growth).
     chart = None
-    if len(chart_points) >= 2:
+    trend_series: List[Dict[str, Any]] = []
+    try:
+        from api.services.chart_tool import build_chart_spec
+        for tk in [t for t, *_ in ranked]:
+            spec = build_chart_spec(tk, metric, "line")
+            pts = (spec or {}).get("data") or []
+            if len(pts) >= 2:
+                trend_series.append({"name": tk, "data": pts})
+    except Exception as exc:  # never let charting break the answer
+        logger.warning(f"Peer comparison trend build failed: {exc}")
+
+    if len(trend_series) >= 2:
         chart = {
-            "type": "bar",
-            "title": f"{label} — {subject} vs. peers",
-            "metric": metric,
-            "label": label,
-            "unit": unit,
+            "type": "line",
+            "title": f"{label} — {subject} vs. peers (trend)",
+            "metric": metric, "label": label, "unit": unit,
             "ticker": subject,
-            "data": chart_points,
+            "data": [],            # multi-series chart; per-company points in `series`
+            "series": trend_series,
         }
+    else:
+        snapshot = [
+            {"period": tk, "value": float(val)}
+            for tk, _disp, val, _period in ranked
+            if val is not None
+        ]
+        if len(snapshot) >= 2:
+            chart = {
+                "type": "bar",
+                "title": f"{label} — {subject} vs. peers",
+                "metric": metric, "label": label, "unit": unit,
+                "ticker": subject,
+                "data": snapshot,
+            }
 
     return _shaped_response(answer, reasoning, chart=chart)
