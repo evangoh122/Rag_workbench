@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Play, Database, Network, BookOpen, Clock, AlertTriangle, CheckCircle, Sparkles } from 'lucide-react';
 import Presentation from './Presentation';
 import CoachMarks, { useTour } from '../components/CoachMarks';
@@ -13,6 +13,8 @@ const TRACKING_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_conten
 
 export default function RagOverview() {
   const navigate = useNavigate();
+  // `ref` from a short vanity link like /r/acme (path-based, cleaner to share).
+  const { ref: refFromPath } = useParams();
   // First-visit guided tour for the overview page (replayable from the header).
   const tour = useTour(OVERVIEW_TOUR_KEY);
 
@@ -23,9 +25,11 @@ export default function RagOverview() {
   // opened. Runs once per mount; never throws (capture is fire-and-forget).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const tracking = Object.fromEntries(
-      TRACKING_PARAMS.map((k) => [k, params.get(k)]).filter(([, v]) => v),
+    const tracking: Record<string, string> = Object.fromEntries(
+      TRACKING_PARAMS.map((k) => [k, params.get(k)]).filter(([, v]) => v) as [string, string][],
     );
+    // A path-based ref (/r/acme) takes precedence and counts even with no query.
+    if (refFromPath) tracking.ref = refFromPath;
     getPosthog().then((p) => {
       p.capture('$pageview', { view: 'rag_overview' });
       if (Object.keys(tracking).length > 0) {
@@ -36,7 +40,7 @@ export default function RagOverview() {
         });
       }
     });
-  }, []);
+  }, [refFromPath]);
 
   return (
     <div className="min-h-screen bg-background text-primary font-sans selection:bg-accent/20 selection:text-white flex flex-col">

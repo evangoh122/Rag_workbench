@@ -1329,6 +1329,12 @@ function App() {
       <Routes>
         <Route path="/" element={<PortfolioHome />} />
         <Route path="/rag-overview" element={<RagOverview />} />
+        {/* Short, shareable aliases for the overview page. `/r/:ref` lets a link
+            carry its channel/recruiter in the path (evangoh.com/r/acme) so it is
+            clean enough to put on a resume or LinkedIn while still being tracked. */}
+        <Route path="/overview" element={<RagOverview />} />
+        <Route path="/r" element={<RagOverview />} />
+        <Route path="/r/:ref" element={<RagOverview />} />
         <Route path="/rag/*" element={<Workbench />} />
       </Routes>
     </>
