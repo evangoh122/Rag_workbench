@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ShieldAlert, Info } from 'lucide-react';
 
 const ACK_KEY = 'rw_disclaimer_ack_v1';
@@ -91,13 +92,23 @@ export function DisclaimerModal() {
 export function DisclaimerFooter({ className = '' }: { className?: string }) {
   return (
     <div
-      className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] sm:text-[11px] text-muted bg-surface/30 border-t border-border/40 ${className}`}
+      className={`flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-3 py-1.5 text-[10px] sm:text-[11px] text-muted bg-surface/30 border-t border-border/40 ${className}`}
     >
-      <Info size={11} className="shrink-0 text-amber-500/70" />
-      <span className="text-center leading-tight">
-        For research &amp; education only — <span className="text-secondary">not investment
-        advice</span>. Do your own due diligence.
+      <span className="flex items-center gap-1.5">
+        <Info size={11} className="shrink-0 text-amber-500/70" />
+        <span className="text-center leading-tight">
+          For research &amp; education only — <span className="text-secondary">not investment
+          advice</span>. Do your own due diligence.
+        </span>
       </span>
+      <span className="text-border/60" aria-hidden>·</span>
+      <Link to="/privacy" className="hover:text-secondary underline-offset-2 hover:underline transition-colors">
+        Privacy
+      </Link>
+      <span className="text-border/60" aria-hidden>·</span>
+      <Link to="/terms" className="hover:text-secondary underline-offset-2 hover:underline transition-colors">
+        Terms
+      </Link>
     </div>
   );
 }
