@@ -871,12 +871,13 @@ function Workbench() {
                     </div>
 
                     <ChartErrorBoundary>
-                      {showEvidence && msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
+                      {showEvidence && msg.role === 'assistant' && msg.chart &&
+                        ((msg.chart.data?.length ?? 0) > 0 || (msg.chart.series?.length ?? 0) > 0) && (
                         <ChartView chart={msg.chart} />
                       )}
 
                       {/* Only show raw XBRL chart when no backend chart is present */}
-                      {showEvidence && msg.role === 'assistant' && !msg.chart && ((msg.relevant_xbrl?.length ?? 0) > 0 || (msg.xbrl_facts?.length ?? 0) > 0) && (
+                      {showEvidence && msg.role === 'assistant' && !((msg.chart?.data?.length ?? 0) > 0 || (msg.chart?.series?.length ?? 0) > 0) && ((msg.relevant_xbrl?.length ?? 0) > 0 || (msg.xbrl_facts?.length ?? 0) > 0) && (
                         <FinancialChart facts={(msg.relevant_xbrl?.length ?? 0) > 0 ? msg.relevant_xbrl : msg.xbrl_facts} />
                       )}
                     </ChartErrorBoundary>
