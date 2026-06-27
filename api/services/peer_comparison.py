@@ -328,7 +328,9 @@ def compute_metric(ticker: str, metric: str) -> Dict[str, Any]:
     return out
 
 
-def _shaped_response(answer: str, reasoning: str) -> Dict[str, Any]:
+def _shaped_response(
+    answer: str, reasoning: str, chart: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """Return a result dict shaped like the LangGraph engine's output so the
     chat route can consume it uniformly."""
     done = {k: "skipped" for k in (
@@ -342,6 +344,7 @@ def _shaped_response(answer: str, reasoning: str) -> Dict[str, Any]:
         "polygon_data": [], "math_result": None, "math_steps": [],
         "verification_status": "SKIPPED",
         "verification_reasoning": reasoning,
+        "chart": chart,
         "status": done,
     }
 
@@ -428,4 +431,26 @@ def run_peer_comparison(query: str, decision: Dict[str, Any]) -> Dict[str, Any]:
         f"Peer comparison: {label} across {', '.join(t for t, *_ in rows)} "
         f"(mode={decision['mode']})."
     )
-    return _shaped_response(answer, reasoning)
+
+    # Bar chart: one bar per company (only those with a computed value), ranked
+    # the same way as the table. The ChartSpec uses `period` as the category
+    # label, so we put the ticker there and the metric value on the bar.
+    unit = "%" if metric in _PERCENT_METRICS else ("USD" if metric in _USD_METRICS else "")
+    chart_points = [
+        {"period": tk, "value": float(val)}
+        for tk, _disp, val, _period in ranked
+        if val is not None
+    ]
+    chart = None
+    if len(chart_points) >= 2:
+        chart = {
+            "type": "bar",
+            "title": f"{label} — {subject} vs. peers",
+            "metric": metric,
+            "label": label,
+            "unit": unit,
+            "ticker": subject,
+            "data": chart_points,
+        }
+
+    return _shaped_response(answer, reasoning, chart=chart)
