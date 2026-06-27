@@ -66,6 +66,8 @@ import { getPosthog } from './utils/posthog'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import PortfolioHome from './pages/PortfolioHome';
 import RagOverview from './pages/RagOverview';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
 
 import ChartView from './components/ChartView';
 import GraphExplorer from './components/GraphExplorer';
@@ -74,6 +76,7 @@ import type { GraphSelection } from './components/KnowledgeGraph';
 import { getGraphEvidence, getGraphTriples, type GraphEvidence } from './api/graph';
 import { COMPANY_NAMES } from './components/GraphExplorer';
 import { DisclaimerModal, DisclaimerFooter } from './components/Disclaimer';
+import AnalyticsNotice from './components/AnalyticsNotice';
 import CoachMarks, { useTour } from './components/CoachMarks';
 import { CHAT_TOUR, CHAT_TOUR_KEY } from './components/tourSteps';
 
@@ -1326,6 +1329,7 @@ function App() {
   return (
     <>
       <DisclaimerModal />
+      <AnalyticsNotice />
       <Routes>
         <Route path="/" element={<PortfolioHome />} />
         <Route path="/rag-overview" element={<RagOverview />} />
@@ -1335,6 +1339,8 @@ function App() {
         <Route path="/overview" element={<RagOverview />} />
         <Route path="/r" element={<RagOverview />} />
         <Route path="/r/:ref" element={<RagOverview />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="/rag/*" element={<Workbench />} />
       </Routes>
     </>

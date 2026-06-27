@@ -233,6 +233,10 @@ export default function RagOverview() {
       <footer className="border-t border-border/40 bg-surface/10 py-8 text-center text-xs text-secondary/50">
         <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <span>&copy; {new Date().getFullYear()} Evan Goh. All rights reserved.</span>
+          <div className="flex gap-4">
+            <button onClick={() => navigate('/privacy')} className="hover:text-primary transition-colors bg-transparent border-0 cursor-pointer text-inherit p-0">Privacy</button>
+            <button onClick={() => navigate('/terms')} className="hover:text-primary transition-colors bg-transparent border-0 cursor-pointer text-inherit p-0">Terms</button>
+          </div>
         </div>
       </footer>
 

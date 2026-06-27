@@ -400,6 +400,8 @@ export default function PortfolioHome() {
           <div className="flex w-full flex-col sm:flex-row items-center justify-between gap-4">
             <span>&copy; {new Date().getFullYear()} Evan Goh. All rights reserved.</span>
             <div className="flex gap-4">
+              <button onClick={() => navigate('/privacy')} className="hover:text-primary transition-colors bg-transparent border-0 cursor-pointer text-inherit p-0">Privacy</button>
+              <button onClick={() => navigate('/terms')} className="hover:text-primary transition-colors bg-transparent border-0 cursor-pointer text-inherit p-0">Terms</button>
               <a href="https://www.linkedin.com/in/eevangoh/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">LinkedIn</a>
             </div>
           </div>
