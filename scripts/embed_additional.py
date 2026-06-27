@@ -339,6 +339,7 @@ def main():
                     batch_texts = [c.text for c in all_chunks]
                     all_vecs = []
                     BATCH_SIZE = int(os.getenv("EMBED_DOC_BATCH", "64"))
+                    embed_failed = False
                     for bi in range(0, len(batch_texts), BATCH_SIZE):
                         batch = batch_texts[bi: bi + BATCH_SIZE]
                         try:
@@ -348,13 +349,24 @@ def main():
                                 f"[{ticker}] Embedding failed for batch {bi}:{bi+BATCH_SIZE} "
                                 f"in {accession}: {exc}"
                             )
-                            all_vecs.extend([None] * len(batch))
+                            embed_failed = True
+                            break
+
+                    # Never store a PARTIAL filing. If any batch failed (e.g. CUDA OOM),
+                    # skip the whole filing: the earlier DELETE already cleared any prior
+                    # rows for this accession, so it is left absent and retried cleanly on a
+                    # future run — instead of being marked 'present' with chunks missing.
+                    if embed_failed or len(all_vecs) != len(all_chunks):
+                        logger.warning(
+                            f"[{ticker}] SKIPPING {form_type} {accession} — embedding "
+                            f"incomplete; not stored (will retry on a future run)."
+                        )
+                        summary[ticker]["skipped"] += 1
+                        continue
 
                     rows_inserted = 0
                     for j, chunk in enumerate(all_chunks):
                         vec = all_vecs[j]
-                        if vec is None:
-                            continue
                         conn.execute(
                             """INSERT INTO edgar_embeddings
                                (ticker, accession, text, embedding, updated_at, cik,
