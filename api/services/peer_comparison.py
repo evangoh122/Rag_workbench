@@ -401,27 +401,6 @@ def _multiyear_comparison(
         ]
         lines.append(f"| {y} | " + " | ".join(cells) + " |")
 
-    # ── Read: change over the window (and CAGR for level metrics), per company ──
-    reads: List[str] = []
-    for tk in have:
-        pts = [(y, series[tk][y]) for y in years if y in series[tk]]
-        if len(pts) < 2 or not pts[0][1]:
-            continue
-        (first_y, first_v), (last_y, last_v) = pts[0], pts[-1]
-        if is_pct:
-            reads.append(
-                f"**{tk}** moved from {_format_value(metric, first_v)} ({first_y}) "
-                f"to {_format_value(metric, last_v)} ({last_y})"
-            )
-        else:
-            growth = (last_v - first_v) / abs(first_v) * 100
-            n_span = int(last_y) - int(first_y)
-            cagr = ((last_v / first_v) ** (1 / n_span) - 1) * 100 if n_span > 0 and first_v > 0 else None
-            cagr_txt = f", a {cagr:.0f}% CAGR" if cagr is not None else ""
-            reads.append(f"**{tk}** grew {growth:+.0f}% ({first_y}→{last_y}){cagr_txt}")
-    if reads:
-        lines.append("\n**What it means:** " + "; ".join(reads) + ".")
-
     # Peer-mode provenance notes (same as the snapshot path).
     if decision["mode"] == "peer":
         if from_graph:
@@ -440,6 +419,41 @@ def _multiyear_comparison(
         "years may differ across companies; \"—\" = no comparable annual figure filed.*"
     )
 
+    # ── 3-layer fields (rendered separately by the UI) ──
+    # "What it means": per-company change over the window (and CAGR for levels).
+    reads: List[str] = []
+    for tk in have:
+        pts = [(y, series[tk][y]) for y in years if y in series[tk]]
+        if len(pts) < 2 or not pts[0][1]:
+            continue
+        (first_y, first_v), (last_y, last_v) = pts[0], pts[-1]
+        if is_pct:
+            reads.append(
+                f"**{tk}** moved from {_format_value(metric, first_v)} ({first_y}) "
+                f"to {_format_value(metric, last_v)} ({last_y})"
+            )
+        else:
+            growth = (last_v - first_v) / abs(first_v) * 100
+            n_span = int(last_y) - int(first_y)
+            cagr = ((last_v / first_v) ** (1 / n_span) - 1) * 100 if n_span > 0 and first_v > 0 else None
+            cagr_txt = f", a {cagr:.0f}% CAGR" if cagr is not None else ""
+            reads.append(f"**{tk}** grew {growth:+.0f}% ({first_y}→{last_y}){cagr_txt}")
+    what_it_means = ("Over " + span + ": " + "; ".join(reads) + ".") if reads else ""
+
+    how_to_interpret = (
+        "Read the trajectory, not just the latest value — a higher CAGR means faster "
+        "compounding growth, while a flat or falling line signals stalling momentum. "
+        "Fiscal years can differ across companies, so align the periods before drawing "
+        "conclusions, and treat \"—\" as 'not filed for that year', not zero."
+    )
+    others = [t for t in have if t != subject]
+    follow_ups = [
+        f"How did {subject} and {others[0]}'s gross margins compare over the same period?"
+        if others else f"How did {subject}'s gross margin trend over this period?",
+        f"What drove {subject}'s {label.lower()} trajectory?",
+        f"Compare {' vs '.join(have)} net income over {len(years)} years",
+    ]
+
     unit = "%" if is_pct else ("USD" if metric in _USD_METRICS else "")
     trend_series = [
         {"name": tk, "data": [{"period": y, "value": series[tk][y]} for y in years if y in series[tk]]}
@@ -456,7 +470,11 @@ def _multiyear_comparison(
         f"Multi-year peer comparison: {label} across {', '.join(have)} "
         f"over {span} (mode={decision['mode']})."
     )
-    return _shaped_response(answer, reasoning, chart=chart)
+    return _shaped_response(
+        answer, reasoning, chart=chart,
+        what_it_means=what_it_means, how_to_interpret=how_to_interpret,
+        follow_ups=follow_ups, retrieved_docs=_filing_sources(have),
+    )
 
 
 def compute_metric(ticker: str, metric: str) -> Dict[str, Any]:
@@ -490,23 +508,65 @@ def compute_metric(ticker: str, metric: str) -> Dict[str, Any]:
     return out
 
 
+def _filing_sources(tickers: List[str]) -> List[Dict[str, Any]]:
+    """Per-company filing references, shaped like the engine's `retrieved_docs` so
+    the chat route renders them in the Sources / audit panel. The comparison's
+    numbers are computed from each company's latest 10-K XBRL facts, so we cite
+    that filing (EDGAR 10-K list, by CIK when known)."""
+    try:
+        from api.config import TICKER_TO_CIK
+    except Exception:
+        TICKER_TO_CIK = {}
+    docs: List[Dict[str, Any]] = []
+    for tk in tickers:
+        cik = (TICKER_TO_CIK or {}).get(tk)
+        url = (
+            f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=10-K"
+            if cik else
+            f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company={tk}&type=10-K"
+        )
+        docs.append({
+            "chunk_text": (
+                f"{tk}: figures computed from the company's latest 10-K XBRL "
+                f"financial data (SEC EDGAR)."
+            ),
+            "metadata": {
+                "ticker": tk,
+                "section_id": "XBRL financial data",
+                "edgar_url": url,
+            },
+        })
+    return docs
+
+
 def _shaped_response(
-    answer: str, reasoning: str, chart: Optional[Dict[str, Any]] = None
+    answer: str, reasoning: str, chart: Optional[Dict[str, Any]] = None,
+    *, what_it_means: str = "", how_to_interpret: str = "",
+    follow_ups: Optional[List[str]] = None,
+    retrieved_docs: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Return a result dict shaped like the LangGraph engine's output so the
-    chat route can consume it uniformly."""
+    chat route can consume it uniformly. Optional fields let the comparison path
+    carry the same Sources + 3-layer educational fields a single-company answer
+    does (otherwise the UI shows no graph context, no sources, no 'what it means')."""
     done = {k: "skipped" for k in (
         "input", "retrieval", "classifier", "extraction", "eval", "math",
         "verification", "output")}
     done["input"] = "success"
     done["output"] = "success"
+    if retrieved_docs:
+        done["retrieval"] = "success"
     return {
         "final_answer": answer,
-        "xbrl_facts": [], "relevant_xbrl": [], "retrieved_docs": [],
+        "xbrl_facts": [], "relevant_xbrl": [],
+        "retrieved_docs": retrieved_docs or [],
         "polygon_data": [], "math_result": None, "math_steps": [],
         "verification_status": "SKIPPED",
         "verification_reasoning": reasoning,
         "chart": chart,
+        "what_it_means": what_it_means,
+        "how_to_interpret": how_to_interpret,
+        "follow_ups": follow_ups or [],
         "status": done,
     }
 
@@ -568,16 +628,17 @@ def run_peer_comparison(query: str, decision: Dict[str, Any]) -> Dict[str, Any]:
         mark = " *(subject)*" if tk == subject else ""
         lines.append(f"| {tk}{mark} | {disp} | {period or '—'} |")
 
-    # One-line read: where the subject lands.
+    # One-line read: where the subject lands (rendered as the UI's "what it means").
     have = [r for r in ranked if r[2] is not None]
+    what_it_means = ""
     if len(have) >= 2 and any(r[0] == subject and r[2] is not None for r in have):
         subj_rank = [i for i, r in enumerate(have) if r[0] == subject][0] + 1
         leader = have[0]
         lead_txt = "lowest" if ascending else "highest"
-        lines.append(
-            f"\n**What it means:** Among the {len(have)} companies with reported "
-            f"data, **{subject}** ranks #{subj_rank} on {label.lower()}. "
-            f"**{leader[0]}** has the {lead_txt} at {leader[1]}."
+        what_it_means = (
+            f"Among the {len(have)} companies with reported data, {subject} ranks "
+            f"#{subj_rank} on {label.lower()}. {leader[0]} has the {lead_txt} at "
+            f"{leader[1]}."
         )
 
     if decision["mode"] == "peer":
@@ -647,4 +708,23 @@ def run_peer_comparison(query: str, decision: Dict[str, Any]) -> Dict[str, Any]:
                 "data": snapshot,
             }
 
-    return _shaped_response(answer, reasoning, chart=chart)
+    tickers_with_data = [t for t, _disp, val, _period in ranked if val is not None]
+    how_to_interpret = (
+        "These are point-in-time figures from each company's latest 10-K — useful for "
+        "ranking, but a single period hides the trajectory. Fiscal years may differ "
+        "across companies, so a like-for-like read needs aligned periods. Ask for the "
+        "same metric \"over N years\" to see the trend."
+    )
+    others = [t for t in tickers_with_data if t != subject]
+    follow_ups = [
+        f"Compare {subject} and {others[0]} {label.lower()} over 5 years"
+        if others else f"How has {subject}'s {label.lower()} trended over 5 years?",
+        f"How do {subject} and its peers compare on gross margin?",
+        f"What drove the gap in {label.lower()} between these companies?",
+    ]
+    return _shaped_response(
+        answer, reasoning, chart=chart,
+        what_it_means=what_it_means, how_to_interpret=how_to_interpret,
+        follow_ups=follow_ups,
+        retrieved_docs=_filing_sources(tickers_with_data or tickers),
+    )

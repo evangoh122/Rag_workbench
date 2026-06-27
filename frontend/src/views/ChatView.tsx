@@ -162,12 +162,13 @@ const ChatView: React.FC<ChatViewProps> = ({
               </div>
 
               <ChartErrorBoundary>
-                {msg.role === 'assistant' && msg.chart && msg.chart.data?.length > 0 && (
+                {msg.role === 'assistant' && msg.chart &&
+                  ((msg.chart.data?.length ?? 0) > 0 || (msg.chart.series?.length ?? 0) > 0) && (
                   <ChartView chart={msg.chart} />
                 )}
 
                 {/* Only show raw XBRL chart when no backend chart is present */}
-                {msg.role === 'assistant' && !msg.chart && ((msg.relevant_xbrl?.length ?? 0) > 0 || (msg.xbrl_facts?.length ?? 0) > 0) && (
+                {msg.role === 'assistant' && !((msg.chart?.data?.length ?? 0) > 0 || (msg.chart?.series?.length ?? 0) > 0) && ((msg.relevant_xbrl?.length ?? 0) > 0 || (msg.xbrl_facts?.length ?? 0) > 0) && (
                   <FinancialChart facts={(msg.relevant_xbrl?.length ?? 0) > 0 ? msg.relevant_xbrl : msg.xbrl_facts} />
                 )}
               </ChartErrorBoundary>

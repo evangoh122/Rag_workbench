@@ -9,7 +9,44 @@ from api.services.peer_comparison import (
     _wants_multiyear,
     _MULTIYEAR_CHARTABLE,
     _MAX_TREND_YEARS,
+    _filing_sources,
+    _shaped_response,
 )
+
+
+class TestComparisonEnrichment:
+    """The comparison result must carry sources + the 3-layer fields a single-
+    company answer has, or the UI shows no graph context / sources / 'what it means'."""
+
+    def test_filing_sources_one_per_ticker_with_edgar_url(self):
+        docs = _filing_sources(["NVDA", "AMD"])
+        assert len(docs) == 2
+        assert [d["metadata"]["ticker"] for d in docs] == ["NVDA", "AMD"]
+        for d in docs:
+            assert d["metadata"]["edgar_url"].startswith("https://www.sec.gov/")
+            assert "10-K" in d["metadata"]["edgar_url"]
+            assert d.get("chunk_text")
+
+    def test_filing_sources_empty(self):
+        assert _filing_sources([]) == []
+
+    def test_shaped_response_carries_optional_fields(self):
+        r = _shaped_response(
+            "ans", "why", chart={"type": "line"},
+            what_it_means="wim", how_to_interpret="hti",
+            follow_ups=["a", "b"], retrieved_docs=[{"chunk_text": "x", "metadata": {}}],
+        )
+        assert r["what_it_means"] == "wim"
+        assert r["how_to_interpret"] == "hti"
+        assert r["follow_ups"] == ["a", "b"]
+        assert len(r["retrieved_docs"]) == 1
+        assert r["status"]["retrieval"] == "success"  # docs present → retrieval ran
+
+    def test_shaped_response_defaults_are_empty(self):
+        r = _shaped_response("ans", "why")
+        assert r["what_it_means"] == "" and r["follow_ups"] == []
+        assert r["retrieved_docs"] == []
+        assert r["status"]["retrieval"] == "skipped"
 
 
 class TestComparisonDetection:
