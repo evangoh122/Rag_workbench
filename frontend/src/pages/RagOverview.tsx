@@ -1,14 +1,42 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, Database, Network, BookOpen, Clock, AlertTriangle, CheckCircle, Sparkles } from 'lucide-react';
 import Presentation from './Presentation';
 import CoachMarks, { useTour } from '../components/CoachMarks';
 import { OVERVIEW_TOUR, OVERVIEW_TOUR_KEY } from '../components/tourSteps';
 import { DisclaimerFooter } from '../components/Disclaimer';
+import { getPosthog } from '../utils/posthog';
+
+// UTM / referral params we read off a shared tracking link so a visit can be
+// attributed to the link it came from (e.g. a minified link sent to one person).
+const TRACKING_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'ref'] as const;
 
 export default function RagOverview() {
   const navigate = useNavigate();
   // First-visit guided tour for the overview page (replayable from the header).
   const tour = useTour(OVERVIEW_TOUR_KEY);
+
+  // Record the visit in PostHog. Fires a $pageview so the overview page shows up
+  // in view analytics, and — when the URL carries tracking params (i.e. the
+  // visitor arrived via a shared link) — a dedicated `overview_link_visit` event
+  // tagged with those params, so you can see exactly when a link you sent was
+  // opened. Runs once per mount; never throws (capture is fire-and-forget).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tracking = Object.fromEntries(
+      TRACKING_PARAMS.map((k) => [k, params.get(k)]).filter(([, v]) => v),
+    );
+    getPosthog().then((p) => {
+      p.capture('$pageview', { view: 'rag_overview' });
+      if (Object.keys(tracking).length > 0) {
+        p.capture('overview_link_visit', {
+          ...tracking,
+          referrer: document.referrer || null,
+          path: window.location.pathname,
+        });
+      }
+    });
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-primary font-sans selection:bg-accent/20 selection:text-white flex flex-col">
