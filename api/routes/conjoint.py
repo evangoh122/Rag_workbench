@@ -88,10 +88,18 @@ ROLES: list[dict[str, str]] = [
         "outcome": "Full evidence trail for regulators",
         "emotional_job": "Confidence that the AI won't create liability",
         "social_job": "Seen as a responsible AI steward",
+        # `answer_guidance` is TONE/EMPHASIS (how to say it); `answer_requirements`
+        # is the behavioral/structural MUSTs the answer has to satisfy (what it must
+        # contain). They are injected differently and the requirements are what the
+        # persona-fit rail (guardrails/persona_rails.py) checks the answer against.
         "answer_guidance": (
-            "Emphasize a complete, auditable evidence trail: cite every source filing "
-            "and section, surface verification status, and flag any uncertainty "
-            "explicitly. Prioritize traceability and defensibility over brevity."
+            "Prioritize traceability and defensibility over brevity — a thorough, "
+            "well-sourced answer is better than a short one."
+        ),
+        "answer_requirements": (
+            "Cite the specific source filing and section for each material claim. "
+            "State the verification status of any figure you report. Explicitly flag "
+            "any uncertainty or gap rather than glossing over it."
         ),
     },
     {
@@ -104,8 +112,11 @@ ROLES: list[dict[str, str]] = [
         "emotional_job": "Trust in AI-surfaced insights",
         "social_job": "Credible analysis for colleagues",
         "answer_guidance": (
-            "Lead with the key disclosure, cite the exact filing section, and stay "
-            "fast and signal-dense. The reader is time-pressed and needs cited insight."
+            "Lead with the key disclosure and stay fast and signal-dense. The reader "
+            "is time-pressed and needs cited insight, not a long preamble."
+        ),
+        "answer_requirements": (
+            "Cite the exact filing section for the key disclosure."
         ),
     },
     {
@@ -118,9 +129,12 @@ ROLES: list[dict[str, str]] = [
         "emotional_job": "Certainty that numbers aren't hallucinated",
         "social_job": "Defensible credit recommendation",
         "answer_guidance": (
-            "Foreground verified financial figures with their source and verification "
-            "status. Never present an unverified number without a caveat; certainty "
-            "that figures aren't hallucinated is the priority."
+            "Foreground verified financial figures; certainty that figures aren't "
+            "hallucinated is the priority."
+        ),
+        "answer_requirements": (
+            "Give the source and verification status for each financial figure. Never "
+            "present an unverified or uncorroborated number without an explicit caveat."
         ),
     },
     {
@@ -137,6 +151,9 @@ ROLES: list[dict[str, str]] = [
             "takeaways. Minimize jargon; favor a clean, prepared narrative over an "
             "exhaustive dump."
         ),
+        # Conciseness is a soft preference, not a hard structural rule, so there is
+        # no separate requirement to enforce/check for this persona.
+        "answer_requirements": "",
     },
 ]
 
@@ -149,23 +166,31 @@ def role_guidance_for(role_key: Optional[str]) -> Optional[str]:
 
     Composes the role's full jobs-to-be-done context (who they are, their
     situation, what they're trying to achieve, and the emotional/social job)
-    together with the distilled `answer_guidance`, so the answering model knows
-    the persona's needs and wants — not just a one-line tone hint.
+    with the persona's TONE guidance (`answer_guidance`) and, separately, its hard
+    REQUIREMENTS (`answer_requirements`). The two are labelled distinctly so the
+    answering model treats the requirements as musts to satisfy rather than as a
+    tone hint — the previous single-blob form let content/structure requirements
+    (e.g. "cite every section", "caveat unverified numbers") get flattened into a
+    tone instruction downstream.
 
     Imported by the chat route to drive `role_based` personalization.
     """
     role = _ROLE_BY_KEY.get((role_key or "").strip())
     if not role:
         return None
-    return (
+    parts = [
         f"The reader is a {role['name']} ({role['persona']}). "
         f"Situation: {role['situation']}. "
         f"What they're trying to do: {role['motivation']}. "
         f"What a good answer gives them: {role['outcome']}. "
         f"They need to feel: {role['emotional_job']}; "
-        f"and to be seen as: {role['social_job']}. "
-        f"{role['answer_guidance']}"
-    )
+        f"and to be seen as: {role['social_job']}.",
+        f"Tone & emphasis: {role['answer_guidance']}",
+    ]
+    requirements = (role.get("answer_requirements") or "").strip()
+    if requirements:
+        parts.append(f"Requirements (the answer must satisfy these): {requirements}")
+    return " ".join(parts)
 
 _MIN_TASKS = 4
 _MAX_TASKS = 12

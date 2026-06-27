@@ -1352,7 +1352,10 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
         # tailor tone/emphasis to the respondent's role; never changes the numbers.
         _rg = (state.get("role_guidance") or "").strip()
         role_instruction = (
-            f" Tailor the answer's tone, emphasis, and depth to this reader: {_rg[:1000]}"
+            " Reader-specific guidance — adapt the answer to this reader and satisfy "
+            "any stated requirements. This changes only emphasis, structure, depth, "
+            "and what you foreground; it must NEVER change the underlying numbers or "
+            f"introduce facts not present in the context: {_rg[:1200]}"
             if _rg else ""
         )
 
@@ -1777,6 +1780,7 @@ def _abstain_response(company: str) -> Dict[str, Any]:
 
 
 _CONSENSUS_COLUMNS_ENSURED = False
+_PERSONA_COLUMNS_ENSURED = False
 
 
 def _ensure_consensus_columns(conn) -> None:
@@ -1928,9 +1932,114 @@ def _spawn_consensus(query: str, result: Dict[str, Any]) -> None:
         logger.warning(f"Consensus spawn failed (non-fatal): {exc}")
 
 
+def _ensure_persona_columns(conn) -> None:
+    """Idempotently add the persona-fit columns to audit_runs (DuckDB).
+
+    Guarded by a process-level flag so the DDL (which takes a write lock) runs at
+    most once per process rather than on every miss.
+    """
+    global _PERSONA_COLUMNS_ENSURED
+    if _PERSONA_COLUMNS_ENSURED:
+        return
+    for col, typ in (
+        ("persona_role", "VARCHAR"),
+        ("persona_fit_status", "VARCHAR"),
+        ("persona_fit_score", "DOUBLE"),
+        ("persona_fit_missing", "VARCHAR"),
+    ):
+        conn.execute(f"ALTER TABLE audit_runs ADD COLUMN IF NOT EXISTS {col} {typ}")
+    _PERSONA_COLUMNS_ENSURED = True
+
+
+def _persona_persist_worker(
+    run_id: str, role: str, score: float, missing: List[str]
+) -> None:
+    """Background writer: persist a persona-fit MISS to the audit row.
+
+    Only spawned on a miss (rare), so write-lock pressure stays low. Uses a
+    dedicated connection (DuckDB connections aren't safe to share across threads),
+    and is entirely non-fatal / fail-open.
+    """
+    try:
+        from api.db.database import db_manager
+
+        conn = db_manager.get_new_review_connection()
+        try:
+            _ensure_persona_columns(conn)
+            conn.execute(
+                """
+                UPDATE audit_runs
+                   SET persona_role = ?,
+                       persona_fit_status = ?,
+                       persona_fit_score = ?,
+                       persona_fit_missing = ?
+                 WHERE run_id = ?
+                """,
+                [role, "MISS", score, ", ".join(missing), run_id],
+            )
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.warning(f"Persona-fit persist failed (non-fatal): {exc}")
+
+
+def _apply_persona_rail(result: Dict[str, Any], role_key: Optional[str]) -> None:
+    """Persona-fit rail: check the finished answer serves the active persona.
+
+    Runs synchronously on the request path — the check is pure/deterministic
+    (no LLM, no IO) so it adds negligible latency. It NEVER edits the answer or
+    changes routing; it attaches a `persona_fit` summary to `result` for audit/UI
+    and, only on a miss with a known run_id, fires a background thread to record
+    the miss on the audit row. Fully fail-open.
+    """
+    try:
+        if not role_key:
+            return
+        if result.get("verification_status") == "ABSTAIN":
+            return
+        answer = result.get("final_answer") or ""
+        if not answer.strip():
+            return
+
+        from api.services.guardrails.persona_rails import check_persona_fit
+
+        verdict = check_persona_fit(
+            role_key, answer, verification_status=result.get("verification_status")
+        )
+        result["persona_fit"] = {
+            "role": verdict.role,
+            "fit": verdict.fit,
+            "skipped": verdict.skipped,
+            "score": verdict.score,
+            "missing": verdict.missing,
+            "reason": verdict.reason,
+        }
+        if verdict.skipped or verdict.fit:
+            return
+
+        logger.info(
+            f"Persona-fit MISS (role={verdict.role}, score={verdict.score}): "
+            f"{verdict.reason}"
+        )
+        run_id = (result.get("lineage") or {}).get("run_id")
+        if run_id:
+            threading.Thread(
+                target=_persona_persist_worker,
+                args=(run_id, verdict.role or "", verdict.score, verdict.missing),
+                daemon=True,
+                name="persona-fit-rail",
+            ).start()
+    except Exception as exc:
+        logger.warning(f"Persona-fit rail spawn failed (non-fatal): {exc}")
+
+
 def run_auditable_rag(query: str, ticker: str,
                       history: Optional[List[Dict[str, str]]] = None,
-                      role_guidance: Optional[str] = None) -> Dict[str, Any]:
+                      role_guidance: Optional[str] = None,
+                      role_key: Optional[str] = None) -> Dict[str, Any]:
     """
     Run the LangGraph DAG for a given query and ticker.
 
@@ -1941,7 +2050,12 @@ def run_auditable_rag(query: str, ticker: str,
     `role_guidance` (optional) tailors the answer to a professional role
     (conjoint `role_based` personalization). It is appended to the answer system
     prompt only; when None/empty the answer is role-agnostic. It never alters
-    retrieval, ticker resolution, or the audited numbers — purely tone/emphasis.
+    retrieval, ticker resolution, or the audited numbers — purely emphasis,
+    structure, and what the answer foregrounds.
+
+    `role_key` (optional) is the same persona's key; it drives the persona-fit rail
+    that checks, after the answer is generated, whether the answer satisfies that
+    persona's hard requirements. Advisory only — never edits the answer.
     """
     # Ground on the company named in the question, not the UI's default ticker.
     # If the query names a company we DON'T cover, abstain rather than answering
@@ -2047,5 +2161,10 @@ def run_auditable_rag(query: str, ticker: str,
     # Spawns a background thread for high-stakes / hard multi-year / comparison
     # questions; never blocks the response. Audit + review queue converge after.
     _spawn_consensus(query, result)
+
+    # Persona-fit rail — when the answer was personalized for a role, check it
+    # actually serves that persona's requirements. Deterministic + advisory:
+    # attaches `persona_fit` to result and records a miss on the audit row.
+    _apply_persona_rail(result, role_key)
 
     return result

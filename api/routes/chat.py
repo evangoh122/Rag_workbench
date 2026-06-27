@@ -208,6 +208,7 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
         result = run_auditable_rag(
             req.message, req.ticker, history=req.history,
             role_guidance=role_guidance_for(req.role),
+            role_key=req.role,
         )
         answer = _apply_output_rails(result["final_answer"])
         _tracker.record_success()
