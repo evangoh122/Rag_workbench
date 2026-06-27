@@ -43,6 +43,24 @@ _TICKER_TO_NAMES: Dict[str, List[str]] = {
     "STM":  ["stmicroelectronics", "stmicro", "stm"],
     "TSM":  ["tsmc", "taiwan semiconductor", "tsm"],
     "PLAB": ["photronics", "plab"],
+    # Remaining covered companies (distinctive aliases only — bare English words
+    # like "form"/"onto" are left to the >=3-char symbol matcher to avoid
+    # false positives such as "fill out the form").
+    "ACLS": ["axcelis"],
+    "AEHR": ["aehr test systems", "aehr"],
+    "AMKR": ["amkor"],
+    "COHU": ["cohu"],
+    "ENTG": ["entegris"],
+    "FORM": ["formfactor"],
+    "ICHR": ["ichor holdings", "ichor"],
+    "KLIC": ["kulicke and soffa", "kulicke & soffa", "kulicke"],
+    "MPWR": ["monolithic power systems", "monolithic power"],
+    "NXPI": ["nxp semiconductors", "nxp"],
+    "ONTO": ["onto innovation"],
+    "QRVO": ["qorvo"],
+    "SWKS": ["skyworks solutions", "skyworks"],
+    "TER":  ["teradyne"],
+    "VECO": ["veeco instruments", "veeco"],
 }
 
 # Curated sector peers — used when the graph has no covered-ticker competitor,
