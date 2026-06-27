@@ -46,6 +46,7 @@ _FINANCIAL_FIGURE = re.compile(
   | \d[\d,]*(?:\.\d+)?\s?%                                                   # 12.5% / 45 %
   | \d[\d,]*(?:\.\d+)?\s?(?:thousand|million|billion|trillion|bn|mn)\b       # 3.4 billion
   | \d{1,3}(?:,\d{3})+(?:\.\d+)?                                             # 1,200 / 26,000
+  | (?:\d+\.\d+[kKmMbBtT]|\d{3,}[kKmMbBtT])(?:\b|(?=[\s,;:!?)]|$))           # 3.4B / 2.1M / 500K (not 10K)
     """,
     re.IGNORECASE | re.VERBOSE,
 )

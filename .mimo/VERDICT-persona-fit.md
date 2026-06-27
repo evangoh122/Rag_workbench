@@ -28,3 +28,16 @@ Reviewed: api/services/guardrails/persona_rails.py, tests/test_persona_rails.py
 
 ## Notes
 The fix directly addresses the round‑1 false‑positive issue by replacing the overly broad `_NUMBER` regex with a targeted `_FINANCIAL_FIGURE` pattern that distinguishes real monetary/percentage/scaled figures from filing labels, form types, and years. The two new tests validate both the specific regression case and the regex’s ability to differentiate figures from non‑figures. No regressions in regex matching, performance, or requirement applicability are observed.
+
+
+---
+
+# VERDICT — persona-fit — MiMo — round 3
+Status: APPROVED
+Reviewed: api/services/guardrails/persona_rails.py:49, tests/test_persona_rails.py:101-109, tests/test_persona_rails.py:127-132
+
+## Findings
+- [SEVERITY: nit] api/services/guardrails/persona_rails.py:49 — The new regex branch uses `[kKmMbBtT]` but the entire pattern is compiled with `re.IGNORECASE`, making explicit case alternation redundant. — Could simplify to `[kmbt]` for clarity (optional, no functional impact).
+
+## Notes
+DeepSeek's fix correctly resolves the original finding. The regex `(?:\d+\.\d+[kKmMbBtT]|\d{3,}[kKmMbBtT])(?:\b|(?=[\s,;

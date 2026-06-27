@@ -98,11 +98,29 @@ def test_has_financial_figure_distinguishes_amounts_from_labels():
     assert _has_financial_figure("net income was 1,200 million")
     assert _has_financial_figure("$26 billion")
     assert _has_financial_figure("a 45 % gross margin")
+    # Single-letter magnitude suffixes (round 3): real figures.
+    assert _has_financial_figure("Net income was 3.4B.")
+    assert _has_financial_figure("revenue of 2.1M")
+    assert _has_financial_figure("market cap 1.2T")
+    assert _has_financial_figure("500K units sold")
+    assert _has_financial_figure("cut costs by 250K this year")
     # Not figures (filing labels / form types / years / section numbers):
     assert not _has_financial_figure("Item 1A of the 10-K in fiscal 2024")
     assert not _has_financial_figure("see Part II, Item 7")
     assert not _has_financial_figure("the 8-K filed in 2023")
     assert not _has_financial_figure("Section 1.01 of the agreement")
+    # Bare 1-2 digit form numbers with a letter suffix must NOT count as magnitudes.
+    assert not _has_financial_figure("the 10K filing")
+    assert not _has_financial_figure("an 8K was filed")
+    assert not _has_financial_figure("11K plan participants")
+
+
+def test_credit_unverified_suffix_figure_without_caveat_misses():
+    # Round-3 regression: an unverified single-letter-suffix figure must NOT slip
+    # past the credit rail — it should require a caveat.
+    v = check_persona_fit("credit_analyst", "Net income was 3.4B.", verification_status="FAIL")
+    assert not v.fit
+    assert "caveat any unverified number" in v.missing
 
 
 def test_credit_unverified_number_without_caveat_misses():
