@@ -81,6 +81,30 @@ def test_credit_no_numbers_no_applicable_requirements_skipped():
     assert v.skipped and v.fit
 
 
+def test_credit_qualitative_citation_not_treated_as_figure():
+    # Regression (round 2): Item 1A / 10-K / fiscal 2024 are filing labels, a form
+    # type, and a year — NOT reported financial figures. A correctly-cited
+    # qualitative credit answer must not be flagged as a MISS.
+    answer = "Per Item 1A of the 10-K, liquidity risk increased in fiscal 2024."
+    v = check_persona_fit("credit_analyst", answer, verification_status="SKIPPED")
+    assert v.skipped and v.fit, v
+
+
+def test_has_financial_figure_distinguishes_amounts_from_labels():
+    from api.services.guardrails.persona_rails import _has_financial_figure
+    # Real figures:
+    assert _has_financial_figure("$3.4 billion")
+    assert _has_financial_figure("revenue rose 12.5%")
+    assert _has_financial_figure("net income was 1,200 million")
+    assert _has_financial_figure("$26 billion")
+    assert _has_financial_figure("a 45 % gross margin")
+    # Not figures (filing labels / form types / years / section numbers):
+    assert not _has_financial_figure("Item 1A of the 10-K in fiscal 2024")
+    assert not _has_financial_figure("see Part II, Item 7")
+    assert not _has_financial_figure("the 8-K filed in 2023")
+    assert not _has_financial_figure("Section 1.01 of the agreement")
+
+
 def test_credit_unverified_number_without_caveat_misses():
     answer = "Net income was $1,200 million."
     v = check_persona_fit("credit_analyst", answer, verification_status="FAIL")

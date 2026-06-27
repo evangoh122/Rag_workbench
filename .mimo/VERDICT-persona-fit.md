@@ -16,3 +16,15 @@ Reviewed: `api/services/langgraph_engine.py`, `api/routes/conjoint.py`, `api/rou
 - **Memory**: `result["persona_fit"]` is a small fixed-shape dict; no unbounded growth. ✅
 - **Fail-open**: Every error/unknown-role/empty-answer path returns `skipped=True, fit=True`. Rail can never degrade the chat path. ✅
 - **Consistency with consensus rail**: Same daemon-thread + dedicated-connection + column-ensure pattern. No new coupling introduced. ✅
+
+---
+
+# VERDICT — persona-fit — MiMo — round 2
+Status: APPROVED
+Reviewed: api/services/guardrails/persona_rails.py, tests/test_persona_rails.py
+
+## Findings
+- [SEVERITY: LOW] api/services/guardrails/persona_rails.py:34-46 — Regex may miss edge‑case financial formats (e.g., “‑3.4%” or “$.5B”), but these are uncommon in SEC filings and outside the round‑1 scope. — No fix required; the current patterns cover the vast majority of real reported figures.
+
+## Notes
+The fix directly addresses the round‑1 false‑positive issue by replacing the overly broad `_NUMBER` regex with a targeted `_FINANCIAL_FIGURE` pattern that distinguishes real monetary/percentage/scaled figures from filing labels, form types, and years. The two new tests validate both the specific regression case and the regex’s ability to differentiate figures from non‑figures. No regressions in regex matching, performance, or requirement applicability are observed.

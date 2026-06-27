@@ -34,9 +34,21 @@ from typing import Callable, Optional
 from loguru import logger
 
 
-# A financial figure: optional $, digits with separators, optional trailing % / unit
-# word (so "12.5" and "$3.4 billion" both count as "the answer states a number").
-_NUMBER = re.compile(r"\$?\d[\d,]*(?:\.\d+)?")
+# A *financial figure* — a monetary amount, a percentage, a scaled magnitude, or a
+# thousands-separated number. It deliberately does NOT match a bare integer, so
+# filing labels ("Item 1A"), form types ("10-K"), section numbers ("1.01"), and
+# standalone fiscal years ("2024") are not mistaken for a reported figure — which
+# would otherwise trip the credit persona's number-conditional requirements on a
+# purely qualitative, correctly-cited answer.
+_FINANCIAL_FIGURE = re.compile(
+    r"""
+    \$\s?\d[\d,]*(?:\.\d+)?                                                  # $1,200 / $3.4
+  | \d[\d,]*(?:\.\d+)?\s?%                                                   # 12.5% / 45 %
+  | \d[\d,]*(?:\.\d+)?\s?(?:thousand|million|billion|trillion|bn|mn)\b       # 3.4 billion
+  | \d{1,3}(?:,\d{3})+(?:\.\d+)?                                             # 1,200 / 26,000
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
 
 # Verification statuses that mean the figure(s) were actually checked upstream, so
 # the persona's "state verification status / caveat unverified numbers" requirement
@@ -82,8 +94,14 @@ def _has_caveat(text: str) -> bool:
     ))
 
 
-def _has_number(text: str) -> bool:
-    return bool(_NUMBER.search(text or ""))
+def _has_financial_figure(text: str) -> bool:
+    """True only for an actual reported financial figure (see _FINANCIAL_FIGURE).
+
+    Bare integers, fiscal years, form types ("10-K"), and item/section numbers do
+    NOT count, so a cited qualitative answer ("Per Item 1A of the 10-K, liquidity
+    risk rose in fiscal 2024") is correctly treated as reporting no figure to caveat.
+    """
+    return bool(_FINANCIAL_FIGURE.search(text or ""))
 
 
 @dataclass
@@ -136,14 +154,14 @@ _PERSONA_REQUIREMENTS: dict[str, list[_Requirement]] = {
         _Requirement(
             "source / verification for figures",
             lambda a, s: _has_citation(a) or _has_verification_language(a) or _status_is_verified(s),
-            # Only applies when the answer actually reports a number.
-            applies=lambda a, s: _has_number(a),
+            # Only applies when the answer actually reports a financial figure.
+            applies=lambda a, s: _has_financial_figure(a),
         ),
         _Requirement(
             "caveat any unverified number",
             # Satisfied if the figures were verified upstream OR the answer hedges.
             lambda a, s: _status_is_verified(s) or _has_caveat(a),
-            applies=lambda a, s: _has_number(a),
+            applies=lambda a, s: _has_financial_figure(a),
         ),
     ],
     # relationship_manager has no hard structural requirement (conciseness is a soft

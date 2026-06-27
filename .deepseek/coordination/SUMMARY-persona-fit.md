@@ -22,7 +22,25 @@
 - `_NUMBER` regex is conservative for the credit-analyst conditional checks (a false
   positive only *adds* a requirement to verify — fails safe).
 
-## Decision
+## Decision (round 1)
 Both required lanes APPROVED with no blocker/major findings → **cleared to commit**
 to `feat/mindforge-consensus-rail`. Gemini (security) and Claude (architecture)
 remain required before any push to prod.
+
+---
+
+# Round 2 — credit-persona false-positive fix
+
+**Trigger:** post-merge review finding (medium, CHANGES NEEDED): the `_NUMBER` regex
+treated any digit (`Item 1A`, `10-K`, `2024`) as a financial figure, so cited
+*qualitative* credit answers were flagged `fit=False` and wrote false
+`persona_fit_status=MISS` rows to the audit log.
+
+**Fix:** replaced `_NUMBER` with `_FINANCIAL_FIGURE` (monetary / percent / scaled /
+thousands-separated) and renamed `_has_number` → `_has_financial_figure`; added two
+regression tests (the exact repro + a figure-vs-label discriminator).
+
+**Verdicts (round 2):** MiMo `APPROVED`, DeepSeek `APPROVED` — no blocker/major.
+`tests/test_persona_rails.py` → 17 passed.
+
+**Commit gate (round 2):** ✅ **CLEARED TO COMMIT.**
