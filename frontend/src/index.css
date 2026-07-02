@@ -9,7 +9,7 @@
   --color-bullish: #2E8B57;
   --color-bearish: #CD5C5C;
   --color-accent: #2E8B57;
-  --color-muted: #6B6B6B;
+  --color-muted: #7D7D7D;
   --color-border: rgba(255, 255, 255, 0.08);
 
   --font-sans: "Inter", "SF Pro Display", "Geist", system-ui, -apple-system, sans-serif;
@@ -58,7 +58,7 @@
   }
 
   ::selection {
-    background: rgba(96, 165, 250, 0.25);
+    background: rgba(46, 139, 87, 0.35);
     color: #fff;
   }
 

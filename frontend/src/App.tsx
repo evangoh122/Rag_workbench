@@ -348,7 +348,7 @@ function Workbench() {
               <button
                 className={`nav-item ${
                   view === 'stocks'
-                    ? 'active !text-bullish [&>svg]:text-bullish'
+                    ? 'active !text-accent [&>svg]:text-accent'
                     : ''
                 }`}
                 onClick={() => {
@@ -356,7 +356,7 @@ function Workbench() {
                   setSidebarOpen(false);
                 }}
               >
-                <Cpu size={16} className={view === 'stocks' ? 'text-bullish' : 'text-secondary'} />
+                <Cpu size={16} className={view === 'stocks' ? 'text-accent' : 'text-secondary'} />
                 Coverage List
               </button>
               <button
@@ -376,7 +376,7 @@ function Workbench() {
               <button
                 className={`nav-item ${
                   view === 'traceability'
-                    ? 'active !text-purple-400 [&>svg]:text-purple-400'
+                    ? 'active !text-accent [&>svg]:text-accent'
                     : ''
                 }`}
                 onClick={() => {
@@ -384,13 +384,13 @@ function Workbench() {
                   setSidebarOpen(false);
                 }}
               >
-                <Activity size={16} className={view === 'traceability' ? 'text-purple-400' : 'text-secondary'} />
+                <Activity size={16} className={view === 'traceability' ? 'text-accent' : 'text-secondary'} />
                 Pipeline Traceability
               </button>
               <button
                 className={`nav-item ${
                   view === 'methodology'
-                    ? 'active !text-indigo-400 [&>svg]:text-indigo-400'
+                    ? 'active !text-accent [&>svg]:text-accent'
                     : ''
                 }`}
                 onClick={() => {
@@ -398,7 +398,7 @@ function Workbench() {
                   setSidebarOpen(false);
                 }}
               >
-                <BookOpen size={16} className={view === 'methodology' ? 'text-indigo-400' : 'text-secondary'} />
+                <BookOpen size={16} className={view === 'methodology' ? 'text-accent' : 'text-secondary'} />
                 Methodology
               </button>
             </div>
@@ -425,7 +425,7 @@ function Workbench() {
               <button
                 className={`nav-item ${
                   view === 'results'
-                    ? 'active !text-bullish [&>svg]:text-bullish'
+                    ? 'active !text-accent [&>svg]:text-accent'
                     : ''
                 }`}
                 onClick={() => {
@@ -433,14 +433,14 @@ function Workbench() {
                   setSidebarOpen(false);
                 }}
               >
-                <BarChart3 size={16} className={view === 'results' ? 'text-bullish' : 'text-secondary'} />
+                <BarChart3 size={16} className={view === 'results' ? 'text-accent' : 'text-secondary'} />
                 Results & Testing
               </button>
 
               <button
                 className={`nav-item ${
                   view === 'audit'
-                    ? 'active !text-amber-400 [&>svg]:text-amber-400'
+                    ? 'active !text-accent [&>svg]:text-accent'
                     : ''
                 }`}
                 onClick={() => {
@@ -448,14 +448,14 @@ function Workbench() {
                   setSidebarOpen(false);
                 }}
               >
-                <ShieldCheck size={16} className={view === 'audit' ? 'text-amber-400' : 'text-secondary'} />
+                <ShieldCheck size={16} className={view === 'audit' ? 'text-accent' : 'text-secondary'} />
                 Audit Log
               </button>
 
               <button
                 className={`nav-item ${
                   view === 'metrics'
-                    ? 'active !text-cyan-400 [&>svg]:text-cyan-400'
+                    ? 'active !text-accent [&>svg]:text-accent'
                     : ''
                 }`}
                 onClick={() => {
@@ -463,14 +463,14 @@ function Workbench() {
                   setSidebarOpen(false);
                 }}
               >
-                <Activity size={16} className={view === 'metrics' ? 'text-cyan-400' : 'text-secondary'} />
+                <Activity size={16} className={view === 'metrics' ? 'text-accent' : 'text-secondary'} />
                 Metrics Dashboard
               </button>
 
               <button
                 className={`nav-item ${
                   view === 'system'
-                    ? 'active !text-orange-400 [&>svg]:text-orange-400'
+                    ? 'active !text-accent [&>svg]:text-accent'
                     : ''
                 }`}
                 onClick={() => {
@@ -478,14 +478,14 @@ function Workbench() {
                   setSidebarOpen(false);
                 }}
               >
-                <Server size={16} className={view === 'system' ? 'text-orange-400' : 'text-secondary'} />
+                <Server size={16} className={view === 'system' ? 'text-accent' : 'text-secondary'} />
                 System Overview
               </button>
 
               <button
                 className={`nav-item ${
                   view === 'conjoint'
-                    ? 'active !text-pink-400 [&>svg]:text-pink-400'
+                    ? 'active !text-accent [&>svg]:text-accent'
                     : ''
                 }`}
                 onClick={() => {
@@ -493,7 +493,7 @@ function Workbench() {
                   setSidebarOpen(false);
                 }}
               >
-                <FlaskConical size={16} className={view === 'conjoint' ? 'text-pink-400' : 'text-secondary'} />
+                <FlaskConical size={16} className={view === 'conjoint' ? 'text-accent' : 'text-secondary'} />
                 Answer Study
               </button>
             </div>
@@ -537,7 +537,7 @@ function Workbench() {
             <Menu size={22} />
           </button>
           <div className="ml-3 flex items-center gap-2">
-            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-1.5 rounded-lg">
+            <div className="bg-gradient-to-br from-emerald-500 to-green-600 p-1.5 rounded-lg">
               <Search size={14} className="text-white" />
             </div>
             <span className="font-semibold text-base tracking-tight text-primary">RAG Workbench</span>
@@ -611,7 +611,7 @@ function Workbench() {
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-200">
               <header className="px-3 md:px-4 lg:px-8 py-3 md:py-4 glass-header z-10 flex-shrink-0">
                 <h1 className="text-base md:text-lg font-semibold text-primary flex items-center gap-2">
-                  <Activity className="text-purple-400" size={18} />
+                  <Activity className="text-accent" size={18} />
                   Pipeline Traceability
                 </h1>
                 <p className="text-xs text-secondary mt-0.5">Live visualization of the execution steps for your last query.</p>
@@ -635,7 +635,7 @@ function Workbench() {
                   <button
                     type="submit"
                     disabled={loading || !input.trim()}
-                    className="flex items-center justify-center px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-[13px] sm:text-sm gap-1 sm:gap-1.5 ml-1 sm:ml-1.5 md:ml-2 shrink-0 active:scale-[0.97]"
+                    className="flex items-center justify-center px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 bg-bullish hover:bg-emerald-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-[13px] sm:text-sm gap-1 sm:gap-1.5 ml-1 sm:ml-1.5 md:ml-2 shrink-0 active:scale-[0.97]"
                   >
                     <span className="hidden sm:inline">Trace</span> <Send size={14} />
                   </button>
@@ -761,7 +761,7 @@ function Workbench() {
                           <Search size={14} />
                           Retrieve evidence
                         </div>
-                        <p className="text-xs leading-relaxed text-gray-500 m-0">
+                        <p className="text-xs leading-relaxed text-gray-400 m-0">
                           Finds relevant passages using hybrid semantic and keyword search across supported SEC filings.
                         </p>
                       </div>
@@ -770,7 +770,7 @@ function Workbench() {
                           <Database size={14} />
                           Ground the numbers
                         </div>
-                        <p className="text-xs leading-relaxed text-gray-500 m-0">
+                        <p className="text-xs leading-relaxed text-gray-400 m-0">
                           Uses structured XBRL facts and deterministic math for financial metrics and period comparisons.
                         </p>
                       </div>
@@ -779,7 +779,7 @@ function Workbench() {
                           <ShieldCheck size={14} />
                           Verify the answer
                         </div>
-                        <p className="text-xs leading-relaxed text-gray-500 m-0">
+                        <p className="text-xs leading-relaxed text-gray-400 m-0">
                           Returns sources, calculations, confidence signals, and verification status for review.
                         </p>
                       </div>
