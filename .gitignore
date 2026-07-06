@@ -42,3 +42,6 @@ no-mistakes.zip
 .agents/
 .claude/skills/
 .claude/VERDICT-*.md
+
+# personal notes (local only)
+docs/link Tracking Taxonomy.md

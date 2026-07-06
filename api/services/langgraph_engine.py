@@ -35,7 +35,7 @@ from api.services.financial_calc import (
     gross_margin, gross_margin_growth, operating_margin, net_margin, rd_intensity, current_ratio, debt_to_equity, net_debt, free_cash_flow, check_balance_sheet, check_gross_profit,
     yoy_growth, cagr,
 )
-from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display
+from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display, _DISPLAY_NAMES
 
 
 # ---------------------------------------------------------------------------
@@ -688,6 +688,18 @@ def _fmt_num(num: float) -> str:
     return f"{num:,.0f}"
 
 
+def _humanize_concept(concept: str) -> str:
+    """Turn a raw XBRL concept (e.g. 'OperatingIncomeLoss') into a readable
+    label. Prefers the shared display-name map, then falls back to splitting
+    the PascalCase/camelCase token into spaced words."""
+    if not concept:
+        return concept
+    mapped = _DISPLAY_NAMES.get(concept)
+    if mapped:
+        return mapped
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", concept)
+
+
 def output_node(state: GraphState) -> Dict[str, Any]:
     """
     Final Node: Format the successful answer.
@@ -760,6 +772,19 @@ def output_node(state: GraphState) -> Dict[str, Any]:
 
             rows.sort(key=lambda x: _period_sort_key(x[0]))
 
+            # Duplicate XBRL facts (e.g. amended filings) can yield repeated
+            # (period, concept) rows — collapse them BEFORE truncation so the
+            # period cap counts distinct rows, not inflated duplicates.
+            seen: set[tuple[str, str]] = set()
+            deduped: list[tuple[str, str, float]] = []
+            for period, concept, num in rows:
+                key = (period, concept)
+                if key in seen:
+                    continue
+                seen.add(key)
+                deduped.append((period, concept, num))
+            rows = deduped
+
             MAX_PERIODS = 6
             if len(rows) > MAX_PERIODS:
                 logger.info(f"output_node: truncating {len(rows)} rows to last {MAX_PERIODS} periods")
@@ -770,12 +795,21 @@ def output_node(state: GraphState) -> Dict[str, Any]:
                 if natural_yoy_summary:
                     lines.append(natural_yoy_summary)
                     lines.append("")
-                lines.append(f"Multi-period comparison for {ticker} (values in reported units):\n")
+                lines.append(
+                    f"**Multi-period comparison for {ticker}** (values in reported units)"
+                )
+                lines.append("")
+                # GitHub-flavoured markdown table — renders as a real table in
+                # the UI (remark-gfm) instead of a run-on line of numbers.
+                lines.append("| Period | Metric | Value |")
+                lines.append("| :-- | :-- | --: |")
                 for period, concept, num in rows:
-                    lines.append(f"  {period}  {concept}: {_fmt_num(num)}")
+                    metric = _humanize_concept(concept).replace("|", "\\|")
+                    lines.append(f"| {period} | {metric} | {_fmt_num(num)} |")
                 math_result = state.get("math_result")
                 if math_result is not None:
-                    lines.append(f"\nLatest calculated metric: {math_result}")
+                    lines.append("")
+                    lines.append(f"Latest calculated metric: {math_result}")
                 answer = "\n".join(lines)
             else:
                 math_result = state.get("math_result")

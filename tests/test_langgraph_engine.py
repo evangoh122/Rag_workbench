@@ -8,7 +8,8 @@ import pytest
 import polars as pl
 from api.services.langgraph_engine import (
     retrieval_node, extraction_node, math_node, verification_node,
-    eval_node, output_node, abstention_node, run_auditable_rag
+    eval_node, output_node, abstention_node, run_auditable_rag,
+    _humanize_concept,
 )
 
 @pytest.fixture
@@ -313,3 +314,82 @@ class TestQualitativeGrounding:
         assert "general knowledge" in content
         assert "do not enumerate specific competitors" in content
         assert result["status"]["output"] == "success"
+
+
+class TestHumanizeConcept:
+    """`_humanize_concept` turns raw XBRL concepts into readable table labels.
+    Guards against the NameError regression where the helper was referenced but
+    never defined."""
+
+    def test_mapped_concept_uses_display_name(self):
+        assert _humanize_concept("NetIncomeLoss") == "Net Income"
+        assert _humanize_concept("GrossProfit") == "Gross Profit"
+        assert _humanize_concept("CostOfGoodsAndServicesSold") == "COGS"
+        assert (
+            _humanize_concept("RevenueFromContractWithCustomerExcludingAssessedTax")
+            == "Revenue"
+        )
+
+    def test_unmapped_concept_splits_pascal_case(self):
+        assert _humanize_concept("SomeUnmappedConceptValue") == "Some Unmapped Concept Value"
+
+    def test_empty_concept_is_passthrough(self):
+        assert _humanize_concept("") == ""
+
+
+class TestOutputNodeComparisonTable:
+    """The comparison path renders a GFM markdown table. Verifies concepts are
+    humanized and that duplicate (period, concept) facts are collapsed BEFORE
+    the MAX_PERIODS truncation — so the cap keeps distinct periods, not
+    duplicate-inflated rows."""
+
+    def _comparison_state(self, facts):
+        return {
+            "query": "compare net income across the years",
+            "ticker": "AAPL",
+            "query_intent": "comparison",
+            "retrieved_docs": [],
+            "xbrl_facts": facts,
+            "math_result": None,
+            "math_steps": [],
+            "verification_status": "PASS",
+            "verification_reasoning": "Verified.",
+            "final_answer": "",
+            "status": {},
+        }
+
+    def test_concept_is_humanized_in_table(self):
+        facts = [
+            {"concept": "NetIncomeLoss", "period_end": "2023-12-31", "value": 5_000_000_000.0},
+            {"concept": "NetIncomeLoss", "period_end": "2024-12-31", "value": 6_000_000_000.0},
+        ]
+        answer = output_node(self._comparison_state(facts))["final_answer"]
+        # Humanized label present, raw concept absent.
+        assert "| Net Income |" in answer
+        assert "NetIncomeLoss" not in answer
+        # Rendered as a GFM table, not a run-on line.
+        assert "| Period | Metric | Value |" in answer
+
+    def test_duplicates_collapsed_before_truncation(self):
+        # 7 distinct periods, each duplicated (amended-filing style) = 14 rows.
+        # Buggy order (truncate-then-dedupe) would keep only the last 3 periods;
+        # the fix (dedupe-then-truncate) keeps the last 6 distinct periods.
+        years = [f"{y}-12-31" for y in range(2018, 2025)]  # 2018..2024
+        facts = []
+        for y in years:
+            for _ in range(2):
+                facts.append({"concept": "NetIncomeLoss", "period_end": y, "value": 1_000.0})
+
+        answer = output_node(self._comparison_state(facts))["final_answer"]
+        data_rows = [
+            ln for ln in answer.splitlines()
+            if ln.startswith("| ") and "Net Income" in ln
+        ]
+        # Exactly MAX_PERIODS distinct rows survive (not 3, not 14).
+        assert len(data_rows) == 6
+        # Each surviving period appears exactly once.
+        periods = [ln.split("|")[1].strip() for ln in data_rows]
+        assert len(periods) == len(set(periods))
+        # The most recent periods are the ones kept.
+        assert "2024-12-31" in periods
+        assert "2019-12-31" in periods
