@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Database, BookOpen, RefreshCcw, Search, Activity, MessageSquare, BarChart3, Network, Server, Cpu, ThumbsUp, ThumbsDown, ShieldCheck, Menu, X, Lightbulb, Info, ChevronDown, ArrowRight, FlaskConical, Sparkles } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MarkdownMessage from './components/MarkdownMessage';
 import { sendSqlMessage, sendRagMessage, sendAuditableRagMessage, sendGraphRagMessage } from './api/chat';
 import type { ChatResponse, Source, XBRLFact, Triple, ChartSpec, ToneAnalysis as ToneAnalysisData } from './api/chat';
 import { submitChatFeedback } from './api/review';
@@ -866,13 +865,7 @@ function Workbench() {
                     }`}
                   >
                     <div className="prose prose-invert prose-refined prose-pre:bg-background prose-pre:border prose-pre:border-border max-w-none">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        allowedElements={['p', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'a', 'br', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'del']}
-                        skipHtml
-                      >
-                        {msg.content}
-                      </ReactMarkdown>
+                      <MarkdownMessage content={msg.content} />
                     </div>
 
                     <ChartErrorBoundary>
