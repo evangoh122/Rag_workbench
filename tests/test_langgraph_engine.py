@@ -338,14 +338,12 @@ class TestHumanizeConcept:
 
 
 class TestOutputNodeComparisonTable:
-    """The comparison path renders a GFM markdown table. Verifies concepts are
-    humanized and that duplicate (period, concept) facts are collapsed BEFORE
-    the MAX_PERIODS truncation — so the cap keeps distinct periods, not
-    duplicate-inflated rows."""
+    """The comparison path renders a wide (pivoted) GFM markdown table — one row
+    per period, one column per metric — with humanized concept labels."""
 
-    def _comparison_state(self, facts):
+    def _comparison_state(self, facts, query="compare net income across the years"):
         return {
-            "query": "compare net income across the years",
+            "query": query,
             "ticker": "AAPL",
             "query_intent": "comparison",
             "retrieved_docs": [],
@@ -358,22 +356,28 @@ class TestOutputNodeComparisonTable:
             "status": {},
         }
 
-    def test_concept_is_humanized_in_table(self):
+    def _period_rows(self, answer):
+        """Table body rows (start with a | + a date)."""
+        return [ln for ln in answer.splitlines()
+                if ln.startswith("| ") and ln[2:6].isdigit()]
+
+    def test_concept_is_humanized_in_wide_header(self):
         facts = [
             {"concept": "NetIncomeLoss", "period_end": "2023-12-31", "value": 5_000_000_000.0},
             {"concept": "NetIncomeLoss", "period_end": "2024-12-31", "value": 6_000_000_000.0},
         ]
         answer = output_node(self._comparison_state(facts))["final_answer"]
-        # Humanized label present, raw concept absent.
-        assert "| Net Income |" in answer
+        # Metric appears once, as a column header (wide pivot), not per row.
+        assert "| Period | Net Income |" in answer
         assert "NetIncomeLoss" not in answer
-        # Rendered as a GFM table, not a run-on line.
-        assert "| Period | Metric | Value |" in answer
+        # Two period rows, one per fiscal year, compact-formatted.
+        rows = self._period_rows(answer)
+        assert len(rows) == 2
+        assert "5.00B" in answer and "6.00B" in answer
 
-    def test_duplicates_collapsed_before_truncation(self):
+    def test_duplicates_collapsed_and_capped_by_period(self):
         # 7 distinct periods, each duplicated (amended-filing style) = 14 rows.
-        # Buggy order (truncate-then-dedupe) would keep only the last 3 periods;
-        # the fix (dedupe-then-truncate) keeps the last 6 distinct periods.
+        # Cap is on PERIODS: keep the last 6 distinct periods, one row each.
         years = [f"{y}-12-31" for y in range(2018, 2025)]  # 2018..2024
         facts = []
         for y in years:
@@ -381,15 +385,61 @@ class TestOutputNodeComparisonTable:
                 facts.append({"concept": "NetIncomeLoss", "period_end": y, "value": 1_000.0})
 
         answer = output_node(self._comparison_state(facts))["final_answer"]
-        data_rows = [
-            ln for ln in answer.splitlines()
-            if ln.startswith("| ") and "Net Income" in ln
-        ]
-        # Exactly MAX_PERIODS distinct rows survive (not 3, not 14).
-        assert len(data_rows) == 6
-        # Each surviving period appears exactly once.
-        periods = [ln.split("|")[1].strip() for ln in data_rows]
-        assert len(periods) == len(set(periods))
-        # The most recent periods are the ones kept.
-        assert "2024-12-31" in periods
+        rows = self._period_rows(answer)
+        assert len(rows) == 6
+        periods = [ln.split("|")[1].strip() for ln in rows]
+        assert len(periods) == len(set(periods))          # no repeats
+        assert "2024-12-31" in periods                     # most recent kept
         assert "2019-12-31" in periods
+        assert "2018-12-31" not in periods                 # oldest dropped
+
+    def test_gross_margin_query_derives_margin_column(self):
+        # Filer tags only Gross Profit + COGS (no Revenue). Revenue is derived as
+        # GP + COGS; Gross Margin % = GP / Revenue * 100.
+        facts = [
+            {"concept": "GrossProfit", "period_end": "2024-08-29", "value": 5_613_000_000.0},
+            {"concept": "CostOfGoodsAndServicesSold", "period_end": "2024-08-29", "value": 19_498_000_000.0},
+        ]
+        answer = output_node(
+            self._comparison_state(facts, query="what is the gross margin")
+        )["final_answer"]
+        assert "| Period | Revenue | Gross Profit | Gross Margin |" in answer
+        # Revenue derived = 25.111B; GM = 5.613 / 25.111 = 22.4%.
+        assert "25.11B" in answer
+        assert "22.4%" in answer
+
+    def test_negative_gross_profit_margin(self):
+        facts = [
+            {"concept": "GrossProfit", "period_end": "2023-08-31", "value": -1_416_000_000.0},
+            {"concept": "CostOfRevenue", "period_end": "2023-08-31", "value": 16_956_000_000.0},
+        ]
+        answer = output_node(
+            self._comparison_state(facts, query="gross margin trend")
+        )["final_answer"]
+        # Revenue = -1.416 + 16.956 = 15.54B; GM = -1.416/15.54 = -9.1%.
+        assert "-1.42B" in answer
+        assert "-9.1%" in answer
+
+
+class TestScalarAnswerFormatting:
+    """Single-number answers get thousand separators, not a raw float repr."""
+
+    def _scalar_state(self, math_result, intent="general"):
+        return {
+            "query": "what was NVDA revenue",
+            "ticker": "NVDA",
+            "query_intent": intent,
+            "retrieved_docs": [],
+            "xbrl_facts": [],
+            "math_result": math_result,
+            "math_steps": [],
+            "verification_status": "PASS",
+            "verification_reasoning": "Verified.",
+            "final_answer": "",
+            "status": {},
+        }
+
+    def test_large_scalar_gets_thousand_separators(self):
+        answer = output_node(self._scalar_state(215_938_000_000.0))["final_answer"]
+        assert "215,938,000,000" in answer
+        assert "215938000000.0" not in answer

@@ -700,6 +700,39 @@ def _humanize_concept(concept: str) -> str:
     return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", concept)
 
 
+def _fmt_compact(num: float) -> str:
+    """Compact currency-style formatting for scannable table cells: abbreviate
+    to B/M with thousand separators, keep small values (EPS, ratios) precise."""
+    a = abs(num)
+    if a >= 1_000_000_000:
+        return f"{num / 1_000_000_000:,.2f}B"
+    if a >= 1_000_000:
+        return f"{num / 1_000_000:,.2f}M"
+    if a >= 1_000:
+        return f"{num:,.0f}"
+    return f"{num:,.2f}"
+
+
+def _fmt_result(value) -> str:
+    """Human-format a single scalar answer: thousand separators when numeric
+    (e.g. 215938000000.0 -> '215,938,000,000'), otherwise the raw string."""
+    num = _safe_numeric(value)
+    return _fmt_num(num) if num is not None else str(value)
+
+
+def _fact_category(concept: str) -> Optional[str]:
+    """Map a raw XBRL concept to a gross-margin-math category. Order matters:
+    check COGS before revenue since 'CostOfRevenue' contains 'revenue'."""
+    c = concept.lower()
+    if "grossprofit" in c:
+        return "gross_profit"
+    if "costofrevenue" in c or "costofgoods" in c:
+        return "cogs"
+    if "revenue" in c or "sales" in c or c == "revenues":
+        return "revenue"
+    return None
+
+
 def output_node(state: GraphState) -> Dict[str, Any]:
     """
     Final Node: Format the successful answer.
@@ -785,10 +818,19 @@ def output_node(state: GraphState) -> Dict[str, Any]:
                 deduped.append((period, concept, num))
             rows = deduped
 
+            # Distinct periods in chronological order — the table is pivoted to
+            # one row per period, so cap on PERIODS (not rows) to avoid dropping
+            # a period just because it has several metrics.
+            distinct_periods: list[str] = []
+            for period, _c, _n in rows:
+                if period not in distinct_periods:
+                    distinct_periods.append(period)
             MAX_PERIODS = 6
-            if len(rows) > MAX_PERIODS:
-                logger.info(f"output_node: truncating {len(rows)} rows to last {MAX_PERIODS} periods")
-                rows = rows[-MAX_PERIODS:]
+            if len(distinct_periods) > MAX_PERIODS:
+                logger.info(f"output_node: truncating {len(distinct_periods)} periods to last {MAX_PERIODS}")
+                keep = set(distinct_periods[-MAX_PERIODS:])
+                distinct_periods = distinct_periods[-MAX_PERIODS:]
+                rows = [r for r in rows if r[0] in keep]
 
             if rows:
                 lines = []
@@ -799,34 +841,77 @@ def output_node(state: GraphState) -> Dict[str, Any]:
                     f"**Multi-period comparison for {ticker}** (values in reported units)"
                 )
                 lines.append("")
+
                 # GitHub-flavoured markdown table — renders as a real table in
-                # the UI (remark-gfm) instead of a run-on line of numbers.
-                lines.append("| Period | Metric | Value |")
-                lines.append("| :-- | :-- | --: |")
-                for period, concept, num in rows:
-                    metric = _humanize_concept(concept).replace("|", "\\|")
-                    lines.append(f"| {period} | {metric} | {_fmt_num(num)} |")
+                # the UI (remark-gfm). Pivoted to one row per period so periods
+                # aren't repeated and metrics sit side by side.
+                is_gm_ask = any(k in query_lower for k in ("gross margin", "gross profit margin"))
+                if is_gm_ask:
+                    # Purpose-built gross-margin view: Revenue, Gross Profit, and
+                    # the derived Gross Margin %. Filers sometimes tag only a
+                    # subset, so derive Revenue = Gross Profit + COGS and
+                    # Gross Profit = Revenue − COGS where possible.
+                    cats: dict[str, dict[str, float]] = {}
+                    for period, concept, num in rows:
+                        cat = _fact_category(concept)
+                        if cat and cat not in cats.setdefault(period, {}):
+                            cats[period][cat] = num
+                    lines.append("| Period | Revenue | Gross Profit | Gross Margin |")
+                    lines.append("| :-- | --: | --: | --: |")
+                    for period in distinct_periods:
+                        c = cats.get(period, {})
+                        rev, gp, cogs = c.get("revenue"), c.get("gross_profit"), c.get("cogs")
+                        if rev is None and gp is not None and cogs is not None:
+                            rev = gp + cogs
+                        if gp is None and rev is not None and cogs is not None:
+                            gp = rev - cogs
+                        gm = None
+                        if gp is not None and rev is not None and rev != 0:
+                            gm = gp / rev * 100
+                        rev_c = _fmt_compact(rev) if rev is not None else "—"
+                        gp_c = _fmt_compact(gp) if gp is not None else "—"
+                        gm_c = f"{gm:.1f}%" if gm is not None else "—"
+                        lines.append(f"| {period} | {rev_c} | {gp_c} | {gm_c} |")
+                else:
+                    # Generic wide pivot of whatever metrics were retrieved.
+                    columns: list[str] = []
+                    pivot: dict[str, dict[str, float]] = {}
+                    for period, concept, num in rows:
+                        label = _humanize_concept(concept)
+                        if label not in columns:
+                            columns.append(label)
+                        pivot.setdefault(period, {})[label] = num
+                    header = "| Period | " + " | ".join(col.replace("|", "\\|") for col in columns) + " |"
+                    lines.append(header)
+                    lines.append("| :-- | " + " | ".join("--:" for _ in columns) + " |")
+                    for period in distinct_periods:
+                        cells = [
+                            _fmt_compact(pivot[period][col]) if col in pivot.get(period, {}) else "—"
+                            for col in columns
+                        ]
+                        lines.append(f"| {period} | " + " | ".join(cells) + " |")
+
                 math_result = state.get("math_result")
                 if math_result is not None:
                     lines.append("")
-                    lines.append(f"Latest calculated metric: {math_result}")
+                    lines.append(f"Latest calculated metric: {_fmt_result(math_result)}")
                 answer = "\n".join(lines)
             else:
                 math_result = state.get("math_result")
                 if natural_yoy_summary:
                     answer = f"Comparison requested but no matching periods found. {natural_yoy_summary}"
                 else:
-                    answer = f"Comparison requested but no matching periods found. Latest: {math_result}"
+                    answer = f"Comparison requested but no matching periods found. Latest: {_fmt_result(math_result)}"
         else:
             if natural_yoy_summary:
                 answer = natural_yoy_summary
             else:
-                answer = f"Based on the SEC filing for {ticker}, the answer is {state.get('math_result')}."
+                answer = f"Based on the SEC filing for {ticker}, the answer is {_fmt_result(state.get('math_result'))}."
     else:
         if natural_yoy_summary:
             answer = natural_yoy_summary
         else:
-            answer = f"Based on the SEC filing for {ticker}, the answer is {state.get('math_result')}."
+            answer = f"Based on the SEC filing for {ticker}, the answer is {_fmt_result(state.get('math_result'))}."
 
     if state["verification_status"] == "PASS":
         answer += f"\n(Verified: {state['verification_reasoning']})"
