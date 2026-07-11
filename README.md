@@ -1,5 +1,5 @@
 ---
-title: Auditable Filing QA
+title: Enterprise AI RAG Workbench
 emoji: 💹
 colorFrom: blue
 colorTo: indigo
@@ -8,17 +8,66 @@ app_port: 7860
 pinned: false
 ---
 
-# RAG Workbench — Auditable Filing QA
+# RAG Workbench
 
-A financial Q&A system over SEC filings where **every claim traces to source and every number is verified against XBRL** — auditable, not just intelligent.
+**Enterprise-grade Retrieval-Augmented Generation platform for regulated financial environments.**
 
-Built for AI/data roles in banking and financial services. The point: demonstrate you think like the team building compliance-grade AI, not just a demo that looks impressive and produces confidently wrong answers.
+RAG Workbench is a financial AI platform for SEC filing analysis where answers are not just generated, but retrieved, verified, routed, and auditable. It combines hybrid retrieval, knowledge-graph evidence, XBRL validation, deterministic financial calculations, guardrails, human review, drift monitoring, and lineage logging in a single deployable system.
+
+The project is built to communicate how enterprise AI systems should behave in regulated domains: every material claim needs evidence, every number needs a source of truth, and every high-risk answer needs an operational control path.
+
+## Architecture
+
+![RAG Workbench architecture](docs/images/rag-workbench-architecture.gif)
+
+The system separates deployment, runtime inference, data ingestion, model providers, API services, and governance. User queries enter through FastAPI; retrieval and orchestration operate inside the application boundary; LLM providers remain external; and audit, evaluation, review, drift, and calibration are treated as first-class product surfaces rather than afterthoughts.
+
+Editable diagram source files are kept in `docs/*.drawio`.
 
 ---
 
-## The thesis
+## Why this project exists
 
-Most RAG systems retrieve context and trust the LLM to do the rest. This system splits the work along trust lines:
+Analysts reviewing SEC filings need speed, but regulated financial institutions also need evidence, repeatability, and model-risk controls. Traditional black-box LLM workflows fail that bar because they cannot reliably show where an answer came from, whether the numbers reconcile, or which outputs need human review.
+
+This project treats filing analysis as an enterprise AI workflow, not a chatbot demo. The target workflow is SEC filing review: analysts search long documents, validate figures, compare peers, identify risk language, and turn findings into credit, research, compliance, or relationship-management commentary.
+
+The product outcome is **time saved without losing auditability**:
+
+| Outcome | Target behavior |
+|---|---|
+| Productivity | Reduce routine filing lookup from analyst minutes to a cited answer in seconds |
+| Quality | Require source citations, XBRL grounding, and calculation steps for numeric claims |
+| Governance | Preserve run logs, sources, model versions, confidence scores, and reviewer decisions |
+| Compliance | Support independent review through audit endpoints and evidence panels |
+| Adoption | Make the answer useful to compliance, research, credit, and relationship-management users |
+
+The same traceability spine serves four banking users:
+
+| Persona | Job to be done | What the system must prove |
+|---|---|---|
+| Compliance officer | Audit an AI-generated answer after deployment | Every claim has source evidence, confidence, and a review trail |
+| Equity research analyst | Find relevant filing disclosures under deadline | Fast retrieval with exact citations and comparable historical context |
+| Credit analyst | Validate borrower figures and risk signals | Numeric accuracy, XBRL checks, and defensible calculations |
+| Relationship manager | Prepare for client conversations | Clear summaries, key risks, and source-backed talking points |
+
+---
+
+## Enterprise capabilities
+
+| Capability | What it demonstrates |
+|---|---|
+| Multi-agent orchestration | LangGraph routes questions through retrieval, classification, extraction, calculation, verification, output, abstention, and lineage nodes |
+| Hybrid RAG | Dense embeddings, BM25 keyword search, Reciprocal Rank Fusion, and cross-encoder reranking |
+| Knowledge graph | Extracted filing triples support entity, relationship, peer, and evidence exploration |
+| XBRL verification | Numeric claims are checked against structured SEC facts where available |
+| Deterministic financial calculations | Python calculates margins, ratios, growth, FCF, CAGR, and accounting identities |
+| Guardrails | Input, dialog, retrieval, execution, and output rails constrain unsafe or off-topic behavior |
+| Human review | `AUTO`, `SAMPLED_REVIEW`, and `ESCALATE` routing creates an oversight loop |
+| Drift detection | Agreement-rate and concept-spike monitoring surface degradation risks |
+| Audit trail | Run IDs, source chunks, EDGAR links, XBRL facts, formulas, confidence, and review history are preserved |
+
+Most RAG systems retrieve context and trust the LLM to do the rest. RAG Workbench splits the work along trust lines:
 
 - **AI retrieves and explains.** A LangGraph pipeline finds the right SEC filing chunks and XBRL-tagged facts, then writes the prose.
 - **Python calculates.** `financial_calc.py` does all arithmetic — the LLM is never asked to do math.
@@ -28,7 +77,7 @@ Most RAG systems retrieve context and trust the LLM to do the rest. This system 
 
 ---
 
-## Architecture
+## Technical architecture
 
 Single Docker container (Nginx + Uvicorn + Supervisor), deployed to Hugging Face Spaces.
 
@@ -79,7 +128,30 @@ Alternative answer paths share the same retrieval and audit layer:
 
 ---
 
-## Key components
+## Control model
+
+The system is designed around six validation layers:
+
+| Layer | Objective | Risk mitigated |
+|---|---|---|
+| Schema and formatting | Validate types, CIK/accession formats, and scale conventions | Pipeline crashes and obvious numeric scale errors |
+| Semantic integrity | Enforce accounting identities and financial logic checks | Mathematically impossible statements |
+| XBRL cross-validation | Compare extracted facts to SEC companyfacts / XBRL source data | Hallucinated or stale numeric claims |
+| Numeric NLI verification | Check that prose claims are entailed by retrieved evidence | Plausible narratives around unsupported numbers |
+| External cross-checks | Optional market/entity checks such as Polygon and auditor/entity recognition | Wrong corporate context or stale external data |
+| Confidence routing | Route outputs into auto, sampled review, or escalation | High-risk answers bypassing human oversight |
+
+Every run also passes through five operational checkpoints:
+
+1. **Provenance tagging:** extracted fields carry a source category such as XBRL, structured table, or narrative evidence.
+2. **Lineage node:** the final LangGraph node records run ID, source chunks, model versions, confidence, timestamps, and routing.
+3. **Audit persistence:** `audit_runs`, `review_decisions`, and calibration tables preserve the workflow history in DuckDB.
+4. **Source attribution:** API responses include EDGAR URLs, chunk metadata, XBRL facts, formulas, and graph evidence where applicable.
+5. **API visibility:** `/api/audit` and review endpoints expose the audit trail for dashboards and independent oversight.
+
+---
+
+## Implementation details
 
 ### Backend — `api/`
 
@@ -342,6 +414,13 @@ See `docs/FINANCIAL_CALC_INSTRUCTIONS.md` for the full instruction set used by t
 
 The HF Space has **no persistent volume**, so runtime state survives restarts through a daily Parquet snapshot (`runtime_snapshot.py`, driven by `.github/workflows/snapshot.yml` → `POST /api/admin/snapshot`) to a private HF dataset, restored on boot by `scripts/restore_review_db.py`. The main corpus DB is fetched by `scripts/fetch_db_from_dataset.py` before Uvicorn opens its connection. `DB_PATH` is validated against an allowlist to prevent path traversal.
 
+### Operational notes
+
+- **DuckDB version alignment:** the old Hugging Face image cap of `duckdb<1.1.0` caused serialization failures with locally generated DuckDB 1.5.3 files. `requirements.txt` now requires DuckDB 1.5.3+, and `.venv_duck10` is obsolete.
+- **Section extraction:** `_extract_sections_with_labels()` now uses `re.finditer()` plus longest-match selection so TOC entries do not steal section labels. Existing data was corrected with `scripts/retag_sections.py`.
+- **Review queue behavior:** an empty `review_decisions` table is expected when queries route to `AUTO` at high confidence. Use narrative-heavy questions to exercise `SAMPLED_REVIEW` and `ESCALATE`.
+- **Feedback caveat:** `/api/chat/feedback` can create `reviewer_verdicts` rows that are not linked to formal review-queue decisions because it uses the message timestamp as the decision ID.
+
 ---
 
 ## Deploy to Hugging Face Spaces
@@ -369,6 +448,8 @@ A full human-in-the-loop review framework beyond what most demos provide:
 - **Drift detection**: alerts when human-agreement rate drops below floor (default 95%, `DRIFT_AGREEMENT_FLOOR`) or unrecognized XBRL concepts spike (`DRIFT_CONCEPT_SPIKE_THRESHOLD`)
 - **Pipeline monitoring**: live `DriftAlert` widget in the sidebar
 
+The review loop is intentionally not just thumbs-up/down feedback. The product records formal decisions against routed outputs, then uses those decisions to tune thresholds and monitor degradation over time.
+
 Endpoints: `GET /api/review/queue`, `POST /api/review/decisions/{id}/verdict`, `GET /api/review/drift`, `POST /api/review/calibrate`
 
 ---
@@ -391,9 +472,12 @@ Every chat call, RAG retrieval, and LangGraph node run produces a trace. Product
 
 | Framework | How this project maps |
 |---|---|
-| **US SR 11-7** (Model Risk Management) | Validation layer, metrics dashboard, drift detection, routing and escalation triggers |
+| **US SR 11-7** (Model Risk Management) | Model inventory concepts, validation layer, monitoring dashboard, drift detection, routing thresholds, and escalation triggers |
+| **MAS FEAT / Veritas-style controls** | Accountability through audit logs and owners; transparency through citations, evidence panels, and confidence codes; ethics through abstention when evidence is weak |
 | **MAS AI Risk Management** | Risk materiality, lifecycle controls, meaningful human oversight, pre/post-deployment monitoring |
-| **EU AI Act** | Demonstrable human oversight of automated decisions via the HITL review queue |
+| **EU AI Act** | Demonstrable human oversight for high-risk outputs through the HITL review queue |
+
+The project is not a legal compliance certification. It is a working architecture that demonstrates how a filing-analysis AI system can be made reviewable by risk, compliance, and model-governance teams.
 
 ---
 
@@ -403,10 +487,9 @@ This project is built by a team of specialist AI agents, each on its own branch,
 
 | Agent | Branch | Focus | Owns |
 |---|---|---|---|
-| 🏛 **Claude** | `claude` | Software architecture — structure, separation of concerns, core pipeline | `api/routes/`, `api/config.py`, `main.py`, `langgraph_engine.py`, `graph_rag_engine.py` |
-| 🔒 **Gemini** | `gemini` | Security + frontend — auth, rate limiting, hardened ingestion, React UI | `api/middleware/`, `scripts/embed_*.py`, `frontend/src/` |
-| ⚡ **MiMo** | `mimo` | Performance + data — caching, latency, DuckDB query/index tuning, startup | retrieval/caching paths in `api/services/`, `data/`, `run.py` |
-| 🔌 **DeepSeek** | `deepseek` | API engineering — routes, services, Pydantic schemas | `api/routes/review.py`, `api/services/drift_detection.py`, `api/models/review_schemas.py` |
+| 🏛 **Claude** | `claude` | Software architecture, maintainability, API organization, configuration validation, core RAG pipeline | `api/routes/`, `api/config.py`, `api/services/langgraph_engine.py`, `api/services/graph_rag_engine.py` |
+| 🔒 **Gemini** | `gemini` | Security hardening, rate limiting, injection resistance, EDGAR/ticker ingestion, parallel retrieval | `api/middleware/`, `scripts/embed_*.py`, shared retrieval paths |
+| ⚡ **MiMo** | `mimo` | Latency, memory efficiency, caching, DuckDB query/index tuning, startup bottlenecks | retrieval/caching paths in `api/services/`, `data/`, `run.py` |
 
 ### Merge workflow
 
@@ -417,7 +500,7 @@ This project is built by a team of specialist AI agents, each on its own branch,
 5. **Integration:** only approved branches merge to `main`. Conflicts are resolved by domain — architecture (Claude), security/perf (Gemini), optimization (MiMo).
 6. **Worktree isolation:** agents dispatched with `isolation: "worktree"` must branch from `main` (not a stale specialist branch) — verified with `git log --oneline <branch> | head -3` before review.
 
-> The `Owner`/`Path` table in `AGENTS.md` still references an `api/retrievers/` package and "MySQL"; the current implementation keeps all retrieval in `api/services/` (`hybrid_retriever.py`, `reranker.py`, `rag_engine.py`) and the datastore is DuckDB. Treat `api/services/` as the home for retrieval ownership.
+> The `Owner`/`Path` table in `AGENTS.md` still references an `api/retrievers/` package and "MySQL"; the current implementation keeps retrieval in `api/services/` (`hybrid_retriever.py`, `reranker.py`, `rag_engine.py`) and the datastore is DuckDB. Treat `api/services/` as the home for retrieval ownership.
 
 ---
 
@@ -456,7 +539,7 @@ This project is built by a team of specialist AI agents, each on its own branch,
 
 ## Honest limitations
 
-- No production users or measured ROI — this is a portfolio PoC.
+- No production users or measured ROI — this is a portfolio PoC. The ROI case is scenario-modeled for a steering-committee discussion, not claimed as realized savings.
 - Some validation phases (parts of the shadow-deployment and metrics tooling) are scaffolded ahead of full wiring; the README's architecture reflects what is implemented in `api/services/`.
 - The golden set covers 50 questions; expanding the domain-specific slots requires banking judgment to write.
-- Before any portfolio presentation: run a shadow-deployment pass and cite a real result (threshold X → false-escalation Y%, agreement Z%).
+- Before any portfolio presentation: run a shadow-deployment pass and cite a real result, for example threshold X → false-escalation Y%, agreement Z%, citation coverage, and average latency.
