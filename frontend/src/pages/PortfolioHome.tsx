@@ -68,7 +68,7 @@ export default function PortfolioHome() {
       <header className="border-b border-border/40 bg-surface/20 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center font-mono font-bold text-white shadow-[0_0_12px_rgba(46,139,87,0.2)]">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-[#60A5FA] flex items-center justify-center font-mono font-bold text-white shadow-[0_0_18px_rgba(139,92,246,0.28)]">
               E
             </div>
             <span className="font-semibold text-base tracking-tight">Evan Goh</span>
@@ -78,7 +78,7 @@ export default function PortfolioHome() {
               onClick={landingTour.start}
               className="flex items-center gap-1.5 text-secondary hover:text-primary transition-colors bg-transparent border-0 cursor-pointer p-0"
             >
-              <Sparkles size={15} className="text-emerald-400" />
+              <Sparkles size={15} className="text-accent-bright" />
               <span className="hidden sm:inline">Tour</span>
             </button>
             <a
@@ -106,7 +106,7 @@ export default function PortfolioHome() {
         {/* Hero Section */}
         <section className="mb-16 md:mb-24 max-w-3xl">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-primary tracking-tight leading-[1.1] mb-6">
-            Hi, I'm <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 bg-clip-text text-transparent">Evan Goh</span>.
+            Hi, I'm <span className="bg-gradient-to-r from-white via-accent-bright to-[#60A5FA] bg-clip-text text-transparent">Evan Goh</span>.
           </h1>
           <p className="text-secondary text-base md:text-lg lg:text-xl leading-relaxed max-w-2xl font-light">
             I enjoy working where data, AI, and product meet. I build systems that help people understand complex information, trust the insights they see, and make better decisions.
@@ -115,7 +115,7 @@ export default function PortfolioHome() {
             <button
               data-tour="hero-cta"
               onClick={() => document.getElementById('profile')?.scrollIntoView({ behavior: 'smooth' })}
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-accent hover:bg-emerald-500 text-white font-semibold transition-all duration-200 active:scale-[0.98] shadow-[0_4px_20px_rgba(16,185,129,0.15)] group cursor-pointer"
+              className="fintech-button px-5 py-3 group"
             >
               Walkthrough My Profile
               <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
@@ -131,7 +131,7 @@ export default function PortfolioHome() {
           </div>
 
           <div className="max-w-3xl border border-border/40 rounded-2xl bg-surface/20 p-6 sm:p-8 relative overflow-hidden flex flex-col justify-center">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl pointer-events-none" />
             <h3 className="text-base font-bold text-primary mb-4 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-accent" />
               The Translation Layer & AI Transformation
@@ -184,9 +184,9 @@ export default function PortfolioHome() {
                 <div
                   data-tour="project-card"
                   onClick={() => navigate('/rag-overview')}
-                  className="border border-accent/20 hover:border-accent/50 rounded-2xl bg-surface/40 hover:bg-surface-elevated/40 transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer shadow-[0_4px_20px_rgba(16,185,129,0.02)] hover:shadow-[0_4px_25px_rgba(16,185,129,0.08)] min-h-[460px]"
+                  className="glass-card hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[460px]"
                 >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors pointer-events-none" />
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
                   <div>
                     <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
                       <div className="flex items-center gap-2.5">
@@ -195,18 +195,18 @@ export default function PortfolioHome() {
                         </div>
                         <div>
                           <h3 className="text-base sm:text-lg font-bold text-primary tracking-tight">RAG Workbench & Strategic Slide Deck</h3>
-                          <p className="text-[11px] font-mono text-emerald-400">Helping investors and analysts find answers faster without sacrificing trust</p>
+                          <p className="text-[11px] font-mono text-accent-bright">Helping investors and analysts find answers faster without sacrificing trust</p>
                         </div>
                       </div>
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-border/25 bg-accent/8 text-[11px] font-semibold text-emerald-400">
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-accent/20 bg-accent/8 text-[11px] font-semibold text-accent-bright">
                         Case Study & App
                       </span>
                     </div>
 
                     {/* Business Case & Challenge Section */}
                     <div className="mb-5 bg-surface-elevated/35 border border-border/30 rounded-xl p-4">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 mb-2 font-mono uppercase tracking-wider">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-accent-bright mb-2 font-mono uppercase tracking-wider">
+                        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
                         Business Case & Challenge
                       </div>
                       <p className="text-xs text-secondary leading-relaxed mb-3 font-light">
@@ -215,15 +215,15 @@ export default function PortfolioHome() {
                       
                       <div className="grid grid-cols-3 gap-2 text-center mb-3">
                         <div className="bg-background/60 border border-border/40 rounded-lg py-1.5">
-                          <div className="text-xs font-mono font-bold text-emerald-400">30 Min</div>
+                          <div className="text-xs font-mono font-bold text-accent-bright">30 Min</div>
                           <div className="text-[9px] text-secondary/70">To Skim</div>
                         </div>
                         <div className="bg-background/60 border border-border/40 rounded-lg py-1.5">
-                          <div className="text-xs font-mono font-bold text-emerald-400">2 Hrs</div>
+                          <div className="text-xs font-mono font-bold text-accent-bright">2 Hrs</div>
                           <div className="text-[9px] text-secondary/70">Deep Analysis</div>
                         </div>
                         <div className="bg-background/60 border border-border/40 rounded-lg py-1.5">
-                          <div className="text-xs font-mono font-bold text-emerald-400">12 Hrs</div>
+                          <div className="text-xs font-mono font-bold text-accent-bright">12 Hrs</div>
                           <div className="text-[9px] text-secondary/70">To Model</div>
                         </div>
                       </div>
@@ -266,7 +266,7 @@ export default function PortfolioHome() {
                       <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">React</span>
                       <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">FAST API</span>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-emerald-300 transition-colors group-hover:underline">
+                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
                       View Pitch & Deck
                       <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                     </span>
@@ -278,7 +278,7 @@ export default function PortfolioHome() {
               <div className="w-full flex-shrink-0 px-1">
                 <div
                   onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}
-                  className="border border-accent/20 hover:border-accent/50 rounded-2xl bg-surface/40 hover:bg-surface-elevated/40 transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer shadow-[0_4px_20px_rgba(16,185,129,0.02)] hover:shadow-[0_4px_25px_rgba(16,185,129,0.08)] min-h-[460px]"
+                  className="glass-card hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[460px]"
                 >
                   <div>
                     <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
@@ -291,7 +291,7 @@ export default function PortfolioHome() {
                           <p className="text-[11px] font-mono text-secondary">Data Platforms & High-Availability Scalability</p>
                         </div>
                       </div>
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-border/25 bg-accent/8 text-[11px] font-semibold text-emerald-400">
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-accent/20 bg-accent/8 text-[11px] font-semibold text-accent-bright">
                         Live App Link
                       </span>
                     </div>
@@ -365,7 +365,7 @@ export default function PortfolioHome() {
                       <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">AWS</span>
                       <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">ClickHouse</span>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-emerald-300 transition-colors group-hover:underline">
+                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
                       Explore Charts
                       <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                     </span>

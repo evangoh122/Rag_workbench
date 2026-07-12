@@ -59,10 +59,10 @@ export default function RagOverview() {
               onClick={tour.start}
               className="flex items-center gap-1.5 text-secondary hover:text-primary transition-colors bg-transparent border-0 cursor-pointer text-sm"
             >
-              <Sparkles size={15} className="text-emerald-400" />
+              <Sparkles size={15} className="text-accent-bright" />
               <span className="hidden sm:inline">Tour</span>
             </button>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-accent/25 bg-accent/8 text-emerald-400">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-accent/25 bg-accent/8 text-accent-bright">
               Product Overview & Deck
             </span>
           </div>
@@ -81,7 +81,7 @@ export default function RagOverview() {
               <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-primary m-0">
                 RAG Workbench
               </h1>
-              <p className="text-xs font-mono text-emerald-400 mt-1">Helping investors and analysts find answers faster without sacrificing trust</p>
+              <p className="text-xs font-mono text-accent-bright mt-1">Helping investors and analysts find answers faster without sacrificing trust</p>
             </div>
           </div>
           <p className="text-secondary text-base leading-relaxed font-light mt-2 max-w-3xl">
@@ -92,7 +92,7 @@ export default function RagOverview() {
             <button
               data-tour="launch"
               onClick={() => navigate('/rag')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent hover:bg-emerald-500 text-white font-semibold transition-all duration-200 active:scale-[0.98] shadow-[0_4px_20px_rgba(16,185,129,0.15)] group cursor-pointer"
+              className="fintech-button px-5 py-2.5 group"
             >
               <Play size={16} className="fill-white" />
               Launch Live App
@@ -159,10 +159,10 @@ export default function RagOverview() {
             </div>
 
             {/* The Solution Card */}
-            <div className="border border-emerald-500/20 rounded-2xl bg-emerald-500/5 p-6 relative overflow-hidden flex flex-col justify-between">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="glass-card rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl pointer-events-none" />
               <div>
-                <div className="flex items-center gap-2 text-emerald-400 font-semibold mb-4 text-xs uppercase tracking-wider font-mono">
+                <div className="flex items-center gap-2 text-accent-bright font-semibold mb-4 text-xs uppercase tracking-wider font-mono">
                   <CheckCircle size={15} />
                   Our Solution: Compressing Review Times
                 </div>
@@ -171,7 +171,7 @@ export default function RagOverview() {
                 </p>
                 <div className="space-y-4">
                   <div className="flex items-start gap-3">
-                    <div className="p-1 bg-emerald-500/15 rounded-lg text-emerald-400 mt-0.5">
+                    <div className="p-1 bg-accent/12 rounded-lg text-accent-bright mt-0.5">
                       <Clock size={14} />
                     </div>
                     <div>
@@ -180,7 +180,7 @@ export default function RagOverview() {
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="p-1 bg-emerald-500/15 rounded-lg text-emerald-400 mt-0.5">
+                    <div className="p-1 bg-accent/12 rounded-lg text-accent-bright mt-0.5">
                       <Database size={14} />
                     </div>
                     <div>
@@ -189,7 +189,7 @@ export default function RagOverview() {
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="p-1 bg-emerald-500/15 rounded-lg text-emerald-400 mt-0.5">
+                    <div className="p-1 bg-accent/12 rounded-lg text-accent-bright mt-0.5">
                       <Network size={14} />
                     </div>
                     <div>
@@ -214,7 +214,7 @@ export default function RagOverview() {
               href="https://docs.google.com/presentation/d/1X0Bh06yYY2zbRe7yh7f0itSyiwb0ubVe/edit?usp=sharing&ouid=100592629992248688729&rtpof=true&sd=true"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-accent hover:text-emerald-300 font-semibold"
+              className="text-xs text-accent hover:text-accent-bright font-semibold"
             >
               Open in Google Slides ↗
             </a>

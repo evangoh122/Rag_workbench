@@ -138,7 +138,7 @@ export default function CoachMarks({ steps, run, onClose }: CoachMarksProps) {
             width: rect.width + PAD * 2,
             height: rect.height + PAD * 2,
             boxShadow: '0 0 0 9999px rgba(0,0,0,0.72)',
-            border: '2px solid rgba(46,139,87,0.9)',
+            border: '2px solid rgba(167,139,250,0.9)',
           }}
         />
       ) : (
@@ -154,7 +154,7 @@ export default function CoachMarks({ steps, run, onClose }: CoachMarksProps) {
         style={cardStyle}
       >
         <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="flex items-center gap-2 text-emerald-400">
+          <div className="flex items-center gap-2 text-accent-bright">
             <Sparkles size={15} />
             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
               Step {index + 1} of {steps.length}
@@ -178,7 +178,7 @@ export default function CoachMarks({ steps, run, onClose }: CoachMarksProps) {
             <span
               key={i}
               className={`h-1.5 rounded-full transition-all duration-200 ${
-                i === index ? 'w-5 bg-emerald-500' : 'w-1.5 bg-white/15'
+                i === index ? 'w-5 bg-accent' : 'w-1.5 bg-white/15'
               }`}
             />
           ))}
@@ -202,7 +202,7 @@ export default function CoachMarks({ steps, run, onClose }: CoachMarksProps) {
             )}
             <button
               onClick={next}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-bullish hover:bg-emerald-500 text-white text-[13px] font-medium border-0 cursor-pointer transition-colors active:scale-[0.97]"
+              className="fintech-button px-3.5 py-1.5 text-[13px]"
             >
               {index >= steps.length - 1 ? 'Done' : 'Next'}
               {index < steps.length - 1 && <ArrowRight size={13} />}
