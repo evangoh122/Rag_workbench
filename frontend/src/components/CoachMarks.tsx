@@ -137,12 +137,12 @@ export default function CoachMarks({ steps, run, onClose }: CoachMarksProps) {
             top: rect.top - PAD,
             width: rect.width + PAD * 2,
             height: rect.height + PAD * 2,
-            boxShadow: '0 0 0 9999px rgba(0,0,0,0.72)',
+            boxShadow: '0 0 0 9999px rgba(0,0,0,0.58)',
             border: '2px solid rgba(167,139,250,0.9)',
           }}
         />
       ) : (
-        <div className="absolute inset-0 bg-black/72" />
+        <div className="absolute inset-0 bg-black/58" />
       )}
 
       {/* Click-catcher so the page underneath isn't interactive mid-tour. */}

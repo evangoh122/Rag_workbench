@@ -8,7 +8,7 @@ function acked(): boolean {
   try {
     return localStorage.getItem(ACK_KEY) === '1';
   } catch {
-    return true; // storage blocked → don't nag
+    return true; // Storage blocked; do not nag.
   }
 }
 
@@ -41,7 +41,7 @@ export default function AnalyticsNotice() {
   return (
     <div className="fixed inset-x-0 bottom-0 z-[200] flex justify-center px-3 pb-3 pointer-events-none">
       <div className="pointer-events-auto w-full max-w-2xl flex items-start gap-3 rounded-xl border border-border/60 bg-surface/95 backdrop-blur-md px-4 py-3 shadow-lg">
-        <span className="mt-0.5 text-emerald-400 shrink-0">
+        <span className="mt-0.5 text-accent-bright shrink-0">
           <BarChart3 size={16} />
         </span>
         <p className="text-[12.5px] text-secondary leading-relaxed m-0 flex-1">
@@ -50,7 +50,7 @@ export default function AnalyticsNotice() {
           this collection. See our{' '}
           <button
             onClick={() => navigate('/privacy')}
-            className="text-emerald-400/90 hover:text-emerald-300 underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer"
+            className="text-accent-bright hover:text-accent underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer"
           >
             Privacy Policy
           </button>{' '}

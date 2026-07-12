@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { Mail, ArrowRight, Cpu, Network, Database, Search, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { Mail, ArrowRight, Cpu, Network, Database, Search, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import CoachMarks, { useTour } from '../components/CoachMarks';
 import { LANDING_TOUR, LANDING_TOUR_KEY } from '../components/tourSteps';
@@ -24,49 +23,12 @@ const LinkedinIcon = ({ size = 20 }: { size?: number }) => (
 
 export default function PortfolioHome() {
   const navigate = useNavigate();
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  // First-visit guided tour for the landing page (replayable from the header).
   const landingTour = useTour(LANDING_TOUR_KEY);
-
-  const totalSlides = 2;
-
-  const nextSlide = () => {
-    setCurrentIndex((prev) => (prev + 1) % totalSlides);
-  };
-
-  const prevSlide = () => {
-    setCurrentIndex((prev) => (prev - 1 + totalSlides) % totalSlides);
-  };
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > 50;
-    const isRightSwipe = distance < -50;
-    if (isLeftSwipe) {
-      nextSlide();
-    } else if (isRightSwipe) {
-      prevSlide();
-    }
-  };
-
 
   return (
     <div className="min-h-screen bg-background text-primary font-sans selection:bg-accent/20 selection:text-white flex flex-col">
-      {/* Header */}
-      <header className="border-b border-border/40 bg-surface/20 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+      <header className="border-b border-border/40 bg-background/72 backdrop-blur-xl sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-[#60A5FA] flex items-center justify-center font-mono font-bold text-white shadow-[0_0_18px_rgba(139,92,246,0.28)]">
               E
@@ -101,302 +63,277 @@ export default function PortfolioHome() {
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-12 md:py-20 flex flex-col justify-center">
-        {/* Hero Section */}
-        <section className="mb-16 md:mb-24 max-w-3xl">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-primary tracking-tight leading-[1.1] mb-6">
-            Hi, I'm <span className="bg-gradient-to-r from-white via-accent-bright to-[#60A5FA] bg-clip-text text-transparent">Evan Goh</span>.
-          </h1>
-          <p className="text-secondary text-base md:text-lg lg:text-xl leading-relaxed max-w-2xl font-light">
-            I enjoy working where data, AI, and product meet. I build systems that help people understand complex information, trust the insights they see, and make better decisions.
-          </p>
-          <div className="flex flex-wrap gap-4 mt-8">
-            <button
-              data-tour="hero-cta"
-              onClick={() => document.getElementById('profile')?.scrollIntoView({ behavior: 'smooth' })}
-              className="fintech-button px-5 py-3 group"
-            >
-              Walkthrough My Profile
-              <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
-            </button>
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 md:py-20">
+        <section className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10 lg:gap-16 items-end mb-18 md:mb-28">
+          <div className="max-w-3xl pt-6 md:pt-10">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="editorial-rule" />
+              <span className="editorial-kicker">product-minded AI systems</span>
+            </div>
+            <h1 className="text-[2.7rem] md:text-[4rem] lg:text-[4.55rem] font-semibold text-primary tracking-tight leading-[0.98] mb-7 text-balance">
+              Evan Goh builds tools for reading messy financial evidence.
+            </h1>
+            <p className="text-secondary text-base md:text-lg leading-8 max-w-2xl font-light text-pretty">
+              I work at the translation layer between product, engineering, and business judgment. The work below is about making AI systems easier to inspect, question, and trust.
+            </p>
+            <div className="flex flex-wrap items-center gap-5 mt-9">
+              <button
+                data-tour="hero-cta"
+                onClick={() => document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth' })}
+                className="fintech-button px-5 py-3 group"
+              >
+                View selected work
+                <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+              </button>
+              <button
+                onClick={() => document.getElementById('profile')?.scrollIntoView({ behavior: 'smooth' })}
+                className="quiet-link bg-transparent border-0 cursor-pointer text-sm"
+              >
+                Read the profile
+              </button>
+            </div>
+          </div>
+
+          <div className="product-glass-preview rounded-[1.4rem] p-4 lg:mb-2 relative overflow-hidden">
+            <div className="absolute inset-x-8 -top-10 h-20 bg-accent/20 blur-3xl" />
+            <div className="rounded-2xl bg-background/70 border border-white/8 p-3 rotate-[-2deg] shadow-2xl">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-accent" />
+                  <span className="h-2 w-2 rounded-full bg-white/20" />
+                  <span className="h-2 w-2 rounded-full bg-white/10" />
+                </div>
+                <span className="text-[10px] font-mono text-secondary">audit trail</span>
+              </div>
+              <div className="space-y-3">
+                <div className="h-8 rounded-lg bg-white/[0.04] border border-white/[0.06]" />
+                <div className="grid grid-cols-[1fr_4rem] gap-3">
+                  <div className="h-24 rounded-xl bg-accent/10 border border-accent/15" />
+                  <div className="space-y-2">
+                    <div className="h-5 rounded bg-white/[0.06]" />
+                    <div className="h-5 rounded bg-white/[0.04]" />
+                    <div className="h-5 rounded bg-white/[0.04]" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="h-14 rounded-lg bg-white/[0.045] border border-white/[0.06]" />
+                  <div className="h-14 rounded-lg bg-white/[0.035] border border-white/[0.06]" />
+                  <div className="h-14 rounded-lg bg-white/[0.045] border border-white/[0.06]" />
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* Profile Section */}
         <section id="profile" className="mb-16 md:mb-24 scroll-mt-20">
-          <div className="flex items-center gap-2.5 mb-8">
-            <div className="w-1 bg-accent h-6 rounded animate-pulse" />
-            <h2 className="text-lg md:text-xl font-bold tracking-tight text-primary">Professional Profile</h2>
+          <div className="flex items-center gap-3 mb-8">
+            <span className="editorial-rule" />
+            <h2 className="text-lg md:text-xl font-semibold tracking-tight text-primary">Profile</h2>
           </div>
 
-          <div className="max-w-3xl border border-border/40 rounded-2xl bg-surface/20 p-6 sm:p-8 relative overflow-hidden flex flex-col justify-center">
+          <div className="max-w-3xl product-glass-preview rounded-2xl p-6 sm:p-8 relative overflow-hidden flex flex-col justify-center">
             <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl pointer-events-none" />
-            <h3 className="text-base font-bold text-primary mb-4 flex items-center gap-2">
+            <h3 className="text-base font-semibold text-primary mb-4 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-              The Translation Layer & AI Transformation
+              Translation layer for AI transformation
             </h3>
-            <p className="text-sm text-secondary leading-relaxed font-light m-0">
-              My core strength is leading AI Transformation by acting as the translation layer between deep engineering teams and executive business stakeholders. I work with stakeholders to architect solutions that are maintainable and secure.
+            <p className="text-sm text-secondary leading-7 font-light m-0 max-w-2xl">
+              I help turn vague AI ambition into systems people can operate: scoped workflows, inspectable outputs, evaluation loops, and enough product discipline that the result survives contact with real users.
             </p>
           </div>
         </section>
 
-        {/* Featured Work Carousel Section */}
         <section id="projects" className="mb-16 md:mb-24 scroll-mt-20">
-          <div className="flex items-center justify-between mb-8 max-w-3xl">
-            <div className="flex items-center gap-2.5">
-              <div className="w-1 bg-accent h-6 rounded animate-pulse" />
-              <h2 className="text-lg md:text-xl font-bold tracking-tight text-primary">Featured Work</h2>
-            </div>
-            
-            {/* Carousel Navigation Arrows */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={prevSlide}
-                aria-label="Previous slide"
-                className="p-2 border border-border/80 rounded-xl bg-surface/20 hover:bg-surface-elevated/40 text-secondary hover:text-primary transition-colors cursor-pointer"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                onClick={nextSlide}
-                aria-label="Next slide"
-                className="p-2 border border-border/80 rounded-xl bg-surface/20 hover:bg-surface-elevated/40 text-secondary hover:text-primary transition-colors cursor-pointer"
-              >
-                <ChevronRight size={16} />
-              </button>
+          <div className="flex items-end justify-between mb-8 max-w-4xl gap-6">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="editorial-rule" />
+                <span className="editorial-kicker">selected work</span>
+              </div>
+              <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-primary m-0">Built around evidence, not demos.</h2>
             </div>
           </div>
 
-          <div 
-            className="relative overflow-hidden w-full max-w-3xl"
-            onTouchStart={onTouchStart}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-          >
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] gap-5 lg:gap-6 max-w-5xl">
             <div
-              className="flex transition-transform duration-500 ease-in-out"
-              style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+              data-tour="project-card"
+              onClick={() => navigate('/rag-overview')}
+              className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
-              {/* Slide 1: RAG Workbench & Strategic Slide Deck */}
-              <div className="w-full flex-shrink-0 px-1">
-                <div
-                  data-tour="project-card"
-                  onClick={() => navigate('/rag-overview')}
-                  className="glass-card hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[460px]"
-                >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
-                  <div>
-                    <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 bg-accent/8 border border-accent/15 rounded-xl text-accent animate-pulse">
-                          <Search size={20} />
-                        </div>
-                        <div>
-                          <h3 className="text-base sm:text-lg font-bold text-primary tracking-tight">RAG Workbench & Strategic Slide Deck</h3>
-                          <p className="text-[11px] font-mono text-accent-bright">Helping investors and analysts find answers faster without sacrificing trust</p>
-                        </div>
-                      </div>
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-accent/20 bg-accent/8 text-[11px] font-semibold text-accent-bright">
-                        Case Study & App
-                      </span>
+              <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
+              <div>
+                <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-accent/8 border border-accent/15 rounded-xl text-accent">
+                      <Search size={20} />
                     </div>
-
-                    {/* Business Case & Challenge Section */}
-                    <div className="mb-5 bg-surface-elevated/35 border border-border/30 rounded-xl p-4">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-accent-bright mb-2 font-mono uppercase tracking-wider">
-                        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                        Business Case & Challenge
-                      </div>
-                      <p className="text-xs text-secondary leading-relaxed mb-3 font-light">
-                        Financial analysts spend an excessive amount of time reviewing SEC reports:
-                      </p>
-                      
-                      <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                        <div className="bg-background/60 border border-border/40 rounded-lg py-1.5">
-                          <div className="text-xs font-mono font-bold text-accent-bright">30 Min</div>
-                          <div className="text-[9px] text-secondary/70">To Skim</div>
-                        </div>
-                        <div className="bg-background/60 border border-border/40 rounded-lg py-1.5">
-                          <div className="text-xs font-mono font-bold text-accent-bright">2 Hrs</div>
-                          <div className="text-[9px] text-secondary/70">Deep Analysis</div>
-                        </div>
-                        <div className="bg-background/60 border border-border/40 rounded-lg py-1.5">
-                          <div className="text-xs font-mono font-bold text-accent-bright">12 Hrs</div>
-                          <div className="text-[9px] text-secondary/70">To Model</div>
-                        </div>
-                      </div>
-                      
-                      <p className="text-xs text-secondary leading-relaxed font-light m-0">
-                        Our solution: compress review times and make verification immediate and completely auditable.
-                      </p>
-                    </div>
-
-                    <p className="text-xs text-secondary leading-relaxed mb-6 font-light">
-                      An advanced agent-driven financial analyzer designed to inspect and cross-verify SEC 10-K filings. Escapes standard black-box LLM limitations by tracing numbers back to structured XBRL facts with calculations, citations, and an interactive execution path visualizer.
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                      <div className="glass-sm p-3.5">
-                        <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
-                          <Network size={13} />
-                          Graph RAG & Strategy
-                        </div>
-                        <p className="text-[11px] text-secondary/70 m-0">Links facts in an interactive entity relation graph & outlines strategic design alignment</p>
-                      </div>
-                      <div className="glass-sm p-3.5">
-                        <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
-                          <Database size={13} />
-                          XBRL Verification
-                        </div>
-                        <p className="text-[11px] text-secondary/70 m-0">Deterministic math checks directly on filed financial data</p>
-                      </div>
+                    <div>
+                      <h3 className="text-xl sm:text-2xl font-semibold text-primary tracking-tight">RAG Workbench</h3>
+                      <p className="text-[11px] font-mono text-accent-bright">SEC filing answers with a paper trail</p>
                     </div>
                   </div>
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md border border-accent/20 bg-accent/8 text-accent-bright">
+                    Case Study & App
+                  </span>
+                </div>
 
-                  <div className="flex items-center justify-between border-t border-border/30 pt-5 mt-2 flex-wrap gap-3">
-                    <div className="flex flex-wrap gap-1.5">
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">RAG</span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">AI Engineering</span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">LLM Application</span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">Embeddings & Vector Search</span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">AI Governance</span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">AI Evaluation & Validation</span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">React</span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">FAST API</span>
+                <div className="mb-6 bg-background/42 border border-white/[0.06] rounded-xl p-4">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-accent-bright mb-3 font-mono">
+                    why it exists
+                  </div>
+                  <p className="text-sm text-secondary leading-7 mb-4 font-light">
+                    Analyst workflows break down when answers cannot show where the number came from. This workbench keeps retrieval, XBRL math, citations, and graph context visible.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 text-left">
+                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">30m</div>
+                      <div className="text-[10px] text-secondary/70">section scan</div>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
-                      View Pitch & Deck
-                      <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-                    </span>
+                    <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">2h</div>
+                      <div className="text-[10px] text-secondary/70">deep read</div>
+                    </div>
+                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">12h</div>
+                      <div className="text-[10px] text-secondary/70">model pass</div>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-sm text-secondary leading-7 mb-6 font-light max-w-xl">
+                  The app is intentionally sober: citations before prose, deterministic checks before confident language, and a visible audit trail for every answer.
+                </p>
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="glass-sm p-3.5">
+                    <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
+                      <Network size={13} />
+                      Graph RAG
+                    </div>
+                    <p className="text-[11px] text-secondary/70 m-0">Links facts in an interactive entity relation graph</p>
+                  </div>
+                  <div className="glass-sm p-3.5">
+                    <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
+                      <Database size={13} />
+                      XBRL verification
+                    </div>
+                    <p className="text-[11px] text-secondary/70 m-0">Deterministic math checks on filed financial data</p>
                   </div>
                 </div>
               </div>
 
-              {/* Slide 3: Enterprise Infrastructure */}
-              <div className="w-full flex-shrink-0 px-1">
-                <div
-                  onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}
-                  className="glass-card hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[460px]"
-                >
-                  <div>
-                    <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 bg-border/20 border border-border/35 rounded-xl text-secondary">
-                          <Database size={20} />
-                        </div>
-                        <div>
-                          <h3 className="text-base sm:text-lg font-bold text-primary tracking-tight">Enterprise Infrastructure</h3>
-                          <p className="text-[11px] font-mono text-secondary">Data Platforms & High-Availability Scalability</p>
-                        </div>
-                      </div>
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full border border-accent/20 bg-accent/8 text-[11px] font-semibold text-accent-bright">
-                        Live App Link
-                      </span>
-                    </div>
-
-                    {/* Business Case & Challenge Section */}
-                    <div className="mb-5 bg-surface-elevated/20 border border-border/20 rounded-xl p-4">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary mb-2 font-mono uppercase tracking-wider">
-                        <span className="w-1.5 h-1.5 rounded-full bg-secondary/50" />
-                        Business Case & Challenge
-                      </div>
-                      <p className="text-xs text-secondary/80 leading-relaxed mb-3 font-light">
-                        Customers and trading systems require high-performance queries on historical stock OHLCV data to analyze market patterns and price action:
-                      </p>
-                      
-                      <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                        <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
-                          <div className="text-xs font-mono font-bold text-secondary">10B+</div>
-                          <div className="text-[9px] text-secondary/60">OHLCV Bars</div>
-                        </div>
-                        <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
-                          <div className="text-xs font-mono font-bold text-secondary">&lt; 15ms</div>
-                          <div className="text-[9px] text-secondary/60">Query Latency</div>
-                        </div>
-                        <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
-                          <div className="text-xs font-mono font-bold text-secondary">Sub-Sec</div>
-                          <div className="text-[9px] text-secondary/60">Aggregations</div>
-                        </div>
-                      </div>
-                      
-                      <p className="text-xs text-secondary/70 leading-relaxed font-light m-0">
-                        Our solution: build a partitioned, column-oriented database layout optimized for fast time-series analytical scans.
-                      </p>
-                    </div>
-
-                    {/* Infrastructure Blueprint Details */}
-                    <div className="mb-5 bg-surface-elevated/20 border border-border/20 rounded-xl p-4">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary mb-2 font-mono uppercase tracking-wider">
-                        Pipeline Blueprint
-                      </div>
-                      <div className="font-mono text-[9px] text-secondary/60 leading-relaxed">
-                        Kafka Ingress ➜ Flink SQL stream engine ➜ ClickHouse Warehouse ➜ App API Tier
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-secondary/70 leading-relaxed mb-6 font-light">
-                      Architectural blueprint designs for large-scale data platforms. Directly feeds historical market pricing data into our AI RAG Workbench sandbox to enable price-performance analysis and charting.
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                      <div className="glass-sm p-3.5 opacity-60">
-                        <div className="flex items-center gap-2 text-secondary text-xs font-semibold mb-1">
-                          <Database size={13} />
-                          Stream Processing
-                        </div>
-                        <p className="text-[11px] text-secondary/70 m-0">Real-time state tracking and stream schemas</p>
-                      </div>
-                      <div className="glass-sm p-3.5 opacity-60">
-                        <div className="flex items-center gap-2 text-secondary text-xs font-semibold mb-1">
-                          <Cpu size={13} />
-                          Distributed DBs
-                        </div>
-                        <p className="text-[11px] text-secondary/70 m-0">Partitioning strategies, indices, and clickhouse shards</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-border/30 pt-5 mt-2 flex-wrap gap-3">
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">Kafka</span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">Kubernetes</span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">AWS</span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">ClickHouse</span>
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
-                      Explore Charts
-                      <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-                    </span>
-                  </div>
+              <div className="flex items-center justify-between border-t border-border/30 pt-5 mt-2 flex-wrap gap-3">
+                <div className="flex flex-wrap gap-1.5 max-w-md">
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">RAG</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">XBRL</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">Graph RAG</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">React</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">FastAPI</span>
                 </div>
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
+                  View pitch and deck
+                  <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+                </span>
               </div>
             </div>
 
-            {/* Slide Indicators / Dots */}
-            <div className="flex justify-center gap-1.5 mt-5">
-              {[0, 1].map((idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`w-1.5 h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-                    currentIndex === idx ? 'bg-accent w-4' : 'bg-secondary/40'
-                  }`}
-                  aria-label={`Go to slide ${idx + 1}`}
-                />
-              ))}
+            <div
+              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}
+              className="glass-card hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 relative group overflow-hidden cursor-pointer lg:mt-16 min-h-[430px]"
+            >
+              <div>
+                <div className="flex items-start justify-between mb-5 flex-wrap gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-border/20 border border-border/35 rounded-xl text-secondary">
+                      <Database size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-semibold text-primary tracking-tight">Enterprise infrastructure</h3>
+                      <p className="text-[11px] font-mono text-secondary">Market data architecture notes</p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md border border-white/10 bg-white/[0.04] text-secondary">
+                    Blueprint
+                  </span>
+                </div>
+
+                <div className="mb-5 bg-surface-elevated/20 border border-border/20 rounded-xl p-4">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary mb-2 font-mono">
+                    operating constraint
+                  </div>
+                  <p className="text-xs text-secondary/80 leading-relaxed mb-3 font-light">
+                    A companion architecture sketch for moving historical market bars into an analysis layer without making every query feel like a batch job.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 text-center mb-3">
+                    <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
+                      <div className="text-xs font-mono font-semibold text-secondary">10B+</div>
+                      <div className="text-[9px] text-secondary/60">bars</div>
+                    </div>
+                    <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
+                      <div className="text-xs font-mono font-semibold text-secondary">&lt;15ms</div>
+                      <div className="text-[9px] text-secondary/60">lookup</div>
+                    </div>
+                    <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
+                      <div className="text-xs font-mono font-semibold text-secondary">sub-sec</div>
+                      <div className="text-[9px] text-secondary/60">rollups</div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-secondary/70 leading-relaxed font-light m-0">
+                    Partitioning, columnar storage, and API boundaries matter more here than one heroic model call.
+                  </p>
+                </div>
+
+                <div className="mb-5 bg-surface-elevated/20 border border-border/20 rounded-xl p-4">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary mb-2 font-mono">
+                    pipeline note
+                  </div>
+                  <div className="font-mono text-[9px] text-secondary/60 leading-relaxed">
+                    Kafka ingress -&gt; Flink SQL -&gt; ClickHouse warehouse -&gt; App API
+                  </div>
+                </div>
+
+                <p className="text-xs text-secondary/70 leading-relaxed mb-6 font-light">
+                  Useful because the research app should eventually answer chart and price-context questions with the same traceability discipline as filing questions.
+                </p>
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="glass-sm p-3.5 opacity-60">
+                    <div className="flex items-center gap-2 text-secondary text-xs font-semibold mb-1">
+                      <Database size={13} />
+                      Stream processing
+                    </div>
+                    <p className="text-[11px] text-secondary/70 m-0">State tracking and stream schemas</p>
+                  </div>
+                  <div className="glass-sm p-3.5 opacity-60">
+                    <div className="flex items-center gap-2 text-secondary text-xs font-semibold mb-1">
+                      <Cpu size={13} />
+                      Distributed DBs
+                    </div>
+                    <p className="text-[11px] text-secondary/70 m-0">Partitioning, indices, and shards</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-border/30 pt-5 mt-2 flex-wrap gap-3">
+                <div className="flex flex-wrap gap-1">
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">Kafka</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">Kubernetes</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">ClickHouse</span>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
+                  Explore charts
+                  <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+                </span>
+              </div>
             </div>
           </div>
         </section>
       </main>
 
-      {/* Not-investment-advice strip (consistent with the workbench) */}
       <DisclaimerFooter className="mt-auto" />
 
-      {/* Footer */}
       <footer className="border-t border-border/40 bg-surface/10 py-8 text-center text-xs text-secondary/50">
-        <div className="max-w-5xl mx-auto px-6 flex flex-col items-center gap-4">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col items-center gap-4">
           <div className="flex w-full flex-col sm:flex-row items-center justify-between gap-4">
             <span>&copy; {new Date().getFullYear()} Evan Goh. All rights reserved.</span>
             <div className="flex gap-4">
@@ -409,9 +346,7 @@ export default function PortfolioHome() {
         </div>
       </footer>
 
-      {/* Guided coach-mark tour for the landing page */}
       <CoachMarks steps={LANDING_TOUR} run={landingTour.run} onClose={landingTour.close} />
     </div>
   );
 }
-
