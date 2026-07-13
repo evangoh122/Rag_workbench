@@ -1,4 +1,5 @@
 import { Mail, ArrowRight, Cpu, Network, Database, Search, Sparkles } from 'lucide-react';
+import type { KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CoachMarks, { useTour } from '../components/CoachMarks';
 import { LANDING_TOUR, LANDING_TOUR_KEY } from '../components/tourSteps';
@@ -24,6 +25,11 @@ const LinkedinIcon = ({ size = 20 }: { size?: number }) => (
 export default function PortfolioHome() {
   const navigate = useNavigate();
   const landingTour = useTour(LANDING_TOUR_KEY);
+  const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    action();
+  };
 
   return (
     <div className="min-h-screen bg-background text-primary font-sans selection:bg-accent/20 selection:text-white flex flex-col">
@@ -158,6 +164,9 @@ export default function PortfolioHome() {
             <div
               data-tour="project-card"
               onClick={() => navigate('/rag-overview')}
+              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/rag-overview'))}
+              role="button"
+              tabIndex={0}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
               <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
@@ -239,6 +248,9 @@ export default function PortfolioHome() {
 
             <div
               onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}
+              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/rag', { state: { initialView: 'stocks' } }))}
+              role="button"
+              tabIndex={0}
               className="glass-card hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 relative group overflow-hidden cursor-pointer lg:mt-16 min-h-[430px]"
             >
               <div>

@@ -377,9 +377,9 @@
     letter-spacing: 0.02em;
   }
 
-  .badge-green  { background: rgba(52, 211, 153, 0.12);  color: #34D399; border: 1px solid rgba(52, 211, 153, 0.2); }
-  .badge-red    { background: rgba(248, 113, 113, 0.12); color: #F87171; border: 1px solid rgba(248, 113, 113, 0.2); }
-  .badge-purple { background: rgba(139, 92, 246, 0.12);  color: #A78BFA; border: 1px solid rgba(139, 92, 246, 0.25); }
+  .badge-green  { background: color-mix(in srgb, var(--color-bullish) 12%, transparent); color: var(--color-bullish); border: 1px solid color-mix(in srgb, var(--color-bullish) 20%, transparent); }
+  .badge-red    { background: color-mix(in srgb, var(--color-bearish) 12%, transparent); color: var(--color-bearish); border: 1px solid color-mix(in srgb, var(--color-bearish) 20%, transparent); }
+  .badge-purple { background: color-mix(in srgb, var(--color-accent) 12%, transparent); color: var(--color-accent-bright); border: 1px solid color-mix(in srgb, var(--color-accent) 25%, transparent); }
   .badge-muted  { background: rgba(255, 255, 255, 0.06); color: var(--color-secondary); border: 1px solid var(--color-border-subtle); }
 
   /* Section heading: Origin italic serif gradient */
