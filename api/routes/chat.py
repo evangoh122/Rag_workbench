@@ -16,8 +16,9 @@ from api.services.xbrl_relevance import (
 )
 from api.models.schemas import (
     ChatRequest, ChatResponse, SourceItem,
-    VerificationResult, PipelineStatus,
+    VerificationResult, PipelineStatus, SECTION_LABELS,
 )
+from api.services.hybrid_retriever import _accession_to_sec_url
 from api.services.guardrails.input_rails import check_input
 from api.services.guardrails.dialog_rails import check_dialog
 from api.services.guardrails.output_rails import check_output
@@ -247,17 +248,41 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
         # not 180+ raw rows with blank Period/Label.
         display_facts = deduped_facts
 
-        # Map retrieved docs to flat SourceItem matching frontend expectations
+        # Map retrieved docs to flat SourceItem matching frontend expectations.
+        # Deduplicate on (ticker, accession, chunk_index) — the same chunk can
+        # surface through both BM25 and vector paths. chunk_index may be absent
+        # on fallback keyword chunks, so hash the text as a stand-in.
+        seen_chunks: set = set()
         sources = []
         for d in result["retrieved_docs"]:
             meta = d.get("metadata", {})
+            chunk_text = d.get("chunk_text", "")
+            accession = meta.get("accession_number", meta.get("accession", "")) or ""
+            chunk_index = meta.get("chunk_index")
+            key = (
+                meta.get("ticker", ""),
+                accession,
+                chunk_index if chunk_index is not None else hash(chunk_text),
+            )
+            if key in seen_chunks:
+                continue
+            seen_chunks.add(key)
+            section_id = meta.get("section_id", meta.get("section", "")) or ""
+            section = SECTION_LABELS.get(section_id.lower().replace(" ", "_"), section_id)
+            period = meta.get("period_of_report")
             sources.append(SourceItem(
-                text=d.get("chunk_text", ""),
+                text=chunk_text,
                 ticker=meta.get("ticker", ""),
-                accession=meta.get("accession_number", meta.get("accession", "")),
-                section=meta.get("section_id", meta.get("section", "")),
-                edgar_url=meta.get("edgar_url", f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={meta.get('ticker', '')}"),
+                accession=accession,
+                section=section,
+                edgar_url=meta.get("edgar_url")
+                    or (_accession_to_sec_url(accession) if accession
+                        else f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={meta.get('ticker', '')}"),
                 distance=meta.get("distance"),
+                form_type=meta.get("form_type") or "",
+                period_of_report=str(period) if period is not None else "",
+                chunk_index=chunk_index,
+                snippet=chunk_text[:200],
             ))
 
         return ChatResponse(

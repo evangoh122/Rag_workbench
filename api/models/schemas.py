@@ -22,6 +22,23 @@ class ChatRequest(BaseModel):
 
 # ── Structured Output Models ─────────────────────────────────────────────────
 
+# section_id → human-readable citation label. Lookup keys are normalised to
+# lowercase snake_case ("Item 7" → "item_7"); unmapped ids fall back to the
+# raw section_id.
+SECTION_LABELS = {
+    "item_1": "Item 1 — Business",
+    "item_1a": "Item 1A — Risk Factors",
+    "item_7": "Item 7 — MD&A",
+    "item_7a": "Item 7A — Quantitative Disclosures",
+    "item_8": "Item 8 — Financial Statements",
+    "business": "Business",
+    "md_and_a": "MD&A",
+    "full_text": "Full Filing",
+    "risk_factors": "Risk Factors",
+    "prospectus_summary": "Prospectus Summary",
+}
+
+
 class SourceItem(BaseModel):
     """A retrieved source chunk with metadata. Matches frontend Source interface."""
     ticker: str = ""
@@ -30,6 +47,11 @@ class SourceItem(BaseModel):
     text: str = ""
     edgar_url: str = ""
     distance: Optional[float] = None
+    # Exact-citation fields (document / section / paragraph provenance)
+    form_type: str = ""
+    period_of_report: str = ""
+    chunk_index: Optional[int] = None
+    snippet: str = ""
 
 
 class VerificationResult(BaseModel):
