@@ -56,7 +56,7 @@ export default function LegalLayout({
       {/* Main */}
       <main className="flex-1 w-full max-w-3xl mx-auto px-6 py-12">
         <div className="flex items-center gap-3">
-          <span className="text-emerald-400">{icon ?? <ShieldCheck />}</span>
+          <span className="text-accent-bright">{icon ?? <ShieldCheck />}</span>
           <h1 className="text-2xl font-semibold text-primary tracking-tight m-0">{title}</h1>
         </div>
         <p className="text-sm text-secondary mt-2">{subtitle}</p>
@@ -116,7 +116,7 @@ export function UL({ children }: { children: React.ReactNode }) {
 export function LI({ children }: { children: React.ReactNode }) {
   return (
     <li className="text-[14px] text-secondary leading-relaxed pl-4 relative">
-      <span className="absolute left-0 top-[9px] w-1 h-1 rounded-full bg-emerald-500/60" />
+      <span className="absolute left-0 top-[9px] w-1 h-1 rounded-full bg-accent/70" />
       {children}
     </li>
   );
@@ -128,7 +128,7 @@ export function B({ children }: { children: React.ReactNode }) {
 
 export function Mail() {
   return (
-    <a href={`mailto:${CONTACT_EMAIL}`} className="text-emerald-400/90 hover:text-emerald-300 underline underline-offset-2">
+    <a href={`mailto:${CONTACT_EMAIL}`} className="text-accent-bright hover:text-accent underline underline-offset-2">
       {CONTACT_EMAIL}
     </a>
   );

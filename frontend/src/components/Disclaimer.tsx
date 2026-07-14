@@ -76,7 +76,7 @@ export function DisclaimerModal() {
 
         <button
           onClick={dismiss}
-          className="mt-6 w-full py-3 rounded-xl bg-bullish hover:bg-emerald-500 text-white font-semibold text-sm border-0 cursor-pointer transition-colors active:scale-[0.99]"
+          className="fintech-button mt-6 w-full justify-center py-3 text-sm active:scale-[0.99]"
         >
           I understand
         </button>

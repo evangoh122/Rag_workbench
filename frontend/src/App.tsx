@@ -326,10 +326,10 @@ function Workbench() {
             aria-label="Back to home"
             className="flex items-center gap-3 bg-transparent border-0 p-0 cursor-pointer text-left"
           >
-            <div className="bg-gradient-to-br from-emerald-500 to-green-600 p-2 rounded-lg shadow-[0_0_12px_rgba(46,139,87,0.25)]">
+            <div className="bg-gradient-to-br from-accent to-[#60A5FA] p-2 rounded-lg shadow-[0_0_18px_rgba(139,92,246,0.28)]">
               <Search size={20} className="text-white" />
             </div>
-            <h2 className="m-0 text-lg font-semibold text-primary tracking-tight hover:text-emerald-300 transition-colors">RAG Workbench</h2>
+            <h2 className="m-0 text-lg font-semibold text-primary tracking-tight hover:text-accent-bright transition-colors">RAG Workbench</h2>
           </button>
           <button
             className="lg:hidden p-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer"
@@ -537,7 +537,7 @@ function Workbench() {
             <Menu size={22} />
           </button>
           <div className="ml-3 flex items-center gap-2">
-            <div className="bg-gradient-to-br from-emerald-500 to-green-600 p-1.5 rounded-lg">
+            <div className="bg-gradient-to-br from-accent to-[#60A5FA] p-1.5 rounded-lg">
               <Search size={14} className="text-white" />
             </div>
             <span className="font-semibold text-base tracking-tight text-primary">RAG Workbench</span>
@@ -598,7 +598,7 @@ function Workbench() {
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-200 overflow-y-auto">
               <header className="px-3 md:px-4 lg:px-8 py-3 md:py-4 glass-header z-10 flex-shrink-0">
                 <h1 className="text-base md:text-lg font-semibold text-primary flex items-center gap-2">
-                  <Cpu className="text-emerald-400" size={18} />
+                  <Cpu className="text-accent" size={18} />
                   Coverage List
                 </h1>
               </header>
@@ -635,7 +635,7 @@ function Workbench() {
                   <button
                     type="submit"
                     disabled={loading || !input.trim()}
-                    className="flex items-center justify-center px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 bg-bullish hover:bg-emerald-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-[13px] sm:text-sm gap-1 sm:gap-1.5 ml-1 sm:ml-1.5 md:ml-2 shrink-0 active:scale-[0.97]"
+                    className="fintech-button px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-[13px] sm:text-sm ml-1 sm:ml-1.5 md:ml-2 shrink-0"
                   >
                     <span className="hidden sm:inline">Trace</span> <Send size={14} />
                   </button>
@@ -677,7 +677,7 @@ function Workbench() {
                   title="Take a guided tour"
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg glass-button text-[11px] sm:text-xs text-secondary hover:text-primary"
                 >
-                  <Sparkles size={13} className="text-emerald-400" />
+                  <Sparkles size={13} className="text-accent-bright" />
                   <span className="hidden sm:inline">Tour</span>
                 </button>
                 {/* Mini Pipeline Status Indicator */}
@@ -688,7 +688,7 @@ function Workbench() {
                      return (
                        <div key={step} className="group relative">
                          <div className={`w-2.5 h-2.5 rounded-full transition-colors duration-500 ${
-                           s === 'success' ? 'bg-emerald-500' : s === 'error' ? 'bg-red-500' : s === 'pending' ? 'bg-blue-500 status-pulse' : 'bg-gray-600'
+                           s === 'success' ? 'bg-bullish' : s === 'error' ? 'bg-red-500' : s === 'pending' ? 'bg-accent status-pulse' : 'bg-gray-600'
                          }`} />
                        </div>
                      );
@@ -740,7 +740,7 @@ function Workbench() {
                     <button
                       type="submit"
                       disabled={loading || !input.trim()}
-                      className="flex items-center justify-center px-3 sm:px-5 py-3 sm:py-3.5 bg-bullish hover:bg-emerald-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-[13px] sm:text-sm gap-1 sm:gap-1.5 ml-1.5 sm:ml-2 shrink-0 active:scale-[0.97]"
+                      className="fintech-button px-3 sm:px-5 py-3 sm:py-3.5 disabled:opacity-40 disabled:cursor-not-allowed text-[13px] sm:text-sm ml-1.5 sm:ml-2 shrink-0"
                     >
                       <span className="hidden sm:inline">Try a query</span> <Send size={14} />
                     </button>
@@ -757,7 +757,7 @@ function Workbench() {
                   {mode === 'auditable' && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-full mb-6 text-left">
                       <div className="glass p-3.5">
-                        <div className="flex items-center gap-2 text-emerald-300 font-medium text-sm mb-1.5">
+                        <div className="flex items-center gap-2 text-accent-bright font-medium text-sm mb-1.5">
                           <Search size={14} />
                           Retrieve evidence
                         </div>
@@ -766,7 +766,7 @@ function Workbench() {
                         </p>
                       </div>
                       <div className="glass p-3.5">
-                        <div className="flex items-center gap-2 text-emerald-300 font-medium text-sm mb-1.5">
+                        <div className="flex items-center gap-2 text-accent-bright font-medium text-sm mb-1.5">
                           <Database size={14} />
                           Ground the numbers
                         </div>
@@ -775,7 +775,7 @@ function Workbench() {
                         </p>
                       </div>
                       <div className="glass p-3.5">
-                        <div className="flex items-center gap-2 text-emerald-300 font-medium text-sm mb-1.5">
+                        <div className="flex items-center gap-2 text-accent-bright font-medium text-sm mb-1.5">
                           <ShieldCheck size={14} />
                           Verify the answer
                         </div>
@@ -791,7 +791,7 @@ function Workbench() {
                     <button
                       type="button"
                       onClick={() => setView('methodology')}
-                      className="inline-flex items-center gap-1.5 text-accent hover:text-emerald-300 bg-transparent border-0 p-0 cursor-pointer font-medium"
+                      className="inline-flex items-center gap-1.5 text-accent hover:text-accent-bright bg-transparent border-0 p-0 cursor-pointer font-medium"
                     >
                       <BookOpen size={14} />
                       Read the methodology
@@ -851,7 +851,7 @@ function Workbench() {
                 >
                   {/* Avatar */}
                   <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${
-                     msg.role === 'user' ? 'bg-bullish border-emerald-500/50 text-white' : 'glass-sm text-accent'
+                     msg.role === 'user' ? 'bg-accent/20 border-accent/35 text-white shadow-[0_0_18px_rgba(139,92,246,0.18)]' : 'glass-sm text-accent'
                   }`}>
                     {msg.role === 'user' ? <Database size={13} /> : <Search size={13} />}
                   </div>
@@ -923,7 +923,7 @@ function Workbench() {
                         {msg.follow_ups && msg.follow_ups.length > 0 && (
                           <div>
                             <div className="flex items-center gap-2 mb-1.5">
-                              <ArrowRight size={13} className="text-bullish" />
+                              <ArrowRight size={13} className="text-accent" />
                               <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">{promptsGuided ? 'Guided Next Steps' : 'Suggested Follow-Ups'}</span>
                             </div>
                             <div className="flex flex-wrap gap-1.5">
@@ -937,7 +937,7 @@ function Workbench() {
                                     }
                                   }}
                                   disabled={loading}
-                                  className="text-left text-[13px] px-3 py-1.5 rounded-lg bg-bullish/8 border border-bullish/15 text-emerald-200 hover:bg-bullish/15 transition-colors disabled:opacity-50"
+                                  className="text-left text-[13px] px-3 py-1.5 rounded-lg bg-accent/8 border border-accent/15 text-accent-bright hover:bg-accent/15 transition-colors disabled:opacity-50"
                                 >
                                   {q}
                                 </button>
@@ -966,7 +966,7 @@ function Workbench() {
                         </div>
                         <div className="flex flex-wrap gap-1.5 mb-3.5">
                           {msg.entities.map((entity, i) => (
-                            <span key={i} className="px-2.5 py-0.5 bg-bullish/8 border border-bullish/15 rounded-md text-[13px] text-emerald-300 font-mono">
+                            <span key={i} className="px-2.5 py-0.5 bg-accent/8 border border-accent/15 rounded-md text-[13px] text-accent-bright font-mono">
                               {entity}
                             </span>
                           ))}
@@ -981,7 +981,7 @@ function Workbench() {
                               {msg.triples.map((triple, i) => (
                                 <div
                                   key={i}
-                                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-[13px] font-mono cursor-pointer transition-colors hover:bg-bullish/8 min-w-0 ${i % 2 === 0 ? 'bg-surface/20' : ''} ${i > 0 ? 'border-t border-border/30' : ''}`}
+                                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-[13px] font-mono cursor-pointer transition-colors hover:bg-accent/8 min-w-0 ${i % 2 === 0 ? 'bg-surface/20' : ''} ${i > 0 ? 'border-t border-border/30' : ''}`}
                                   onClick={() => {
                                     setActiveTriples(msg.triples!);
                                     setOriginalTriples(msg.triples!);
@@ -993,11 +993,11 @@ function Workbench() {
                                   }}
                                   title="Click to visualize this relationship"
                                 >
-                                  <span className="text-emerald-300 truncate flex-shrink min-w-0">{triple.subject}</span>
+                                  <span className="text-accent-bright truncate flex-shrink min-w-0">{triple.subject}</span>
                                   <span className="text-muted flex-shrink-0">&rarr;</span>
-                                  <span className="text-bullish text-[10px] sm:text-[11px] px-1 sm:px-1.5 py-0.5 bg-bullish/8 rounded border border-bullish/15 whitespace-nowrap flex-shrink-0">{triple.predicate}</span>
+                                  <span className="text-accent text-[10px] sm:text-[11px] px-1 sm:px-1.5 py-0.5 bg-accent/8 rounded border border-accent/15 whitespace-nowrap flex-shrink-0">{triple.predicate}</span>
                                   <span className="text-muted flex-shrink-0">&rarr;</span>
-                                  <span className="text-emerald-200 truncate flex-shrink min-w-0">{triple.object}</span>
+                                  <span className="text-accent-bright truncate flex-shrink min-w-0">{triple.object}</span>
                                 </div>
                               ))}
                             </div>
@@ -1162,7 +1162,7 @@ function Workbench() {
                 <button
                   type="submit"
                   disabled={loading || !input.trim()}
-                  className="flex items-center justify-center px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 bg-bullish hover:bg-emerald-500 text-white rounded-lg border-0 cursor-pointer transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-[13px] sm:text-sm gap-1 sm:gap-1.5 ml-1 sm:ml-1.5 md:ml-2 shrink-0 active:scale-[0.97]"
+                  className="fintech-button px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 disabled:opacity-40 disabled:cursor-not-allowed text-[13px] sm:text-sm ml-1 sm:ml-1.5 md:ml-2 shrink-0"
                 >
                   <span className="hidden sm:inline">Send</span> <Send size={14} />
                 </button>
@@ -1265,7 +1265,7 @@ function Workbench() {
                           href={evidence.edgar_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-block text-[11px] text-accent hover:text-emerald-300 font-medium"
+                          className="inline-block text-[11px] text-accent hover:text-accent-bright font-medium"
                         >
                           View {evidence.ticker} on EDGAR ↗
                         </a>
