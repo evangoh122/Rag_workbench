@@ -33,6 +33,19 @@ def tokenize(text: str) -> list[str]:
     return text.lower().split()
 
 
+def _accession_to_sec_url(accession: str) -> str:
+    """Convert an accession number (e.g. 0000723125-25-000042) to the direct
+    SEC EDGAR filing index URL for that specific filing."""
+    if not accession:
+        return ""
+    clean = accession.replace("-", "")
+    if len(clean) < 18:
+        return ""
+    cik = clean[:10].lstrip("0")
+    dashed = f"{clean[:10]}-{clean[10:12]}-{clean[12:]}"
+    return f"https://www.sec.gov/Archives/edgar/data/{cik}/{clean}/{dashed}-index.htm"
+
+
 # ── RRF Fusion ────────────────────────────────────────────────────────────────
 
 def rrf_fuse(
@@ -99,7 +112,8 @@ def _load_bm25_index() -> tuple[BM25Okapi, list[Document], list[list[str]]] | No
         try:
             conn = db_manager.get_connection()
             rows = conn.execute(
-                "SELECT ticker, text, accession FROM edgar_embeddings"
+                "SELECT ticker, text, accession, section_id, chunk_index, "
+                "period_of_report, form_type FROM edgar_embeddings"
             ).fetchall()
 
             if not rows:
@@ -108,10 +122,18 @@ def _load_bm25_index() -> tuple[BM25Okapi, list[Document], list[list[str]]] | No
 
             docs: list[Document] = []
             tokenised: list[list[str]] = []
-            for ticker, text, accession in rows:
+            for ticker, text, accession, section_id, chunk_index, period_of_report, form_type in rows:
                 docs.append(Document(
                     page_content=text,
-                    metadata={"source": "edgar_embeddings", "ticker": ticker, "accession": accession},
+                    metadata={
+                        "source": "edgar_embeddings",
+                        "ticker": ticker,
+                        "accession": accession,
+                        "section_id": section_id,
+                        "chunk_index": chunk_index,
+                        "period_of_report": period_of_report,
+                        "form_type": form_type,
+                    },
                 ))
                 tokenised.append(tokenize(text))
 
@@ -175,7 +197,7 @@ def vector_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document
 
         if ticker:
             rows = conn.execute(f"""
-                SELECT ticker, text, accession,
+                SELECT ticker, text, accession, section_id, chunk_index, period_of_report, form_type,
                        array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
                 FROM edgar_embeddings
                 WHERE ticker = ?
@@ -184,7 +206,7 @@ def vector_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document
             """, [qvec, ticker, top_k]).fetchall()
         else:
             rows = conn.execute(f"""
-                SELECT ticker, text, accession,
+                SELECT ticker, text, accession, section_id, chunk_index, period_of_report, form_type,
                        array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
                 FROM edgar_embeddings
                 ORDER BY dist ASC
@@ -194,7 +216,16 @@ def vector_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document
         return [
             Document(
                 page_content=r[1],
-                metadata={"source": "edgar_embeddings", "ticker": r[0], "accession": r[2], "distance": r[3]},
+                metadata={
+                    "source": "edgar_embeddings",
+                    "ticker": r[0],
+                    "accession": r[2],
+                    "section_id": r[3],
+                    "chunk_index": r[4],
+                    "period_of_report": r[5],
+                    "form_type": r[6],
+                    "distance": r[7],
+                },
             )
             for r in rows
         ]
@@ -304,7 +335,6 @@ class EDGARHybridRetriever(BaseRetriever):
     ticker: str = ""
     rrf_k: int = 60
     ticker_boost: float = 2.0
-
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:

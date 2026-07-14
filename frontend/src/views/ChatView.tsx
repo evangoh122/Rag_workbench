@@ -37,6 +37,15 @@ interface PipelineStatus {
   output?: 'success' | 'error' | 'pending';
 }
 
+const PIPELINE_STEPS: Array<{ key: keyof PipelineStatus; label: string }> = [
+  { key: 'input', label: 'Input' },
+  { key: 'retrieval', label: 'Retrieve' },
+  { key: 'extraction', label: 'Extract' },
+  { key: 'math', label: 'Calculate' },
+  { key: 'verification', label: 'Verify' },
+  { key: 'output', label: 'Answer' },
+];
+
 interface ChatViewProps {
   messages: Message[];
   input: string;
@@ -65,7 +74,7 @@ const ChatView: React.FC<ChatViewProps> = ({
       <header className="px-4 lg:px-8 py-5 border-b border-border bg-surface/50 backdrop-blur-sm z-10 flex-shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-primary flex items-center gap-3">
-            <MessageSquare className="text-blue-400" />
+            <MessageSquare className="text-accent" />
             Testing Interface
           </h1>
           <div className="text-sm text-secondary mt-1 flex items-center gap-2">
@@ -73,15 +82,16 @@ const ChatView: React.FC<ChatViewProps> = ({
           </div>
         </div>
         {/* Mini Pipeline Status Indicator */}
-        <div className="flex items-center gap-2 bg-surface-elevated px-4 py-2 rounded-xl border border-border shadow-none">
-           <div className="text-xs font-semibold text-secondary uppercase mr-2 tracking-widest">Pipeline</div>
-           {['input', 'retrieval', 'extraction', 'math', 'verification', 'output'].map(step => {
-             const s = pipelineStatus[step as keyof PipelineStatus];
+        <div className="hidden md:flex items-center gap-2 bg-surface-elevated px-3 py-2 rounded-lg border border-border" role="status" aria-live="polite">
+           <div className="text-xs font-semibold text-secondary mr-2">Pipeline</div>
+           {PIPELINE_STEPS.map(({ key, label }) => {
+             const s = pipelineStatus[key];
              return (
-               <div key={step} className="group relative">
-                 <div className={`w-3 h-3 rounded-full border-2 border-surface-elevated transition-colors duration-500 ${
-                   s === 'success' ? 'bg-bullish' : s === 'error' ? 'bg-bearish' : s === 'pending' ? 'bg-blue-500 animate-pulse' : 'bg-secondary/40'
+               <div key={key} className="w-10 text-center" title={`${label}: ${s ?? 'idle'}`}>
+                 <div className={`h-1 rounded-full transition-colors duration-200 ${
+                   s === 'success' ? 'bg-bullish' : s === 'error' ? 'bg-bearish' : s === 'pending' ? 'bg-accent animate-pulse' : 'bg-border'
                  }`} />
+                 <span className="mt-1 block truncate text-[8px] text-muted">{label}</span>
                </div>
              );
            })}
@@ -92,8 +102,8 @@ const ChatView: React.FC<ChatViewProps> = ({
       <div className="flex-1 overflow-y-auto px-4 lg:px-8 py-8 flex flex-col gap-8 scroll-smooth pb-32">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center max-w-lg mx-auto">
-            <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 border border-blue-500/20">
-              <MessageSquare size={32} className="text-blue-400" />
+            <div className="w-16 h-16 bg-accent/10 rounded-xl flex items-center justify-center mb-6 border border-accent/20">
+              <MessageSquare size={32} className="text-accent" />
             </div>
             <h3 className="text-2xl font-semibold text-primary mb-3">
               Start a Testing Session
@@ -139,7 +149,7 @@ const ChatView: React.FC<ChatViewProps> = ({
           >
             {/* Avatar */}
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${
-               msg.role === 'user' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-surface-elevated border-border text-blue-400'
+               msg.role === 'user' ? 'bg-accent-fill border-accent-fill text-white' : 'bg-surface border-border text-accent'
             }`}>
               {msg.role === 'user' ? <Database size={18} /> : <Search size={18} />}
             </div>
@@ -148,7 +158,7 @@ const ChatView: React.FC<ChatViewProps> = ({
             <div
               className={`px-5 py-4 rounded-2xl leading-relaxed text-[15px] shadow-none ${
                 msg.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-tr-sm'
+                  ? 'bg-accent-fill text-white rounded-tr-sm'
                   : 'bg-surface-elevated text-primary border border-border rounded-tl-sm'
               }`}
             >
@@ -190,12 +200,12 @@ const ChatView: React.FC<ChatViewProps> = ({
               {msg.role === 'assistant' && msg.entities && msg.entities.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-border/50">
                   <div className="flex items-center gap-2 mb-3">
-                    <Network size={14} className="text-indigo-400" />
+                    <Network size={14} className="text-accent" />
                     <span className="text-xs font-semibold text-secondary uppercase tracking-wider">Search Entities</span>
                   </div>
                   <div className="flex flex-wrap gap-2 mb-4">
                     {msg.entities.map((entity, i) => (
-                      <span key={i} className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-sm text-indigo-300 font-mono">
+                      <span key={i} className="px-3 py-1 bg-accent/10 border border-accent/20 rounded-lg text-sm text-accent-bright font-mono">
                         {entity}
                       </span>
                     ))}
@@ -203,17 +213,17 @@ const ChatView: React.FC<ChatViewProps> = ({
                   {msg.triples && msg.triples.length > 0 && (
                     <>
                       <div className="flex items-center gap-2 mb-3 mt-4">
-                        <Search size={14} className="text-blue-400" />
+                        <Search size={14} className="text-accent" />
                         <span className="text-xs font-semibold text-secondary uppercase tracking-wider">Knowledge Graph Triples ({msg.triples.length})</span>
                       </div>
                       <div className="bg-background border border-border rounded-xl overflow-hidden shadow-none">
                         {msg.triples.map((triple, i) => (
                           <div key={i} className={`flex items-center gap-2 px-4 py-2.5 text-sm font-mono ${i % 2 === 0 ? '' : 'bg-surface/30'} ${i > 0 ? 'border-t border-border/50' : ''}`}>
-                            <span className="text-blue-300">{triple.subject}</span>
+                            <span className="text-accent-bright">{triple.subject}</span>
                             <span className="text-secondary">&rarr;</span>
                             <span className="text-bullish text-xs px-1.5 py-0.5 bg-bullish/10 rounded border border-bullish/20">{triple.predicate}</span>
                             <span className="text-secondary">&rarr;</span>
-                            <span className="text-purple-300">{triple.object}</span>
+                            <span className="text-accent-bright">{triple.object}</span>
                           </div>
                         ))}
                       </div>
@@ -278,16 +288,15 @@ const ChatView: React.FC<ChatViewProps> = ({
 
         {loading && (
           <div className="flex gap-5 max-w-[90%] self-start animate-in slide-in-from-bottom-2 duration-300">
-            <div className="w-10 h-10 rounded-xl bg-surface-elevated border border-border text-blue-400 flex items-center justify-center shadow-none">
+            <div className="w-10 h-10 rounded-xl bg-surface border border-border text-accent flex items-center justify-center">
               <Search size={18} className="animate-pulse" />
             </div>
-            <div className="px-6 py-4 rounded-2xl rounded-tl-sm bg-surface-elevated text-secondary border border-border flex items-center gap-3">
-              <div className="flex gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 rounded-full bg-blue-500/50 animate-bounce" style={{ animationDelay: '300ms' }} />
+            <div className="px-6 py-4 rounded-xl rounded-tl-sm bg-surface-elevated text-secondary border border-border" role="status" aria-live="polite">
+              <div className="mb-3 text-primary font-medium">Retrieving filing sections</div>
+              <div className="space-y-2" aria-hidden="true">
+                <div className="h-2 w-64 max-w-full rounded bg-border-subtle animate-pulse" />
+                <div className="h-2 w-48 max-w-full rounded bg-border-subtle animate-pulse" />
               </div>
-              Processing query...
             </div>
           </div>
         )}
@@ -299,10 +308,12 @@ const ChatView: React.FC<ChatViewProps> = ({
       <div className="px-4 lg:px-8 py-6 bg-gradient-to-t from-background via-background to-transparent flex-shrink-0 absolute bottom-0 left-0 right-0 pointer-events-none">
         <form
           onSubmit={handleSubmit}
-          className="max-w-4xl mx-auto flex items-center bg-surface-elevated border border-border rounded-2xl p-2 transition-all duration-300 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 pointer-events-auto shadow-none"
+          className="max-w-4xl mx-auto flex items-center glass-input p-2 pointer-events-auto"
         >
           <input
-            className="flex-1 bg-transparent border-0 text-primary placeholder-secondary px-4 py-3 text-base outline-none w-full"
+            name="query"
+            aria-label="Research question"
+            className="flex-1 bg-transparent border-0 text-primary placeholder-muted px-4 py-3 text-base outline-none w-full"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
@@ -319,7 +330,7 @@ const ChatView: React.FC<ChatViewProps> = ({
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl border-0 cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium gap-2 ml-2"
+            className="fintech-button flex items-center justify-center px-6 py-3 gap-2 ml-2"
           >
             Send <Send size={16} />
           </button>

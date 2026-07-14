@@ -62,6 +62,15 @@ type PipelineStatus = {
   output?: 'success' | 'error' | 'pending';
 };
 
+const PIPELINE_STEPS: Array<{ key: keyof PipelineStatus; label: string }> = [
+  { key: 'input', label: 'Input' },
+  { key: 'retrieval', label: 'Retrieve' },
+  { key: 'extraction', label: 'Extract' },
+  { key: 'math', label: 'Calculate' },
+  { key: 'verification', label: 'Verify' },
+  { key: 'output', label: 'Answer' },
+];
+
 import { getPosthog } from './utils/posthog'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import PortfolioHome from './pages/PortfolioHome';
@@ -101,6 +110,9 @@ function Workbench() {
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
   const [ticker, _setTicker] = useState('MU');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const sidebarCloseRef = useRef<HTMLButtonElement>(null);
   const [feedbackSent, setFeedbackSent] = useState<Set<number>>(new Set());
   // Conjoint personalization. `prefs` (arm/role/answer-experience levels) drives
   // both the chat presentation and whether role-based answers are requested.
@@ -108,6 +120,47 @@ function Workbench() {
   const [gateOpen, setGateOpen] = useState<boolean>(() => loadConjointPrefs() === null);
   const [surveyOpen, setSurveyOpen] = useState(false);
   const [surveyPrompted, setSurveyPrompted] = useState<boolean>(() => hasCompletedConjoint());
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const handleChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarOpen || isDesktop) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const focusFrame = window.requestAnimationFrame(() => sidebarCloseRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSidebarOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const drawer = sidebarRef.current;
+      if (!drawer) return;
+      const focusable = Array.from(
+        drawer.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), select, input, textarea, [tabindex]:not([tabindex="-1"])')
+      ).filter((element) => !element.hasAttribute('hidden'));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', handleKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [sidebarOpen, isDesktop]);
   // Personalization toggles derived from prefs (standard/control => all shown).
   const showEvidence = prefs?.evidence !== 'text_only';
   const showExplain = prefs?.answer_style !== 'direct';
@@ -115,6 +168,8 @@ function Workbench() {
   const roleArg =
     prefs?.arm === 'treatment' && prefs?.answer_basis === 'role_based' ? prefs?.role ?? null : null;
   const [graphModalOpen, setGraphModalOpen] = useState(false);
+  const graphDialogRef = useRef<HTMLDialogElement>(null);
+  const graphReturnFocusRef = useRef<HTMLButtonElement | null>(null);
   const [activeTriples, setActiveTriples] = useState<any[]>([]);
   const [originalTriples, setOriginalTriples] = useState<any[]>([]);
   const [modalTicker, setModalTicker] = useState('');
@@ -125,6 +180,15 @@ function Workbench() {
   const [evidenceSel, setEvidenceSel] = useState<GraphSelection | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const dialog = graphDialogRef.current;
+    if (!graphModalOpen || !dialog) return;
+    if (!dialog.open) dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+    };
+  }, [graphModalOpen]);
   // Guided coach-mark tour for the chat workbench. Auto-runs once on the first
   // visit to the chat view (after the disclaimer + conjoint gate are cleared);
   // the header button replays it on demand.
@@ -145,9 +209,12 @@ function Workbench() {
   };
 
   const closeGraphModal = () => {
+    const returnTarget = graphReturnFocusRef.current;
+    graphDialogRef.current?.close();
     setGraphModalOpen(false);
     setEvidence(null);
     setEvidenceSel(null);
+    window.requestAnimationFrame(() => returnTarget?.focus());
   };
 
   const handleModalTickerChange = (ticker: string) => {
@@ -175,7 +242,7 @@ function Workbench() {
   };
 
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > 0) scrollToBottom();
   }, [messages]);
 
   // Once the user has engaged (≥3 assistant answers), prompt the end-of-session
@@ -302,23 +369,37 @@ function Workbench() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-primary font-sans">
+    <div className="flex h-dvh w-full overflow-hidden bg-background text-primary font-sans">
+      <a
+        href="#workbench-content"
+        className="skip-link"
+        tabIndex={!isDesktop && sidebarOpen ? -1 : 0}
+        aria-hidden={!isDesktop && sidebarOpen ? true : undefined}
+      >
+        Skip to main content
+      </a>
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
-        <div 
+        <button
+          type="button"
+          aria-label="Close navigation overlay"
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar Navigation */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-50 w-72 glass-sidebar flex flex-col px-4 py-5
+      <aside
+        ref={sidebarRef}
+        aria-label="RAG Workbench"
+        {...(!isDesktop && !sidebarOpen ? { inert: true, 'aria-hidden': true } : {})}
+        className={`
+        fixed inset-y-0 left-0 z-50 w-72 lg:w-[248px] glass-sidebar flex flex-col px-4 py-5
         transition-transform duration-300 ease-out lg:relative lg:translate-x-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Logo (returns to the portfolio home) */}
-        <div className="flex items-center justify-between mb-7 px-1">
+        <div className="flex items-center justify-between mb-6 px-1">
           <button
             type="button"
             onClick={() => navigate('/')}
@@ -326,12 +407,15 @@ function Workbench() {
             aria-label="Back to home"
             className="flex items-center gap-3 bg-transparent border-0 p-0 cursor-pointer text-left"
           >
-            <div className="bg-gradient-to-br from-accent to-[#60A5FA] p-2 rounded-lg shadow-[0_0_18px_rgba(139,92,246,0.28)]">
+            <div className="bg-accent-fill p-2 rounded-lg">
               <Search size={20} className="text-white" />
             </div>
             <h2 className="m-0 text-lg font-semibold text-primary tracking-tight hover:text-accent-bright transition-colors">RAG Workbench</h2>
           </button>
           <button
+            ref={sidebarCloseRef}
+            type="button"
+            aria-label="Close navigation"
             className="lg:hidden p-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer"
             onClick={() => setSidebarOpen(false)}
           >
@@ -340,7 +424,7 @@ function Workbench() {
         </div>
 
         {/* Main Navigation */}
-        <nav data-tour="nav" className="flex flex-col gap-5 mb-8 overflow-y-auto">
+        <nav aria-label="Workbench navigation" data-tour="nav" className="flex flex-col gap-5 mb-8 overflow-y-auto">
           {/* USER SECTION */}
           <div>
             <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.12em] px-2 mb-2.5">For Users</div>
@@ -504,7 +588,7 @@ function Workbench() {
         {(view === 'chat' || view === 'traceability') && (
           <div className="mt-auto">
             <button
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium text-gray-400 hover:text-red-400 glass-button hover:border-red-900/50 hover:bg-red-500/5"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium text-secondary hover:text-bearish glass-button"
               onClick={() => {
                 if (import.meta.env.VITE_POSTHOG_KEY) {
                   getPosthog().then(p => p.capture('session_reset', { message_count: messages.length, view }));
@@ -527,17 +611,24 @@ function Workbench() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full min-w-0 bg-background relative">
+      <main
+        id="workbench-content"
+        tabIndex={-1}
+        {...(!isDesktop && sidebarOpen ? { inert: true, 'aria-hidden': true } : {})}
+        className="flex-1 flex flex-col h-full min-w-0 bg-background relative"
+      >
         {/* Mobile Header Toggle */}
           <div className="lg:hidden flex items-center px-3 py-2.5 glass-header sticky top-0 z-30 flex-shrink-0">
           <button
+            type="button"
+            aria-label="Open navigation"
             onClick={() => setSidebarOpen(true)}
             className="p-2 -ml-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer"
           >
             <Menu size={22} />
           </button>
           <div className="ml-3 flex items-center gap-2">
-            <div className="bg-gradient-to-br from-accent to-[#60A5FA] p-1.5 rounded-lg">
+            <div className="bg-accent-fill p-1.5 rounded-lg">
               <Search size={14} className="text-white" />
             </div>
             <span className="font-semibold text-base tracking-tight text-primary">RAG Workbench</span>
@@ -635,7 +726,7 @@ function Workbench() {
                   <button
                     type="submit"
                     disabled={loading || !input.trim()}
-                    className="fintech-button px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-[13px] sm:text-sm ml-1 sm:ml-1.5 md:ml-2 shrink-0"
+                    className="fintech-button px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 text-[13px] sm:text-sm ml-1 sm:ml-1.5 md:ml-2 shrink-0"
                   >
                     <span className="hidden sm:inline">Trace</span> <Send size={14} />
                   </button>
@@ -650,17 +741,17 @@ function Workbench() {
         {/* VIEW: CHAT */}
         {view === 'chat' && (
           <div className="flex-1 flex flex-col h-full animate-in fade-in duration-200">
-              <header className="px-2 sm:px-3 md:px-4 lg:px-8 py-2 sm:py-3 md:py-4 glass-header z-10 flex-shrink-0 flex items-center justify-between gap-2">
+              <header className="min-h-14 px-3 md:px-4 lg:px-6 py-2.5 glass-header z-10 flex-shrink-0 flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <h1 className="text-sm sm:text-base md:text-lg font-semibold text-primary flex items-center gap-1.5 sm:gap-2 truncate">
+                <h1 className="text-base font-semibold text-primary flex items-center gap-2 truncate">
                   <MessageSquare className="text-accent shrink-0" size={16} />
                   <span className="truncate">Testing Interface</span>
                 </h1>
                 <div className="text-[10px] sm:text-xs text-secondary mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <div className="flex items-center gap-1 sm:gap-1.5">
-                    <span className="hidden sm:inline">Engine:</span> <span className="text-gray-200 font-medium px-1.5 sm:px-2 py-0.5 glass-sm text-[10px] sm:text-[11px]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
+                    <span className="hidden sm:inline">Engine:</span> <span className="text-primary font-medium px-1.5 sm:px-2 py-0.5 glass-sm text-[10px] sm:text-[11px]">{mode === 'sql' ? 'SQL Database' : mode === 'rag' ? 'Basic RAG' : mode === 'graph' ? 'Graph RAG' : 'Auditable Filing QA'}</span>
                   </div>
-                  <div className="hidden sm:flex items-center gap-1 text-accent/70 font-medium text-[11px]">
+                  <div className="hidden sm:flex items-center gap-1 text-accent font-medium text-[11px]">
                     <ShieldCheck size={12} />
                     <span>Coverage List Only</span>
                   </div>
@@ -680,34 +771,49 @@ function Workbench() {
                   <Sparkles size={13} className="text-accent-bright" />
                   <span className="hidden sm:inline">Tour</span>
                 </button>
-                {/* Mini Pipeline Status Indicator */}
-                <div data-tour="pipeline" className="flex items-center gap-1.5 md:gap-2 glass-sm px-2.5 md:px-3 py-1.5">
-                   <div className="text-[9px] md:text-[10px] font-semibold text-secondary uppercase tracking-wider mr-1 hidden xs:block">Pipeline</div>
-                   {['input', 'retrieval', 'extraction', 'math', 'verification', 'output'].map(step => {
-                     const s = pipelineStatus[step as keyof PipelineStatus];
-                     return (
-                       <div key={step} className="group relative">
-                         <div className={`w-2.5 h-2.5 rounded-full transition-colors duration-500 ${
-                           s === 'success' ? 'bg-bullish' : s === 'error' ? 'bg-red-500' : s === 'pending' ? 'bg-accent status-pulse' : 'bg-gray-600'
-                         }`} />
-                       </div>
-                     );
-                   })}
+                {/* Compact labeled pipeline status */}
+                <div
+                  data-tour="pipeline"
+                  className="hidden md:flex items-center gap-3 rounded-lg border border-border bg-surface-elevated px-3 py-1.5"
+                  role="status"
+                  aria-live="polite"
+                  aria-label={`Pipeline: ${PIPELINE_STEPS.map(({ key, label }) => `${label} ${pipelineStatus[key] ?? 'idle'}`).join(', ')}`}
+                >
+                  <div className="min-w-[72px]">
+                    <div className="text-[10px] font-semibold text-secondary">Pipeline</div>
+                    <div className="text-[10px] text-muted">
+                      {PIPELINE_STEPS.find(({ key }) => pipelineStatus[key] === 'pending')?.label ??
+                        (pipelineStatus.output === 'success' ? 'Complete' : 'Ready')}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-1.5" aria-hidden="true">
+                    {PIPELINE_STEPS.map(({ key, label }) => {
+                      const status = pipelineStatus[key];
+                      return (
+                        <div key={key} className="w-9 text-center">
+                          <div className={`h-1 rounded-full transition-colors duration-200 ${
+                            status === 'success' ? 'bg-bullish' : status === 'error' ? 'bg-bearish' : status === 'pending' ? 'bg-accent status-pulse' : 'bg-border'
+                          }`} />
+                          <span className="mt-1 block truncate text-[8px] text-muted">{label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </header>
 
             {/* Chat area */}
-            <div className="flex-1 overflow-y-auto px-2 sm:px-3 md:px-4 lg:px-8 py-4 sm:py-6 md:py-8 flex flex-col gap-4 sm:gap-6 scroll-smooth pb-12 sm:pb-16">
+            <div className="flex-1 overflow-y-auto px-3 md:px-6 lg:px-8 py-5 md:py-8 flex flex-col gap-4 sm:gap-6 scroll-smooth pb-12 sm:pb-16">
               {messages.length === 0 && (
-                <div className="flex flex-col items-center justify-center min-h-full text-center max-w-4xl mx-auto py-4">
-                  <div className="w-14 h-14 bg-accent/8 rounded-xl flex items-center justify-center mb-5 border border-accent/15">
+                <div className="flex flex-col items-start justify-start md:justify-center min-h-full text-left w-full max-w-3xl mx-auto py-6">
+                  <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center mb-5 border border-accent/20">
                     <MessageSquare size={28} className="text-accent" />
                   </div>
-                  <h3 className="text-xl font-semibold text-primary mb-2.5 tracking-tight">
+                  <h2 className="text-xl font-semibold text-primary mb-2.5 tracking-tight">
                     Financial research with an audit trail
-                  </h3>
-                  <p className="text-secondary text-sm leading-relaxed max-w-2xl mb-6">
+                  </h2>
+                  <p className="text-secondary text-sm leading-relaxed max-w-[68ch] mb-6 text-pretty">
                     {mode === 'auditable'
                       ? 'RAG Workbench helps analysts question SEC filings in plain English. Each answer connects filing excerpts, structured XBRL facts, deterministic calculations, and verification results so you can inspect the evidence instead of trusting a black-box response.'
                       : mode === 'graph'
@@ -719,11 +825,13 @@ function Workbench() {
                   <form
                     data-tour="composer"
                     onSubmit={handleSubmit}
-                    className="w-full max-w-2xl mx-auto flex items-center glass-input mb-5 sm:mb-7"
+                    className="w-full flex items-center glass-input p-1.5"
                   >
                     <input
-                      autoFocus
-                      className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-3 sm:px-4 py-3 sm:py-3.5 text-[14px] sm:text-[15px] outline-none w-full min-w-0"
+                      autoFocus={isDesktop}
+                      name="query"
+                      aria-label="Research question"
+                      className="flex-1 bg-transparent border-0 text-primary placeholder-muted px-3 sm:px-4 py-3 text-[14px] sm:text-[15px] outline-none w-full min-w-0"
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       placeholder={
@@ -740,13 +848,17 @@ function Workbench() {
                     <button
                       type="submit"
                       disabled={loading || !input.trim()}
-                      className="fintech-button px-3 sm:px-5 py-3 sm:py-3.5 disabled:opacity-40 disabled:cursor-not-allowed text-[13px] sm:text-sm ml-1.5 sm:ml-2 shrink-0"
+                      className="fintech-button px-3 sm:px-5 py-3 text-[13px] sm:text-sm ml-1.5 shrink-0"
                     >
                       <span className="hidden sm:inline">Try a query</span> <Send size={14} />
                     </button>
                   </form>
+                  <div className="w-full flex justify-between gap-4 mt-2 mb-5 text-[11px] text-muted">
+                    <span>Questions stay grounded in supported filings.</span>
+                    <span className="hidden sm:inline">Enter to send</span>
+                  </div>
 
-                  <div className="w-full max-w-2xl mx-auto p-3.5 mb-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex gap-3 text-xs text-amber-200 leading-relaxed shadow-sm text-left animate-in fade-in duration-300">
+                  <div className="w-full p-3.5 mb-5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex gap-3 text-xs text-amber-200 leading-relaxed text-left animate-in fade-in duration-300">
                     <div className="mt-0.5 shrink-0 w-2 h-2 rounded-full bg-amber-500 status-pulse" />
                     <div>
                       <strong className="font-semibold text-amber-300 block mb-0.5">Filing Range Notice</strong>
@@ -755,38 +867,38 @@ function Workbench() {
                   </div>
 
                   {mode === 'auditable' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-full mb-6 text-left">
-                      <div className="glass p-3.5">
-                        <div className="flex items-center gap-2 text-accent-bright font-medium text-sm mb-1.5">
+                    <div className="evidence-sequence w-full mb-5 text-left divide-y divide-border-subtle rounded-xl border border-border bg-surface">
+                      <div className="evidence-step">
+                        <div className="evidence-step-label">
                           <Search size={14} />
                           Retrieve evidence
                         </div>
-                        <p className="text-xs leading-relaxed text-gray-400 m-0">
+                        <p className="evidence-step-description">
                           Finds relevant passages using hybrid semantic and keyword search across supported SEC filings.
                         </p>
                       </div>
-                      <div className="glass p-3.5">
-                        <div className="flex items-center gap-2 text-accent-bright font-medium text-sm mb-1.5">
+                      <div className="evidence-step">
+                        <div className="evidence-step-label">
                           <Database size={14} />
                           Ground the numbers
                         </div>
-                        <p className="text-xs leading-relaxed text-gray-400 m-0">
+                        <p className="evidence-step-description">
                           Uses structured XBRL facts and deterministic math for financial metrics and period comparisons.
                         </p>
                       </div>
-                      <div className="glass p-3.5">
-                        <div className="flex items-center gap-2 text-accent-bright font-medium text-sm mb-1.5">
+                      <div className="evidence-step">
+                        <div className="evidence-step-label">
                           <ShieldCheck size={14} />
                           Verify the answer
                         </div>
-                        <p className="text-xs leading-relaxed text-gray-400 m-0">
+                        <p className="evidence-step-description">
                           Returns sources, calculations, confidence signals, and verification status for review.
                         </p>
                       </div>
                     </div>
                   )}
 
-                  <div className="flex flex-wrap items-center justify-center gap-3 mb-6 text-xs text-muted">
+                  <div className="flex flex-wrap items-center gap-3 mb-5 text-xs text-muted">
                     <span>Designed for research and testing, not investment advice.</span>
                     <button
                       type="button"
@@ -798,7 +910,7 @@ function Workbench() {
                     </button>
                   </div>
 
-                  <div data-tour="suggestions" className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 w-full">
+                  <div data-tour="suggestions" className="flex flex-col gap-2 w-full">
                      {mode === 'graph' ? (
                        <>
                          <button onClick={() => {
@@ -806,7 +918,7 @@ function Workbench() {
                            if (import.meta.env.VITE_POSTHOG_KEY) {
                              getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'micron_relationships', mode }));
                            }
-                         }} className="text-left px-3 sm:px-4 py-2.5 sm:py-3 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
+                         }} className="w-full text-left px-3 sm:px-4 py-2.5 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
                            "What are Micron's key relationships?"
                          </button>
                          <button onClick={() => {
@@ -814,7 +926,7 @@ function Workbench() {
                            if (import.meta.env.VITE_POSTHOG_KEY) {
                              getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'nvidia_suppliers', mode }));
                            }
-                         }} className="text-left px-3 sm:px-4 py-2.5 sm:py-3 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
+                         }} className="w-full text-left px-3 sm:px-4 py-2.5 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
                            "Show me NVIDIA's suppliers and partners"
                          </button>
                        </>
@@ -825,7 +937,7 @@ function Workbench() {
                         if (import.meta.env.VITE_POSTHOG_KEY) {
                           getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'nvidia_revenue', mode }));
                         }
-                      }} className="text-left px-3 sm:px-4 py-2.5 sm:py-3 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
+                      }} className="w-full text-left px-3 sm:px-4 py-2.5 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
                          "What was NVIDIA's total revenue?"
                       </button>
                       <button onClick={() => {
@@ -833,7 +945,7 @@ function Workbench() {
                         if (import.meta.env.VITE_POSTHOG_KEY) {
                           getPosthog().then(p => p.capture('suggestion_click', { suggestion: 'micron_margin', mode }));
                         }
-                      }} className="text-left px-3 sm:px-4 py-2.5 sm:py-3 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
+                      }} className="w-full text-left px-3 sm:px-4 py-2.5 glass-button text-[13px] sm:text-sm text-secondary hover:text-primary">
                          "Did Micron's gross margin improve?"
                       </button>
                        </>
@@ -845,13 +957,13 @@ function Workbench() {
               {messages.map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`flex gap-2 sm:gap-3 md:gap-4 max-w-[95%] sm:max-w-[90%] md:max-w-[88%] ${
-                    msg.role === 'user' ? 'self-end flex-row-reverse' : 'self-start'
+                  className={`flex gap-2 sm:gap-3 md:gap-4 w-full ${
+                    msg.role === 'user' ? 'self-end flex-row-reverse max-w-[78%]' : 'self-start max-w-[96%] lg:max-w-[88%]'
                   }`}
                 >
                   {/* Avatar */}
                   <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${
-                     msg.role === 'user' ? 'bg-accent/20 border-accent/35 text-white shadow-[0_0_18px_rgba(139,92,246,0.18)]' : 'glass-sm text-accent'
+                     msg.role === 'user' ? 'bg-accent-fill border-accent-fill text-white' : 'bg-surface border-border text-accent'
                   }`}>
                     {msg.role === 'user' ? <Database size={13} /> : <Search size={13} />}
                   </div>
@@ -979,10 +1091,12 @@ function Workbench() {
                             </div>
                             <div className="bg-background border border-border/50 rounded-lg overflow-hidden overflow-x-auto">
                               {msg.triples.map((triple, i) => (
-                                <div
+                                <button
+                                  type="button"
                                   key={i}
-                                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-[13px] font-mono cursor-pointer transition-colors hover:bg-accent/8 min-w-0 ${i % 2 === 0 ? 'bg-surface/20' : ''} ${i > 0 ? 'border-t border-border/30' : ''}`}
-                                  onClick={() => {
+                                  className={`flex w-full items-center gap-1.5 border-x-0 border-b-0 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-left text-[11px] sm:text-[13px] font-mono cursor-pointer transition-colors hover:bg-accent/8 min-w-0 ${i % 2 === 0 ? 'bg-surface/20' : 'bg-transparent'} ${i > 0 ? 'border-t border-border/30' : 'border-t-0'}`}
+                                  onClick={(event) => {
+                                    graphReturnFocusRef.current = event.currentTarget;
                                     setActiveTriples(msg.triples!);
                                     setOriginalTriples(msg.triples!);
                                     setModalTicker('');
@@ -998,7 +1112,7 @@ function Workbench() {
                                   <span className="text-accent text-[10px] sm:text-[11px] px-1 sm:px-1.5 py-0.5 bg-accent/8 rounded border border-accent/15 whitespace-nowrap flex-shrink-0">{triple.predicate}</span>
                                   <span className="text-muted flex-shrink-0">&rarr;</span>
                                   <span className="text-accent-bright truncate flex-shrink min-w-0">{triple.object}</span>
-                                </div>
+                                </button>
                               ))}
                             </div>
 
@@ -1120,17 +1234,21 @@ function Workbench() {
               ))}
 
               {loading && (
-                <div className="flex gap-4 max-w-[88%] self-start animate-in slide-in-from-bottom-2 duration-300">
-                  <div className="w-8 h-8 rounded-lg glass-sm text-accent flex items-center justify-center">
+                <div className="flex gap-4 w-full max-w-[88%] self-start animate-in slide-in-from-bottom-2 duration-200" role="status" aria-live="polite">
+                  <div className="w-8 h-8 rounded-lg bg-surface border border-border text-accent flex items-center justify-center">
                     <Search size={14} className="animate-pulse" />
                   </div>
-                  <div className="px-5 py-3 rounded-xl rounded-tl-sm glass text-gray-400 flex items-center gap-2.5 text-sm">
-                    <div className="flex gap-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-accent/50 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-1.5 h-1.5 rounded-full bg-accent/50 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-1.5 h-1.5 rounded-full bg-accent/50 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div className="flex-1 max-w-2xl px-5 py-4 rounded-xl rounded-tl-sm bg-surface-elevated border border-border text-secondary text-sm">
+                    <div className="mb-3 font-medium text-primary">
+                      {PIPELINE_STEPS.find(({ key }) => pipelineStatus[key] === 'pending')?.key === 'retrieval'
+                        ? 'Retrieving filing sections'
+                        : 'Preparing an evidence-backed answer'}
                     </div>
-                    Thinking...
+                    <div className="space-y-2" aria-hidden="true">
+                      <div className="h-2 w-11/12 rounded bg-border-subtle animate-pulse" />
+                      <div className="h-2 w-4/5 rounded bg-border-subtle animate-pulse" />
+                      <div className="h-2 w-3/5 rounded bg-border-subtle animate-pulse" />
+                    </div>
                   </div>
                 </div>
               )}
@@ -1139,13 +1257,15 @@ function Workbench() {
             </div>
 
             {/* Input bar (hidden on the empty state, where the front-and-center composer is shown) */}
-            <div className={`px-2 sm:px-3 md:px-4 lg:px-8 py-2 sm:py-3 md:py-5 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/95 to-transparent flex-shrink-0 sticky bottom-0 z-20 pointer-events-none${messages.length === 0 ? ' hidden' : ''}`}>
+            <div className={`px-3 md:px-6 lg:px-8 py-3 bg-background border-t border-border-subtle flex-shrink-0 sticky bottom-0 z-20 pointer-events-none${messages.length === 0 ? ' hidden' : ''}`}>
               <form
                 onSubmit={handleSubmit}
-                className="max-w-4xl mx-auto flex items-center glass-input pointer-events-auto"
+                className="max-w-4xl mx-auto flex items-center glass-input p-1.5 pointer-events-auto"
               >
                 <input
-                  className="flex-1 bg-transparent border-0 text-white placeholder-gray-500 px-2.5 sm:px-3.5 md:px-4 py-2.5 sm:py-3 text-[13px] sm:text-sm outline-none w-full min-w-0"
+                  name="query"
+                  aria-label="Research question"
+                  className="flex-1 bg-transparent border-0 text-primary placeholder-muted px-2.5 sm:px-3.5 md:px-4 py-2.5 text-[13px] sm:text-sm outline-none w-full min-w-0"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={
@@ -1162,11 +1282,12 @@ function Workbench() {
                 <button
                   type="submit"
                   disabled={loading || !input.trim()}
-                  className="fintech-button px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 disabled:opacity-40 disabled:cursor-not-allowed text-[13px] sm:text-sm ml-1 sm:ml-1.5 md:ml-2 shrink-0"
+                  className="fintech-button px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 text-[13px] sm:text-sm ml-1 sm:ml-1.5 md:ml-2 shrink-0"
                 >
                   <span className="hidden sm:inline">Send</span> <Send size={14} />
                 </button>
               </form>
+              <div className="max-w-4xl mx-auto mt-1.5 text-right text-[10px] text-muted pointer-events-auto hidden sm:block">Enter to send</div>
             </div>
           </div>
         )}
@@ -1176,15 +1297,25 @@ function Workbench() {
       </main>
       {/* Knowledge Graph Modal */}
       {graphModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+        <dialog
+          ref={graphDialogRef}
+          aria-labelledby="graph-dialog-title"
+          onCancel={(event) => {
+            event.preventDefault();
+            closeGraphModal();
+          }}
+          className="fixed inset-0 z-[100] m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-0"
+        >
           <div
-            className="absolute inset-0 bg-black/80 backdrop-blur-md"
-            onClick={closeGraphModal}
-          />
-          <div className="relative w-full max-w-6xl h-full max-h-[800px] glass-modal overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+            className="flex h-full w-full items-center justify-center bg-black/80 p-4 backdrop-blur-md md:p-8"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) closeGraphModal();
+            }}
+          >
+            <div className="relative w-full max-w-6xl h-full max-h-[800px] glass-modal overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
             <header className="px-5 py-3.5 glass-header flex items-center justify-between gap-4 flex-wrap">
               <div>
-                <h3 className="text-lg font-semibold text-primary flex items-center gap-2">
+                <h3 id="graph-dialog-title" className="text-lg font-semibold text-primary flex items-center gap-2">
                   <Network className="text-accent" size={18} />
                   Knowledge Graph Visualization
                 </h3>
@@ -1207,7 +1338,9 @@ function Workbench() {
                   </select>
                 </div>
                 <button
+                  autoFocus
                   onClick={closeGraphModal}
+                  aria-label="Close knowledge graph"
                   className="p-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer transition-colors"
                 >
                   <X size={20} />
@@ -1229,6 +1362,7 @@ function Workbench() {
                     <span className="text-[10px] uppercase tracking-[0.12em] text-muted font-semibold">Source evidence</span>
                     <button
                       onClick={() => { setEvidenceSel(null); setEvidence(null); }}
+                      aria-label="Close source evidence"
                       className="text-secondary hover:text-primary bg-transparent border-0 cursor-pointer"
                     >
                       <X size={14} />
@@ -1278,8 +1412,9 @@ function Workbench() {
             <footer className="px-5 py-3 border-t border-border bg-surface/20 text-[11px] text-muted">
               Interactive node-edge graph. Drag nodes to rearrange. Click an edge/node for its filing source. Scroll to zoom.
             </footer>
+            </div>
           </div>
-        </div>
+        </dialog>
       )}
 
       {/* Conjoint entry gate — first visit: standard vs personalized-by-role */}

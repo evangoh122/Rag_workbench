@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, X } from 'lucide-react';
 
@@ -21,11 +21,7 @@ function acked(): boolean {
  */
 export default function AnalyticsNotice() {
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!acked()) setOpen(true);
-  }, []);
+  const [open, setOpen] = useState(() => !acked());
 
   if (!open) return null;
 
@@ -39,15 +35,19 @@ export default function AnalyticsNotice() {
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[200] flex justify-center px-3 pb-3 pointer-events-none">
-      <div className="pointer-events-auto w-full max-w-2xl flex items-start gap-3 rounded-xl border border-border/60 bg-surface/95 backdrop-blur-md px-4 py-3 shadow-lg">
+    <div className="fixed inset-x-0 bottom-0 z-[200] flex justify-center px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pointer-events-none">
+      <div
+        role="status"
+        aria-label="Analytics notice"
+        className="pointer-events-auto w-full max-w-xl flex items-start gap-3 rounded-xl border border-border bg-surface px-3 sm:px-4 py-3 shadow-lg"
+      >
         <span className="mt-0.5 text-accent-bright shrink-0">
           <BarChart3 size={16} />
         </span>
-        <p className="text-[12.5px] text-secondary leading-relaxed m-0 flex-1">
-          This application uses analytics to understand feature usage and improve the experience. We
-          collect limited usage data and do not use it for advertising. By continuing, you acknowledge
-          this collection. See our{' '}
+        <p className="text-xs sm:text-[12.5px] text-secondary leading-relaxed m-0 flex-1">
+          <span className="sm:hidden">Limited analytics help improve this app. No advertising use. </span>
+          <span className="hidden sm:inline">This application uses limited analytics to understand feature usage and improve the experience. We do not use this data for advertising. </span>
+          See our{' '}
           <button
             onClick={() => navigate('/privacy')}
             className="text-accent-bright hover:text-accent underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer"
@@ -59,7 +59,7 @@ export default function AnalyticsNotice() {
         <button
           onClick={dismiss}
           aria-label="Dismiss analytics notice"
-          className="shrink-0 -mr-1 -mt-1 p-1 rounded-md text-secondary/60 hover:text-primary hover:bg-surface-elevated transition-colors bg-transparent border-0 cursor-pointer"
+          className="shrink-0 -mr-1 -mt-1 p-2 rounded-md text-secondary hover:text-primary hover:bg-surface-elevated transition-colors bg-transparent border-0 cursor-pointer"
         >
           <X size={15} />
         </button>
