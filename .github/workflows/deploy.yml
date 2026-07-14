@@ -146,6 +146,7 @@ jobs:
           git config user.email "deploy@ci"
           git config user.name "deploy-ci"
           git checkout --orphan hf-deploy
+          rm -rf docs/images
           git add -A
           git commit -q -m "Deploy ${GITHUB_SHA::7}"
           git push hf hf-deploy:main --force
