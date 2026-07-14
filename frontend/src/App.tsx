@@ -110,6 +110,9 @@ function Workbench() {
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>({});
   const [ticker, _setTicker] = useState('MU');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const sidebarCloseRef = useRef<HTMLButtonElement>(null);
   const [feedbackSent, setFeedbackSent] = useState<Set<number>>(new Set());
   // Conjoint personalization. `prefs` (arm/role/answer-experience levels) drives
   // both the chat presentation and whether role-based answers are requested.
@@ -117,6 +120,47 @@ function Workbench() {
   const [gateOpen, setGateOpen] = useState<boolean>(() => loadConjointPrefs() === null);
   const [surveyOpen, setSurveyOpen] = useState(false);
   const [surveyPrompted, setSurveyPrompted] = useState<boolean>(() => hasCompletedConjoint());
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const handleChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarOpen || isDesktop) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const focusFrame = window.requestAnimationFrame(() => sidebarCloseRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSidebarOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const drawer = sidebarRef.current;
+      if (!drawer) return;
+      const focusable = Array.from(
+        drawer.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), select, input, textarea, [tabindex]:not([tabindex="-1"])')
+      ).filter((element) => !element.hasAttribute('hidden'));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', handleKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [sidebarOpen, isDesktop]);
   // Personalization toggles derived from prefs (standard/control => all shown).
   const showEvidence = prefs?.evidence !== 'text_only';
   const showExplain = prefs?.answer_style !== 'direct';
@@ -124,6 +168,8 @@ function Workbench() {
   const roleArg =
     prefs?.arm === 'treatment' && prefs?.answer_basis === 'role_based' ? prefs?.role ?? null : null;
   const [graphModalOpen, setGraphModalOpen] = useState(false);
+  const graphDialogRef = useRef<HTMLDialogElement>(null);
+  const graphReturnFocusRef = useRef<HTMLButtonElement | null>(null);
   const [activeTriples, setActiveTriples] = useState<any[]>([]);
   const [originalTriples, setOriginalTriples] = useState<any[]>([]);
   const [modalTicker, setModalTicker] = useState('');
@@ -134,6 +180,15 @@ function Workbench() {
   const [evidenceSel, setEvidenceSel] = useState<GraphSelection | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const dialog = graphDialogRef.current;
+    if (!graphModalOpen || !dialog) return;
+    if (!dialog.open) dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+    };
+  }, [graphModalOpen]);
   // Guided coach-mark tour for the chat workbench. Auto-runs once on the first
   // visit to the chat view (after the disclaimer + conjoint gate are cleared);
   // the header button replays it on demand.
@@ -154,9 +209,12 @@ function Workbench() {
   };
 
   const closeGraphModal = () => {
+    const returnTarget = graphReturnFocusRef.current;
+    graphDialogRef.current?.close();
     setGraphModalOpen(false);
     setEvidence(null);
     setEvidenceSel(null);
+    window.requestAnimationFrame(() => returnTarget?.focus());
   };
 
   const handleModalTickerChange = (ticker: string) => {
@@ -184,7 +242,7 @@ function Workbench() {
   };
 
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > 0) scrollToBottom();
   }, [messages]);
 
   // Once the user has engaged (≥3 assistant answers), prompt the end-of-session
@@ -311,17 +369,31 @@ function Workbench() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-primary font-sans">
+    <div className="flex h-dvh w-full overflow-hidden bg-background text-primary font-sans">
+      <a
+        href="#workbench-content"
+        className="skip-link"
+        tabIndex={!isDesktop && sidebarOpen ? -1 : 0}
+        aria-hidden={!isDesktop && sidebarOpen ? true : undefined}
+      >
+        Skip to main content
+      </a>
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
-        <div 
+        <button
+          type="button"
+          aria-label="Close navigation overlay"
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar Navigation */}
-      <aside className={`
+      <aside
+        ref={sidebarRef}
+        aria-label="RAG Workbench"
+        {...(!isDesktop && !sidebarOpen ? { inert: true, 'aria-hidden': true } : {})}
+        className={`
         fixed inset-y-0 left-0 z-50 w-72 lg:w-[248px] glass-sidebar flex flex-col px-4 py-5
         transition-transform duration-300 ease-out lg:relative lg:translate-x-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -341,6 +413,7 @@ function Workbench() {
             <h2 className="m-0 text-lg font-semibold text-primary tracking-tight hover:text-accent-bright transition-colors">RAG Workbench</h2>
           </button>
           <button
+            ref={sidebarCloseRef}
             type="button"
             aria-label="Close navigation"
             className="lg:hidden p-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer"
@@ -538,7 +611,12 @@ function Workbench() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full min-w-0 bg-background relative">
+      <main
+        id="workbench-content"
+        tabIndex={-1}
+        {...(!isDesktop && sidebarOpen ? { inert: true, 'aria-hidden': true } : {})}
+        className="flex-1 flex flex-col h-full min-w-0 bg-background relative"
+      >
         {/* Mobile Header Toggle */}
           <div className="lg:hidden flex items-center px-3 py-2.5 glass-header sticky top-0 z-30 flex-shrink-0">
           <button
@@ -728,13 +806,13 @@ function Workbench() {
             {/* Chat area */}
             <div className="flex-1 overflow-y-auto px-3 md:px-6 lg:px-8 py-5 md:py-8 flex flex-col gap-4 sm:gap-6 scroll-smooth pb-12 sm:pb-16">
               {messages.length === 0 && (
-                <div className="flex flex-col items-start justify-center min-h-full text-left w-full max-w-3xl mx-auto py-6">
+                <div className="flex flex-col items-start justify-start md:justify-center min-h-full text-left w-full max-w-3xl mx-auto py-6">
                   <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center mb-5 border border-accent/20">
                     <MessageSquare size={28} className="text-accent" />
                   </div>
-                  <h3 className="text-xl font-semibold text-primary mb-2.5 tracking-tight">
+                  <h2 className="text-xl font-semibold text-primary mb-2.5 tracking-tight">
                     Financial research with an audit trail
-                  </h3>
+                  </h2>
                   <p className="text-secondary text-sm leading-relaxed max-w-[68ch] mb-6 text-pretty">
                     {mode === 'auditable'
                       ? 'RAG Workbench helps analysts question SEC filings in plain English. Each answer connects filing excerpts, structured XBRL facts, deterministic calculations, and verification results so you can inspect the evidence instead of trusting a black-box response.'
@@ -750,7 +828,7 @@ function Workbench() {
                     className="w-full flex items-center glass-input p-1.5"
                   >
                     <input
-                      autoFocus
+                      autoFocus={isDesktop}
                       name="query"
                       aria-label="Research question"
                       className="flex-1 bg-transparent border-0 text-primary placeholder-muted px-3 sm:px-4 py-3 text-[14px] sm:text-[15px] outline-none w-full min-w-0"
@@ -1013,10 +1091,12 @@ function Workbench() {
                             </div>
                             <div className="bg-background border border-border/50 rounded-lg overflow-hidden overflow-x-auto">
                               {msg.triples.map((triple, i) => (
-                                <div
+                                <button
+                                  type="button"
                                   key={i}
-                                  className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-[13px] font-mono cursor-pointer transition-colors hover:bg-accent/8 min-w-0 ${i % 2 === 0 ? 'bg-surface/20' : ''} ${i > 0 ? 'border-t border-border/30' : ''}`}
-                                  onClick={() => {
+                                  className={`flex w-full items-center gap-1.5 border-x-0 border-b-0 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-left text-[11px] sm:text-[13px] font-mono cursor-pointer transition-colors hover:bg-accent/8 min-w-0 ${i % 2 === 0 ? 'bg-surface/20' : 'bg-transparent'} ${i > 0 ? 'border-t border-border/30' : 'border-t-0'}`}
+                                  onClick={(event) => {
+                                    graphReturnFocusRef.current = event.currentTarget;
                                     setActiveTriples(msg.triples!);
                                     setOriginalTriples(msg.triples!);
                                     setModalTicker('');
@@ -1032,7 +1112,7 @@ function Workbench() {
                                   <span className="text-accent text-[10px] sm:text-[11px] px-1 sm:px-1.5 py-0.5 bg-accent/8 rounded border border-accent/15 whitespace-nowrap flex-shrink-0">{triple.predicate}</span>
                                   <span className="text-muted flex-shrink-0">&rarr;</span>
                                   <span className="text-accent-bright truncate flex-shrink min-w-0">{triple.object}</span>
-                                </div>
+                                </button>
                               ))}
                             </div>
 
@@ -1217,15 +1297,25 @@ function Workbench() {
       </main>
       {/* Knowledge Graph Modal */}
       {graphModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+        <dialog
+          ref={graphDialogRef}
+          aria-labelledby="graph-dialog-title"
+          onCancel={(event) => {
+            event.preventDefault();
+            closeGraphModal();
+          }}
+          className="fixed inset-0 z-[100] m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-0"
+        >
           <div
-            className="absolute inset-0 bg-black/80 backdrop-blur-md"
-            onClick={closeGraphModal}
-          />
-          <div className="relative w-full max-w-6xl h-full max-h-[800px] glass-modal overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+            className="flex h-full w-full items-center justify-center bg-black/80 p-4 backdrop-blur-md md:p-8"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) closeGraphModal();
+            }}
+          >
+            <div className="relative w-full max-w-6xl h-full max-h-[800px] glass-modal overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
             <header className="px-5 py-3.5 glass-header flex items-center justify-between gap-4 flex-wrap">
               <div>
-                <h3 className="text-lg font-semibold text-primary flex items-center gap-2">
+                <h3 id="graph-dialog-title" className="text-lg font-semibold text-primary flex items-center gap-2">
                   <Network className="text-accent" size={18} />
                   Knowledge Graph Visualization
                 </h3>
@@ -1248,7 +1338,9 @@ function Workbench() {
                   </select>
                 </div>
                 <button
+                  autoFocus
                   onClick={closeGraphModal}
+                  aria-label="Close knowledge graph"
                   className="p-2 text-secondary hover:text-primary bg-transparent border-0 cursor-pointer transition-colors"
                 >
                   <X size={20} />
@@ -1270,6 +1362,7 @@ function Workbench() {
                     <span className="text-[10px] uppercase tracking-[0.12em] text-muted font-semibold">Source evidence</span>
                     <button
                       onClick={() => { setEvidenceSel(null); setEvidence(null); }}
+                      aria-label="Close source evidence"
                       className="text-secondary hover:text-primary bg-transparent border-0 cursor-pointer"
                     >
                       <X size={14} />
@@ -1319,8 +1412,9 @@ function Workbench() {
             <footer className="px-5 py-3 border-t border-border bg-surface/20 text-[11px] text-muted">
               Interactive node-edge graph. Drag nodes to rearrange. Click an edge/node for its filing source. Scroll to zoom.
             </footer>
+            </div>
           </div>
-        </div>
+        </dialog>
       )}
 
       {/* Conjoint entry gate — first visit: standard vs personalized-by-role */}

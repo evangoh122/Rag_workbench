@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ShieldAlert, Info } from 'lucide-react';
 
@@ -27,11 +27,17 @@ export const DISCLAIMER_ACK_EVENT = 'rw:disclaimer-ack';
  * every route. Requires an explicit acknowledgement rather than a passive close.
  */
 export function DisclaimerModal() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => !acked());
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    if (!acked()) setOpen(true);
-  }, []);
+    const dialog = dialogRef.current;
+    if (!open || !dialog) return;
+    if (!dialog.open) dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -41,18 +47,25 @@ export function DisclaimerModal() {
     } catch {
       /* ignore */
     }
+    dialogRef.current?.close();
     setOpen(false);
     window.dispatchEvent(new Event(DISCLAIMER_ACK_EVENT));
   };
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-lg glass-modal p-6 sm:p-7 animate-in fade-in zoom-in-95 duration-200">
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="disclaimer-title"
+      onCancel={(event) => event.preventDefault()}
+      className="fixed inset-0 z-[300] m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-0"
+    >
+      <div className="flex h-full w-full items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-lg glass-modal p-6 sm:p-7 animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 rounded-xl bg-amber-500/12 border border-amber-500/25 text-amber-400 shrink-0">
             <ShieldAlert size={20} />
           </div>
-          <h2 className="text-lg font-semibold text-primary tracking-tight m-0">
+          <h2 id="disclaimer-title" className="text-lg font-semibold text-primary tracking-tight m-0">
             Not investment advice
           </h2>
         </div>
@@ -75,13 +88,15 @@ export function DisclaimerModal() {
         </div>
 
         <button
+          autoFocus
           onClick={dismiss}
           className="fintech-button mt-6 w-full justify-center py-3 text-sm active:scale-[0.99]"
         >
           I understand
         </button>
+        </div>
       </div>
-    </div>
+    </dialog>
   );
 }
 

@@ -33,10 +33,11 @@ export default function PortfolioHome() {
 
   return (
     <div className="min-h-screen bg-background text-primary font-sans selection:bg-accent/20 selection:text-white flex flex-col">
+      <a href="#portfolio-content" className="skip-link">Skip to main content</a>
       <header className="border-b border-border/40 bg-background/72 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-[#60A5FA] flex items-center justify-center font-mono font-bold text-white shadow-[0_0_18px_rgba(139,92,246,0.28)]">
+            <div className="w-8 h-8 rounded-lg bg-accent-fill flex items-center justify-center font-mono font-bold text-white">
               E
             </div>
             <span className="font-semibold text-base tracking-tight">Evan Goh</span>
@@ -69,8 +70,8 @@ export default function PortfolioHome() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 md:py-20">
-        <section className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10 lg:gap-16 items-end mb-18 md:mb-28">
+      <main id="portfolio-content" tabIndex={-1} className="flex-1 max-w-6xl w-full mx-auto px-5 sm:px-6 py-12 md:py-20">
+        <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-10 lg:gap-16 items-center mb-18 md:mb-28">
           <div className="max-w-3xl pt-6 md:pt-10">
             <div className="flex items-center gap-3 mb-6">
               <span className="editorial-rule" />
@@ -100,35 +101,27 @@ export default function PortfolioHome() {
             </div>
           </div>
 
-          <div className="product-glass-preview rounded-[1.4rem] p-4 lg:mb-2 relative overflow-hidden">
-            <div className="absolute inset-x-8 -top-10 h-20 bg-accent/20 blur-3xl" />
-            <div className="rounded-2xl bg-background/70 border border-white/8 p-3 rotate-[-2deg] shadow-2xl">
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-accent" />
-                  <span className="h-2 w-2 rounded-full bg-white/20" />
-                  <span className="h-2 w-2 rounded-full bg-white/10" />
-                </div>
-                <span className="text-[10px] font-mono text-secondary">audit trail</span>
-              </div>
-              <div className="space-y-3">
-                <div className="h-8 rounded-lg bg-white/[0.04] border border-white/[0.06]" />
-                <div className="grid grid-cols-[1fr_4rem] gap-3">
-                  <div className="h-24 rounded-xl bg-accent/10 border border-accent/15" />
-                  <div className="space-y-2">
-                    <div className="h-5 rounded bg-white/[0.06]" />
-                    <div className="h-5 rounded bg-white/[0.04]" />
-                    <div className="h-5 rounded bg-white/[0.04]" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="h-14 rounded-lg bg-white/[0.045] border border-white/[0.06]" />
-                  <div className="h-14 rounded-lg bg-white/[0.035] border border-white/[0.06]" />
-                  <div className="h-14 rounded-lg bg-white/[0.045] border border-white/[0.06]" />
-                </div>
-              </div>
+          <figure className="portrait-card relative m-0 max-w-[360px] sm:max-w-[400px] lg:max-w-none">
+            <div className="portrait-frame">
+              <img
+                src="/evan-goh.jpg"
+                alt="Evan Goh in a grey suit"
+                width="800"
+                height="799"
+                className="block w-full aspect-square object-cover object-center"
+              />
             </div>
-          </div>
+            <figcaption className="flex items-center justify-between gap-4 border-x border-b border-border bg-surface px-4 py-3 rounded-b-xl">
+              <div>
+                <p className="m-0 text-sm font-semibold text-primary">Evan Goh</p>
+                <p className="m-0 mt-0.5 text-xs text-secondary">AI product &amp; systems builder</p>
+              </div>
+              <span className="inline-flex items-center gap-2 text-xs font-medium text-secondary whitespace-nowrap">
+                <span className="h-2 w-2 rounded-full bg-bullish" aria-hidden="true" />
+                Singapore
+              </span>
+            </figcaption>
+          </figure>
         </section>
 
         <section id="profile" className="mb-16 md:mb-24 scroll-mt-20">
