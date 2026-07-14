@@ -68,12 +68,16 @@ export default function DataTable({ table }: { table: ParsedTable }) {
                   <th
                     key={h.id}
                     className={`${alignClass(align)} data-table-th`}
-                    onClick={h.column.getToggleSortingHandler()}
                     aria-sort={
                       sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'
                     }
                   >
-                    <span className="data-table-th-inner">
+                    <button
+                      type="button"
+                      className="data-table-sort-button"
+                      onClick={h.column.getToggleSortingHandler()}
+                      aria-label={`Sort by ${String(h.column.columnDef.header)}${sorted ? `, currently ${sorted === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+                    >
                       {flexRender(h.column.columnDef.header, h.getContext())}
                       {sorted === 'asc' ? (
                         <ChevronUp size={12} />
@@ -82,7 +86,7 @@ export default function DataTable({ table }: { table: ParsedTable }) {
                       ) : (
                         <ChevronsUpDown size={12} className="data-table-sort-idle" />
                       )}
-                    </span>
+                    </button>
                   </th>
                 );
               })}
