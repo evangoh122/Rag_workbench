@@ -44,6 +44,8 @@ Use a single dark graphite theme for this pass. Keep violet as the existing bran
 Rules:
 
 - Violet is the only brand/action accent across the product. Use the bright foreground tokens for violet text and icons on graphite; use the darker fill tokens only behind white text in solid CTAs and user messages.
+- Keep idle control borders graphite. On focus, move the border to the bright violet foreground token with only a restrained 1px halo; do not use a default glow.
+- Enabled primary actions use the solid accent fill with white text. Disabled actions remain fully opaque and legible, using a desaturated graphite fill, slate border, and muted label so they cannot be mistaken for an active CTA.
 - Green, red, amber, and blue are semantic only and always paired with text or an icon.
 - Use solid surfaces and separators by default. Reserve blur for the mobile overlay and modal backdrop.
 - Use one radius rule: 12px containers, 8px inputs and buttons, full pills only for compact status chips.
@@ -73,6 +75,7 @@ Rules:
 - Assistant responses should be wider than user prompts. Use a quiet surface for answers and the accent only for the user message or active state.
 - Response order: answer, key figures, citations, confidence/review state, then expandable trace and graph evidence.
 - Suggested questions should be compact action rows, not equal promotional cards.
+- Present Retrieve, Ground, and Verify as one numbered sequence with aligned label and description columns; stack each label above its description on narrow screens rather than splitting the steps into promotional cards.
 - Loading should use a response-shaped skeleton plus a plain-language status such as `Retrieving filing sections`.
 - Errors remain inline with retry and preserve the original query.
 

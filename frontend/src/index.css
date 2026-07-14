@@ -157,7 +157,7 @@
 
   .glass-input:focus-within {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 2px rgba(109, 91, 208, 0.22);
+    box-shadow: 0 0 0 1px rgba(169, 157, 248, 0.12);
   }
 
   /* Buttons */
@@ -184,8 +184,71 @@
     border-color: var(--color-accent-fill-hover);
   }
 
-  .fintech-button:active,
-  .btn-primary:active { transform: translateY(1px) scale(0.98); }
+  .fintech-button:not(:disabled):active,
+  .btn-primary:not(:disabled):active { transform: translateY(1px) scale(0.98); }
+
+  .fintech-button:disabled,
+  .btn-primary:disabled {
+    background: #242A34;
+    border-color: #353D49;
+    color: #9BA4B1;
+    opacity: 1;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* A single evidence sequence, with aligned labels and descriptions. */
+  .evidence-sequence {
+    counter-reset: evidence-step;
+  }
+
+  .evidence-step {
+    counter-increment: evidence-step;
+    display: grid;
+    grid-template-columns: 1.5rem minmax(9.75rem, 0.72fr) minmax(0, 1.6fr);
+    align-items: start;
+    gap: 0.75rem;
+    padding: 0.875rem;
+  }
+
+  .evidence-step::before {
+    content: "0" counter(evidence-step);
+    padding-top: 0.125rem;
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  .evidence-step-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    color: var(--color-accent-bright);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+  }
+
+  .evidence-step-description {
+    margin: 0;
+    color: var(--color-secondary);
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+  }
+
+  @media (max-width: 639px) {
+    .evidence-step {
+      grid-template-columns: 1.5rem minmax(0, 1fr);
+      row-gap: 0.375rem;
+    }
+
+    .evidence-step-description {
+      grid-column: 2;
+    }
+  }
 
   .glass-button,
   .btn-ghost {

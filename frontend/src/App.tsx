@@ -648,7 +648,7 @@ function Workbench() {
                   <button
                     type="submit"
                     disabled={loading || !input.trim()}
-                    className="fintech-button px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-[13px] sm:text-sm ml-1 sm:ml-1.5 md:ml-2 shrink-0"
+                    className="fintech-button px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 text-[13px] sm:text-sm ml-1 sm:ml-1.5 md:ml-2 shrink-0"
                   >
                     <span className="hidden sm:inline">Trace</span> <Send size={14} />
                   </button>
@@ -770,7 +770,7 @@ function Workbench() {
                     <button
                       type="submit"
                       disabled={loading || !input.trim()}
-                      className="fintech-button px-3 sm:px-5 py-3 disabled:opacity-40 disabled:cursor-not-allowed text-[13px] sm:text-sm ml-1.5 shrink-0"
+                      className="fintech-button px-3 sm:px-5 py-3 text-[13px] sm:text-sm ml-1.5 shrink-0"
                     >
                       <span className="hidden sm:inline">Try a query</span> <Send size={14} />
                     </button>
@@ -789,31 +789,31 @@ function Workbench() {
                   </div>
 
                   {mode === 'auditable' && (
-                    <div className="w-full mb-5 text-left divide-y divide-border-subtle rounded-xl border border-border bg-surface">
-                      <div className="flex gap-3 p-3.5">
-                        <div className="flex items-center gap-2 text-accent-bright font-medium text-sm mb-1.5">
+                    <div className="evidence-sequence w-full mb-5 text-left divide-y divide-border-subtle rounded-xl border border-border bg-surface">
+                      <div className="evidence-step">
+                        <div className="evidence-step-label">
                           <Search size={14} />
                           Retrieve evidence
                         </div>
-                        <p className="text-xs leading-relaxed text-secondary m-0 flex-1">
+                        <p className="evidence-step-description">
                           Finds relevant passages using hybrid semantic and keyword search across supported SEC filings.
                         </p>
                       </div>
-                      <div className="flex gap-3 p-3.5">
-                        <div className="flex items-center gap-2 text-accent-bright font-medium text-sm mb-1.5">
+                      <div className="evidence-step">
+                        <div className="evidence-step-label">
                           <Database size={14} />
                           Ground the numbers
                         </div>
-                        <p className="text-xs leading-relaxed text-secondary m-0 flex-1">
+                        <p className="evidence-step-description">
                           Uses structured XBRL facts and deterministic math for financial metrics and period comparisons.
                         </p>
                       </div>
-                      <div className="flex gap-3 p-3.5">
-                        <div className="flex items-center gap-2 text-accent-bright font-medium text-sm mb-1.5">
+                      <div className="evidence-step">
+                        <div className="evidence-step-label">
                           <ShieldCheck size={14} />
                           Verify the answer
                         </div>
-                        <p className="text-xs leading-relaxed text-secondary m-0 flex-1">
+                        <p className="evidence-step-description">
                           Returns sources, calculations, confidence signals, and verification status for review.
                         </p>
                       </div>
@@ -1202,7 +1202,7 @@ function Workbench() {
                 <button
                   type="submit"
                   disabled={loading || !input.trim()}
-                  className="fintech-button px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 disabled:opacity-40 disabled:cursor-not-allowed text-[13px] sm:text-sm ml-1 sm:ml-1.5 md:ml-2 shrink-0"
+                  className="fintech-button px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 text-[13px] sm:text-sm ml-1 sm:ml-1.5 md:ml-2 shrink-0"
                 >
                   <span className="hidden sm:inline">Send</span> <Send size={14} />
                 </button>

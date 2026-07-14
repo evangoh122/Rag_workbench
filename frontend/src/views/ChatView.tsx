@@ -330,7 +330,7 @@ const ChatView: React.FC<ChatViewProps> = ({
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="fintech-button flex items-center justify-center px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed gap-2 ml-2"
+            className="fintech-button flex items-center justify-center px-6 py-3 gap-2 ml-2"
           >
             Send <Send size={16} />
           </button>

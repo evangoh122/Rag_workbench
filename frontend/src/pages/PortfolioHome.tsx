@@ -141,10 +141,10 @@ export default function PortfolioHome() {
             <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl pointer-events-none" />
             <h3 className="text-base font-semibold text-primary mb-4 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-              Translation layer for AI transformation
+              From AI ideas to working systems
             </h3>
             <p className="text-sm text-secondary leading-7 font-light m-0 max-w-2xl">
-              I help turn vague AI ambition into systems people can operate: scoped workflows, inspectable outputs, evaluation loops, and enough product discipline that the result survives contact with real users.
+              I turn loosely defined AI opportunities into scoped workflows, inspectable outputs, and evaluation loops that teams can operate and improve.
             </p>
           </div>
         </section>
