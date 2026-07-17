@@ -234,8 +234,11 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
         for f in raw_facts:
             normalised = format_fact_for_display(f)
             key = (
-                normalised["concept"], normalised["value"], normalised["period"],
+                normalised["concept"], normalised["value"],
+                normalised["period_start"], normalised["period_end"],
+                normalised["unit"],
                 normalised["accession"],
+                normalised["frame"],
             )
             if key in seen:
                 continue

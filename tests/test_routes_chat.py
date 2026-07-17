@@ -92,6 +92,40 @@ def test_chat_auditable_rag_success():
         assert response.json()["answer"] == "Audit answer"
         assert response.json()["verification"]["status"] == "verified"
 
+
+@pytest.mark.usefixtures("mock_auth", "mock_guards")
+def test_chat_preserves_distinct_sec_fact_contexts():
+    base_fact = {
+        "ticker": "NVDA", "cik": "0001045810", "concept": "Revenues",
+        "value": 100.0, "unit": "USD", "period_end": "2024-12-31",
+        "form_type": "10-K", "accession": "0001045810-25-000023",
+        "filed": "2025-02-26",
+    }
+    result = {
+        "final_answer": "Audit answer", "retrieved_docs": [],
+        "xbrl_facts": [
+            {**base_fact, "period_start": "2024-01-01", "frame": "CY2024"},
+            {**base_fact, "period_start": "2024-04-01", "frame": "CY2024Q4"},
+        ],
+        "relevant_xbrl": [], "verification_status": "verified",
+        "verification_reasoning": "all good", "math_steps": [],
+        "status": {
+            "input": "success", "retrieval": "success", "classifier": "success",
+            "extraction": "success", "eval": "success", "math": "success",
+            "verification": "success", "output": "success",
+        },
+    }
+    with patch('api.routes.chat.run_auditable_rag', return_value=result):
+        response = client.post(
+            "/api/chat/auditable-rag",
+            json={"message": "Check NVDA revenue", "ticker": "NVDA"},
+        )
+
+    assert response.status_code == 200
+    facts = response.json()["xbrl_facts"]
+    assert len(facts) == 2
+    assert {fact["frame"] for fact in facts} == {"CY2024", "CY2024Q4"}
+
 def test_input_rail_blocking():
     app.dependency_overrides[get_read_api_key] = lambda: "test-key"
     with patch('api.routes.chat.check_input') as m_in:

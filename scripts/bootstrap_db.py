@@ -132,6 +132,9 @@ def create_tables(conn: duckdb.DuckDBPyConnection) -> None:
             frame       VARCHAR
         )
     """)
+    # CREATE TABLE IF NOT EXISTS does not evolve an existing bootstrap DB.
+    # Run this before the frame-aware insert path below.
+    conn.execute("ALTER TABLE xbrl_facts ADD COLUMN IF NOT EXISTS frame VARCHAR")
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_xbrl_ticker_concept
         ON xbrl_facts (ticker, concept)
