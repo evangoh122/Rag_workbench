@@ -52,6 +52,7 @@ class RefreshResponse(BaseModel):
 
 
 def _fetch_company_facts(cik: str) -> dict | None:
+    """Fetch one company's raw SEC companyfacts payload by zero-padded CIK."""
     url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
     headers = {"User-Agent": EDGAR_USER_AGENT}
     try:
@@ -67,6 +68,7 @@ def _fetch_company_facts(cik: str) -> dict | None:
 
 
 def _extract_facts(company_data: dict, ticker: str, cik: str) -> list[dict]:
+    """Extract supported annual XBRL facts while preserving SEC provenance."""
     facts_list = []
     us_gaap = company_data.get("facts", {}).get("us-gaap", {})
     for full_concept in KEY_CONCEPTS:
@@ -96,6 +98,7 @@ def _extract_facts(company_data: dict, ticker: str, cik: str) -> list[dict]:
 
 
 def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
+    """Create or migrate the admin ingestion tables and supporting indexes."""
     conn.execute("CREATE SEQUENCE IF NOT EXISTS xbrl_facts_seq START 1")
     conn.execute("CREATE SEQUENCE IF NOT EXISTS filing_chunks_seq START 1")
     conn.execute("""

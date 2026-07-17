@@ -4,6 +4,7 @@ from scripts.bootstrap_db import create_tables
 
 
 def test_create_tables_migrates_existing_xbrl_frame_column():
+    """Bootstrap table creation adds frame to a legacy XBRL schema."""
     conn = duckdb.connect(":memory:")
     conn.execute("CREATE SEQUENCE xbrl_facts_seq START 1")
     conn.execute("CREATE SEQUENCE filing_chunks_seq START 1")

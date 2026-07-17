@@ -26,6 +26,7 @@ COVERAGE = [
 
 
 def main() -> None:
+    """Refresh XBRL coverage tickers and print a compact ingestion summary."""
     conn = duckdb.connect(Config.DB_PATH)
     _ensure_tables(conn)
 

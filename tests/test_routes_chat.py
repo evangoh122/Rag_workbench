@@ -8,12 +8,14 @@ client = TestClient(app)
 
 @pytest.fixture
 def mock_auth():
+    """Override chat authentication with a stable test API key."""
     app.dependency_overrides[get_read_api_key] = lambda: "test-key"
     yield
     app.dependency_overrides = {}
 
 @pytest.fixture
 def mock_guards():
+    """Allow requests through input, dialog, and output guardrails."""
     with patch('api.routes.chat.check_input') as m_in, \
          patch('api.routes.chat.check_dialog') as m_dia, \
          patch('api.routes.chat.check_output') as m_out:
@@ -25,6 +27,7 @@ def mock_guards():
 
 @pytest.mark.usefixtures("mock_auth", "mock_guards")
 def test_chat_sql_success():
+    """SQL chat returns the generated answer for a valid request."""
     with patch('api.routes.chat.chat_sql') as mock_chat:
         mock_chat.return_value = {"type": "sql", "answer": "The revenue is $100M", "query": "SELECT..."}
         
@@ -34,6 +37,7 @@ def test_chat_sql_success():
 
 @pytest.mark.usefixtures("mock_auth", "mock_guards")
 def test_chat_rag_success():
+    """Basic RAG chat returns the retriever-generated answer."""
     with patch('api.routes.chat.ask_rag') as mock_rag:
         mock_rag.return_value = "RAG answer"
         
@@ -43,6 +47,7 @@ def test_chat_rag_success():
 
 @pytest.mark.usefixtures("mock_auth", "mock_guards")
 def test_chat_graph_rag_success():
+    """Graph RAG returns its answer and extracted entities."""
     with patch('api.routes.chat.run_graph_rag') as mock_graph:
         mock_graph.return_value = {
             "final_answer": "Graph answer",
@@ -57,6 +62,7 @@ def test_chat_graph_rag_success():
 
 @pytest.mark.usefixtures("mock_auth", "mock_guards")
 def test_chat_graph_rag_missing_ticker():
+    """Graph RAG rejects requests that omit the required ticker."""
     with patch('api.routes.chat.run_graph_rag') as mock_graph:
         response = client.post("/api/chat/graph-rag", json={"message": "explain AAPL", "ticker": ""})
         assert response.status_code == 400
@@ -64,6 +70,7 @@ def test_chat_graph_rag_missing_ticker():
 
 @pytest.mark.usefixtures("mock_auth", "mock_guards")
 def test_chat_auditable_rag_success():
+    """Auditable RAG returns answer and verification metadata."""
     with patch('api.routes.chat.run_auditable_rag') as mock_audit:
         mock_audit.return_value = {
             "final_answer": "Audit answer",
@@ -95,6 +102,7 @@ def test_chat_auditable_rag_success():
 
 @pytest.mark.usefixtures("mock_auth", "mock_guards")
 def test_chat_preserves_distinct_sec_fact_contexts():
+    """Auditable RAG keeps facts that differ by SEC context metadata."""
     base_fact = {
         "ticker": "NVDA", "cik": "0001045810", "concept": "Revenues",
         "value": 100.0, "unit": "USD", "period_end": "2024-12-31",
@@ -127,6 +135,7 @@ def test_chat_preserves_distinct_sec_fact_contexts():
     assert {fact["frame"] for fact in facts} == {"CY2024", "CY2024Q4"}
 
 def test_input_rail_blocking():
+    """A blocked input rail produces the expected client error."""
     app.dependency_overrides[get_read_api_key] = lambda: "test-key"
     with patch('api.routes.chat.check_input') as m_in:
         m_in.return_value = MagicMock(blocked=True, reason="Inappropriate content")
@@ -137,6 +146,7 @@ def test_input_rail_blocking():
     app.dependency_overrides = {}
 
 def test_output_rail_masking():
+    """Output-rail masking replaces sensitive generated content."""
     app.dependency_overrides[get_read_api_key] = lambda: "test-key"
     with patch('api.routes.chat.check_input') as m_in, \
          patch('api.routes.chat.check_dialog') as m_dia, \
