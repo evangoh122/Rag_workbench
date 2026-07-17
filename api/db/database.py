@@ -8,6 +8,7 @@ class DatabaseManager:
     _lock = threading.Lock()
 
     def __new__(cls):
+        """Return the process-wide database manager singleton."""
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super(DatabaseManager, cls).__new__(cls)
@@ -138,6 +139,7 @@ class DatabaseManager:
         return self.execute(sql, params)
 
     def close(self):
+        """Close and clear the shared main and review database connections."""
         with self._conn_lock:
             if self._conn:
                 self._conn.close()

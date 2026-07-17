@@ -25,18 +25,21 @@ def test_pick_value_keeps_zero():
 
 
 def test_pick_value_falls_back_to_val_only_when_value_missing():
+    """Value selection uses val only when the primary value is absent."""
     assert _pick_value({"val": 123}) == 123
     # 'value' present (even as 0) wins over 'val'
     assert _pick_value({"value": 0, "val": 999}) == 0
 
 
 def test_pick_value_none_when_both_absent():
+    """Value selection returns None when neither numeric key exists."""
     assert _pick_value({"concept": "X"}) is None
 
 
 # ── format_fact_for_display ─────────────────────────────────────────────────────
 
 def test_format_zero_value_is_verified_and_not_dropped():
+    """Formatting preserves a legitimate zero as a verified SEC value."""
     out = format_fact_for_display({
         "concept": "LongTermDebt", "value": 0, "unit": "USD", "period_end": "2024-09-28",
     })
@@ -47,6 +50,7 @@ def test_format_zero_value_is_verified_and_not_dropped():
 
 
 def test_format_maps_period_and_label():
+    """Formatting maps canonical display labels and reporting periods."""
     out = format_fact_for_display({
         "concept": "Revenues", "value": 30391000000, "unit": "USD", "period_end": "2024-09-28",
     })
@@ -56,12 +60,14 @@ def test_format_maps_period_and_label():
 
 
 def test_format_missing_value_is_unverified():
+    """Formatting marks a missing numeric value as unverified."""
     out = format_fact_for_display({"concept": "Revenues", "unit": "USD", "period_end": "2024-09-28"})
     assert out["value"] is None
     assert out["is_verified"] is False
 
 
 def test_format_preserves_exact_sec_fact_provenance():
+    """Formatting retains provenance and constructs exact SEC source URLs."""
     out = format_fact_for_display({
         "ticker": "NVDA",
         "cik": "1045810",
@@ -91,12 +97,14 @@ def test_format_preserves_exact_sec_fact_provenance():
 
 
 def test_period_falls_back_to_fiscal_year_when_period_end_is_empty():
+    """Period display falls back to fiscal year when no end date exists."""
     fact = {"fiscal_year": 2025, "fiscal_period": "FY"}
     assert get_fact_period(fact) == "FY2025"
     assert format_fact_for_display(fact)["period"] == "FY2025"
 
 
 def test_period_prefers_period_end_over_filing_date_and_fiscal_year():
+    """Period display prefers the fact end date over filing metadata."""
     fact = {
         "period_end": "2025-01-31",
         "filed": "2025-03-10",
@@ -106,11 +114,13 @@ def test_period_prefers_period_end_over_filing_date_and_fiscal_year():
 
 
 def test_period_prefers_fiscal_year_over_later_filing_date():
+    """Fiscal year outranks filing date when the fact end date is absent."""
     fact = {"period_end": None, "fiscal_year": 2025, "fiscal_period": "FY", "filed": "2026-02-01"}
     assert get_fact_period(fact) == "FY2025"
 
 
 def test_period_normalises_datetime_to_date_for_stable_deduplication():
+    """Period normalization removes time components for stable identities."""
     assert get_fact_period({"period_end": "2025-01-31T00:00:00"}) == "2025-01-31"
 
 
@@ -128,6 +138,7 @@ def test_rank_does_not_demote_zero_valued_fact_below_missing():
 
 
 def test_get_relevant_facts_includes_zero_value():
+    """Relevance filtering retains zero-valued facts."""
     facts = [{"concept": "LongTermDebt", "value": 0, "unit": "USD", "period_end": "2024-09-28"}]
     result = get_relevant_facts("What is the company's long-term debt?", facts)
     assert result["total"] == 1
@@ -136,6 +147,7 @@ def test_get_relevant_facts_includes_zero_value():
 
 
 def test_get_relevant_facts_empty():
+    """Relevance filtering returns an empty result for an empty corpus."""
     result = get_relevant_facts("anything", [])
     assert result["relevant"] == []
     assert result["total"] == 0
@@ -143,6 +155,7 @@ def test_get_relevant_facts_empty():
 
 
 def test_latest_query_keeps_only_facts_from_latest_fiscal_year():
+    """Latest intent restricts facts to the newest fiscal year."""
     facts = [
         {"concept": "Revenues", "value": 100, "period_end": "2023-12-31", "fiscal_year": 2023},
         {"concept": "Revenues", "value": 120, "period_end": "2024-12-31", "fiscal_year": 2024},
@@ -154,6 +167,7 @@ def test_latest_query_keeps_only_facts_from_latest_fiscal_year():
 
 
 def test_latest_query_uses_period_year_when_fiscal_year_is_missing():
+    """Latest intent derives the year from period when fiscal year is absent."""
     facts = [
         {"concept": "Revenues", "value": 100, "period_end": "2023-12-31"},
         {"concept": "Revenues", "value": 120, "period_end": "2024-12-31"},
@@ -164,6 +178,7 @@ def test_latest_query_uses_period_year_when_fiscal_year_is_missing():
 
 
 def test_general_query_preserves_multiple_years():
+    """General intent keeps multi-year facts for trend analysis."""
     facts = [
         {"concept": "Revenues", "value": 100, "period_end": "2023-12-31"},
         {"concept": "Revenues", "value": 120, "period_end": "2024-12-31"},
@@ -172,6 +187,7 @@ def test_general_query_preserves_multiple_years():
 
 
 def test_current_requires_a_complete_word():
+    """Latest-intent keywords match complete words rather than substrings."""
     facts = [
         {"concept": "Revenues", "value": 100, "period_end": "2023-12-31"},
         {"concept": "Revenues", "value": 120, "period_end": "2024-12-31"},
@@ -181,6 +197,7 @@ def test_current_requires_a_complete_word():
 
 
 def test_relevance_can_skip_period_filter_when_caller_already_applied_it():
+    """Callers can bypass redundant latest-period filtering."""
     facts = [
         {"concept": "Revenues", "value": 100, "period_end": "2023-12-31"},
         {"concept": "Revenues", "value": 120, "period_end": "2024-12-31"},

@@ -116,6 +116,7 @@ def _conversational_llm_call(message: str) -> str:
 
 @router.post("/sql", response_model=ChatResponse)
 async def chat_sql_endpoint(req: ChatRequest):
+    """Answer a validated chat request through the SQL query path."""
     await _apply_input_rails(req.message)
     try:
         result = chat_sql(req.message, req.history)
@@ -137,6 +138,7 @@ async def chat_sql_endpoint(req: ChatRequest):
 
 @router.post("/rag", response_model=ChatResponse)
 async def chat_rag_endpoint(req: ChatRequest):
+    """Answer a validated chat request through the basic RAG path."""
     await _apply_input_rails(req.message)
     try:
         answer = ask_rag(req.message)
@@ -159,6 +161,7 @@ async def chat_rag_endpoint(req: ChatRequest):
 
 @router.post("/graph-rag", response_model=ChatResponse)
 async def chat_graph_rag_endpoint(req: ChatRequest):
+    """Answer a validated ticker query through the graph-RAG path."""
     await _apply_input_rails(req.message)
     try:
         if not req.ticker:
@@ -185,6 +188,7 @@ async def chat_graph_rag_endpoint(req: ChatRequest):
 
 @router.post("/auditable-rag", response_model=ChatResponse)
 async def chat_auditable_rag_endpoint(req: ChatRequest):
+    """Return an evidence-rich RAG response with exact SEC provenance."""
     await _apply_input_rails(req.message)
     try:
         # Fast path: conversational messages bypass the full RAG pipeline
@@ -377,6 +381,7 @@ class FeedbackRequest(BaseModel):
 
 @router.post("/feedback", status_code=204)
 async def chat_feedback_endpoint(req: FeedbackRequest):
+    """Persist user feedback for a previously returned chat response."""
     import uuid
     vid = str(uuid.uuid4())
     did = req.message_id or vid

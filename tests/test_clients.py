@@ -15,6 +15,7 @@ from api.routes.admin import _extract_facts
 
 @patch("api.services.xbrl_client.requests.get")
 def test_fetch_company_facts(mock_get):
+    """Companyfacts client returns the SEC payload after a successful request."""
     # Mock response
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"cik": "12345", "facts": {"us-gaap": {}}}
@@ -29,6 +30,7 @@ def test_fetch_company_facts(mock_get):
 
 @patch("api.services.xbrl_client.fetch_company_facts")
 def test_get_fact(mock_fetch):
+    """Fact lookup selects the requested concept and latest annual value."""
     mock_fetch.return_value = {
         "facts": {
             "us-gaap": {
@@ -53,6 +55,7 @@ def test_get_fact(mock_fetch):
 # ── SEC Client Tests ─────────────────────────────────────────────────────────
 
 def test_admin_xbrl_ingestion_preserves_selected_sec_unit_and_frame():
+    """Admin ingestion retains the SEC unit bucket and frame identifier."""
     company_data = {
         "facts": {"us-gaap": {"EarningsPerShareBasic": {"units": {
             "USD/shares": [{
@@ -72,6 +75,7 @@ def test_admin_xbrl_ingestion_preserves_selected_sec_unit_and_frame():
 
 @patch("api.db.database.db_manager.get_connection")
 def test_get_latest_10k_facts_preserves_period_metadata(mock_get_connection):
+    """Fact retrieval retains fiscal, filing, accession, and frame metadata."""
     conn = MagicMock()
     conn.execute.return_value.fetchall.return_value = [
         ("Revenues", 1000, "USD", None, "10-K", 2025, "FY", "2026-02-01",
@@ -88,6 +92,7 @@ def test_get_latest_10k_facts_preserves_period_metadata(mock_get_connection):
 
 @patch("api.db.database.db_manager.get_connection")
 def test_get_latest_10k_facts(mock_get_connection):
+    """Fact retrieval converts stored rows into a non-empty Polars frame."""
     # Mock DuckDB connection
     mock_conn = MagicMock()
     mock_get_connection.return_value = mock_conn
@@ -107,6 +112,7 @@ def test_get_latest_10k_facts(mock_get_connection):
 @patch("api.services.sec_client.Company")
 @patch("api.services.sec_client.ensure_edgar_identity")
 def test_chunk_filing_sections(mock_ensure, mock_company_cls):
+    """Filing section extraction returns chunks with accession metadata."""
     mock_company = MagicMock()
     mock_filing = MagicMock()
 
