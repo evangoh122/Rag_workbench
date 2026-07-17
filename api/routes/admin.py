@@ -73,7 +73,8 @@ def _extract_facts(company_data: dict, ticker: str, cik: str) -> list[dict]:
         concept_name = full_concept.split("/")[-1]
         concept_data = us_gaap.get(concept_name, {})
         units = concept_data.get("units", {})
-        unit_data = units.get("USD", units.get("USD/shares", units.get("shares", [])))
+        unit_key = next((key for key in ("USD", "USD/shares", "shares") if units.get(key)), "")
+        unit_data = units.get(unit_key, [])
         if not unit_data:
             continue
         for entry in unit_data:
@@ -84,11 +85,12 @@ def _extract_facts(company_data: dict, ticker: str, cik: str) -> list[dict]:
             facts_list.append({
                 "ticker": ticker, "cik": cik, "concept": concept_name,
                 "value": entry.get("val"),
-                "unit": "USD" if "USD" in units else "shares",
+                "unit": unit_key,
                 "period_end": entry.get("end"), "period_start": entry.get("start"),
                 "form_type": entry.get("form", ""),
                 "accession": entry.get("accn", ""), "filed": entry.get("filed", ""),
                 "fiscal_year": entry.get("fy"), "fiscal_period": entry.get("fp"),
+                "frame": entry.get("frame", ""),
             })
     return facts_list
 
@@ -103,9 +105,11 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
             concept VARCHAR NOT NULL, value DOUBLE, unit VARCHAR,
             period_end VARCHAR, period_start VARCHAR, form_type VARCHAR,
             accession VARCHAR, filed VARCHAR, fiscal_year INTEGER,
-            fiscal_period VARCHAR
+            fiscal_period VARCHAR,
+            frame VARCHAR
         )
     """)
+    conn.execute("ALTER TABLE xbrl_facts ADD COLUMN IF NOT EXISTS frame VARCHAR")
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_xbrl_ticker_concept
         ON xbrl_facts (ticker, concept)
@@ -242,14 +246,14 @@ def refresh_data(
                     (f["ticker"], f["cik"], f["concept"], f["value"],
                      f["unit"], f["period_end"], f["period_start"],
                      f["form_type"], f["accession"], f["filed"],
-                     f["fiscal_year"], f["fiscal_period"])
+                     f["fiscal_year"], f["fiscal_period"], f["frame"])
                     for f in facts
                 ]
                 conn.executemany("""
                     INSERT INTO xbrl_facts
                         (ticker, cik, concept, value, unit, period_end, period_start,
-                         form_type, accession, filed, fiscal_year, fiscal_period)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         form_type, accession, filed, fiscal_year, fiscal_period, frame)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, batch)
                 total_facts += len(batch)
 

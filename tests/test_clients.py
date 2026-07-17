@@ -9,6 +9,7 @@ import pandas as pd
 from unittest.mock import patch
 from api.services.xbrl_client import fetch_company_facts, get_fact
 from api.services.sec_client import get_latest_10k_facts, chunk_filing_sections
+from api.routes.admin import _extract_facts
 
 # ── XBRL Client Tests ────────────────────────────────────────────────────────
 
@@ -51,11 +52,30 @@ def test_get_fact(mock_fetch):
 
 # ── SEC Client Tests ─────────────────────────────────────────────────────────
 
+def test_admin_xbrl_ingestion_preserves_selected_sec_unit_and_frame():
+    company_data = {
+        "facts": {"us-gaap": {"EarningsPerShareBasic": {"units": {
+            "USD/shares": [{
+                "val": 2.34, "start": "2024-01-01", "end": "2024-12-31",
+                "form": "10-K", "accn": "0001045810-25-000023",
+                "filed": "2025-02-26", "fy": 2024, "fp": "FY",
+                "frame": "CY2024",
+            }],
+        }}}},
+    }
+
+    facts = _extract_facts(company_data, "NVDA", "0001045810")
+
+    assert len(facts) == 1
+    assert facts[0]["unit"] == "USD/shares"
+    assert facts[0]["frame"] == "CY2024"
+
 @patch("api.db.database.db_manager.get_connection")
 def test_get_latest_10k_facts_preserves_period_metadata(mock_get_connection):
     conn = MagicMock()
     conn.execute.return_value.fetchall.return_value = [
-        ("Revenues", 1000, "USD", None, "10-K", 2025, "FY", "2026-02-01")
+        ("Revenues", 1000, "USD", None, "10-K", 2025, "FY", "2026-02-01",
+         "NVDA", "0001045810", "0001045810-26-000023", "2025-01-27", "CY2025")
     ]
     mock_get_connection.return_value = conn
     get_latest_10k_facts.cache_clear()
@@ -72,7 +92,8 @@ def test_get_latest_10k_facts(mock_get_connection):
     mock_conn = MagicMock()
     mock_get_connection.return_value = mock_conn
     mock_conn.execute.return_value.fetchall.return_value = [
-        ("Revenue", 1000.0, "USD", "2023-12-31", "10-K", 2023, "FY", "2024-02-01")
+        ("Revenue", 1000.0, "USD", "2023-12-31", "10-K", 2023, "FY", "2024-02-01",
+         "NVDA", "0001045810", "0001045810-24-000029", "2023-01-30", "CY2023")
     ]
     get_latest_10k_facts.cache_clear()
 

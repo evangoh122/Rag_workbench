@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 ConceptGroup = str
 ConceptName = str
@@ -377,13 +378,56 @@ def get_relevant_facts(query: str, all_facts: List[Dict[str, Any]],
 
 
 def format_fact_for_display(fact: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalise a fact dict for frontend consumption."""
+    """Normalise a fact dict for frontend consumption, preserving provenance.
+
+    The SEC company-concept endpoint is the raw JSON dataset from which the
+    value was selected.  The accession URL identifies the exact filing that
+    reported it.  Together with period/unit/form metadata this makes the
+    displayed number independently traceable instead of merely "SEC sourced".
+    """
     concept = fact.get("concept", "") or fact.get("label", "")
     value = _pick_value(fact)
     unit = fact.get("unit", "")
     period = get_fact_period(fact)
     label = fact.get("label", "") or _DISPLAY_NAMES.get(concept, concept)
     num = _to_float(value)
+
+    ticker = str(fact.get("ticker") or "")
+    cik = re.sub(r"\D", "", str(fact.get("cik") or "")).zfill(10) if fact.get("cik") else ""
+    taxonomy = str(fact.get("taxonomy") or "us-gaap")
+    accession = str(fact.get("accession") or fact.get("accn") or "")
+    filed = str(fact.get("filed") or fact.get("filed_date") or "")
+    form_type = str(fact.get("form_type") or fact.get("form") or "")
+    period_start = str(fact.get("period_start") or fact.get("start") or "")
+    frame = str(fact.get("frame") or "")
+
+    raw_fact_url = ""
+    if cik and concept:
+        raw_fact_url = (
+            f"https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/"
+            f"{quote(taxonomy, safe='')}/{quote(str(concept), safe='')}.json"
+        )
+
+    raw_frame_url = ""
+    if frame and concept and unit:
+        raw_frame_url = (
+            f"https://data.sec.gov/api/xbrl/frames/{quote(taxonomy, safe='')}/"
+            f"{quote(str(concept), safe='')}/{quote(str(unit), safe='')}/"
+            f"{quote(frame, safe='')}.json"
+        )
+
+    filing_url = ""
+    clean_accession = re.sub(r"\D", "", accession)
+    if len(clean_accession) >= 18:
+        filing_cik = (cik.lstrip("0") if cik else clean_accession[:10].lstrip("0"))
+        dashed = (
+            f"{clean_accession[:10]}-{clean_accession[10:12]}-"
+            f"{clean_accession[12:]}"
+        )
+        filing_url = (
+            f"https://www.sec.gov/Archives/edgar/data/{filing_cik}/"
+            f"{clean_accession}/{dashed}-index.htm"
+        )
 
     return {
         "concept": concept,
@@ -392,4 +436,16 @@ def format_fact_for_display(fact: Dict[str, Any]) -> Dict[str, Any]:
         "unit": unit,
         "period": period,
         "is_verified": num is not None,
+        "ticker": ticker,
+        "cik": cik,
+        "taxonomy": taxonomy,
+        "accession": accession,
+        "form_type": form_type,
+        "filed": filed,
+        "period_start": period_start,
+        "period_end": str(fact.get("period_end") or fact.get("end") or period),
+        "frame": frame,
+        "raw_fact_url": raw_fact_url,
+        "raw_frame_url": raw_frame_url,
+        "filing_url": filing_url,
     }

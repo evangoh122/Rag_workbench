@@ -49,13 +49,14 @@ def main() -> None:
             """
             INSERT INTO xbrl_facts
                 (ticker, cik, concept, value, unit, period_end, period_start,
-                 form_type, accession, filed, fiscal_year, fiscal_period)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 form_type, accession, filed, fiscal_year, fiscal_period, frame)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (f["ticker"], f["cik"], f["concept"], f["value"], f["unit"],
                  f["period_end"], f["period_start"], f["form_type"],
-                 f["accession"], f["filed"], f["fiscal_year"], f["fiscal_period"])
+                 f["accession"], f["filed"], f["fiscal_year"], f["fiscal_period"],
+                 f["frame"])
                 for f in facts
             ],
         )

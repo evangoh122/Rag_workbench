@@ -61,6 +61,35 @@ def test_format_missing_value_is_unverified():
     assert out["is_verified"] is False
 
 
+def test_format_preserves_exact_sec_fact_provenance():
+    out = format_fact_for_display({
+        "ticker": "NVDA",
+        "cik": "1045810",
+        "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "value": 130497000000,
+        "unit": "USD",
+        "period_start": "2024-01-29",
+        "period_end": "2025-01-26",
+        "form_type": "10-K",
+        "accession": "0001045810-25-000023",
+        "filed": "2025-02-26",
+        "frame": "CY2024",
+    })
+    assert out["cik"] == "0001045810"
+    assert out["accession"] == "0001045810-25-000023"
+    assert out["period_start"] == "2024-01-29"
+    assert out["frame"] == "CY2024"
+    assert out["raw_fact_url"].endswith(
+        "/CIK0001045810/us-gaap/RevenueFromContractWithCustomerExcludingAssessedTax.json"
+    )
+    assert out["filing_url"].endswith(
+        "/1045810/000104581025000023/0001045810-25-000023-index.htm"
+    )
+    assert out["raw_frame_url"].endswith(
+        "/us-gaap/RevenueFromContractWithCustomerExcludingAssessedTax/USD/CY2024.json"
+    )
+
+
 def test_period_falls_back_to_fiscal_year_when_period_end_is_empty():
     fact = {"fiscal_year": 2025, "fiscal_period": "FY"}
     assert get_fact_period(fact) == "FY2025"
