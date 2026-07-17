@@ -41,14 +41,9 @@ function PctBadge({ pct, type }: { pct: number | null | undefined; type: 'positi
   const isUp = pct > 0;
   const isDown = pct < 0;
 
-  let colorClass = 'text-muted';
-  if (type === 'positive') {
-    colorClass = isUp ? 'text-emerald-400' : isDown ? 'text-amber-400' : 'text-muted';
-  } else if (type === 'negative') {
-    colorClass = isUp ? 'text-amber-400' : isDown ? 'text-emerald-400' : 'text-muted';
-  } else {
-    colorClass = isUp ? 'text-amber-400' : isDown ? 'text-emerald-400' : 'text-muted';
-  }
+  const colorClass = type === 'positive'
+    ? isUp ? 'text-emerald-400' : isDown ? 'text-amber-400' : 'text-muted'
+    : isUp ? 'text-amber-400' : isDown ? 'text-emerald-400' : 'text-muted';
 
   return (
     <span className={`text-[11px] font-mono ${colorClass}`}>
