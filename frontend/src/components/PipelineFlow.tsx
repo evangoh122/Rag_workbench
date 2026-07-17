@@ -33,7 +33,7 @@ const PipelineFlow: React.FC<PipelineFlowProps> = ({ status = {} }) => {
       case 'error':
         return { ...baseStyle, background: 'linear-gradient(135deg, #CD5C5C 0%, #F87171 100%)', borderColor: 'rgba(248, 113, 113, 0.2)' };
       case 'pending':
-        return { ...baseStyle, background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)', borderColor: 'rgba(99, 102, 241, 0.2)', animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' };
+        return { ...baseStyle, background: 'linear-gradient(135deg, var(--color-accent-fill) 0%, var(--color-accent-bright) 100%)', color: 'var(--color-accent-ink)', borderColor: 'var(--color-accent)', animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' };
       default:
         return { ...baseStyle, background: '#1A1A1A', color: '#888888', borderColor: 'rgba(255,255,255,0.08)' };
     }

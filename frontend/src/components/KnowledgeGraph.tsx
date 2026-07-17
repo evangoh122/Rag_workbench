@@ -28,7 +28,7 @@ const TYPE_COLORS: Record<string, string> = {
   Segment: '#0891b2',
   Risk: '#dc2626',
   Executive: '#d97706',
-  Metric: '#7c3aed',
+  Metric: 'var(--color-accent-fill)',
   XBRL: '#059669',
   Product: '#db2777',
   Geography: '#4b5563',
@@ -144,7 +144,7 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ triples, onSelect, maxN
         position: { x, y },
         style: {
           background: bg,
-          color: '#FFFFFF',
+          color: type === 'Metric' ? 'var(--color-accent-ink)' : '#FFFFFF',
           border: isExpanded ? '2px solid #10B981' : '1px solid rgba(255, 255, 255, 0.2)',
           boxShadow: isExpanded ? '0 0 10px rgba(16, 185, 129, 0.4)' : 'none',
           borderRadius: '12px',

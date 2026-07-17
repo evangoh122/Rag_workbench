@@ -9,7 +9,7 @@ const ACCENT = '#2E8B57';
 const AXIS = '#888888';
 const GRID = 'rgba(255,255,255,0.06)';
 // Distinct line colours for multi-company comparison trends.
-const PALETTE = ['#2E8B57', '#60A5FA', '#F59E0B', '#A78BFA', '#F472B6', '#34D399'];
+const PALETTE = ['var(--color-accent)', 'var(--color-silver)', '#60A5FA', '#2E8B57', '#F59E0B', '#34D399'];
 
 function fmtUSD(v: number): string {
   const a = Math.abs(v);

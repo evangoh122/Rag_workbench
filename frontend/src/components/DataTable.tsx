@@ -46,6 +46,8 @@ export default function DataTable({ table }: { table: ParsedTable }) {
     [table],
   );
 
+  // TanStack Table returns non-memoizable methods; React Compiler safely skips this hook.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const instance = useReactTable({
     data: table.rows,
     columns,

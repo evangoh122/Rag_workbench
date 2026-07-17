@@ -408,7 +408,7 @@ function Workbench() {
             className="flex items-center gap-3 bg-transparent border-0 p-0 cursor-pointer text-left"
           >
             <div className="bg-accent-fill p-2 rounded-lg">
-              <Search size={20} className="text-white" />
+              <Search size={20} className="text-accent-ink" />
             </div>
             <h2 className="m-0 text-lg font-semibold text-primary tracking-tight hover:text-accent-bright transition-colors">RAG Workbench</h2>
           </button>
@@ -629,7 +629,7 @@ function Workbench() {
           </button>
           <div className="ml-3 flex items-center gap-2">
             <div className="bg-accent-fill p-1.5 rounded-lg">
-              <Search size={14} className="text-white" />
+              <Search size={14} className="text-accent-ink" />
             </div>
             <span className="font-semibold text-base tracking-tight text-primary">RAG Workbench</span>
           </div>
@@ -963,7 +963,7 @@ function Workbench() {
                 >
                   {/* Avatar */}
                   <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${
-                     msg.role === 'user' ? 'bg-accent-fill border-accent-fill text-white' : 'bg-surface border-border text-accent'
+                     msg.role === 'user' ? 'bg-accent-fill border-accent-fill text-accent-ink' : 'bg-surface border-border text-accent'
                   }`}>
                     {msg.role === 'user' ? <Database size={13} /> : <Search size={13} />}
                   </div>
@@ -972,7 +972,7 @@ function Workbench() {
                   <div
                     className={`px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl leading-relaxed text-[13px] sm:text-[14.5px] min-w-0 ${
                       msg.role === 'user'
-                        ? 'msg-user text-white rounded-tr-sm'
+                        ? 'msg-user text-accent-ink rounded-tr-sm'
                         : 'msg-assistant text-primary rounded-tl-sm'
                     }`}
                   >
