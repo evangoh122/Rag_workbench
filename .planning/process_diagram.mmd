@@ -1,0 +1,26 @@
+graph TD
+    A[Analyst Initiates Query] --> B{Input Rails Check}
+    B -- Fails --> C[Reject: Prompt Injection/Jailbreak]
+    B -- Passes --> D[Retrieve SEC Filings & Knowledge Graph]
+    
+    D --> E{Retrieval Rails Check}
+    E -- Irrelevant --> F[Reject/Refine Search]
+    E -- Relevant --> G[Extract Financial Facts]
+    
+    G --> H[XBRL Cross-Validation]
+    H --> I[Semantic Validation]
+    
+    I --> J{Confidence Scorer}
+    J -- High Confidence --> K[AUTO: Direct to Math Node]
+    J -- Medium Confidence --> L[SAMPLED_REVIEW: Queue for HITL]
+    J -- Low/Trigger Fired --> M[ESCALATE: Require Manual Override]
+    
+    K --> N[Deterministic Math Execution]
+    L --> N
+    M -- Analyst Approves --> N
+    
+    N --> O{Execution & Output Rails}
+    O -- Fails --> P[Abstain / Mask PII]
+    O -- Passes --> Q[Deliver Auditable Answer]
+    
+    Q --> R[Metrics Dashboard & Drift Monitoring]

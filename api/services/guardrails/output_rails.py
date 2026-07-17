@@ -31,9 +31,9 @@ class OutputVerdict:
 # ── PII patterns ─────────────────────────────────────────────────────────────
 
 _PII_PATTERNS: list[tuple[str, str, str]] = [
-    # SSN (US Social Security Number)
+    # SSN (US Social Security Number) — only the dashed format to avoid
+    # false-positives on CIK numbers, EINs, and other 9-digit financial identifiers.
     (r"\b\d{3}-\d{2}-\d{4}\b", "SSN", "***-**-****"),
-    (r"\b\d{9}\b", "SSN (raw)", "***-**-****"),
     # Credit card numbers
     (r"\b(?:4\d{3}|5[1-5]\d{2}|3[47]\d{2}|6(?:011|5\d{2}))\d{12,15}\b",
      "Credit card", "****-****-****-****"),
@@ -55,15 +55,16 @@ _COMPILED_PII: list[tuple[re.Pattern, str, str]] = [
 
 
 # ── System prompt leak detection ─────────────────────────────────────────────
+# Only check for generic meta-instruction phrases that indicate the model is
+# regurgitating its system prompt. Avoids false-positives on domain-specific
+# phrases that a user might legitimately write in a query.
 
-_SYSTEM_PROMPT_FRAGMENTS: list[str] = [
-    "you are a financial data analyst assistant",
-    "you have access to a duckdb financial database",
-    "respond with ONLY a valid DuckDB SQL query",
-    "never make up data",
-    "system prompt",
-    "system instructions",
-    "your instructions are",
+_SYSTEM_PROMPT_LEAK_PATTERNS: list[re.Pattern] = [
+    re.compile(r"\bmy (system|internal) (prompt|instructions)\b", re.IGNORECASE),
+    re.compile(r"\byou (are|were) (instructed|told) to\b", re.IGNORECASE),
+    re.compile(r"\brespond with ONLY a valid\b", re.IGNORECASE),
+    re.compile(r"\bsystem prompt\b", re.IGNORECASE),
+    re.compile(r"\byour instructions are\b", re.IGNORECASE),
 ]
 
 
@@ -122,10 +123,9 @@ def check_output(
     if not answer:
         return OutputVerdict(safe=True)
 
-    # 1. Check for system prompt leaks
-    answer_lower = answer.lower()
-    for fragment in _SYSTEM_PROMPT_FRAGMENTS:
-        if fragment in answer_lower:
+    # 1. Check for system prompt leaks (regex-based to reduce false-positives)
+    for pattern in _SYSTEM_PROMPT_LEAK_PATTERNS:
+        if pattern.search(answer):
             return OutputVerdict(
                 safe=False,
                 reason="Response contains system prompt fragments",
