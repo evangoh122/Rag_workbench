@@ -87,24 +87,72 @@ function XBRLFactCard({ fact }: { fact: XBRLFact }) {
     return v.toFixed(2);
   };
 
+  const hasProvenance = Boolean(fact.accession || fact.raw_fact_url || fact.filing_url);
+
   return (
-    <div className="flex items-center gap-3 px-3 py-2 bg-surface border border-border rounded-md">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-primary font-medium truncate">{fact.label || fact.concept}</span>
-          {fact.is_verified && (
-            <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-bullish">
-              <CheckCircle size={10} /> verified
-            </span>
-          )}
+    <div className="px-3 py-2 bg-surface border border-border rounded-md">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-primary font-medium truncate">{fact.label || fact.concept}</span>
+            {fact.is_verified && (
+              <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-bullish">
+                <CheckCircle size={10} /> SEC XBRL
+              </span>
+            )}
+          </div>
+          {fact.period && <div className="text-[10px] text-secondary/60 mt-0.5 tabular-nums">{fact.period}</div>}
         </div>
-        {fact.period && (
-          <div className="text-[10px] text-secondary/60 mt-0.5 tabular-nums">{fact.period}</div>
-        )}
+        <div className="text-right shrink-0">
+          <div className="text-sm font-mono text-bullish tabular-nums">{fmt(fact.value)}</div>
+          <div className="text-[10px] text-secondary/40">{fact.unit || ''}</div>
+        </div>
       </div>
-      <div className="text-right shrink-0">
-        <div className="text-sm font-mono text-bullish tabular-nums">{fmt(fact.value)}</div>
-        <div className="text-[10px] text-secondary/40">{fact.unit || ''}</div>
+      {hasProvenance && (
+        <details className="mt-2 border-t border-border/60 pt-2">
+          <summary className="cursor-pointer text-[11px] text-blue-400 hover:text-blue-300 select-none">Inspect exact raw data point</summary>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 mt-2 text-[10px]">
+            <dt className="text-secondary/50">Tag</dt><dd className="font-mono text-secondary break-all">{fact.taxonomy || 'us-gaap'}:{fact.concept}</dd>
+            <dt className="text-secondary/50">Raw value</dt><dd className="font-mono text-primary break-all tabular-nums">{String(fact.value)} {fact.unit}</dd>
+            <dt className="text-secondary/50">Period</dt><dd className="font-mono text-secondary tabular-nums">{fact.period_start ? `${fact.period_start} → ` : ''}{fact.period_end || fact.period}</dd>
+            {fact.accession && <><dt className="text-secondary/50">Accession</dt><dd className="font-mono text-secondary break-all">{fact.accession}</dd></>}
+            {fact.form_type && <><dt className="text-secondary/50">Filed as</dt><dd className="text-secondary">{fact.form_type}{fact.filed ? ` on ${fact.filed}` : ''}</dd></>}
+            {fact.frame && <><dt className="text-secondary/50">SEC frame</dt><dd className="font-mono text-secondary">{fact.frame}</dd></>}
+          </dl>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+            {fact.raw_fact_url && <a href={fact.raw_fact_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300">SEC concept JSON <ExternalLink size={10} /></a>}
+            {fact.raw_frame_url && <a href={fact.raw_frame_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300">SEC frame JSON <ExternalLink size={10} /></a>}
+            {fact.filing_url && <a href={fact.filing_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300">Reporting filing <ExternalLink size={10} /></a>}
+          </div>
+          <p className="mt-1.5 text-[10px] text-secondary/50">In SEC JSON, match this card’s accession, period, unit, and raw value.</p>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function SourceCard({ src }: { src: Source }) {
+  const [expanded, setExpanded] = useState(false);
+  const excerptId = React.useId();
+  return (
+    <div className="border border-border rounded-md p-3 bg-surface">
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-surface-elevated text-blue-300 border border-blue-900/30">{src.section}</span>
+        <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-blue-900/30 text-blue-200">{src.ticker}</span>
+        <span className="text-xs text-secondary/40 tabular-nums">{src.accession}</span>
+        {src.distance != null && <span className="text-xs text-secondary/30 ml-auto tabular-nums">dist: {src.distance.toFixed(4)}</span>}
+      </div>
+      <div className="text-[10px] text-secondary/50 mb-2 flex flex-wrap gap-x-3 gap-y-0.5">
+        {src.form_type && <span>{src.form_type}</span>}
+        {src.period_of_report && <span>Period {src.period_of_report}</span>}
+        {src.chunk_index != null && <span className="font-mono">Retrieved chunk #{src.chunk_index}</span>}
+      </div>
+      <p id={excerptId} className={`text-secondary text-xs leading-relaxed whitespace-pre-wrap ${expanded ? '' : 'line-clamp-3'}`}>
+        {expanded ? src.text : src.text.slice(0, 200)}{!expanded && src.text.length > 200 ? '…' : ''}
+      </p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+        {src.text.length > 200 && <button type="button" aria-expanded={expanded} aria-controls={excerptId} onClick={() => setExpanded(value => !value)} className="text-xs text-blue-400 hover:text-blue-300 bg-transparent border-0 p-0 cursor-pointer">{expanded ? 'Collapse raw excerpt' : 'Show full retrieved excerpt'}</button>}
+        <a href={src.edgar_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">Open reporting filing <ExternalLink size={10} /></a>
       </div>
     </div>
   );
@@ -203,31 +251,7 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
         <CollapsibleSection title="Sources" count={sources!.length}>
           <div className="flex flex-col gap-3">
             {sources!.map((src, idx) => (
-              <div key={idx} className="border border-border rounded-md p-3 bg-surface">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-surface-elevated text-blue-300 border border-blue-900/30">
-                    {src.section}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-blue-900/30 text-blue-200">
-                    {src.ticker}
-                  </span>
-                  <span className="text-xs text-secondary/40 tabular-nums">{src.accession}</span>
-                  {src.distance != null && (
-                    <span className="text-xs text-secondary/30 ml-auto tabular-nums">dist: {src.distance.toFixed(4)}</span>
-                  )}
-                </div>
-                <p className="text-secondary text-xs leading-relaxed mb-2 line-clamp-3">
-                  {src.text.slice(0, 200)}{src.text.length > 200 ? '…' : ''}
-                </p>
-                <a
-                  href={src.edgar_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  View on EDGAR <ExternalLink size={10} />
-                </a>
-              </div>
+              <SourceCard key={`${src.accession}-${src.chunk_index ?? idx}`} src={src} />
             ))}
           </div>
         </CollapsibleSection>
@@ -240,7 +264,7 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr>
-                  {['Concept', 'Label', 'Value', 'Unit', 'Period'].map(col => (
+                  {['Concept', 'Label', 'Value', 'Unit', 'Period', 'Raw source'].map(col => (
                     <th
                       key={col}
                       className="text-left px-2 py-2 text-secondary font-medium border-b border-border"
@@ -260,6 +284,19 @@ export default function AuditTrail({ sources, xbrl_facts, relevant_xbrl, xbrl_ba
                     </td>
                     <td className="px-2 py-1.5 text-secondary/60 border-b border-border/40">{fact.unit}</td>
                     <td className="px-2 py-1.5 text-secondary/60 border-b border-border/40 tabular-nums">{fact.period}</td>
+                    <td className="px-2 py-1.5 border-b border-border/40 whitespace-nowrap">
+                      {fact.raw_fact_url ? (
+                        <a
+                          href={fact.raw_fact_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={fact.accession ? `SEC accession ${fact.accession}` : 'Open raw SEC XBRL fact'}
+                          className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300"
+                        >
+                          SEC JSON <ExternalLink size={9} />
+                        </a>
+                      ) : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

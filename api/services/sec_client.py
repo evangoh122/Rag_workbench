@@ -26,21 +26,23 @@ def get_latest_10k_facts(ticker: str, concepts: Optional[tuple] = None) -> pl.Da
             clauses = " OR ".join(["concept LIKE ?" for _ in concepts])
             sql = f"""
                 SELECT concept, value, unit, period_end, form_type,
-                       fiscal_year, fiscal_period, filed
+                       fiscal_year, fiscal_period, filed, ticker, cik,
+                       accession, period_start, frame
                 FROM xbrl_facts
                 WHERE ticker = ?
                   AND ({clauses})
-                ORDER BY period_end DESC
+                ORDER BY period_end DESC, filed DESC, accession DESC
             """
             params = [ticker] + [f"%{c}%" for c in concepts]
             rows = conn.execute(sql, params).fetchall()
         else:
             rows = conn.execute("""
                 SELECT concept, value, unit, period_end, form_type,
-                       fiscal_year, fiscal_period, filed
+                       fiscal_year, fiscal_period, filed, ticker, cik,
+                       accession, period_start, frame
                 FROM xbrl_facts
                 WHERE ticker = ?
-                ORDER BY period_end DESC
+                ORDER BY period_end DESC, filed DESC, accession DESC
             """, [ticker]).fetchall()
 
         if not rows:
@@ -50,7 +52,8 @@ def get_latest_10k_facts(ticker: str, concepts: Optional[tuple] = None) -> pl.Da
             rows,
             schema=[
                 "concept", "value", "unit", "period_end", "form_type",
-                "fiscal_year", "fiscal_period", "filed",
+                "fiscal_year", "fiscal_period", "filed", "ticker", "cik",
+                "accession", "period_start", "frame",
             ],
             orient="row",
         )

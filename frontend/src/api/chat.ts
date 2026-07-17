@@ -7,6 +7,10 @@ export interface Source {
   text: string;
   edgar_url: string;
   distance?: number;
+  form_type?: string;
+  period_of_report?: string;
+  chunk_index?: number;
+  snippet?: string;
 }
 
 export interface XBRLFact {
@@ -17,6 +21,17 @@ export interface XBRLFact {
   period: string;
   ticker: string;
   is_verified?: boolean;
+  cik?: string;
+  taxonomy?: string;
+  accession?: string;
+  form_type?: string;
+  filed?: string;
+  period_start?: string;
+  period_end?: string;
+  frame?: string;
+  raw_fact_url?: string;
+  raw_frame_url?: string;
+  filing_url?: string;
 }
 
 export interface PolygonData {

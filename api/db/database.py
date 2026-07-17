@@ -70,6 +70,15 @@ class DatabaseManager:
                         self._conn.execute(_stmt)
                     except Exception:
                         pass
+                # Exact SEC fact provenance. Existing databases predate the
+                # companyfacts `frame` field, so migrate them on first access.
+                try:
+                    self._conn.execute(
+                        "ALTER TABLE xbrl_facts ADD COLUMN IF NOT EXISTS frame VARCHAR"
+                    )
+                except Exception:
+                    # Some lightweight/test databases intentionally omit XBRL.
+                    pass
             return self._conn
 
     def get_review_connection(self):

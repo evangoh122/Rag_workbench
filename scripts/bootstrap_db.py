@@ -81,8 +81,9 @@ def extract_facts(company_data: dict, ticker: str, cik: str) -> list[dict]:
         concept_data = us_gaap.get(concept_name, {})
         units = concept_data.get("units", {})
 
-        # Try USD first, then shares
-        unit_data = units.get("USD", units.get("USD/shares", units.get("shares", [])))
+        # Preserve the exact SEC unit bucket used for the selected facts.
+        unit_key = next((key for key in ("USD", "USD/shares", "shares") if units.get(key)), "")
+        unit_data = units.get(unit_key, [])
         if not unit_data:
             continue
 
@@ -97,7 +98,7 @@ def extract_facts(company_data: dict, ticker: str, cik: str) -> list[dict]:
                 "cik": cik,
                 "concept": concept_name,
                 "value": entry.get("val"),
-                "unit": "USD" if "USD" in units else "shares",
+                "unit": unit_key,
                 "period_end": entry.get("end"),
                 "period_start": entry.get("start"),
                 "form_type": form,
@@ -105,6 +106,7 @@ def extract_facts(company_data: dict, ticker: str, cik: str) -> list[dict]:
                 "filed": entry.get("filed", ""),
                 "fiscal_year": entry.get("fy"),
                 "fiscal_period": entry.get("fp"),
+                "frame": entry.get("frame", ""),
             })
 
     return facts_list
@@ -126,9 +128,13 @@ def create_tables(conn: duckdb.DuckDBPyConnection) -> None:
             accession   VARCHAR,
             filed       VARCHAR,
             fiscal_year INTEGER,
-            fiscal_period VARCHAR
+            fiscal_period VARCHAR,
+            frame       VARCHAR
         )
     """)
+    # CREATE TABLE IF NOT EXISTS does not evolve an existing bootstrap DB.
+    # Run this before the frame-aware insert path below.
+    conn.execute("ALTER TABLE xbrl_facts ADD COLUMN IF NOT EXISTS frame VARCHAR")
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_xbrl_ticker_concept
         ON xbrl_facts (ticker, concept)
@@ -222,13 +228,13 @@ def bootstrap(tickers: list[str], db_path: str) -> None:
             conn.execute("""
                 INSERT INTO xbrl_facts
                     (ticker, cik, concept, value, unit, period_end, period_start,
-                     form_type, accession, filed, fiscal_year, fiscal_period)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     form_type, accession, filed, fiscal_year, fiscal_period, frame)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, [
                 fact["ticker"], fact["cik"], fact["concept"], fact["value"],
                 fact["unit"], fact["period_end"], fact["period_start"],
                 fact["form_type"], fact["accession"], fact["filed"],
-                fact["fiscal_year"], fact["fiscal_period"],
+                fact["fiscal_year"], fact["fiscal_period"], fact["frame"],
             ])
             total_facts += 1
 

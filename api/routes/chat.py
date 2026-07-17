@@ -221,11 +221,25 @@ async def chat_auditable_rag_endpoint(req: ChatRequest):
         # so every query path (numeric / qualitative / comparison) shows a
         # deduped, query-relevant, properly-labelled fact set.
         raw_facts = filter_facts_for_query(req.message, result.get("xbrl_facts") or [])
+        raw_facts = sorted(
+            raw_facts,
+            key=lambda fact: (
+                str(fact.get("filed") or fact.get("filed_date") or ""),
+                str(fact.get("accession") or fact.get("accn") or ""),
+            ),
+            reverse=True,
+        )
         seen: set = set()
         deduped_facts = []
         for f in raw_facts:
             normalised = format_fact_for_display(f)
-            key = (normalised["concept"], normalised["value"], normalised["period"])
+            key = (
+                normalised["concept"], normalised["value"],
+                normalised["period_start"], normalised["period_end"],
+                normalised["unit"],
+                normalised["accession"],
+                normalised["frame"],
+            )
             if key in seen:
                 continue
             seen.add(key)
