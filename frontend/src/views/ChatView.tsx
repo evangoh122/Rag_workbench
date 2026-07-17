@@ -149,7 +149,7 @@ const ChatView: React.FC<ChatViewProps> = ({
           >
             {/* Avatar */}
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${
-               msg.role === 'user' ? 'bg-accent-fill border-accent-fill text-white' : 'bg-surface border-border text-accent'
+               msg.role === 'user' ? 'bg-accent-fill border-accent-fill text-accent-ink' : 'bg-surface border-border text-accent'
             }`}>
               {msg.role === 'user' ? <Database size={18} /> : <Search size={18} />}
             </div>
@@ -158,7 +158,7 @@ const ChatView: React.FC<ChatViewProps> = ({
             <div
               className={`px-5 py-4 rounded-2xl leading-relaxed text-[15px] shadow-none ${
                 msg.role === 'user'
-                  ? 'bg-accent-fill text-white rounded-tr-sm'
+                  ? 'bg-accent-fill text-accent-ink rounded-tr-sm'
                   : 'bg-surface-elevated text-primary border border-border rounded-tl-sm'
               }`}
             >

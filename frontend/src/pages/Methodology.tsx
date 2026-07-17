@@ -41,7 +41,7 @@ function Tag({ children, color = 'blue' }: { children: React.ReactNode; color?: 
   const colors: Record<string, string> = {
     blue:   'bg-blue-500/10 border-blue-500/20 text-blue-300',
     emerald:'bg-bullish/10 border-bullish/20 text-bullish',
-    purple: 'bg-purple-500/10 border-purple-500/20 text-purple-300',
+    gold:   'bg-accent/10 border-accent/25 text-accent-bright',
     orange: 'bg-orange-500/10 border-orange-500/20 text-orange-300',
     cyan:   'bg-cyan-500/10 border-cyan-500/20 text-cyan-300',
   };
@@ -70,7 +70,7 @@ export default function Methodology() {
     <div className="flex-1 flex flex-col h-full overflow-y-auto">
       <header className="px-4 lg:px-8 py-5 border-b border-border bg-surface/50 backdrop-blur-sm flex-shrink-0">
         <h1 className="text-xl font-semibold text-primary flex items-center gap-3">
-          <BookOpen className="text-indigo-400" />
+          <BookOpen className="text-accent" />
           Methodology
         </h1>
         <p className="text-sm text-secondary mt-1">
@@ -133,8 +133,8 @@ export default function Methodology() {
           <H>Model</H>
           <P>
             Embeddings are generated <strong className="text-white">in-process</strong> with{' '}
-            <Tag color="purple">sentence-transformers</Tag> running{' '}
-            <Tag color="purple">Qwen/Qwen3-Embedding-0.6B</Tag> (1024 dimensions). Running the
+            <Tag color="gold">sentence-transformers</Tag> running{' '}
+            <Tag color="gold">Qwen/Qwen3-Embedding-0.6B</Tag> (1024 dimensions). Running the
             model inside the container means no external inference API — eliminating the rate
             limits, provider-routing failures, and cold starts that plague hosted embedding
             endpoints. The 0.6B variant is chosen deliberately: the 8B Qwen embedder is far more

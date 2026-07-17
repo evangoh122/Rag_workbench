@@ -56,7 +56,7 @@ function StatCard({
   const colors: Record<string, string> = {
     blue:   'text-blue-400 bg-blue-500/10 border-blue-500/20',
     emerald:'text-bullish bg-bullish/10 border-bullish/20',
-    purple: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+    gold:   'text-accent-bright bg-accent/10 border-accent/25',
     orange: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
     red:    'text-bearish bg-bearish/10 border-bearish/20',
     cyan:   'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
@@ -188,7 +188,7 @@ export default function SystemDashboard() {
             value={fmt(stats?.data.graph_triples)}
             sub="Knowledge graph edges"
             icon={<GitBranch size={16} />}
-            accent="purple"
+            accent="gold"
           />
           <StatCard
             label="LLM Failures"
@@ -218,7 +218,7 @@ export default function SystemDashboard() {
               <Arrow />
               <PipelineNode label="Structure Chunker" sub="tables + semantic" color="border-border bg-surface-elevated text-secondary" />
               <Arrow />
-              <PipelineNode label="Embeddings" sub={stats?.config.embedding_model ?? 'Qwen3-Embedding-0.6B'} color="border-purple-500/30 bg-purple-500/5 text-purple-300" />
+              <PipelineNode label="Embeddings" sub={stats?.config.embedding_model ?? 'Qwen3-Embedding-0.6B'} color="border-accent/30 bg-accent/5 text-accent-bright" />
               <Arrow />
               <PipelineNode label="DuckDB" sub="edgar_embeddings" color="border-bullish/30 bg-bullish/5 text-bullish" />
             </div>
@@ -232,7 +232,7 @@ export default function SystemDashboard() {
             <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
               <PipelineNode label="User Query" sub="natural language" color="border-blue-500/30 bg-blue-500/5 text-blue-300" />
               <Arrow />
-              <PipelineNode label="Embed Query" sub={stats?.config.embedding_model ?? 'Qwen3-Embedding-0.6B'} color="border-purple-500/30 bg-purple-500/5 text-purple-300" />
+              <PipelineNode label="Embed Query" sub={stats?.config.embedding_model ?? 'Qwen3-Embedding-0.6B'} color="border-accent/30 bg-accent/5 text-accent-bright" />
               <Arrow />
               <PipelineNode label="Hybrid Search" sub="BM25 + vector → RRF" color="border-border bg-surface-elevated text-secondary" />
               <Arrow />
@@ -252,9 +252,9 @@ export default function SystemDashboard() {
           <div>
             <p className="text-xs text-secondary/60 uppercase tracking-widest mb-3 px-1">Graph RAG (optional)</p>
             <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
-              <PipelineNode label="Entity Extract" sub="from query" color="border-indigo-500/30 bg-indigo-500/5 text-indigo-300" />
+              <PipelineNode label="Entity Extract" sub="from query" color="border-silver/30 bg-silver/5 text-silver" />
               <Arrow />
-              <PipelineNode label="Graph Triples" sub="DuckDB" color="border-indigo-500/30 bg-indigo-500/5 text-indigo-300" />
+              <PipelineNode label="Graph Triples" sub="DuckDB" color="border-silver/30 bg-silver/5 text-silver" />
               <Arrow />
               <PipelineNode label="Subgraph" sub="ILIKE match" color="border-border bg-surface-elevated text-secondary" />
               <Arrow />

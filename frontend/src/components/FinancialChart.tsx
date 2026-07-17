@@ -15,7 +15,7 @@ interface FinancialChartProps {
   facts?: Fact[];
 }
 
-const COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#f472b6', '#a78bfa', '#22d3ee'];
+const COLORS = ['var(--color-accent)', 'var(--color-silver)', '#60a5fa', '#34d399', '#fbbf24', '#22d3ee'];
 
 /** Compact currency/number formatter: 1.23B, 456.7M, 12.3K. */
 function fmt(n: number): string {

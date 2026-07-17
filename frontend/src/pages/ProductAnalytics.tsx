@@ -59,7 +59,7 @@ function ProductAnalytics() {
         </div>
         <button
           onClick={load}
-          className="fintech-button flex items-center gap-2 px-3 py-2 text-sm text-secondary border border-border hover:text-primary"
+          className="fintech-button flex items-center gap-2 px-3 py-2 text-sm"
         >
           <RefreshCcw size={15} /> Refresh
         </button>
@@ -127,7 +127,7 @@ function ProductAnalytics() {
                       <XAxis type="number" tick={{ fill: 'var(--color-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <YAxis type="category" dataKey="view" width={100} tick={{ fill: 'var(--color-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
                       <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                      <Bar dataKey="count" fill="#a78bfa" radius={[0, 4, 4, 0]} barSize={16} />
+                      <Bar dataKey="count" fill="var(--color-accent)" radius={[0, 4, 4, 0]} barSize={16} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

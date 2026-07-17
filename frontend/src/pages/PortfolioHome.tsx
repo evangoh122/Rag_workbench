@@ -38,12 +38,12 @@ export default function PortfolioHome() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-primary font-sans selection:bg-accent/20 selection:text-white flex flex-col">
+    <div className="min-h-screen bg-background text-primary font-sans flex flex-col">
       <a href="#portfolio-content" className="skip-link">Skip to main content</a>
       <header className="border-b border-border/40 bg-background/72 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-accent-fill flex items-center justify-center font-mono font-bold text-white">
+            <div className="w-8 h-8 rounded-lg bg-accent-fill flex items-center justify-center font-mono font-bold text-accent-ink">
               E
             </div>
             <span className="font-semibold text-base tracking-tight">Evan Goh</span>

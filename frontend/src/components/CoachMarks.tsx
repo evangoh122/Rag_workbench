@@ -138,7 +138,7 @@ export default function CoachMarks({ steps, run, onClose }: CoachMarksProps) {
             width: rect.width + PAD * 2,
             height: rect.height + PAD * 2,
             boxShadow: '0 0 0 9999px rgba(0,0,0,0.58)',
-            border: '2px solid rgba(167,139,250,0.9)',
+            border: '2px solid var(--color-accent)',
           }}
         />
       ) : (

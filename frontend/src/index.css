@@ -1,23 +1,26 @@
 @import "tailwindcss";
 
 @theme {
-  /* Evidence-first graphite palette */
-  --color-background:        #0A0C10;
-  --color-surface:           #11141A;
-  --color-surface-elevated:  #171B23;
-  --color-primary:           #F3F5F7;
-  --color-secondary:         #A8B0BC;
-  --color-muted:             #747D8B;
-  --color-border:            #2A303B;
-  --color-border-subtle:     #1D222B;
+  /* Evidence-first obsidian, silver, and gold palette */
+  --color-background:        #090A0C;
+  --color-surface:           #111317;
+  --color-surface-elevated:  #181B20;
+  --color-primary:           #F3F1EA;
+  --color-secondary:         #B8BDC5;
+  --color-muted:             #818791;
+  --color-border:            #32363D;
+  --color-border-subtle:     #22262C;
 
-  /* Accent: violet/purple */
-  --color-accent:            #A99DF8;
-  --color-accent-bright:     #C1B8FA;
-  --color-accent-fill:       #6D5BD0;
-  --color-accent-fill-hover: #7563D2;
-  --color-accent-dim:        rgba(109, 91, 208, 0.14);
-  --color-accent-glow:       rgba(109, 91, 208, 0.2);
+  /* Metallic accents: gold leads, silver supports */
+  --color-accent:            #D6B65A;
+  --color-accent-bright:     #F1D77A;
+  --color-accent-fill:       #C9A227;
+  --color-accent-fill-hover: #DEBA3E;
+  --color-accent-ink:        #171205;
+  --color-accent-dim:        rgba(214, 182, 90, 0.14);
+  --color-accent-glow:       rgba(214, 182, 90, 0.2);
+  --color-silver:            #C7CBD1;
+  --color-silver-dim:        #8D949E;
 
   /* Financial signals */
   --color-bullish:           #43D19E;
@@ -72,13 +75,13 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Scrollbar: purple tint */
+  /* Scrollbar: restrained gold tint */
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(109, 91, 208, 0.24); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(109, 91, 208, 0.4); }
+  ::-webkit-scrollbar-thumb { background: rgba(214, 182, 90, 0.28); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(214, 182, 90, 0.46); }
 
-  ::selection { background: rgba(109, 91, 208, 0.38); color: #fff; }
+  ::selection { background: var(--color-accent); color: var(--color-background); }
 
   :where(button, a, input, select, textarea, summary, [role="button"]):focus-visible {
     outline: 2px solid var(--color-accent);
@@ -198,7 +201,7 @@
 
   .glass-input:focus-within {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 1px rgba(169, 157, 248, 0.12);
+    box-shadow: 0 0 0 1px rgba(214, 182, 90, 0.16);
   }
 
   /* Buttons */
@@ -206,7 +209,7 @@
   .fintech-button,
   .btn-primary {
     background: var(--color-accent-fill);
-    color: white;
+    color: var(--color-accent-ink);
     border-radius: var(--radius-lg);
     font-weight: 600;
     font-size: 0.875rem;
@@ -354,7 +357,7 @@
 
   .nav-item.active {
     background: var(--color-accent-dim);
-    border-color: transparent;
+    border-color: color-mix(in srgb, var(--color-accent) 22%, transparent);
     color: var(--color-accent-bright);
   }
 
@@ -373,7 +376,7 @@
 
   .msg-user {
     background: var(--color-accent-fill);
-    color: white;
+    color: var(--color-accent-ink);
     border-radius: 16px 16px 4px 16px;
   }
 
@@ -386,14 +389,14 @@
   /* Stat card */
 
   .stat-card {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.07) 0%, rgba(15, 15, 26, 0.9) 70%);
+    background: linear-gradient(135deg, rgba(214, 182, 90, 0.08) 0%, rgba(17, 19, 23, 0.96) 70%);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     padding: 1rem 1.25rem;
     transition: border-color 0.2s;
   }
 
-  .stat-card:hover { border-color: rgba(139, 92, 246, 0.25); }
+  .stat-card:hover { border-color: rgba(214, 182, 90, 0.3); }
 
   /* Data tables */
 
@@ -481,7 +484,6 @@
 
   .badge-green  { background: color-mix(in srgb, var(--color-bullish) 12%, transparent); color: var(--color-bullish); border: 1px solid color-mix(in srgb, var(--color-bullish) 20%, transparent); }
   .badge-red    { background: color-mix(in srgb, var(--color-bearish) 12%, transparent); color: var(--color-bearish); border: 1px solid color-mix(in srgb, var(--color-bearish) 20%, transparent); }
-  .badge-purple { background: color-mix(in srgb, var(--color-accent) 12%, transparent); color: var(--color-accent-bright); border: 1px solid color-mix(in srgb, var(--color-accent) 25%, transparent); }
   .badge-muted  { background: rgba(255, 255, 255, 0.06); color: var(--color-secondary); border: 1px solid var(--color-border-subtle); }
 
   /* Section heading: Origin italic serif gradient */
@@ -492,7 +494,7 @@
     font-weight: 400;
     font-size: 1.5rem;
     letter-spacing: -0.02em;
-    background: linear-gradient(135deg, #ffffff 0%, #A78BFA 100%);
+    background: linear-gradient(135deg, #F8F6EF 0%, var(--color-accent-bright) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -509,18 +511,18 @@
   .editorial-rule {
     width: 3.5rem;
     height: 1px;
-    background: linear-gradient(90deg, rgba(167, 139, 250, 0.75), transparent);
+    background: linear-gradient(90deg, rgba(214, 182, 90, 0.82), rgba(199, 203, 209, 0.18), transparent);
   }
 
   .product-glass-preview {
     background:
-      radial-gradient(circle at 25% 12%, rgba(167, 139, 250, 0.18), transparent 32%),
-      linear-gradient(145deg, rgba(255,255,255,0.07), rgba(15,15,26,0.46));
+      radial-gradient(circle at 25% 12%, rgba(214, 182, 90, 0.2), transparent 32%),
+      linear-gradient(145deg, rgba(199,203,209,0.08), rgba(9,10,12,0.5));
     border: 1px solid rgba(255,255,255,0.1);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,0.11),
       0 28px 80px rgba(0,0,0,0.38),
-      0 0 70px rgba(139,92,246,0.1);
+      0 0 70px rgba(214,182,90,0.11);
     backdrop-filter: blur(18px) saturate(1.25);
     -webkit-backdrop-filter: blur(18px) saturate(1.25);
   }
@@ -539,7 +541,7 @@
   /* Accent glow */
 
   .accent-glow {
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2), 0 0 60px rgba(139, 92, 246, 0.08);
+    box-shadow: 0 0 20px rgba(214, 182, 90, 0.2), 0 0 60px rgba(214, 182, 90, 0.08);
   }
 
   /* Status pulse */
@@ -566,9 +568,9 @@
     font-family: var(--font-mono);
     font-size: 0.83em;
     padding: 0.15em 0.4em;
-    background: rgba(139, 92, 246, 0.1);
+    background: rgba(214, 182, 90, 0.1);
     border-radius: 4px;
-    border: 1px solid rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(214, 182, 90, 0.18);
   }
 
   .prose-refined pre {
@@ -623,7 +625,7 @@
   .prose-refined blockquote {
     margin: 0.75em 0;
     padding: 0.4em 0 0.4em 0.9em;
-    border-left: 3px solid rgba(139, 92, 246, 0.5);
+    border-left: 3px solid rgba(214, 182, 90, 0.58);
     color: var(--color-secondary);
     font-style: italic;
   }
@@ -653,7 +655,7 @@
     font-size: 0.78em;
     letter-spacing: 0.04em;
     padding: 0.5em 0.75em;
-    background: rgba(139, 92, 246, 0.05);
+    background: rgba(214, 182, 90, 0.06);
     border-bottom: 1px solid var(--color-border);
     white-space: nowrap;
   }
@@ -665,7 +667,7 @@
     vertical-align: top;
   }
 
-  .prose-refined tbody tr:nth-child(even) { background: rgba(139, 92, 246, 0.02); }
+  .prose-refined tbody tr:nth-child(even) { background: rgba(199, 203, 209, 0.025); }
 
   .prose-refined .text-right,
   .prose-refined .numeric { text-align: right; }

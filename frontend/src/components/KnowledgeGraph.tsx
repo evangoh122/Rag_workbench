@@ -28,7 +28,7 @@ const TYPE_COLORS: Record<string, string> = {
   Segment: '#0891b2',
   Risk: '#dc2626',
   Executive: '#d97706',
-  Metric: '#7c3aed',
+  Metric: 'var(--color-accent-fill)',
   XBRL: '#059669',
   Product: '#db2777',
   Geography: '#4b5563',

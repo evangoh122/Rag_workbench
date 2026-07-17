@@ -68,7 +68,7 @@ export default function ConjointStudy() {
         </div>
         <button
           onClick={load}
-          className="fintech-button flex items-center gap-2 px-3 py-2 text-sm text-secondary border border-border hover:text-primary"
+          className="fintech-button flex items-center gap-2 px-3 py-2 text-sm"
         >
           <RefreshCcw size={15} /> Refresh
         </button>
