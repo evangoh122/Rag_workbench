@@ -67,21 +67,6 @@ jobs:
               echo "Skipping $key (not set)"
             fi
           }
-          # Space VARIABLES (not secrets) are passed to the Docker build as
-          # --build-arg, which is required for Vite to inline VITE_* vars into
-          # the frontend bundle. The PostHog project key is client-public, so a
-          # variable (not a secret) is the correct classification.
-          upload_variable() {
-            local key=$1 value=$2
-            if [ -n "$value" ]; then
-              echo "Uploading variable: $key"
-              post_with_retry \
-                "https://huggingface.co/api/spaces/$HF_USERNAME/$HF_SPACE_NAME/variables" \
-                "$(jq -nc --arg k "$key" --arg v "$value" '{"key": $k, "value": $v}')"
-            else
-              echo "Skipping $key (not set)"
-            fi
-          }
           upload_secret "GEMINI_API_KEY"    "${{ secrets.GEMINI_API_KEY }}"
           upload_secret "GOOGLE_API_KEY"    "${{ secrets.GOOGLE_API_KEY }}"
           upload_secret "DEEPSEEK_API_KEY"  "${{ secrets.DEEPSEEK_API_KEY }}"
@@ -107,11 +92,6 @@ jobs:
           # printf renders the \n as a real newline (Qwen's "Instruct: …\nQuery: …"
           # format); jq then JSON-encodes that newline so the Space env var is correct.
           upload_secret "EMBEDDING_QUERY_PREFIX" "$(printf 'Instruct: Given a financial question, retrieve relevant SEC filing passages that answer it.\nQuery: ')"
-          # PostHog product analytics — build-time variables for the frontend.
-          # Set the GitHub secret VITE_POSTHOG_KEY to activate; leaving it unset
-          # keeps analytics disabled (the app no-ops when the key is empty).
-          upload_variable "VITE_POSTHOG_KEY"  "${{ secrets.VITE_POSTHOG_KEY }}"
-          upload_variable "VITE_POSTHOG_HOST" "${{ secrets.VITE_POSTHOG_HOST }}"
 
           # PostHog backend secrets for querying aggregates (charts)
           upload_secret "POSTHOG_API_KEY"    "${{ secrets.POSTHOG_API_KEY }}"

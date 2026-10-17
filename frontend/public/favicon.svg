@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
-  <title id="title">RAG Workbench</title>
-  <rect width="48" height="48" rx="12" fill="#090A0C"/>
-  <path d="M12 15.5 24 10l12 5.5L24 21l-12-5.5Z" fill="#D6B65A"/>
-  <path d="M12 22.5 24 28l12-5.5M12 29.5 24 35l12-5.5" fill="none" stroke="#C7CBD1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="36" cy="29.5" r="2.2" fill="#F1D77A"/>
-</svg>

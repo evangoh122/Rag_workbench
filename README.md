@@ -226,18 +226,10 @@ Every run also passes through five operational checkpoints:
 | `routes/stats.py` | `GET /api/stats` |
 | `main.py` | `GET /api/health`, `/api/health/full` (DB + drift + LLM telemetry) |
 
-### Frontend — `frontend/src/`
+### Frontend
 
-React + TypeScript + Vite + Tailwind. Routed shell: `/` portfolio home, `/rag-overview`, `/rag/*` workbench.
-
-| Area | Files |
-|---|---|
-| Views | `views/ChatView.tsx` (SQL / RAG / auditable / graph chat), `views/TraceabilityView.tsx` |
-| Audit & pipeline | `components/AuditTrail.tsx` (sources + XBRL facts table + verification badge), `components/PipelineFlow.tsx` (live step viz), `components/DriftAlert.tsx` |
-| Knowledge graph | `components/KnowledgeGraph.tsx`, `GraphExplorer.tsx`, `GraphAnalytics.tsx` |
-| Charts & tone | `components/FinancialChart.tsx`, `ChartView.tsx`, `ToneAnalysis.tsx` |
-| Pages | `pages/ReviewQueue.tsx`, `MetricsDashboard.tsx`, `SystemDashboard.tsx`, `AuditLog.tsx`, `Methodology.tsx`, `ProductAnalytics.tsx`, `PortfolioHome.tsx`, `RagOverview.tsx`, `StocksList.tsx` |
-| API clients | `api/{client,chat,review,graph,analytics}.ts` |
+Moved to the separate [`evangoh-frontend`](https://github.com/evangoh122/evangoh-frontend)
+repo, which serves it directly in production. This repo is backend/API-only.
 
 ### Evaluation — `evals/`
 
@@ -254,7 +246,6 @@ React + TypeScript + Vite + Tailwind. Routed shell: `/` portfolio home, `/rag-ov
 ### Prerequisites
 
 - Python 3.11+ (the Docker image pins 3.11)
-- Node 22+
 - Docker (for the container build)
 
 ### Local development
@@ -277,13 +268,10 @@ cp .env.example .env
 
 # 3. Start the backend
 uvicorn api.main:app --reload --port 8000
-
-# 4. Start the frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
-# → http://localhost:5173
 ```
+
+The frontend lives in the separate `evangoh-frontend` repo — see its own
+README for local dev setup.
 
 ### Docker (single container)
 
@@ -522,18 +510,14 @@ This project is built by a team of specialist AI agents, each on its own branch,
 │   ├── golden_set.csv   # 50-question labelled eval set
 │   ├── run_eval.py      # Deterministic 4-axis scorer
 │   └── ragas_eval.py    # LLM-judge metrics
-├── frontend/            # Legacy — no longer deployed, see note below
 ├── scripts/             # Ingestion, XBRL/graph extraction, DB fetch/restore, shadow runs
 ├── tests/               # Unit tests
 └── Dockerfile           # 2-stage: Python deps → runtime; uvicorn serves 7860 directly
 ```
 
-The portfolio + RAG Workbench UI now lives in the separate
-`evangoh-frontend` repo, which serves it directly in production — this
-repo's `Dockerfile` is backend/API-only (no frontend build stage, no
-nginx, no supervisord). `frontend/` here is no longer deployed; it's kept
-for now but is effectively a stale duplicate of what was copied into
-`evangoh-frontend`.
+The portfolio + RAG Workbench UI lives in the separate `evangoh-frontend`
+repo, which serves it directly in production. This repo is
+backend/API-only (no frontend build stage, no nginx, no supervisord).
 
 ---
 
