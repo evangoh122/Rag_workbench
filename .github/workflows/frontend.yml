@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
       - run: npm ci
       - run: npm run lint
       # No separate typecheck/test scripts exist yet — `build` already runs

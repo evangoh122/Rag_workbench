@@ -40,7 +40,7 @@ jobs:
           pip-audit -r requirements.txt || true
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
       - name: npm audit (frontend)
         working-directory: frontend
         run: npm audit --audit-level=high || true

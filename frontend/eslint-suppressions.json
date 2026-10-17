@@ -1,0 +1,92 @@
+{
+  "src/App.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 2
+    }
+  },
+  "src/components/CoachMarks.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    },
+    "react-refresh/only-export-components": {
+      "count": 3
+    }
+  },
+  "src/components/ConjointSurvey.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    },
+    "react-hooks/static-components": {
+      "count": 6
+    }
+  },
+  "src/components/Disclaimer.tsx": {
+    "react-refresh/only-export-components": {
+      "count": 1
+    }
+  },
+  "src/components/DriftAlert.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/components/GraphAnalytics.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/components/GraphExplorer.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 2
+    },
+    "react-refresh/only-export-components": {
+      "count": 1
+    }
+  },
+  "src/components/KnowledgeGraph.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/pages/AuditLog.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/pages/ConjointStudy.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/pages/MetricsDashboard.tsx": {
+    "react-hooks/immutability": {
+      "count": 1
+    }
+  },
+  "src/pages/ProductAnalytics.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/pages/ReviewQueue.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/pages/SystemDashboard.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/views/ChatView.tsx": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  }
+}
