@@ -21,6 +21,7 @@ interface CoachMarksProps {
 }
 
 const PAD = 8; // spotlight padding around the target
+const CARD_H = 240; // tooltip budget used to keep the card on-screen
 const CARD_W = 320;
 
 /**
@@ -114,15 +115,27 @@ export default function CoachMarks({ steps, run, onClose }: CoachMarksProps) {
       left: Math.max(12, (vw - Math.min(CARD_W, vw - 24)) / 2),
       bottom: 20,
       width: Math.min(CARD_W, vw - 24),
+      maxHeight: vh - 40,
+      overflowY: 'auto',
     };
   } else {
-    const below = rect.bottom + 12;
-    const wantAbove = below + 180 > vh && rect.top > 200;
-    const top = wantAbove ? undefined : below;
-    const bottom = wantAbove ? vh - rect.top + 12 : undefined;
+    // The tooltip must always be fully reachable: prefer the side of the target
+    // with room for it, and when the target is taller than the viewport (the
+    // project deck is 651px) place it inside the viewport rather than below the
+    // fold - otherwise Next/Done end up off-screen and the tour cannot continue.
+    const roomBelow = vh - 12 - (rect.bottom + 12);
+    const roomAbove = rect.top - 24;
+    let top: number;
+    if (roomBelow >= CARD_H) {
+      top = rect.bottom + 12;
+    } else if (roomAbove >= CARD_H) {
+      top = rect.top - CARD_H - 12;
+    } else {
+      top = Math.max(12, Math.min(rect.bottom + 12, vh - CARD_H - 12));
+    }
     let left = rect.left + rect.width / 2 - CARD_W / 2;
     left = Math.min(Math.max(12, left), vw - CARD_W - 12);
-    cardStyle = { left, top, bottom, width: CARD_W };
+    cardStyle = { left, top, width: CARD_W, maxHeight: vh - 24, overflowY: 'auto' };
   }
 
   return (
