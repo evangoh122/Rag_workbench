@@ -675,11 +675,14 @@
 }
 
 /* Stacked project deck ----------------------------------------------------------
-   "Selected work" is a deck, not a track: every card sits in the same grid cell
-   and is positioned purely by its offset from the active index - the page writes
-   `data-offset` and this decides where the card goes. No library, no translate
-   on a parent. The two cards behind poke out on the right (and the mirror on the
-   left keeps the deck symmetric); anything further back is faded out entirely.
+   "Selected work" is a deck, not a track: every card sits in the same grid cell.
+   Position/scale/opacity/filter are driven in JS (PortfolioHome.tsx, via Motion)
+   as a continuous function of each card's live distance from the active index -
+   not by discrete per-offset CSS rules - so dragging between cards moves every
+   card in the stack at once, with 1:1 pointer tracking and spring physics on
+   release. This stylesheet only keeps what JS still depends on: the grid
+   structure, and the --deck-peek/--deck-peek-2 breakpoints JS reads at runtime
+   so the resting peek distances stay tunable from CSS alone.
 
    Unlayered on purpose: layered utilities must not outrank these rules. */
 .haze-deck {
@@ -693,65 +696,18 @@
 }
 
 /* one cell for every card: the deck adopts the tallest card's height and each
-   card stretches to it, so switching cards never resizes the section */
+   card stretches to it, so switching cards never resizes the section. No CSS
+   `transition` here - Motion drives transform/opacity/filter every frame, and
+   a competing CSS transition on the same properties would fight it. */
 .haze-deck > * {
   grid-area: 1 / 1;
   align-self: stretch;
-  transform-origin: right center;
-  transition:
-    transform 450ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 450ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 450ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform, opacity;
-}
-
-.haze-deck > [data-offset="0"] {
-  transform: none;
-  opacity: 1;
-  filter: none;
-  z-index: 30;
   /* the cards' surface is translucent glass, so without an opaque backing the
-     cards stacked behind bleed through the front card's own text. Radius matches
+     cards stacked behind bleed through whichever one is on top. Radius matches
      the card's rounded-2xl (1rem), so nothing square shows at the corners. */
   background: var(--color-background);
   border-radius: 1rem;
-}
-
-.haze-deck > [data-offset="1"] {
-  transform: translateX(var(--deck-peek)) scale(0.94);
-  opacity: 0.6;
-  filter: brightness(0.6);
-  z-index: 20;
-}
-
-.haze-deck > [data-offset="2"] {
-  transform: translateX(var(--deck-peek-2)) scale(0.88);
-  opacity: 0.3;
-  filter: brightness(0.6);
-  z-index: 10;
-}
-
-.haze-deck > [data-offset="-1"] {
-  transform: translateX(calc(-1 * var(--deck-peek))) scale(0.94);
-  opacity: 0.6;
-  filter: brightness(0.6);
-  z-index: 20;
-  transform-origin: left center;
-}
-
-.haze-deck > [data-offset="-2"] {
-  transform: translateX(calc(-1 * var(--deck-peek-2))) scale(0.88);
-  opacity: 0.3;
-  filter: brightness(0.6);
-  z-index: 10;
-  transform-origin: left center;
-}
-
-/* only ever seen mid-transition: three or more positions back is gone */
-.haze-deck > [data-offset]:not([data-offset="0"]):not([data-offset="1"]):not([data-offset="-1"]):not([data-offset="2"]):not([data-offset="-2"]) {
-  opacity: 0;
-  pointer-events: none;
-  z-index: 0;
 }
 
 /* the peek lives outside the deck box, so it has to fit the viewport */
