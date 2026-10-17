@@ -9,7 +9,9 @@ import requests
 from loguru import logger
 
 ADMIN_KEY = os.getenv("ADMIN_API_KEY", "")
-BASE_URL = "http://127.0.0.1:8000"
+# uvicorn now binds the Space's public port directly (no nginx in front of
+# it anymore — the frontend moved to evangoh-frontend).
+BASE_URL = "http://127.0.0.1:7860"
 
 # The DB is restored from the HF dataset at boot (fetch_db_from_dataset.py).
 # EDGAR re-seeding is OFF by default so the Space does not re-download/re-embed
