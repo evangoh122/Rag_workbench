@@ -1,6 +1,7 @@
 import { Mail, ArrowRight, Network, Database, Search, Sparkles, Flame, ShieldCheck } from 'lucide-react';
-import { useRef, useState } from 'react';
-import type { HTMLAttributes, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent, MouseEvent, PointerEvent } from 'react';
+import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import CoachMarks, { useTour } from '../components/CoachMarks';
 import { LANDING_TOUR, LANDING_TOUR_KEY } from '../components/tourSteps';
@@ -32,32 +33,125 @@ const GithubIcon = ({ size = 20 }: { size?: number }) => (
 const PROJECT_TITLES = ['RAG Workbench', 'Haze Watch', 'Quant Platform'];
 const PROJECT_COUNT = PROJECT_TITLES.length;
 
+// How far (in px) a drag must travel to fully traverse one card position -
+// independent of the resting peek distance below, which is a much smaller
+// visual offset. Tuned so a deliberate swipe, not an accidental nudge, commits.
+const DRAG_CARD_PITCH = 320;
+
+// Apple's exponential-decay projection (Designing Fluid Interfaces, WWDC18):
+// projects where a release velocity would coast to, so a flick lands further
+// than a slow drag released at the same point. Works in "cards" units here
+// (not px) since that's what `position` below is measured in - the formula
+// is unit-agnostic.
+function projectMomentum(velocity: number, decelerationRate = 0.998) {
+  return ((velocity / 1000) * decelerationRate) / (1 - decelerationRate);
+}
+
+function wrap(index: number) {
+  return ((index % PROJECT_COUNT) + PROJECT_COUNT) % PROJECT_COUNT;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = () => setReduced(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return reduced;
+}
+
 export default function PortfolioHome() {
   const navigate = useNavigate();
   const [activeProject, setActiveProject] = useState(0);
-  // The deck has no translating track: every card is positioned purely by its
-  // offset from the active index (0 = front, +/-1 = one behind, +/-2 = two behind).
-  const deckOffset = (index: number) => index - activeProject;
-  const moveProject = (delta: number) =>
-    setActiveProject((current) => (current + delta + PROJECT_COUNT) % PROJECT_COUNT);
+  const deckRef = useRef<HTMLDivElement>(null);
+  const reducedMotion = usePrefersReducedMotion();
+
+  // `position` is the single continuous value driving the whole deck: it
+  // equals `activeProject` at rest, and tracks the pointer 1:1 while
+  // dragging ("touch and content should move together"). Every card's
+  // transform is derived from its own distance to this value, so dragging
+  // between cards 0 and 1 moves every card in the stack at once, not just
+  // the one under the finger.
+  const position = useMotionValue(activeProject);
+  const settleAnimation = useRef<ReturnType<typeof animate> | null>(null);
+
+  // The resting peek distances (index.css: --deck-peek / --deck-peek-2) stay
+  // CSS-driven across breakpoints; this just mirrors their current computed
+  // value so the JS-driven interpolation below agrees with them at rest.
+  const [peek, setPeek] = useState({ near: 40, far: 80 });
+  useEffect(() => {
+    const read = () => {
+      const el = deckRef.current;
+      if (!el) return;
+      const style = getComputedStyle(el);
+      const near = parseFloat(style.getPropertyValue('--deck-peek')) || 40;
+      const far = parseFloat(style.getPropertyValue('--deck-peek-2')) || 80;
+      setPeek({ near, far });
+      // Nudge the derived card transforms (keyed off `position`, not `peek`)
+      // to recompute with the latest peek closure immediately on resize,
+      // rather than waiting for the next drag/commit.
+      position.set(position.get());
+    };
+    read();
+    window.addEventListener('resize', read);
+    return () => window.removeEventListener('resize', read);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const commitTo = (target: number, velocity = 0) => {
+    const next = wrap(target);
+    setActiveProject(next);
+    settleAnimation.current?.stop();
+    settleAnimation.current = animate(
+      position,
+      next,
+      reducedMotion
+        ? { duration: 0.15, ease: 'easeOut' }
+        : {
+            type: 'spring',
+            velocity,
+            // Bounce only when the gesture itself carried momentum - overshoot
+            // on a button/dot click (no gesture behind it) would feel wrong.
+            bounce: velocity ? 0.2 : 0,
+            duration: 0.4,
+          },
+    );
+  };
+
+  const moveProject = (delta: number) => commitTo(activeProject + delta);
+
   const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     action();
   };
-  const deckCardProps = (index: number): HTMLAttributes<HTMLDivElement> => {
+  // Static a11y attributes only - no ref access here, so this stays a plain
+  // helper. The ref-touching onClick/onKeyDown (commitTo closes over the
+  // settleAnimation ref) are set directly inline in JSX at each card site
+  // instead of flowing through a returned object, so the compiler can see
+  // the ref is only ever read inside a real, directly-authored event handler.
+  type DeckCardA11y = {
+    role?: 'button';
+    tabIndex?: number;
+    'aria-label'?: string;
+    inert?: boolean;
+    'aria-hidden'?: boolean;
+  };
+  const deckCardA11y = (index: number): DeckCardA11y => {
     const offset = index - activeProject;
     if (offset === 0) return {};
     if (Math.abs(offset) > 2) return { inert: true, 'aria-hidden': true };
     // A card behind the active one is hidden from assistive tech, so the wrapper
     // is the control that brings it forward.
-    return {
-      role: 'button',
-      tabIndex: 0,
-      'aria-label': `Show ${PROJECT_TITLES[index]}`,
-      onClick: () => setActiveProject(index),
-      onKeyDown: (event) => activateCardOnKeyDown(event, () => setActiveProject(index)),
-    };
+    return { role: 'button', tabIndex: 0, 'aria-label': `Show ${PROJECT_TITLES[index]}` };
   };
   const onDeckKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'ArrowRight') {
@@ -68,22 +162,51 @@ export default function PortfolioHome() {
       moveProject(-1);
     }
   };
+
+  // Drag: 1:1 pointer tracking the whole way through (never animate only on
+  // release), a short position/time history for release velocity, and
+  // momentum projection so a flick lands further than a slow drag released
+  // at the same point. Grabbing the deck again mid-settle interrupts the
+  // in-flight spring at its live value - no waiting for it to finish first.
   const dragFrom = useRef<number | null>(null);
+  const dragStartPosition = useRef(0);
+  const dragHistory = useRef<Array<{ x: number; t: number }>>([]);
   const dragged = useRef(false);
   const onDeckPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    settleAnimation.current?.stop();
     dragFrom.current = event.clientX;
+    dragStartPosition.current = position.get();
+    dragHistory.current = [{ x: event.clientX, t: event.timeStamp }];
     dragged.current = false;
+  };
+  const onDeckPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const start = dragFrom.current;
+    if (start === null) return;
+    const deltaX = event.clientX - start;
+    if (Math.abs(deltaX) > 6) dragged.current = true;
+    position.set(dragStartPosition.current - deltaX / DRAG_CARD_PITCH);
+    const history = dragHistory.current;
+    history.push({ x: event.clientX, t: event.timeStamp });
+    while (history.length > 1 && event.timeStamp - history[0].t > 100) history.shift();
   };
   const onDeckPointerUp = (event: PointerEvent<HTMLDivElement>) => {
     const start = dragFrom.current;
     dragFrom.current = null;
     if (start === null) return;
-    const delta = event.clientX - start;
-    if (Math.abs(delta) >= 45) {
-      // a swipe must not turn into a click on whatever card the finger left on
-      dragged.current = true;
-      moveProject(delta < 0 ? 1 : -1);
-    }
+    const history = dragHistory.current;
+    const first = history[0];
+    const last = history[history.length - 1] ?? { x: event.clientX, t: event.timeStamp };
+    const dt = last.t - first.t;
+    // Finger velocity in px/s, converted to the same "cards" unit `position`
+    // is measured in, then handed off as the spring's initial velocity so
+    // there's no visible seam between drag and animation.
+    const pxVelocity = dt > 0 ? (last.x - first.x) / (dt / 1000) : 0;
+    const cardVelocity = -pxVelocity / DRAG_CARD_PITCH;
+    const projected = position.get() + projectMomentum(cardVelocity);
+    const startIndex = dragStartPosition.current;
+    const target = clamp(Math.round(projected), startIndex - 1, startIndex + 1);
+    commitTo(target, cardVelocity);
   };
   const onDeckClickCapture = (event: MouseEvent<HTMLDivElement>) => {
     if (!dragged.current) return;
@@ -91,6 +214,37 @@ export default function PortfolioHome() {
     event.preventDefault();
     event.stopPropagation();
   };
+
+  // One derived-value set per card, keyed off its live distance to
+  // `position` - dragging or settling moves every card in the stack at
+  // once. Called at a fixed number of sites (3 literal cards), same order
+  // every render, so this satisfies the rules of hooks despite not being a
+  // .map() - see cardStyle0/1/2 below.
+  function useCardStyle(index: number) {
+    const offset = useTransform(position, (p) => index - p);
+    const x = useTransform(offset, (v) => {
+      const magnitude = Math.min(Math.abs(v), 2);
+      const sign = v < 0 ? -1 : 1;
+      const px = magnitude <= 1 ? peek.near * magnitude : peek.near + (peek.far - peek.near) * (magnitude - 1);
+      return sign * px;
+    });
+    const scale = useTransform(offset, [-2, -1, 0, 1, 2], [0.88, 0.94, 1, 0.94, 0.88]);
+    // Opacity only hides cards past the visible stack (|offset| > 2) - the
+    // "receding" dimming within the stack is brightness (below), not opacity.
+    // The wrapper's own opaque backing lives on this same element, so fading
+    // *its* opacity as a card is dragged out would fade the backing too,
+    // letting whatever's behind it bleed through mid-drag.
+    const opacity = useTransform(offset, [-3, -2, 2, 3], [0, 1, 1, 0]);
+    const brightness = useTransform(offset, [-2, -1, 0, 1, 2], [0.6, 0.6, 1, 0.6, 0.6]);
+    const filter = useTransform(brightness, (b) => `brightness(${b})`);
+    const zIndex = useTransform(offset, (v) => Math.round(30 - Math.min(Math.abs(v), 3) * 10));
+    const transformOrigin = useTransform(offset, (v) => (v >= 0 ? 'right center' : 'left center'));
+    return { x, scale, opacity, filter, zIndex, transformOrigin };
+  }
+  const cardStyle0 = useCardStyle(0);
+  const cardStyle1 = useCardStyle(1);
+  const cardStyle2 = useCardStyle(2);
+
   const landingTour = useTour(LANDING_TOUR_KEY);
 
   return (
@@ -232,6 +386,7 @@ export default function PortfolioHome() {
 
           <div className="relative max-w-5xl">
             <div
+              ref={deckRef}
               data-tour="project-deck"
               className="haze-deck relative"
               role="group"
@@ -240,11 +395,18 @@ export default function PortfolioHome() {
               tabIndex={0}
               onKeyDown={onDeckKeyDown}
               onPointerDown={onDeckPointerDown}
+              onPointerMove={onDeckPointerMove}
               onPointerUp={onDeckPointerUp}
               onPointerCancel={onDeckPointerUp}
               onClickCapture={onDeckClickCapture}
             >
-              <div className="haze-deck-card" data-offset={deckOffset(0)} {...deckCardProps(0)}>
+              <motion.div
+                className="haze-deck-card"
+                style={cardStyle0}
+                {...deckCardA11y(0)}
+                onClick={activeProject === 0 ? undefined : () => commitTo(0)}
+                onKeyDown={activeProject === 0 ? undefined : (event) => activateCardOnKeyDown(event, () => commitTo(0))}
+              >
             <div
               data-tour="project-card"
               onClick={() => navigate('/projects/rag-workbench')}
@@ -331,9 +493,15 @@ export default function PortfolioHome() {
                 </span>
               </div>
             </div>
-              </div>
+              </motion.div>
 
-              <div className="haze-deck-card" data-offset={deckOffset(1)} {...deckCardProps(1)}>
+              <motion.div
+                className="haze-deck-card"
+                style={cardStyle1}
+                {...deckCardA11y(1)}
+                onClick={activeProject === 1 ? undefined : () => commitTo(1)}
+                onKeyDown={activeProject === 1 ? undefined : (event) => activateCardOnKeyDown(event, () => commitTo(1))}
+              >
             <div
               data-tour="project-card"
               onClick={() => navigate('/projects/haze-watch')}
@@ -420,8 +588,14 @@ export default function PortfolioHome() {
                 </span>
               </div>
             </div>
-              </div>
-              <div className="haze-deck-card" data-offset={deckOffset(2)} {...deckCardProps(2)}>
+              </motion.div>
+              <motion.div
+                className="haze-deck-card"
+                style={cardStyle2}
+                {...deckCardA11y(2)}
+                onClick={activeProject === 2 ? undefined : () => commitTo(2)}
+                onKeyDown={activeProject === 2 ? undefined : (event) => activateCardOnKeyDown(event, () => commitTo(2))}
+              >
             <a
               data-tour="project-card"
               href="https://github.com/evangoh122/quant_platform_1"
@@ -508,7 +682,7 @@ export default function PortfolioHome() {
                 </span>
               </div>
             </a>
-              </div>
+              </motion.div>
             </div>
           <div className="mt-6 flex items-center justify-center gap-4" role="group" aria-label="Project carousel">
             <button
@@ -526,7 +700,7 @@ export default function PortfolioHome() {
                   type="button"
                   aria-label={`Show project ${i + 1}`}
                   aria-current={activeProject === i}
-                  onClick={() => setActiveProject(i)}
+                  onClick={() => commitTo(i)}
                   className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${activeProject === i ? 'w-6 bg-accent' : 'w-2 bg-border hover:bg-secondary'}`}
                 />
               ))}
