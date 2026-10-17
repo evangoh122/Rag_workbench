@@ -48,24 +48,24 @@ def cross_validate(
     reason_codes: list[ReasonCode] = []
     details: dict = {}
 
-    for field in result.fields:  # noqa: F402
+    for extracted_field in result.fields:
         fc = FieldConfidence(
-            name=field.name,
-            confidence=PROVENANCE_BASE_SCORE.get(field.provenance, 0.5),
+            name=extracted_field.name,
+            confidence=PROVENANCE_BASE_SCORE.get(extracted_field.provenance, 0.5),
         )
 
-        if not isinstance(field.value, (int, float)):
+        if not isinstance(extracted_field.value, (int, float)):
             field_confidences.append(fc)
             continue
 
-        if not field.concept:
+        if not extracted_field.concept:
             field_confidences.append(fc)
             continue
 
         period = result.period or ""
         xbrl_fact = get_fact(
             cik=result.cik,
-            concept=field.concept,
+            concept=extracted_field.concept,
             period_end=period,
             ticker=ticker,
         )
@@ -75,7 +75,7 @@ def cross_validate(
             continue
 
         fc.xbrl_value = xbrl_fact.value
-        fc.claimed_value = float(field.value)
+        fc.claimed_value = float(extracted_field.value)
 
         delta = abs(fc.claimed_value - xbrl_fact.value) / max(abs(xbrl_fact.value), 1.0)
 
@@ -87,7 +87,7 @@ def cross_validate(
             fc.matched_xbrl = False
             fc.reason_code = ReasonCode.XBRL_MISMATCH
             reason_codes.append(ReasonCode.XBRL_MISMATCH)
-            details[field.name] = {
+            details[extracted_field.name] = {
                 "xbrl": xbrl_fact.value,
                 "extracted": fc.claimed_value,
                 "delta_pct": f"{delta:.2%}",

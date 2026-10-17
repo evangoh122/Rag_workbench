@@ -10,7 +10,7 @@ Structure-aware chunking:
 - Narrative text is split by topic similarity (semantic chunking), not fixed size
 - Each chunk is tagged with section_type (balance_sheet, income_statement, md_and_a, etc.)
 """
-import gc  # noqa: F401
+import gc
 import os
 import re
 import shutil
@@ -548,8 +548,6 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
     
     Processes tickers in batches with explicit memory cleanup to stay within HF Space limits.
     """
-    import gc  # noqa: F811
-    
     if tickers is None:
         tickers = DEMO_TICKERS
 
