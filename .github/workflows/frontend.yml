@@ -24,8 +24,13 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
-      - run: npm ci
+          node-version: "22"
+      # npm install, not npm ci: the committed lockfile was generated on
+      # Windows and is missing Linux-only optional deps (@emnapi/core etc.),
+      # which `npm ci` treats as a hard mismatch. `npm install` is what the
+      # production Dockerfile already uses for the same reason - matching it
+      # here means CI reflects the real build, not a stricter invented one.
+      - run: npm install
       - run: npm run lint
       # No separate typecheck/test scripts exist yet — `build` already runs
       # `tsc -b` before `vite build`, so it's the typecheck gate for now.
