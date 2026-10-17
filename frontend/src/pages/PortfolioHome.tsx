@@ -1,5 +1,6 @@
-import { Mail, ArrowRight, Cpu, Network, Database, Search, Sparkles } from 'lucide-react';
-import type { KeyboardEvent } from 'react';
+import { Mail, ArrowRight, Network, Database, Search, Sparkles, Flame, ShieldCheck } from 'lucide-react';
+import { useRef, useState } from 'react';
+import type { HTMLAttributes, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CoachMarks, { useTour } from '../components/CoachMarks';
 import { LANDING_TOUR, LANDING_TOUR_KEY } from '../components/tourSteps';
@@ -28,14 +29,69 @@ const GithubIcon = ({ size = 20 }: { size?: number }) => (
   </svg>
 );
 
+const PROJECT_TITLES = ['RAG Workbench', 'Haze Watch', 'Quant Platform'];
+const PROJECT_COUNT = PROJECT_TITLES.length;
+
 export default function PortfolioHome() {
   const navigate = useNavigate();
-  const landingTour = useTour(LANDING_TOUR_KEY);
+  const [activeProject, setActiveProject] = useState(0);
+  // The deck has no translating track: every card is positioned purely by its
+  // offset from the active index (0 = front, +/-1 = one behind, +/-2 = two behind).
+  const deckOffset = (index: number) => index - activeProject;
+  const moveProject = (delta: number) =>
+    setActiveProject((current) => (current + delta + PROJECT_COUNT) % PROJECT_COUNT);
   const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     action();
   };
+  const deckCardProps = (index: number): HTMLAttributes<HTMLDivElement> => {
+    const offset = index - activeProject;
+    if (offset === 0) return {};
+    if (Math.abs(offset) > 2) return { inert: true, 'aria-hidden': true };
+    // A card behind the active one is hidden from assistive tech, so the wrapper
+    // is the control that brings it forward.
+    return {
+      role: 'button',
+      tabIndex: 0,
+      'aria-label': `Show ${PROJECT_TITLES[index]}`,
+      onClick: () => setActiveProject(index),
+      onKeyDown: (event) => activateCardOnKeyDown(event, () => setActiveProject(index)),
+    };
+  };
+  const onDeckKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      moveProject(1);
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      moveProject(-1);
+    }
+  };
+  const dragFrom = useRef<number | null>(null);
+  const dragged = useRef(false);
+  const onDeckPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    dragFrom.current = event.clientX;
+    dragged.current = false;
+  };
+  const onDeckPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const start = dragFrom.current;
+    dragFrom.current = null;
+    if (start === null) return;
+    const delta = event.clientX - start;
+    if (Math.abs(delta) >= 45) {
+      // a swipe must not turn into a click on whatever card the finger left on
+      dragged.current = true;
+      moveProject(delta < 0 ? 1 : -1);
+    }
+  };
+  const onDeckClickCapture = (event: MouseEvent<HTMLDivElement>) => {
+    if (!dragged.current) return;
+    dragged.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const landingTour = useTour(LANDING_TOUR_KEY);
 
   return (
     <div className="min-h-screen bg-background text-primary font-sans flex flex-col">
@@ -48,7 +104,7 @@ export default function PortfolioHome() {
             </div>
             <span className="font-semibold text-base tracking-tight">Evan Goh</span>
           </div>
-          <nav className="flex items-center gap-4 sm:gap-5 text-sm">
+          <nav data-tour="contact" className="flex items-center gap-4 sm:gap-5 text-sm">
             <button
               onClick={landingTour.start}
               className="flex items-center gap-1.5 text-secondary hover:text-primary transition-colors bg-transparent border-0 cursor-pointer p-0"
@@ -60,6 +116,8 @@ export default function PortfolioHome() {
               href="https://www.linkedin.com/in/eevangoh/"
               target="_blank"
               rel="noopener noreferrer"
+              aria-label="Visit Evan Goh's LinkedIn profile"
+              title="LinkedIn"
               className="text-secondary hover:text-primary transition-colors flex items-center gap-1.5"
             >
               <LinkedinIcon size={15} />
@@ -78,6 +136,8 @@ export default function PortfolioHome() {
             </a>
             <a
               href="mailto:evangohsg@gmail.com"
+              aria-label="Contact Evan Goh"
+              title="Contact"
               className="text-secondary hover:text-primary transition-colors flex items-center gap-1.5"
             >
               <Mail size={15} />
@@ -170,13 +230,29 @@ export default function PortfolioHome() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] gap-5 lg:gap-6 max-w-5xl">
+          <div className="relative max-w-5xl">
+            <div
+              data-tour="project-deck"
+              className="haze-deck relative"
+              role="group"
+              aria-roledescription="carousel"
+              aria-label="Selected work"
+              tabIndex={0}
+              onKeyDown={onDeckKeyDown}
+              onPointerDown={onDeckPointerDown}
+              onPointerUp={onDeckPointerUp}
+              onPointerCancel={onDeckPointerUp}
+              onClickCapture={onDeckClickCapture}
+            >
+              <div className="haze-deck-card" data-offset={deckOffset(0)} {...deckCardProps(0)}>
             <div
               data-tour="project-card"
-              onClick={() => navigate('/rag-overview')}
-              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/rag-overview'))}
+              onClick={() => navigate('/projects/rag-workbench')}
+              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/rag-workbench'))}
               role="button"
-              tabIndex={0}
+              tabIndex={activeProject === 0 ? 0 : -1}
+              aria-hidden={activeProject !== 0}
+              inert={activeProject !== 0}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
               <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
@@ -255,99 +331,215 @@ export default function PortfolioHome() {
                 </span>
               </div>
             </div>
+              </div>
 
+              <div className="haze-deck-card" data-offset={deckOffset(1)} {...deckCardProps(1)}>
             <div
-              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}
-              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/rag', { state: { initialView: 'stocks' } }))}
+              data-tour="project-card"
+              onClick={() => navigate('/projects/haze-watch')}
+              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/haze-watch'))}
               role="button"
-              tabIndex={0}
-              className="glass-card hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 relative group overflow-hidden cursor-pointer lg:mt-16 min-h-[430px]"
+              tabIndex={activeProject === 1 ? 0 : -1}
+              aria-hidden={activeProject !== 1}
+              inert={activeProject !== 1}
+              className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
+              <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
               <div>
-                <div className="flex items-start justify-between mb-5 flex-wrap gap-2">
+                <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-border/20 border border-border/35 rounded-xl text-secondary">
-                      <Database size={20} />
+                    <div className="p-2 bg-accent/8 border border-accent/15 rounded-xl text-accent">
+                      <Flame size={20} />
                     </div>
                     <div>
-                      <h3 className="text-base sm:text-lg font-semibold text-primary tracking-tight">Enterprise infrastructure</h3>
-                      <p className="text-[11px] font-mono text-secondary">Market data architecture notes</p>
+                      <h3 className="text-xl sm:text-2xl font-semibold text-primary tracking-tight">Haze Watch</h3>
+                      <p className="text-[11px] font-mono text-accent-bright">Geospatial climate risk for lenders</p>
                     </div>
                   </div>
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md border border-white/10 bg-white/[0.04] text-secondary">
-                    Blueprint
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md border border-accent/20 bg-accent/8 text-accent-bright">
+                    Case Study & App
                   </span>
                 </div>
 
-                <div className="mb-5 bg-surface-elevated/20 border border-border/20 rounded-xl p-4">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary mb-2 font-mono">
-                    operating constraint
+                <div className="mb-6 bg-background/42 border border-white/[0.06] rounded-xl p-4">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-accent-bright mb-3 font-mono">
+                    why it exists
                   </div>
-                  <p className="text-xs text-secondary/80 leading-relaxed mb-3 font-light">
-                    A companion architecture sketch for moving historical market bars into an analysis layer without making every query feel like a batch job.
+                  <p className="text-sm text-secondary leading-7 mb-4 font-light">
+                    Banks and insurers hold plantation portfolios exposed to recurring wildfire and haze, yet the link from environmental hazard to borrower cash flow is rarely modeled end to end. Haze Watch joins real NASA fire observations to concession geography and runs auditable credit stress scenarios.
                   </p>
-                  <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                    <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
-                      <div className="text-xs font-mono font-semibold text-secondary">10B+</div>
-                      <div className="text-[9px] text-secondary/60">bars</div>
+                  <div className="grid grid-cols-3 gap-2 text-left">
+                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">300</div>
+                      <div className="text-[10px] text-secondary/70">real concession polygons</div>
                     </div>
-                    <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
-                      <div className="text-xs font-mono font-semibold text-secondary">&lt;15ms</div>
-                      <div className="text-[9px] text-secondary/60">lookup</div>
+                    <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">24-72h</div>
+                      <div className="text-[10px] text-secondary/70">hazard horizons</div>
                     </div>
-                    <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
-                      <div className="text-xs font-mono font-semibold text-secondary">sub-sec</div>
-                      <div className="text-[9px] text-secondary/60">rollups</div>
+                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">75</div>
+                      <div className="text-[10px] text-secondary/70">pipeline tests</div>
                     </div>
-                  </div>
-                  <p className="text-xs text-secondary/70 leading-relaxed font-light m-0">
-                    Partitioning, columnar storage, and API boundaries matter more here than one heroic model call.
-                  </p>
-                </div>
-
-                <div className="mb-5 bg-surface-elevated/20 border border-border/20 rounded-xl p-4">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary mb-2 font-mono">
-                    pipeline note
-                  </div>
-                  <div className="font-mono text-[9px] text-secondary/60 leading-relaxed">
-                    Kafka ingress -&gt; Flink SQL -&gt; ClickHouse warehouse -&gt; App API
                   </div>
                 </div>
 
-                <p className="text-xs text-secondary/70 leading-relaxed mb-6 font-light">
-                  Useful because the research app should eventually answer chart and price-context questions with the same traceability discipline as filing questions.
+                <p className="text-sm text-secondary leading-7 mb-6 font-light max-w-xl">
+                  Real environmental data, entirely synthetic commercial data. Every credit ratio traces to a documented formula, every dataset carries its provenance and licence, and hazard scores are labeled baselines - never probabilities of default.
                 </p>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="glass-sm p-3.5 opacity-60">
-                    <div className="flex items-center gap-2 text-secondary text-xs font-semibold mb-1">
-                      <Database size={13} />
-                      Stream processing
+                  <div className="glass-sm p-3.5">
+                    <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
+                      <Flame size={13} />
+                      Real fire observations
                     </div>
-                    <p className="text-[11px] text-secondary/70 m-0">State tracking and stream schemas</p>
+                    <p className="text-[11px] text-secondary/70 m-0">NASA FIRMS detections and ERA5 weather joined to concession geography</p>
                   </div>
-                  <div className="glass-sm p-3.5 opacity-60">
-                    <div className="flex items-center gap-2 text-secondary text-xs font-semibold mb-1">
-                      <Cpu size={13} />
-                      Distributed DBs
+                  <div className="glass-sm p-3.5">
+                    <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
+                      <ShieldCheck size={13} />
+                      Auditable stress tests
                     </div>
-                    <p className="text-[11px] text-secondary/70 m-0">Partitioning, indices, and shards</p>
+                    <p className="text-[11px] text-secondary/70 m-0">Scenario engines with full calculation traces and guardrailed analyst chat</p>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-between border-t border-border/30 pt-5 mt-2 flex-wrap gap-3">
-                <div className="flex flex-wrap gap-1">
-                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">Kafka</span>
-                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">Kubernetes</span>
-                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">ClickHouse</span>
+                <div className="flex flex-wrap gap-1.5 max-w-md">
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">Geospatial</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">FastAPI</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">React</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">MapLibre</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">DuckDB</span>
                 </div>
                 <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
-                  Explore charts
+                  View case study
                   <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                 </span>
               </div>
             </div>
+              </div>
+              <div className="haze-deck-card" data-offset={deckOffset(2)} {...deckCardProps(2)}>
+            <a
+              data-tour="project-card"
+              href="https://github.com/evangoh122/quant_platform_1"
+              target="_blank"
+              rel="noopener noreferrer"
+              tabIndex={activeProject === 2 ? 0 : -1}
+              aria-hidden={activeProject !== 2}
+              inert={activeProject !== 2}
+              className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
+            >
+              <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
+              <div>
+                <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-accent/8 border border-accent/15 rounded-xl text-accent">
+                      <Database size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl sm:text-2xl font-semibold text-primary tracking-tight">Quant Platform</h3>
+                      <p className="text-[11px] font-mono text-accent-bright">Point-in-time equity research on Databricks</p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md border border-accent/20 bg-accent/8 text-accent-bright">
+                    Open Source - Repo
+                  </span>
+                </div>
+
+                <div className="mb-6 bg-background/42 border border-white/[0.06] rounded-xl p-4">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-accent-bright mb-3 font-mono">
+                    why it exists
+                  </div>
+                  <p className="text-sm text-secondary leading-7 mb-4 font-light">
+                    A backtest is only as honest as what it was allowed to know. Quant Platform ingests market, options, SEC, COT and macro data with PySpark into a Delta medallion lakehouse, stamps every row with when it became available so features join point-in-time, and lets an LLM-directed agent research a company and save a note through a deterministic validator.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 text-left">
+                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">287M</div>
+                      <div className="text-[10px] text-secondary/70">rows ingested</div>
+                    </div>
+                    <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">5</div>
+                      <div className="text-[10px] text-secondary/70">data domains</div>
+                    </div>
+                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">8+</div>
+                      <div className="text-[10px] text-secondary/70">Lakebase tables</div>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-sm text-secondary leading-7 mb-6 font-light max-w-xl">
+                  Real market and filing data, with the limits stated as plainly as the results: signals are labelled an untuned baseline with no predictive edge claimed, and agent writes are validated, idempotent and logged before they reach the database.
+                </p>
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="glass-sm p-3.5">
+                    <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
+                      <Network size={13} />
+                      Point-in-time joins
+                    </div>
+                    <p className="text-[11px] text-secondary/70 m-0">Silver stamps information_available_ts so features cannot see the future</p>
+                  </div>
+                  <div className="glass-sm p-3.5">
+                    <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
+                      <ShieldCheck size={13} />
+                      Validated agent writes
+                    </div>
+                    <p className="text-[11px] text-secondary/70 m-0">Allowlist, roles, write scope and idempotency checked before any Lakebase write</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-border/30 pt-5 mt-2 flex-wrap gap-3">
+                <div className="flex flex-wrap gap-1.5 max-w-md">
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">Databricks</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">PySpark</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">Delta Lake</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">FastAPI</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">React</span>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
+                  View the repo
+                  <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+                </span>
+              </div>
+            </a>
+              </div>
+            </div>
+          <div className="mt-6 flex items-center justify-center gap-4" role="group" aria-label="Project carousel">
+            <button
+              type="button"
+              aria-label="Previous project"
+              onClick={() => moveProject(-1)}
+              className="haze-proj-prev flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+            >
+              ‹
+            </button>
+            <div className="flex items-center gap-2">
+              {PROJECT_TITLES.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`Show project ${i + 1}`}
+                  aria-current={activeProject === i}
+                  onClick={() => setActiveProject(i)}
+                  className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${activeProject === i ? 'w-6 bg-accent' : 'w-2 bg-border hover:bg-secondary'}`}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-label="Next project"
+              onClick={() => moveProject(1)}
+              className="haze-proj-next flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+            >
+              ›
+            </button>
+          </div>
           </div>
         </section>
       </main>
@@ -363,7 +555,7 @@ export default function PortfolioHome() {
             </div>
           </div>
           <p className="mt-2 text-[11px] text-secondary/40 leading-relaxed max-w-2xl text-center">
-            Disclaimer: This is a personal portfolio and ongoing area of exploration. All views expressed are my own. All data is publicly sourced and not related to my work.
+            Disclaimer: This is a personal portfolio and ongoing area of exploration. All views expressed are my own. Environmental data is publicly sourced; demo companies and financial figures are synthetic. Not related to my work.
           </p>
         </div>
       </footer>

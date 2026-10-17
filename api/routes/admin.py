@@ -9,7 +9,7 @@ from typing import Literal
 
 import duckdb
 import requests
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException  # noqa: F401
 from loguru import logger
 from pydantic import BaseModel
 

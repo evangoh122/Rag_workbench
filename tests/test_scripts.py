@@ -6,19 +6,19 @@ for mod in ["sec_edgar_downloader", "langchain_text_splitters", "bs4", "edgar"]:
     sys.modules[mod] = MagicMock()
 
 # Fix broken import in scripts/embed_edgar.py
-import scripts.embed_tickers
+import scripts.embed_tickers  # noqa: E402
 scripts.embed_tickers.get_embeddings = MagicMock()
 
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open  # noqa: E402
 
 # Now we can import the scripts
-from scripts.embed_edgar import _reset_incompatible_embeddings, run_embed_edgar_etl
-from scripts.embed_tickers import (
+from scripts.embed_edgar import _reset_incompatible_embeddings, run_embed_edgar_etl  # noqa: E402
+from scripts.embed_tickers import (  # noqa: E402
     _load_ticker_rows,
     _reset_incompatible_embeddings as _reset_incompatible_ticker_embeddings,
 )
-from scripts.init_graph_triples import init_graph_triples
-from scripts.run_shadow import load_extractions, main as shadow_main
+from scripts.init_graph_triples import init_graph_triples  # noqa: E402
+from scripts.run_shadow import load_extractions, main as shadow_main  # noqa: E402
 
 # ── Embed Edgar Script Tests ─────────────────────────────────────────────────
 

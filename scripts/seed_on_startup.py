@@ -117,7 +117,7 @@ def main():
                 logger.info(f"Embedding complete — {chunks} chunks, status={d.get('status')}")
                 if chunks > 0:
                     break
-                logger.warning(f"Embedding returned 0 chunks — retrying...")
+                logger.warning(f"Embedding returned 0 chunks — retrying...")  # noqa: F541
             else:
                 logger.error(f"Embedding failed: HTTP {r.status_code} — {r.text}")
         except Exception as e:

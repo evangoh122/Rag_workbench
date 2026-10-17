@@ -15,14 +15,14 @@ os.environ["ST_EMBEDDING_MODEL"] = "Qwen/Qwen3-Embedding-0.6B"
 os.environ["EMBEDDING_DIM"] = "1024"
 
 # Use standard lxml parser warning filter for clean log output
-import warnings
-from bs4 import XMLParsedAsHTMLWarning
+import warnings  # noqa: E402
+from bs4 import XMLParsedAsHTMLWarning  # noqa: E402
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
-from scripts.bootstrap_db import bootstrap
-from scripts.embed_edgar import run_embed_edgar_etl
-from scripts.embed_tickers import run_embed_tickers_etl
-from api.config import Config
+from scripts.bootstrap_db import bootstrap  # noqa: E402
+from scripts.embed_edgar import run_embed_edgar_etl  # noqa: E402
+from scripts.embed_tickers import run_embed_tickers_etl  # noqa: E402
+from api.config import Config  # noqa: E402
 
 missing_embeddings = ['NXPI', 'MPWR', 'SWKS', 'QRVO', 'TER', 'ENTG', 'ONTO', 'FORM', 'COHU', 'KLIC', 'ICHR', 'VECO', 'AEHR', 'ACLS', 'AMKR', 'RKLB']
 missing_xbrl = ['MRVL', 'NXPI', 'MCHP', 'MPWR', 'SWKS', 'QRVO', 'AMAT', 'ONTO', 'FORM', 'COHU', 'VECO', 'AMKR', 'RKLB']

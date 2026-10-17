@@ -548,8 +548,6 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
     
     Processes tickers in batches with explicit memory cleanup to stay within HF Space limits.
     """
-    import gc
-    
     if tickers is None:
         tickers = DEMO_TICKERS
 

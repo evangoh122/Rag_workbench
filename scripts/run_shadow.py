@@ -107,11 +107,11 @@ def main():
     print(f"AUTO:             {report.auto_count}")
     print(f"SAMPLED_REVIEW:   {report.sampled_review_count}")
     print(f"ESCALATE:         {report.escalation_count}")
-    print(f"\nConfidence histogram:")
+    print(f"\nConfidence histogram:")  # noqa: F541
     for bucket, count in sorted(report.confidence_histogram.items()):
         print(f"  {bucket}: {count}")
     if report.trigger_counts:
-        print(f"\nTrigger counts:")
+        print(f"\nTrigger counts:")  # noqa: F541
         for trigger, count in sorted(report.trigger_counts.items(), key=lambda x: -x[1]):
             print(f"  {trigger}: {count}")
     print(f"\nReport saved to: {args.output}")

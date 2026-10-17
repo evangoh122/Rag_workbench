@@ -75,6 +75,7 @@ import { getPosthog } from './utils/posthog'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import PortfolioHome from './pages/PortfolioHome';
 import RagOverview from './pages/RagOverview';
+import HazeWatch from './pages/HazeWatch';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 
@@ -1463,6 +1464,9 @@ function App() {
       <Routes>
         <Route path="/" element={<PortfolioHome />} />
         <Route path="/rag-overview" element={<RagOverview />} />
+        <Route path="/projects/rag-workbench" element={<RagOverview />} />
+        <Route path="/haze-watch" element={<HazeWatch />} />
+        <Route path="/projects/haze-watch" element={<HazeWatch />} />
         {/* Short, shareable aliases for the overview page. `/r/:ref` lets a link
             carry its channel/recruiter in the path (evangoh.com/r/acme) so it is
             clean enough to put on a resume or LinkedIn while still being tracked. */}

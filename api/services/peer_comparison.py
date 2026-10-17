@@ -486,7 +486,7 @@ def compute_metric(ticker: str, metric: str) -> Dict[str, Any]:
     from api.services.metric_router import route_metric
     from api.services.sec_client import get_latest_10k_facts
 
-    import polars as pl
+    import polars as pl  # noqa: F401
 
     out = {"value": None, "period": "", "ok": False}
     try:

@@ -1,0 +1,42 @@
+name: Python CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "api/**"
+      - "scripts/**"
+      - "tests/**"
+      - "main.py"
+      - "run.py"
+      - "requirements.txt"
+      - "requirements-dev.txt"
+      - "ruff.toml"
+      - ".github/workflows/python.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      # Plain pip + requirements.txt, not a uv workspace (no pyproject.toml/
+      # uv.lock exists here, unlike haze_watch) - uv is just a much faster
+      # pip-compatible installer for these requirements files, same deps.
+      - name: Install dependencies
+        run: uv pip install --system -r requirements.txt -r requirements-dev.txt
+      - name: Lint
+        run: ruff check api scripts tests main.py run.py
+      - name: Tests
+        # Not `pytest tests` - that omits the repo root from sys.path, so
+        # `import api` fails. `-m` makes Python add the cwd itself.
+        run: python -m pytest tests

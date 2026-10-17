@@ -998,7 +998,7 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
     import json
     import uuid
     from api.db.database import db_manager
-    from api.db.review_queue import init_review_tables, insert_decision
+    from api.db.review_queue import init_review_tables, insert_decision  # noqa: F401
 
     chunk_ids: List[str] = []
     source_docs: List[str] = []
