@@ -143,10 +143,19 @@ def posthog_summary():
             "SELECT event, count() c FROM events WHERE timestamp > now() - INTERVAL 7 DAY "
             "GROUP BY event ORDER BY c DESC LIMIT 10",
         )
+        # All of evangoh's sites (evangoh.com, quant_platform_1) share this one
+        # PostHog project, so $host is what actually distinguishes them.
+        by_site = _hogql(
+            host, project, key,
+            "SELECT properties.$host AS site, count() c FROM events "
+            "WHERE timestamp > now() - INTERVAL 7 DAY AND properties.$host IS NOT NULL "
+            "GROUP BY site ORDER BY c DESC LIMIT 10",
+        )
         return {
             "configured": True,
             "events_7d": (total[0][0] if total and total[0] else 0),
             "top_events": [{"event": row[0], "count": row[1]} for row in top],
+            "by_site": [{"site": row[0], "count": row[1]} for row in by_site],
         }
     except Exception as e:
         logger.warning("PostHog query failed: {}", e)
