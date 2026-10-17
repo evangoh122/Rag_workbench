@@ -143,12 +143,17 @@ def posthog_summary():
             "SELECT event, count() c FROM events WHERE timestamp > now() - INTERVAL 7 DAY "
             "GROUP BY event ORDER BY c DESC LIMIT 10",
         )
-        # All of evangoh's sites (evangoh.com, quant_platform_1) share this one
-        # PostHog project, so $host is what actually distinguishes them.
+        # Breaks down by the first path segment (e.g. /haze-watch, /rag) rather
+        # than $host: $host leaks raw infrastructure hostnames (HF Space names,
+        # hosting-provider subdomains) on this public page, where a path
+        # segment doesn't. This also naturally covers every site sharing this
+        # PostHog project without listing hosts to include or exclude.
         by_site = _hogql(
             host, project, key,
-            "SELECT properties.$host AS site, count() c FROM events "
-            "WHERE timestamp > now() - INTERVAL 7 DAY AND properties.$host IS NOT NULL "
+            "SELECT if(splitByChar('/', coalesce(properties.$pathname, '/'))[2] = '', "
+            "'/ (home)', concat('/', splitByChar('/', coalesce(properties.$pathname, '/'))[2])) AS site, "
+            "count() c FROM events "
+            "WHERE timestamp > now() - INTERVAL 7 DAY AND properties.$pathname IS NOT NULL "
             "GROUP BY site ORDER BY c DESC LIMIT 10",
         )
         return {
