@@ -135,7 +135,13 @@ export default function CoachMarks({ steps, run, onClose }: CoachMarksProps) {
     }
     let left = rect.left + rect.width / 2 - CARD_W / 2;
     left = Math.min(Math.max(12, left), vw - CARD_W - 12);
-    cardStyle = { left, top, width: CARD_W, maxHeight: vh - 24, overflowY: 'auto' };
+    cardStyle = {
+      left,
+      top,
+      width: CARD_W,
+      maxHeight: Math.max(0, Math.min(CARD_H, vh - top - 12)),
+      overflowY: 'auto',
+    };
   }
 
   return (

@@ -40,6 +40,11 @@ export default function PortfolioHome() {
   const deckOffset = (index: number) => index - activeProject;
   const moveProject = (delta: number) =>
     setActiveProject((current) => (current + delta + PROJECT_COUNT) % PROJECT_COUNT);
+  const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    action();
+  };
   const deckCardProps = (index: number): HTMLAttributes<HTMLDivElement> => {
     const offset = index - activeProject;
     if (offset === 0) return {};
@@ -51,6 +56,7 @@ export default function PortfolioHome() {
       tabIndex: 0,
       'aria-label': `Show ${PROJECT_TITLES[index]}`,
       onClick: () => setActiveProject(index),
+      onKeyDown: (event) => activateCardOnKeyDown(event, () => setActiveProject(index)),
     };
   };
   const onDeckKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -86,11 +92,6 @@ export default function PortfolioHome() {
     event.stopPropagation();
   };
   const landingTour = useTour(LANDING_TOUR_KEY);
-  const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    action();
-  };
 
   return (
     <div className="min-h-screen bg-background text-primary font-sans flex flex-col">
