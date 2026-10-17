@@ -522,18 +522,18 @@ This project is built by a team of specialist AI agents, each on its own branch,
 │   ├── golden_set.csv   # 50-question labelled eval set
 │   ├── run_eval.py      # Deterministic 4-axis scorer
 │   └── ragas_eval.py    # LLM-judge metrics
-├── frontend/
-│   └── src/
-│       ├── api/         # Typed API clients
-│       ├── components/  # AuditTrail, PipelineFlow, KnowledgeGraph, charts, tone
-│       ├── pages/       # ReviewQueue, dashboards, audit log, methodology
-│       └── views/       # ChatView, TraceabilityView
+├── frontend/            # Legacy — no longer deployed, see note below
 ├── scripts/             # Ingestion, XBRL/graph extraction, DB fetch/restore, shadow runs
 ├── tests/               # Unit tests
-├── Dockerfile           # 3-stage: Node build → Python deps → Nginx + Supervisor runtime
-├── nginx.conf           # Port 7860, /api/ proxied to FastAPI
-└── supervisord.conf     # Process manager: nginx + uvicorn
+└── Dockerfile           # 2-stage: Python deps → runtime; uvicorn serves 7860 directly
 ```
+
+The portfolio + RAG Workbench UI now lives in the separate
+`evangoh-frontend` repo, which serves it directly in production — this
+repo's `Dockerfile` is backend/API-only (no frontend build stage, no
+nginx, no supervisord). `frontend/` here is no longer deployed; it's kept
+for now but is effectively a stale duplicate of what was copied into
+`evangoh-frontend`.
 
 ---
 
