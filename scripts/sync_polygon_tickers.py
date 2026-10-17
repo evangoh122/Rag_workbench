@@ -5,7 +5,7 @@ Fetch company details from Polygon.io and populate the polygon_tickers table in 
 Usage:
     python scripts/sync_polygon_tickers.py
 """
-import os
+import os  # noqa: F401
 import sys
 import time
 import requests

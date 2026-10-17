@@ -25,7 +25,7 @@ _NCPU = str(os.cpu_count() or 4)
 os.environ.setdefault("OMP_NUM_THREADS", _NCPU)
 os.environ.setdefault("MKL_NUM_THREADS", _NCPU)
 
-import duckdb
+import duckdb  # noqa: E402
 
 MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
 TARGET_DIM = 1024

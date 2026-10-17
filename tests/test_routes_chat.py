@@ -63,7 +63,7 @@ def test_chat_graph_rag_success():
 @pytest.mark.usefixtures("mock_auth", "mock_guards")
 def test_chat_graph_rag_missing_ticker():
     """Graph RAG rejects requests that omit the required ticker."""
-    with patch('api.routes.chat.run_graph_rag') as mock_graph:
+    with patch('api.routes.chat.run_graph_rag') as mock_graph:  # noqa: F841
         response = client.post("/api/chat/graph-rag", json={"message": "explain AAPL", "ticker": ""})
         assert response.status_code == 400
         assert "Ticker is required" in response.json()["detail"]

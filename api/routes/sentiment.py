@@ -7,10 +7,10 @@ All read-only, zero-LLM-cost (except tone-shift which uses embeddings, not LLM).
 from __future__ import annotations
 
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any  # noqa: F401
 
 from fastapi import APIRouter, HTTPException, Query
-from loguru import logger
+from loguru import logger  # noqa: F401
 
 from api.services.sentiment import (
     get_filing_sentiment,

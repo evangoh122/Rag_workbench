@@ -48,7 +48,7 @@ def cross_validate(
     reason_codes: list[ReasonCode] = []
     details: dict = {}
 
-    for field in result.fields:
+    for field in result.fields:  # noqa: F402
         fc = FieldConfidence(
             name=field.name,
             confidence=PROVENANCE_BASE_SCORE.get(field.provenance, 0.5),
