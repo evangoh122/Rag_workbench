@@ -165,6 +165,9 @@ jobs:
       # The inline helper below is stdlib-only (json module), so no project
       # dependencies are needed: --no-project runs it with the runner's Python.
       - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.23"
+          enable-cache: false
 
       - name: Trigger incremental XBRL refresh (skips existing tickers)
         env:
@@ -215,6 +218,9 @@ jobs:
       # The inline helper below is stdlib-only (json/os), so no project
       # dependencies are needed: --no-project runs it with the runner's Python.
       - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.23"
+          enable-cache: false
 
       - name: "Verify restored dataset DB (poll /api/stats)"
         env:
@@ -307,6 +313,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.23"
       - name: "RAG pipeline -- all 31 tickers (chunk -> hybrid BM25+vector -> rerank -> RRF)"
         env:
           HF_USERNAME:    ${{ secrets.HF_USERNAME }}

@@ -55,6 +55,8 @@ dev = [
 # This repository is an application, not an installable library: `uv sync`
 # manages the virtual environment and dev tools without building the project.
 package = false
+# Keep CI, Docker (ghcr.io/astral-sh/uv:0.12.23) and local runs on one uv.
+required-version = "==0.12.23"
 
 # CPU-only PyTorch for Linux. The Docker image and CI are CPU-only; resolving
 # torch from PyPI would add the CUDA runtime (nvidia-* + triton, several GB).
