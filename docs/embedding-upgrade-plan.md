@@ -173,7 +173,7 @@ except Exception as e:
 
 ### Step 8 — Verify tests pass
 ```bash
-pytest tests/test_hybrid_retriever.py tests/test_rag_engine.py
+uv run pytest tests/test_hybrid_retriever.py tests/test_rag_engine.py
 ```
 The public interface (`embed_query`, `embed_documents`) does not change, so all existing tests should pass.
 

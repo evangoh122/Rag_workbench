@@ -23,6 +23,11 @@ dependencies = [
     "uvicorn>=0.49.0,<0.50.0",
     "rank_bm25>=0.2.1,<0.3.0",
     "sentence-transformers>=5.6.0,<6.0.0",
+    # Direct dependency so [tool.uv.sources] can pin the CPU-only PyTorch build:
+    # sentence-transformers pulls torch transitively, and the default PyPI wheel
+    # drags in the CUDA stack (nvidia-*, triton) on Linux. No version cap was
+    # ever declared for torch; keep it a floor only.
+    "torch>=2.0.0",
     # Qwen3-Embedding-0.6B requires the Qwen3 architecture, added in transformers 4.51.
     # The local environment currently uses transformers 5.x with sentence-transformers 5.x.
     "transformers>=5.12.1,<6.0.0",
@@ -50,6 +55,20 @@ dev = [
 # This repository is an application, not an installable library: `uv sync`
 # manages the virtual environment and dev tools without building the project.
 package = false
+
+# CPU-only PyTorch for Linux. The Docker image and CI are CPU-only; resolving
+# torch from PyPI would add the CUDA runtime (nvidia-* + triton, several GB).
+# The source is scoped to Linux so macOS/Windows keep resolving torch from
+# PyPI (their wheels are already CPU builds).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
 
 [tool.pytest.ini_options]
 # `uv run pytest` does not put the repo root on sys.path on its own; the test

@@ -125,7 +125,7 @@ entities as graph nodes (labelled non-XBRL) if we want them shown.
 - Graph triples API: `GET /api/graph/triples?ticker=NVDA&limit=50`.
 
 ## Test status
-- `pytest tests/test_langgraph_engine.py tests/test_peer_comparison.py
+- `uv run pytest tests/test_langgraph_engine.py tests/test_peer_comparison.py
   tests/test_xbrl_relevance.py` → 54 passed, **1 pre-existing failure**
   (`test_eval_node` patches `score_and_route`, a lazy in-function import that is
   never a module attribute — predates this session, unrelated).
