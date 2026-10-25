@@ -16,6 +16,11 @@ Run with the duckdb-1.5.x venv (the on-disk DB is 1.5.x format):
   .venv\\Scripts\\python.exe scripts/embed_additional.py --forms annual --dry-run
   .venv\\Scripts\\python.exe scripts/embed_additional.py --forms annual
   .venv\\Scripts\\python.exe scripts/embed_additional.py --forms 10-Q
+  .venv\\Scripts\\python.exe scripts/embed_additional.py --forms 8-K --days 180 --max-filings 8
+
+--forms 8-K fetches recent 8-Ks (6-K for foreign filers that file 20-F), bounded by
+--days / --max-filings. 8-Ks are split by item and stored with section_id
+`item_<N.NN>` (e.g. item_2.02); amendments (8-K/A) are excluded.
 """
 
 import sys
@@ -63,6 +68,14 @@ from api.config import Config  # noqa: E402
 from api.services.embeddings import get_embeddings  # noqa: E402
 from api.services.structure_chunker import StructureChunker  # noqa: E402
 from api.services._edgar_identity import ensure_edgar_identity  # noqa: E402
+from scripts.event_filings import (  # noqa: E402
+    DEFAULT_8K_DAYS,
+    DEFAULT_8K_MAX,
+    event_form_for,
+    event_period,
+    sections_for_event_filing,
+    select_recent_filings,
+)
 from scripts.embed_edgar import (  # noqa: E402
     parse_html_file,
     _extract_sections_with_labels,
@@ -125,9 +138,23 @@ def main():
     )
     parser.add_argument(
         "--forms",
-        choices=["annual", "10-Q"],
+        choices=["annual", "10-Q", "8-K"],
         default="annual",
-        help='Which forms to fetch: "annual" (10-K + 20-F, latest 2) or "10-Q".',
+        help='Which forms to fetch: "annual" (10-K + 20-F, latest 2), "10-Q", or '
+        '"8-K" (recent 8-Ks; 6-K for foreign filers).',
+    )
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=DEFAULT_8K_DAYS,
+        help="For --forms 8-K: only filings from the last N days. Default %(default)s.",
+    )
+    parser.add_argument(
+        "--max-filings",
+        type=int,
+        default=DEFAULT_8K_MAX,
+        help="For --forms 8-K: cap on filings per company (newest first), to bound "
+        "embedding cost. Default %(default)s.",
     )
     parser.add_argument(
         "--quarters",
@@ -231,6 +258,15 @@ def main():
                         f"skipping annual."
                     )
                     continue
+            elif args.forms == "8-K":
+                event_form = event_form_for(existing_forms)
+                if event_form is None:
+                    logger.info(
+                        f"[{ticker}] no 10-K/20-F/8-K/6-K in corpus "
+                        f"(forms={sorted(existing_forms)}); skipping event filings."
+                    )
+                    continue
+                form_plan = [(event_form, max(1, args.max_filings))]
             else:
                 form_plan = [("10-Q", max(1, args.quarters))]
 
@@ -247,9 +283,14 @@ def main():
                     logger.error(f"[{ticker}] Failed to get {form_code} filings: {exc}")
                     continue
 
-                filing_list = [
-                    f for f in window if getattr(f, "form", None) == form_code
-                ][:n_latest]
+                if form_code in ("8-K", "6-K"):
+                    filing_list = select_recent_filings(
+                        window, form_code, args.days, n_latest
+                    )
+                else:
+                    filing_list = [
+                        f for f in window if getattr(f, "form", None) == form_code
+                    ][:n_latest]
                 if not filing_list:
                     logger.info(f"[{ticker}] No exact {form_code} filings found.")
                     continue
@@ -295,11 +336,16 @@ def main():
                         continue
 
                     period_of_report = _period_from_accession(accession)
+                    if form_code in ("8-K", "6-K"):
+                        period_of_report = event_period(fl, period_of_report)
                     cik = _TICKER_CIK.get(ticker.upper(), "")
                     ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
                     # Extract sections and chunk (20-F falls back to full_text)
-                    sections = _extract_sections_with_labels(text)
+                    if form_code in ("8-K", "6-K"):
+                        sections = sections_for_event_filing(form_code, text)
+                    else:
+                        sections = _extract_sections_with_labels(text)
                     all_chunks = []
                     for section_label, section_text in sections:
                         if not section_text or not section_text.strip():

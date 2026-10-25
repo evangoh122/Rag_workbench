@@ -20,6 +20,10 @@ on:
         description: 'Dry run (list what would be embedded; no embed/upload/restart)'
         type: boolean
         default: false
+      include_8k:
+        description: 'Also ingest recent 8-K (6-K for foreign filers) event filings (manual runs only)'
+        type: boolean
+        default: false
 
 concurrency:
   # Share the embed-dataset lock so this never writes the dataset at the same
@@ -42,6 +46,7 @@ jobs:
       EMBEDDING_DIM: '1024'
       # Real run unless explicitly dispatched as a dry run.
       DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+      INCLUDE_8K: ${{ github.event_name == 'workflow_dispatch' && inputs.include_8k == true }}
     steps:
       - uses: actions/checkout@v4
 
@@ -81,6 +86,10 @@ jobs:
           # Annual (latest 2 x 10-K/20-F) then quarterly (latest 3 x 10-Q = ~1yr).
           python scripts/embed_additional.py --forms annual $FLAGS
           python scripts/embed_additional.py --forms 10-Q --quarters 3 $FLAGS
+          # Opt-in (workflow_dispatch include_8k): last 180 days, max 8 per company.
+          if [ "$INCLUDE_8K" = "true" ]; then
+            python scripts/embed_additional.py --forms 8-K --days 180 --max-filings 8 $FLAGS
+          fi
 
       - name: 'Guardrail: block any destructive change to the vector DB'
         if: ${{ env.DRY != 'true' }}
