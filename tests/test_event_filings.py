@@ -49,7 +49,7 @@ def test_inline_item_reference_is_not_a_heading():
 def test_repeated_heading_bodies_are_merged_under_one_label():
     text = "Item 5.02 Departure.\nFirst part.\nItem 8.01 Other.\nx\nItem 5.02 Departure (cont).\nSecond part.\n"
     items = split_8k_items(text)
-    assert [l for l, _ in items] == ["item_5.02", "item_8.01"]
+    assert [label for label, _ in items] == ["item_5.02", "item_8.01"]
     body = dict(items)["item_5.02"]
     assert "First part." in body and "Second part." in body
 
@@ -111,7 +111,7 @@ def test_event_period_prefers_report_date_then_filing_date():
 def _run_main(tmp_path, monkeypatch, filing_objs, argv_extra=()):
     """Run embed_additional.main() --forms 8-K with mocked EDGAR/embedder; return (db, ea)."""
     import sys
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import MagicMock
 
     import duckdb
 
@@ -271,7 +271,9 @@ def test_get_filings_called_without_amendments(tmp_path, monkeypatch):
     # re-run with a recording Company
     from types import SimpleNamespace as NS
     from unittest.mock import MagicMock
-    filings = MagicMock(); filings.empty = False; filings.latest.return_value = []
+    filings = MagicMock()
+    filings.empty = False
+    filings.latest.return_value = []
     monkeypatch.setattr(ea, "Company", lambda t: NS(get_filings=lambda **kw: calls.append(kw) or filings))
     monkeypatch.setattr(sys, "argv", ["embed_additional.py", "--forms", "8-K", "--dry-run"])
     ea.DB_PATH = ea.DB_PATH
