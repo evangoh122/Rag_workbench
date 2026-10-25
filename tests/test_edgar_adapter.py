@@ -5,10 +5,10 @@ Unit tests (fixture-based, no network) and an optional integration smoke test
 for api/services/edgar_adapter.py.
 
 Run unit tests only:
-    python -m pytest tests/test_edgar_adapter.py -v -k "not smoke"
+    uv run pytest tests/test_edgar_adapter.py -v -k "not smoke"
 
 Run all tests (requires EDGAR_USER_AGENT env var set):
-    EDGAR_USER_AGENT="Your Name your@email.com" python -m pytest tests/test_edgar_adapter.py -v
+    EDGAR_USER_AGENT="Your Name your@email.com" uv run pytest tests/test_edgar_adapter.py -v
 """
 import pytest
 import pandas as pd

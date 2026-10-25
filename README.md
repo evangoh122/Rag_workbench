@@ -283,8 +283,8 @@ README for local dev setup.
 
 - **Python:** dependencies are declared in `pyproject.toml` and pinned in
   `uv.lock`. Run `uv lock` after editing dependencies, and commit both files.
-  CI and Docker use `uv sync --frozen`, so an out-of-date lock fails the build
-  instead of silently resolving new versions.
+  CI and Docker use `uv sync --locked`, which fails if `uv.lock` is out of date
+  (run `uv lock --check` locally to verify the lock matches `pyproject.toml`).
   `requirements.txt` / `requirements-dev.txt` are retired; nothing needs them.
 
 ### Docker (single container)
@@ -333,10 +333,10 @@ Retrieval is reranked by a CrossEncoder (`RERANKER_MODEL`, default `cross-encode
 
 ```bash
 # Ingest the semiconductor ticker universe (10-K, latest available)
-python -m scripts.embed_edgar
+uv run python -m scripts.embed_edgar
 
 # Or specific tickers
-EMBED_TICKERS=NVDA,AMD python -m scripts.embed_edgar
+EMBED_TICKERS=NVDA,AMD uv run python -m scripts.embed_edgar
 ```
 
 Each chunk is stored with `ticker`, `accession`, `cik`, `section_id`, `form_type`, `period_of_report`, `chunk_index`. The retriever uses this metadata to build the audit trail. The ticker universe (see `api/config.py` `TICKER_TO_CIK`) covers ~33 semiconductor names — chip designers (NVDA, AMD, QCOM, AVGO, INTC, MU, TXN, …) and equipment/materials (AMAT, LRCX, KLAC, ENTG, …).
@@ -351,17 +351,17 @@ Related scripts: `extract_xbrl_facts.py`, `extract_graph_triples.py`, `backfill_
 # Start the API first, then:
 
 # 1. Deterministic scoring (fast, free)
-python evals/run_eval.py
+uv run python evals/run_eval.py
 
 # 2. LLM-judge scoring (uses your configured provider)
-python evals/ragas_eval.py
+uv run python evals/ragas_eval.py
 
 # Debug a single question
-python evals/run_eval.py --id 5
-python evals/ragas_eval.py --id 5 --metrics faithfulness,answer_relevancy
+uv run python evals/run_eval.py --id 5
+uv run python evals/ragas_eval.py --id 5 --metrics faithfulness,answer_relevancy
 
 # Filter by failure mode
-python evals/run_eval.py --mode gaap_vs_nongaap
+uv run python evals/run_eval.py --mode gaap_vs_nongaap
 ```
 
 ### Golden set failure modes

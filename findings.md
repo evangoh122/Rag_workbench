@@ -51,7 +51,7 @@ Local retrieval works; the Space does not — the gap is the empty Space index.
 
 ## Verify in One Call
 ```bash
-curl -s "$SPACE_URL/api/stats" | python -m json.tool
+curl -s "$SPACE_URL/api/stats" | uv run python -m json.tool
 ```
 - `data.edgar_embeddings: 0` → confirms empty-index root cause.
 - `config.embedding_dim: 4096` → confirms `EMBEDDING_DIM` is unset/defaulted.

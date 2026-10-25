@@ -12,12 +12,12 @@ Metrics:
   context_recall    -- does the context contain what's needed to answer?
 
 Usage:
-    python evals/ragas_eval.py
-    python evals/ragas_eval.py --api-url http://localhost:8000
-    python evals/ragas_eval.py --mode baseline
-    python evals/ragas_eval.py --id 1,2,3
-    python evals/ragas_eval.py --metrics faithfulness,answer_relevancy
-    EVAL_API_URL=http://... python evals/ragas_eval.py
+    uv run python evals/ragas_eval.py
+    uv run python evals/ragas_eval.py --api-url http://localhost:8000
+    uv run python evals/ragas_eval.py --mode baseline
+    uv run python evals/ragas_eval.py --id 1,2,3
+    uv run python evals/ragas_eval.py --metrics faithfulness,answer_relevancy
+    EVAL_API_URL=http://... uv run python evals/ragas_eval.py
 """
 
 from __future__ import annotations

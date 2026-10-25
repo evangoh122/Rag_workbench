@@ -6,7 +6,7 @@ Forces a refresh of xbrl_facts for the user-facing coverage tickers using the
 revenue concepts, and 20-F support (STM). Run locally against data/rag.duckdb,
 then rebuild + upload the dataset.
 
-Usage:  PYTHONPATH=. python -m scripts.backfill_xbrl_coverage
+Usage:  uv run python -m scripts.backfill_xbrl_coverage
 """
 from __future__ import annotations
 

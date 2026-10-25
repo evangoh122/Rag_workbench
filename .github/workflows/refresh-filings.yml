@@ -51,11 +51,11 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen --no-dev
+        run: uv sync --locked --no-dev
 
       - name: Download current DB from the HF dataset
         run: |
-          uv run --frozen --no-dev python - <<'PY'
+          uv run --locked --no-dev python - <<'PY'
           import os, shutil
           from huggingface_hub import hf_hub_download
           os.makedirs("data", exist_ok=True)
@@ -70,25 +70,25 @@ jobs:
           PY
 
       - name: Snapshot corpus BEFORE embedding
-        run: uv run --frozen --no-dev python scripts/etl_guardrail.py snapshot data/rag.duckdb /tmp/before.json
+        run: uv run --locked --no-dev python scripts/etl_guardrail.py snapshot data/rag.duckdb /tmp/before.json
 
       - name: Embed new annual + quarterly filings
         run: |
           FLAGS=""
           if [ "$DRY" = "true" ]; then FLAGS="--dry-run"; fi
           # Annual (latest 2 x 10-K/20-F) then quarterly (latest 3 x 10-Q = ~1yr).
-          uv run --frozen --no-dev python scripts/embed_additional.py --forms annual $FLAGS
-          uv run --frozen --no-dev python scripts/embed_additional.py --forms 10-Q --quarters 3 $FLAGS
+          uv run --locked --no-dev python scripts/embed_additional.py --forms annual $FLAGS
+          uv run --locked --no-dev python scripts/embed_additional.py --forms 10-Q --quarters 3 $FLAGS
 
       - name: 'Guardrail: block any destructive change to the vector DB'
         if: ${{ env.DRY != 'true' }}
         id: guard
-        run: uv run --frozen --no-dev python scripts/etl_guardrail.py verify data/rag.duckdb /tmp/before.json
+        run: uv run --locked --no-dev python scripts/etl_guardrail.py verify data/rag.duckdb /tmp/before.json
 
       - name: Log current dataset commit (rollback target)
         if: ${{ env.DRY != 'true' && steps.guard.outputs.changed == 'true' }}
         run: |
-          uv run --frozen --no-dev python - <<'PY'
+          uv run --locked --no-dev python - <<'PY'
           import os
           from huggingface_hub import HfApi
           api = HfApi(token=os.environ["HF_TOKEN"])
@@ -99,7 +99,7 @@ jobs:
       - name: Upload updated DB to the HF dataset
         if: ${{ env.DRY != 'true' && steps.guard.outputs.changed == 'true' }}
         run: |
-          uv run --frozen --no-dev python - <<'PY'
+          uv run --locked --no-dev python - <<'PY'
           import os
           from huggingface_hub import HfApi
           api = HfApi(token=os.environ["HF_TOKEN"])
@@ -120,7 +120,7 @@ jobs:
       - name: Restart the Space to serve the new corpus
         if: ${{ env.DRY != 'true' && steps.guard.outputs.changed == 'true' }}
         run: |
-          uv run --frozen --no-dev python - <<'PY'
+          uv run --locked --no-dev python - <<'PY'
           import os
           from huggingface_hub import HfApi
           api = HfApi(token=os.environ["HF_TOKEN"])
@@ -132,7 +132,7 @@ jobs:
       - name: 'Post-restart health check: live Space serves a valid 1024-dim corpus'
         if: ${{ env.DRY != 'true' && steps.guard.outputs.changed == 'true' }}
         run: |
-          uv run --frozen --no-dev python - <<'PY'
+          uv run --locked --no-dev python - <<'PY'
           import os, time, json, urllib.request
           slug = os.environ["HF_SPACE_NAME"].lower()
           url = f"https://{os.environ['HF_USERNAME']}-{slug}.hf.space/api/stats"

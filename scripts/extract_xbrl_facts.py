@@ -8,8 +8,8 @@ This replaces the broken async-based get_latest_10k_facts() with a synchronous
 HTTP approach that works reliably.
 
 Usage:
-    python -m scripts.extract_xbrl_facts
-    python -m scripts.extract_xbrl_facts --tickers NVDA,AMD,QCOM
+    uv run python -m scripts.extract_xbrl_facts
+    uv run python -m scripts.extract_xbrl_facts --tickers NVDA,AMD,QCOM
 """
 from __future__ import annotations
 

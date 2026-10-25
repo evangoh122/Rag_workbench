@@ -50,7 +50,8 @@ This document defines the roles, responsibilities, and ownership model for the A
 - **Python:** deps live in `pyproject.toml`; exact versions are pinned in
   `uv.lock`. Use `uv sync` to create/refresh `.venv`, `uv run <cmd>` to execute
   in it, and `uv lock` after changing dependencies. CI and Docker must use
-  `uv sync --frozen` (never `pip install`) so a stale lock fails the build.
+  `uv sync --locked` (never `pip install`) so a stale lock fails the build;
+  `uv lock --check` verifies the lock matches `pyproject.toml` locally.
   Dev-only tools (pytest, pytest-asyncio, httpx, ruff) are in the `dev`
   dependency group.
 - **Frontend:** npm is the package manager; `package-lock.json` is the source of

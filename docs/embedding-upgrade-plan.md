@@ -150,8 +150,8 @@ DROP TABLE ticker_embeddings;
 Then re-run **in order** (ticker_embeddings holds both metadata AND vectors):
 ```
 POST /api/admin/refresh-data          # restores xbrl_facts + ticker_embeddings metadata
-python scripts/embed_edgar.py         # restores edgar_embeddings with Fin-E5 vectors
-python scripts/embed_tickers.py       # restores ticker_embeddings vectors (metadata already present)
+uv run python scripts/embed_edgar.py         # restores edgar_embeddings with Fin-E5 vectors
+uv run python scripts/embed_tickers.py       # restores ticker_embeddings vectors (metadata already present)
 ```
 
 **Important:** DROP TABLE ticker_embeddings also destroys ticker metadata (descriptions, sectors, industries) inserted by `refresh-data`. The re-run order above restores metadata first via refresh-data, then vectors via embed_tickers. The `ON CONFLICT DO UPDATE` in embed_tickers.py ensures vectors are upserted into existing metadata rows without clobbering description/sector/industry.
