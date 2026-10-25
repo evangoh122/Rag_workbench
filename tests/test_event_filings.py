@@ -9,7 +9,7 @@ from scripts.event_filings import (
     split_8k_items,
 )
 
-TODAY = date(2026, 10, 26)
+TODAY = date.today()
 
 EIGHT_K = """UNITED STATES SECURITIES AND EXCHANGE COMMISSION
 FORM 8-K  Current Report
@@ -80,7 +80,7 @@ def test_select_recent_window_amendments_and_cap():
 
 
 def test_select_accepts_iso_string_dates():
-    f = SimpleNamespace(form="6-K", filing_date="2026-10-01", accession_number="x")
+    f = SimpleNamespace(form="6-K", filing_date=(TODAY - timedelta(days=5)).isoformat(), accession_number="x")
     assert select_recent_filings([f], "6-K", 30, 5, today=TODAY) == [f]
 
 
@@ -92,8 +92,8 @@ def test_event_period_prefers_report_date_then_filing_date():
     assert event_period(SimpleNamespace(), "2026-12-31") == "2026-12-31"
 
 
-def test_embed_additional_8k_end_to_end_mocked(tmp_path, monkeypatch):
-    """main() --forms 8-K with mocked EDGAR/embedder: item ids stored, existing skipped."""
+def _run_main(tmp_path, monkeypatch, filing_objs, argv_extra=()):
+    """Run embed_additional.main() --forms 8-K with mocked EDGAR/embedder; return (db, ea)."""
     import sys
     from unittest.mock import MagicMock, patch
 
@@ -116,13 +116,9 @@ def test_embed_additional_8k_end_to_end_mocked(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
-    new = _f("8-K", 3, "0000000001-26-000011")
-    dup = _f("8-K", 4, "0000000001-26-000010")
     filings = MagicMock()
     filings.empty = False
-    filings.latest.return_value = [new, dup]
-    new.text = lambda: "html"
-    dup.text = lambda: "html"
+    filings.latest.return_value = filing_objs
 
     model = MagicMock()
     model.embed_documents.side_effect = lambda texts: [[0.1] * 1024 for _ in texts]
@@ -143,9 +139,21 @@ def test_embed_additional_8k_end_to_end_mocked(tmp_path, monkeypatch):
     monkeypatch.setattr(ea, "StructureChunker", lambda **kw: chunker)
     monkeypatch.setattr(ea, "parse_html_file", lambda p: (EIGHT_K, ""))
     monkeypatch.setattr(ea, "Company", lambda t: SimpleNamespace(get_filings=lambda form: filings))
-    monkeypatch.setattr(sys, "argv", ["embed_additional.py", "--forms", "8-K"])
+    monkeypatch.setattr(sys, "argv", ["embed_additional.py", "--forms", "8-K", *argv_extra])
 
     ea.main()
+    return db
+
+
+def test_embed_additional_8k_end_to_end_mocked(tmp_path, monkeypatch):
+    """item ids stored, existing accession skipped."""
+    import duckdb
+
+    new = _f("8-K", 3, "0000000001-26-000011")
+    dup = _f("8-K", 4, "0000000001-26-000010")
+    new.text = lambda: "html"
+    dup.text = lambda: "html"
+    db = _run_main(tmp_path, monkeypatch, [new, dup])
 
     conn = duckdb.connect(db, read_only=True)
     rows = conn.execute(
@@ -155,6 +163,66 @@ def test_embed_additional_8k_end_to_end_mocked(tmp_path, monkeypatch):
     n10k = conn.execute("SELECT count(*) FROM edgar_embeddings WHERE form_type='10-K'").fetchone()[0]
     conn.close()
     assert [r[0] for r in rows] == ["item_2.02", "item_5.02", "item_9.01"]
-    assert {r[2] for r in rows} == {"0000000001-26-000011"}  # duplicate accession skipped
+    assert {r[2] for r in rows} == {"0000000001-26-000011"}
     assert {r[3] for r in rows} == {1024}
     assert n10k == 1
+
+
+class _EntityFilingLike:
+    """EntityFiling-like: report_date is submissions-backed; period_of_report may raise."""
+
+    def __init__(self, acc, days_ago, report_date=None, period_raises=False):
+        self.form = "8-K"
+        self.accession_number = acc
+        self.filing_date = TODAY - timedelta(days=days_ago)
+        self.report_date = report_date
+        self._period_raises = period_raises
+
+    @property
+    def period_of_report(self):
+        if self._period_raises:
+            raise RuntimeError("SGML submission download failed")
+        return "2020-01-01"
+
+    def text(self):
+        return "html"
+
+
+def test_event_period_survives_raising_period_of_report():
+    f = _EntityFilingLike("a", 3, period_raises=True)
+    assert event_period(f, "2026-12-31") == (TODAY - timedelta(days=3)).isoformat()
+    g = _EntityFilingLike("b", 3, report_date=date(2026, 10, 20), period_raises=True)
+    assert event_period(g, "2026-12-31") == "2026-10-20"  # period_of_report never touched
+
+
+def test_bad_period_of_report_does_not_stop_refresh(tmp_path, monkeypatch):
+    import duckdb
+
+    bad = _EntityFilingLike("0000000001-26-000020", 2, period_raises=True)
+    good = _EntityFilingLike("0000000001-26-000021", 3, report_date=date(2026, 10, 20))
+    later = _EntityFilingLike("0000000001-26-000022", 4)
+    db = _run_main(tmp_path, monkeypatch, [bad, good, later])
+
+    conn = duckdb.connect(db, read_only=True)
+    got = dict(
+        conn.execute(
+            "SELECT accession, min(period_of_report) FROM edgar_embeddings "
+            "WHERE form_type='8-K' GROUP BY 1"
+        ).fetchall()
+    )
+    conn.close()
+    assert set(got) == {bad.accession_number, good.accession_number, later.accession_number}
+    assert got[bad.accession_number] == (TODAY - timedelta(days=2)).isoformat()
+    assert got[good.accession_number] == "2026-10-20"
+    assert got[later.accession_number] == "2020-01-01"  # period_of_report fallback works
+
+
+def test_max_chunks_per_filing_caps_chunks(tmp_path, monkeypatch):
+    import duckdb
+
+    f = _EntityFilingLike("0000000001-26-000030", 2)
+    db = _run_main(tmp_path, monkeypatch, [f], ("--max-chunks-per-filing", "2"))
+    conn = duckdb.connect(db, read_only=True)
+    n = conn.execute("SELECT count(*) FROM edgar_embeddings WHERE form_type='8-K'").fetchone()[0]
+    conn.close()
+    assert n == 2

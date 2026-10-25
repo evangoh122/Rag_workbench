@@ -71,6 +71,8 @@ from api.services._edgar_identity import ensure_edgar_identity  # noqa: E402
 from scripts.event_filings import (  # noqa: E402
     DEFAULT_8K_DAYS,
     DEFAULT_8K_MAX,
+    DEFAULT_8K_MAX_CHUNKS,
+    cap_chunks,
     event_form_for,
     event_period,
     sections_for_event_filing,
@@ -148,6 +150,13 @@ def main():
         type=int,
         default=DEFAULT_8K_DAYS,
         help="For --forms 8-K: only filings from the last N days. Default %(default)s.",
+    )
+    parser.add_argument(
+        "--max-chunks-per-filing",
+        type=int,
+        default=DEFAULT_8K_MAX_CHUNKS,
+        help="For --forms 8-K: cap on chunks embedded per filing (0 = no cap). "
+        "Default %(default)s.",
     )
     parser.add_argument(
         "--max-filings",
@@ -370,6 +379,9 @@ def main():
                             )
                             continue
                         all_chunks.extend(chunks)
+
+                    if form_code in ("8-K", "6-K"):
+                        all_chunks = cap_chunks(all_chunks, args.max_chunks_per_filing)
 
                     if not all_chunks:
                         logger.warning(f"[{ticker}] No chunks produced for {accession}.")

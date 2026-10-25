@@ -12,8 +12,11 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timedelta
 
+from loguru import logger
+
 DEFAULT_8K_DAYS = 180
 DEFAULT_8K_MAX = 8
+DEFAULT_8K_MAX_CHUNKS = 200
 
 # "Item 2.02", "ITEM 5.02." etc. at the start of a line. 8-K items are N.NN
 # (sections 1-9). The same item can be referenced inline ("see Item 2.02"), so
@@ -46,7 +49,11 @@ def split_8k_items(text: str) -> list[tuple[str, str]]:
 def sections_for_event_filing(form_code: str, text: str) -> list[tuple[str, str]]:
     """Sections to chunk for an 8-K / 6-K. Only 8-K is item-split."""
     if form_code == "8-K":
-        items = split_8k_items(text)
+        try:
+            items = split_8k_items(text)
+        except Exception as exc:
+            logger.warning(f"8-K item split failed, using full_text: {exc}")
+            items = []
         if items:
             return items
     return [("full_text", text)] if text and text.strip() else []
@@ -78,8 +85,18 @@ def _as_date(value) -> date | None:
         return None
 
 
+def _safe_attr(obj, name: str):
+    """getattr that never raises: some EdgarTools properties (period_of_report,
+    items) can trigger a full SGML download that fails. Returns None on error."""
+    try:
+        return getattr(obj, name, None)
+    except Exception as exc:
+        logger.warning(f"Optional filing attribute '{name}' unavailable: {exc}")
+        return None
+
+
 def filing_date_of(filing) -> date | None:
-    return _as_date(getattr(filing, "filing_date", None))
+    return _as_date(_safe_attr(filing, "filing_date"))
 
 
 def select_recent_filings(
@@ -94,7 +111,7 @@ def select_recent_filings(
     cutoff = today - timedelta(days=max(0, days))
     dated = []
     for f in filings:
-        if getattr(f, "form", None) != form_code:
+        if _safe_attr(f, "form") != form_code:
             continue
         d = filing_date_of(f)
         if d is None or d < cutoff:
@@ -105,6 +122,19 @@ def select_recent_filings(
 
 
 def event_period(filing, fallback: str) -> str:
-    """Report date, else filing date (ISO), else the accession-derived fallback."""
-    d = _as_date(getattr(filing, "period_of_report", None)) or filing_date_of(filing)
+    """Report date, else filing date (ISO), else the accession-derived fallback.
+
+    Prefers the submissions-backed `report_date`; `period_of_report` is only a
+    last resort because it may download the whole SGML submission. Never raises.
+    """
+    d = (
+        _as_date(_safe_attr(filing, "report_date"))
+        or _as_date(_safe_attr(filing, "period_of_report"))
+        or filing_date_of(filing)
+    )
     return d.isoformat() if d else fallback
+
+
+def cap_chunks(chunks: list, max_chunks: int) -> list:
+    """Cost bound: keep at most `max_chunks` (<=0 disables the cap)."""
+    return chunks[:max_chunks] if max_chunks and max_chunks > 0 else chunks
