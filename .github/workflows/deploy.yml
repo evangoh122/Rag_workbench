@@ -22,6 +22,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 # ── 1. Sync secrets ─────────────────────────────────────────────────────────
 jobs:
   sync-secrets:
