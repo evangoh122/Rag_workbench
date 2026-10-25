@@ -70,5 +70,9 @@ USER user
 # foreground process now (exec, no supervisord) and binds the Space's public
 # port directly — there's no nginx in front of it anymore (the frontend moved
 # to evangoh-frontend, which serves the portfolio + RAG Workbench UI directly).
+#
+# The CMD runs bare `python`/`uvicorn` on purpose: PATH points at the copied
+# /opt/venv created by `uv sync`, so it is the locked environment, not a
+# system interpreter.
 CMD ["sh", "-c", "cd /app && PYTHONPATH=/app python -m scripts.fetch_db_from_dataset || true; PYTHONPATH=/app python -m scripts.restore_review_db || true; python scripts/seed_on_startup.py & exec uvicorn api.main:app --host 0.0.0.0 --port 7860"]
 # build: v7 — backend-only (frontend moved to evangoh-frontend); uv (pyproject.toml + uv.lock)

@@ -43,7 +43,7 @@ This document defines the roles, responsibilities, and ownership model for the A
 | Ingestion Scripts | Gemini | `scripts/embed_*.py` |
 | Data Pipelines | MiMo | `data/` |
 | Startup Logic | MiMo | `run.py` |
-| Integration & UI | Main | `frontend/`, `main.py` |
+| Integration | Main | `main.py`, `run.py` |
 
 ## Dependency Management
 
@@ -54,9 +54,8 @@ This document defines the roles, responsibilities, and ownership model for the A
   `uv lock --check` verifies the lock matches `pyproject.toml` locally.
   Dev-only tools (pytest, pytest-asyncio, httpx, ruff) are in the `dev`
   dependency group.
-- **Frontend:** npm is the package manager; `package-lock.json` is the source of
-  truth. Use `npm ci` in CI/Docker (not `npm install`) and `npm run build` /
-  `npm run lint` for checks.
+- **Frontend:** lives in the separate `evangoh-frontend` repository; this repo
+  is backend/API-only.
 - The former `requirements.txt` and `requirements-dev.txt` files are retired.
 
 ## Merge Workflow
