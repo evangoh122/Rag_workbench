@@ -1,7 +1,8 @@
 name: Refresh Filings (scheduled) → Dataset
 
 # Ongoing freshness: on a weekly schedule (and on demand) pick up any newly-filed
-# 10-K / 20-F / 10-Q that isn't in the corpus yet, embed it with the same
+# 10-K / 20-F / 10-Q (and, only when the manual `include_8k` input is true, recent
+# 8-K / 6-K event filings) that isn't in the corpus yet, embed it with the same
 # Qwen/Qwen3-Embedding-0.6B (1024-dim) model, and publish — entirely on GitHub's
 # runner. embed_additional.py only fetches each company's latest annuals (2) and
 # latest quarterlies (3) and skips accessions already stored, so a scheduled run
@@ -79,7 +80,7 @@ jobs:
       - name: Snapshot corpus BEFORE embedding
         run: python scripts/etl_guardrail.py snapshot data/rag.duckdb /tmp/before.json
 
-      - name: Embed new annual + quarterly filings
+      - name: Embed new annual + quarterly filings (+ 8-K/6-K if include_8k)
         run: |
           FLAGS=""
           if [ "$DRY" = "true" ]; then FLAGS="--dry-run"; fi

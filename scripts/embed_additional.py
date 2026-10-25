@@ -61,7 +61,7 @@ from bs4 import XMLParsedAsHTMLWarning  # noqa: E402
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 # ── imports ───────────────────────────────────────────────────────────────────
-from datetime import datetime, timezone  # noqa: E402
+from datetime import date, datetime, timedelta, timezone  # noqa: E402
 from loguru import logger  # noqa: E402
 
 from api.config import Config  # noqa: E402
@@ -192,6 +192,12 @@ def main():
         help="Optional loguru file sink path.",
     )
     args = parser.parse_args()
+    if args.max_filings < 1:
+        parser.error("--max-filings must be >= 1")
+    if args.days < 1:
+        parser.error("--days must be >= 1")
+    if args.max_chunks_per_filing < 0:
+        parser.error("--max-chunks-per-filing must be >= 0 (0 = no cap)")
 
     if args.log:
         logger.add(args.log, rotation="10 MB", level="DEBUG")
@@ -283,7 +289,17 @@ def main():
                 # Pull a wider window, then keep only EXACT-form filings (drop
                 # amendments like 10-K/A) and take the n most recent.
                 try:
-                    filings = Company(ticker).get_filings(form=form_code)
+                    if form_code in ("8-K", "6-K"):
+                        # Server-side narrowing; the exact-form + date filter in
+                        # select_recent_filings stays as a safety net.
+                        since = (date.today() - timedelta(days=args.days)).isoformat()
+                        filings = Company(ticker).get_filings(
+                            form=form_code,
+                            amendments=False,
+                            filing_date=f"{since}:",
+                        )
+                    else:
+                        filings = Company(ticker).get_filings(form=form_code)
                     if filings is None or getattr(filings, "empty", False):
                         logger.info(f"[{ticker}] No {form_code} filings found.")
                         continue
@@ -381,7 +397,15 @@ def main():
                         all_chunks.extend(chunks)
 
                     if form_code in ("8-K", "6-K"):
+                        n_before = len(all_chunks)
                         all_chunks = cap_chunks(all_chunks, args.max_chunks_per_filing)
+                        if len(all_chunks) < n_before:
+                            logger.warning(
+                                f"[{ticker}] {form_type} {accession} truncated to "
+                                f"{len(all_chunks)}/{n_before} chunks "
+                                f"(--max-chunks-per-filing); the remainder is not "
+                                f"re-ingested on later runs."
+                            )
 
                     if not all_chunks:
                         logger.warning(f"[{ticker}] No chunks produced for {accession}.")

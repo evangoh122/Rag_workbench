@@ -28,8 +28,8 @@ def split_8k_items(text: str) -> list[tuple[str, str]]:
     """Split 8-K text into [(\"item_2.02\", body), ...].
 
     Repeated headings for one item (e.g. a TOC-style summary) are merged, keeping
-    document order of first appearance. Text before the first item is dropped
-    (cover page). Returns [] when no item headings are found so the caller can
+    document order of first appearance. Text before the first item is kept as
+    `item_preamble`. Returns [] when no item headings are found so the caller can
     fall back to a single full_text section.
     """
     if not text:
@@ -38,6 +38,11 @@ def split_8k_items(text: str) -> list[tuple[str, str]]:
     if not matches:
         return []
     bodies: dict[str, list[str]] = {}
+    preamble = text[: matches[0].start()].strip()
+    if preamble:
+        # Cover page / text before the first heading: keep it rather than drop it.
+        logger.debug(f"8-K has {len(preamble)} chars before first item; kept as item_preamble")
+        bodies["item_preamble"] = [preamble]
     for i, m in enumerate(matches):
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[m.end():end].strip()
@@ -95,6 +100,13 @@ def _safe_attr(obj, name: str):
         return None
 
 
+def _has_attr(obj, name: str) -> bool:
+    try:
+        return hasattr(obj, name)
+    except Exception:
+        return False
+
+
 def filing_date_of(filing) -> date | None:
     return _as_date(_safe_attr(filing, "filing_date"))
 
@@ -124,14 +136,16 @@ def select_recent_filings(
 def event_period(filing, fallback: str) -> str:
     """Report date, else filing date (ISO), else the accession-derived fallback.
 
-    Prefers the submissions-backed `report_date`; `period_of_report` is only a
-    last resort because it may download the whole SGML submission. Never raises.
+    Uses the submissions-backed `report_date` when the attribute exists; an empty
+    value there means "no report date" and falls to the filing date. Only when the
+    attribute is absent entirely is `period_of_report` tried (it may download the
+    whole SGML submission). Never raises.
     """
-    d = (
-        _as_date(_safe_attr(filing, "report_date"))
-        or _as_date(_safe_attr(filing, "period_of_report"))
-        or filing_date_of(filing)
-    )
+    if _has_attr(filing, "report_date"):
+        d = _as_date(_safe_attr(filing, "report_date"))
+    else:
+        d = _as_date(_safe_attr(filing, "period_of_report"))
+    d = d or filing_date_of(filing)
     return d.isoformat() if d else fallback
 
 

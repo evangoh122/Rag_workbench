@@ -33,15 +33,31 @@ def _f(form, days_ago, acc="0000000000-26-000001"):
 
 def test_split_items_labels_and_bodies():
     items = dict(split_8k_items(EIGHT_K))
-    assert list(items) == ["item_2.02", "item_5.02", "item_9.01"]
+    assert list(items) == ["item_preamble", "item_2.02", "item_5.02", "item_9.01"]
     assert "revenue of $10 billion" in items["item_2.02"]
     assert "CFO resigned" in items["item_5.02"]
     assert "CFO" not in items["item_2.02"]
 
 
 def test_inline_item_reference_is_not_a_heading():
-    labels = [l for l, _ in split_8k_items(EIGHT_K)]
-    assert labels.count("item_9.01") == 1  # "See Item 9.01" mid-line ignored
+    text = "Item 2.02 Results.\nRevenue grew; see Item 7.01 and Item 9.01 for more.\n"
+    items = dict(split_8k_items(text))
+    assert list(items) == ["item_2.02"]  # inline refs create no sections
+    assert "see Item 7.01 and Item 9.01 for more." in items["item_2.02"]
+
+
+def test_repeated_heading_bodies_are_merged_under_one_label():
+    text = "Item 5.02 Departure.\nFirst part.\nItem 8.01 Other.\nx\nItem 5.02 Departure (cont).\nSecond part.\n"
+    items = split_8k_items(text)
+    assert [l for l, _ in items] == ["item_5.02", "item_8.01"]
+    body = dict(items)["item_5.02"]
+    assert "First part." in body and "Second part." in body
+
+
+def test_text_before_first_heading_is_kept_as_preamble():
+    items = dict(split_8k_items(EIGHT_K))
+    assert list(items)[0] == "item_preamble"
+    assert "Current Report" in items["item_preamble"]
 
 
 def test_no_items_falls_back_to_full_text():
@@ -138,7 +154,7 @@ def _run_main(tmp_path, monkeypatch, filing_objs, argv_extra=()):
     monkeypatch.setattr(ea, "get_embeddings", lambda: model)
     monkeypatch.setattr(ea, "StructureChunker", lambda **kw: chunker)
     monkeypatch.setattr(ea, "parse_html_file", lambda p: (EIGHT_K, ""))
-    monkeypatch.setattr(ea, "Company", lambda t: SimpleNamespace(get_filings=lambda form: filings))
+    monkeypatch.setattr(ea, "Company", lambda t: SimpleNamespace(get_filings=lambda **kw: filings))
     monkeypatch.setattr(sys, "argv", ["embed_additional.py", "--forms", "8-K", *argv_extra])
 
     ea.main()
@@ -162,7 +178,7 @@ def test_embed_additional_8k_end_to_end_mocked(tmp_path, monkeypatch):
     ).fetchall()
     n10k = conn.execute("SELECT count(*) FROM edgar_embeddings WHERE form_type='10-K'").fetchone()[0]
     conn.close()
-    assert [r[0] for r in rows] == ["item_2.02", "item_5.02", "item_9.01"]
+    assert [r[0] for r in rows] == ["item_2.02", "item_5.02", "item_9.01", "item_preamble"]
     assert {r[2] for r in rows} == {"0000000001-26-000011"}
     assert {r[3] for r in rows} == {1024}
     assert n10k == 1
@@ -214,7 +230,7 @@ def test_bad_period_of_report_does_not_stop_refresh(tmp_path, monkeypatch):
     assert set(got) == {bad.accession_number, good.accession_number, later.accession_number}
     assert got[bad.accession_number] == (TODAY - timedelta(days=2)).isoformat()
     assert got[good.accession_number] == "2026-10-20"
-    assert got[later.accession_number] == "2020-01-01"  # period_of_report fallback works
+    assert got[later.accession_number] == (TODAY - timedelta(days=4)).isoformat()
 
 
 def test_max_chunks_per_filing_caps_chunks(tmp_path, monkeypatch):
@@ -226,3 +242,39 @@ def test_max_chunks_per_filing_caps_chunks(tmp_path, monkeypatch):
     n = conn.execute("SELECT count(*) FROM edgar_embeddings WHERE form_type='8-K'").fetchone()[0]
     conn.close()
     assert n == 2
+
+
+def test_empty_report_date_is_missing_not_fallthrough_to_period_of_report():
+    f = _EntityFilingLike("e", 3, report_date="")
+    # period_of_report would give 2020-01-01; empty report_date must use filing date
+    assert event_period(f, "2026-12-31") == (TODAY - timedelta(days=3)).isoformat()
+    # attribute entirely absent -> period_of_report is tried
+    g = SimpleNamespace(period_of_report="2026-10-01", filing_date=TODAY)
+    assert event_period(g, "x") == "2026-10-01"
+
+
+def test_invalid_cli_bounds_error(tmp_path, monkeypatch):
+    import pytest
+
+    for flag in ("--max-filings", "--days"):
+        with pytest.raises(SystemExit) as e:
+            _run_main(tmp_path, monkeypatch, [], (flag, "0"))
+        assert e.value.code == 2
+
+
+def test_get_filings_called_without_amendments(tmp_path, monkeypatch):
+    calls = []
+    f = _EntityFilingLike("0000000001-26-000040", 2)
+    import sys
+    _run_main(tmp_path, monkeypatch, [f])
+    ea = sys.modules["scripts.embed_additional"]
+    # re-run with a recording Company
+    from types import SimpleNamespace as NS
+    from unittest.mock import MagicMock
+    filings = MagicMock(); filings.empty = False; filings.latest.return_value = []
+    monkeypatch.setattr(ea, "Company", lambda t: NS(get_filings=lambda **kw: calls.append(kw) or filings))
+    monkeypatch.setattr(sys, "argv", ["embed_additional.py", "--forms", "8-K", "--dry-run"])
+    ea.DB_PATH = ea.DB_PATH
+    ea.main()
+    assert calls and calls[0]["amendments"] is False and calls[0]["form"] == "8-K"
+    assert calls[0]["filing_date"].endswith(":")
