@@ -82,9 +82,9 @@ HF_EMBEDDING_MODEL=<fin-e5-model-id>
 EMBEDDING_DIM=768                      # match Fin-E5 actual output dim
 ```
 
-### Step 3 — Remove Ollama code path (embeddings.py + requirements.txt)
+### Step 3 — Remove Ollama code path (embeddings.py + pyproject.toml)
 
-**3a. `requirements.txt`**
+**3a. `pyproject.toml`**
 ```diff
 - langchain-ollama>=0.2.0,<0.3.0
 - ollama>=0.4.0,<0.5.0
@@ -197,7 +197,7 @@ The public interface (`embed_query`, `embed_documents`) does not change, so all 
 | File | Change |
 |---|---|
 | `.env` | `EMBEDDING_PROVIDER`, `HF_EMBEDDING_MODEL`, `EMBEDDING_DIM` |
-| `requirements.txt` | Remove `langchain-ollama`, `ollama` |
+| `pyproject.toml` | Remove `langchain-ollama`, `ollama` |
 | `api/services/embeddings.py` | Remove `PrefixedOllamaEmbeddings`, `is_ollama_available()`, Ollama branch in `get_embeddings()` |
 | `scripts/embed_edgar.py` | Skip `content_type="table"` chunks before calling `embed_documents()` |
 | `api/services/hybrid_retriever.py` | Widen `top_k * 2` → `top_k * 5` for cascade recall |

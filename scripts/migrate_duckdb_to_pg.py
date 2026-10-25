@@ -5,15 +5,15 @@ Reads the local DuckDB corpus and bulk-loads it into a Postgres table created by
 db/pgvector/schema.sql. Idempotent: ON CONFLICT (ticker, accession, chunk_index)
 DO NOTHING, so re-runs and partial loads are safe.
 
-Prereqs:
-  pip install "psycopg[binary]" pgvector duckdb
+Prereqs (from the repo root, after `uv sync`):
+  uv pip install "psycopg[binary]" pgvector
   # create the schema first:
   psql "$PG_DSN" -f db/pgvector/schema.sql
 
 Usage:
   PG_DSN="postgresql://user:pass@host:5432/dbname?sslmode=require" \
   DUCKDB_PATH=data/rag.duckdb \
-  python scripts/migrate_duckdb_to_pg.py [--batch 1000] [--limit N]
+  uv run python scripts/migrate_duckdb_to_pg.py [--batch 1000] [--limit N]
 
 Tip: build the ANN index AFTER the bulk load (it's in schema.sql; if you create
 the table without the index, load, then `CREATE INDEX ... USING diskann ...`,

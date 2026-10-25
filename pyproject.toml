@@ -1,0 +1,63 @@
+[project]
+name = "rag-workbench"
+version = "0.1.0"
+description = "Enterprise-grade Retrieval-Augmented Generation platform for SEC filing analysis."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=1.5.3,<2.0.0",
+    "langchain-core>=1.4.7,<2.0.0",
+    "langchain-openai>=1.3.2,<2.0.0",
+    "langchain-anthropic>=1.0.0,<2.0.0",
+    "langchain-text-splitters>=1.1.2,<2.0.0",
+    "openai>=2.41.1,<3.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "loguru>=0.7.0,<0.8.0",
+    "pandas>=3.0.3,<4.0.0",
+    "sec-edgar-downloader>=5.0.0,<6.0.0",
+    "beautifulsoup4>=4.15.0,<5.0.0",
+    "lxml>=6.1.1,<7.0.0",
+    "tabulate>=0.10.0,<0.11.0",
+    "fastapi>=0.136.3,<0.137.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "uvicorn>=0.49.0,<0.50.0",
+    "rank_bm25>=0.2.1,<0.3.0",
+    "sentence-transformers>=5.6.0,<6.0.0",
+    # Qwen3-Embedding-0.6B requires the Qwen3 architecture, added in transformers 4.51.
+    # The local environment currently uses transformers 5.x with sentence-transformers 5.x.
+    "transformers>=5.12.1,<6.0.0",
+    "numpy>=2.4.6,<3.0.0",
+    "langsmith>=0.8.15,<0.9.0",
+    "edgartools>=5.36.0,<6.0.0",
+    "polars>=0.20.0,<1.0.0",
+    "langgraph>=1.2.5,<2.0.0",
+    "requests>=2.34.2,<3.0.0",
+    "huggingface_hub>=1.19.0,<2.0.0",
+    "cachetools>=6.2.6,<7.0.0",
+    "pypdf>=6.13.3,<7.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    # The async middleware/route tests use @pytest.mark.asyncio.
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+    "ruff>=0.3.0",
+]
+
+[tool.uv]
+# This repository is an application, not an installable library: `uv sync`
+# manages the virtual environment and dev tools without building the project.
+package = false
+
+[tool.pytest.ini_options]
+# `uv run pytest` does not put the repo root on sys.path on its own; the test
+# suite imports the top-level `api` package, so add the root explicitly.
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "spark: requires a Spark runtime",
+    "lakebase: requires a Databricks Lakebase instance",
+    "databricks: requires a Databricks workspace",
+]

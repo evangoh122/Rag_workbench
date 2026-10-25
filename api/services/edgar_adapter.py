@@ -144,7 +144,7 @@ def fetch_filing(cik: str, accession: str) -> ExtractionResult:
         from edgar import Company  # noqa: PLC0415 — deferred import
     except ImportError as exc:
         raise EdgarAdapterError(
-            "edgartools is not installed. Run: pip install 'edgartools>=2.26.0'"
+            "edgartools is not installed. Run: uv sync"
         ) from exc
 
     @retry(
