@@ -472,13 +472,20 @@ Every chat call, RAG retrieval, and LangGraph node run produces a trace. Product
 
 ## CI & security
 
-Every PR runs the checks below. All third-party actions are pinned by commit
-SHA; workflows hold top-level `permissions: contents: read` and elevate only
-per job where needed (CodeQL → `security-events: write`; gitleaks →
-`pull-requests: write` so it can comment when a leak is found). The suites live
-in `.github/workflows/`: `python.yml`, `security.yml`, `codeql.yml`,
-`quality.yml`, `docker.yml` (plus weekly Dependabot via
-`.github/dependabot.yml`). `refresh-filings.yml` / `embed-annuals.yml` are
+What runs where (accurately — three suites are path-filtered): `security.yml`
+and `codeql.yml` run on **every** PR (`security.yml` also on push to `main`
+and on a weekly schedule; `codeql.yml` on a weekly schedule);
+`python.yml` runs on PRs touching `api/ scripts/ tests/ main.py run.py
+pyproject.toml uv.lock ruff.toml` (plus push to `main`); `quality.yml` on PRs
+touching `.github/workflows/**`, `.github/dependabot.yml`, `Dockerfile` or
+`zizmor.yml`; `docker.yml` on PRs touching the Dockerfile, the app code or the
+lock/config it bakes in. A docs-only PR therefore only gets the `security.yml` +
+`codeql.yml` suites. All third-party actions are pinned by commit SHA;
+workflows hold top-level `permissions: contents: read` and elevate only per job
+where needed (CodeQL → `security-events: write`; nothing else elevates any
+more — the gitleaks job runs a checksum-pinned binary and needs no extra
+permissions). The suites live in `.github/workflows/` (plus weekly Dependabot
+via `.github/dependabot.yml`). `refresh-filings.yml` / `embed-annuals.yml` are
 operational ETL workflows and are not part of this pipeline.
 
 | Check | Where | What it blocks | Run locally |
@@ -486,16 +493,16 @@ operational ETL workflows and are not part of this pipeline.
 | Ruff lint | `python.yml` | lint regressions in `api/ scripts/ tests/ main.py run.py` | `uv run ruff check api scripts tests main.py run.py` |
 | pytest + coverage gate | `python.yml` | test failures; `api/`+`scripts/` line coverage below **48%** (measured **49.3%** on 2026-10-26 with Python 3.12; `coverage.xml` uploaded as an artifact) | `uv run pytest tests -m "not spark and not lakebase and not databricks" --cov=api --cov=scripts --cov-fail-under=48` |
 | uv.lock consistency | `python.yml` | `pyproject.toml` changed without re-locking | `uv lock --check` |
-| Python 3.11 + 3.12 matrix | `python.yml` | test failures on either interpreter (both verified against `uv.lock`: 397 passed / 3 skipped on 3.11.17 and 3.12.13) | `uv run --python 3.11 pytest tests -m "not spark and not lakebase and not databricks"` |
-| gitleaks, full git history | `security.yml` | committed secrets anywhere in history (config: `.gitleaks.toml`) | `pre-commit run gitleaks --all-files` (or `gitleaks git .`) |
-| TruffleHog, verified-only | `security.yml` | credentials confirmed live against their provider in the pushed range | `trufflehog git file://. --only-verified` |
+| Python 3.11 + 3.12 matrix | `python.yml` | test failures on either interpreter (both verified against `uv.lock`: 397 passed / 3 skipped on 3.11.17 and 3.12.13 locally; CI resolves the latest 3.11/3.12 patches) | `uv run --python 3.11 pytest tests -m "not spark and not lakebase and not databricks"` |
+| gitleaks, full git history | `security.yml` | committed secrets in **every commit on every fetched ref** — the job runs a checksum-pinned gitleaks 8.28.0 binary with `detect --log-opts=--all`, not a PR-range scan (config: `.gitleaks.toml`) | `gitleaks detect --log-opts=--all --redact --config .gitleaks.toml` (or `pre-commit run gitleaks --all-files` for staged changes) |
+| TruffleHog, verified-only | `security.yml` | credentials confirmed live against their provider in the pushed range (PR base..head / push range; full history on the weekly run) | `trufflehog git file://. --only-verified` |
 | pip-audit | `security.yml` | known advisories in the locked dependency tree (CPU-torch-stripped `uv export`) | `uvx --python 3.11 --from pip-audit pip-audit --no-deps -r <exported requirements>` (see job for the exact export) |
-| dependency-review-action | `security.yml` | PRs that introduce a dependency version with a known advisory | GitHub-only (diffs PR against base) |
+| dependency-review-action | `security.yml` | PRs that introduce a dependency version with a known advisory. **Repo prerequisite:** Dependency graph must be enabled (Settings → Code security → Dependency graph); until a maintainer enables it the job fails with "Dependency graph not supported on this repository" | GitHub-only (diffs PR against base) |
 | bandit, medium+ severity | `security.yml` | MEDIUM/HIGH SAST findings outside the documented baseline (`[tool.bandit]` in `pyproject.toml`) | `uv run --with bandit==1.9.4 bandit -c pyproject.toml -r api scripts main.py run.py -ll` |
 | CodeQL (python) | `codeql.yml` | code-scanning alerts on PRs + weekly full scan (Mondays 04:23 UTC) | GitHub-only |
 | actionlint + zizmor | `quality.yml` | invalid workflow files; GitHub Actions security findings (config: `zizmor.yml`) | `actionlint` (pinned 1.7.7 binary) · `uvx zizmor==1.31.1 .github/workflows/` |
 | hadolint | `quality.yml` | Dockerfile findings at warning level and above | `hadolint Dockerfile` |
-| Docker build + Trivy image scan | `docker.yml` | image build breakage; **fixable HIGH/CRITICAL** image vulnerabilities (`.trivyignore` holds the documented pre-existing set) | `docker build -f Dockerfile -t rag-workbench:ci . && trivy image --severity HIGH,CRITICAL --ignore-unfixed rag-workbench:ci` |
+| Docker build + Trivy image scan | `docker.yml` | image build breakage; **fixable HIGH/CRITICAL** image vulnerabilities only (`scanners: vuln` — Trivy's built-in secret scanner is off here because secret scanning is gitleaks/TruffleHog's job and it false-positived on API-shaped strings inside vendored SDK sources; `.trivyignore` holds the documented pre-existing set) | `docker build -f Dockerfile -t rag-workbench:ci . && trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed rag-workbench:ci` |
 | Dependabot | `dependabot.yml` | — (opens weekly PRs for `uv`, `github-actions`, `docker`) | GitHub-only |
 
 Tool versions the baseline was recorded with: gitleaks 8.28.0 (also the
@@ -508,20 +515,29 @@ commit.
 
 ### Pre-existing findings — honest list
 
-Scanned on 2026-10-26 at base `2c92d08`. **No real secret has ever been
-committed to this repository** — and therefore none has been allowlisted. The
-full-history secret scans found only the two false positives below.
+Scanned on 2026-10-26 at base `2c92d08`, re-verified on PR #27 head. **No real
+secret has ever been committed to this repository** — and therefore none has
+been allowlisted.
 
-**Secrets (gitleaks 8.28.0, full history: 2 findings, both false positives,
-allowlisted in `.gitleaks.toml` with reasons):**
+**Secrets (gitleaks 8.28.0, full history via `detect --log-opts=--all`: 4 raw
+matches over 2 distinct fixed literals, all false positives, allowlisted in
+`.gitleaks.toml` by exact value — one historical site per literal plus this
+README's own findings table quoting them):**
 
 1. `frontend/src/components/Disclaimer.tsx:4` (commit `f2fe15b0`) —
    `ACK_KEY = 'rw_disclaimer_ack_v1'` is a localStorage flag name for the
    disclaimer banner (the frontend has since moved to `evangoh-frontend`).
+   The same literal is quoted above in this findings table (commit `b55ae19`).
 2. `.venv_duck10/Lib/site-packages/setuptools/_distutils/msvccompiler.py:45`
    (commit `9b44f3b6`) — `RegEnumKey = win32api.RegEnumKey`, i.e. setuptools'
    vendored Win32 registry code inside a virtualenv that was once committed
-   (removed from HEAD; only history matches).
+   (removed from HEAD; only history matches). Quoted in this findings table
+   too (commit `b55ae19`).
+
+Both allowlist regexes pin the exact fixed literal (`rw_disclaimer_ack_v1`,
+`win32api.RegEnumKey`) — neither can ever be a real credential, so matching by
+value cannot mask one. Local proof: `gitleaks detect --log-opts=--all --redact
+--config .gitleaks.toml` reports "no leaks found" over the full history.
 
 TruffleHog 3.99.7 full history, verified-only: **0 verified, 0 unverified
 secrets**.
@@ -567,18 +583,23 @@ security-relevant in their context.
 
 **zizmor 1.31.1 — 6 pre-existing findings, all in the two workflows another PR
 is rewriting (this PR must not touch `refresh-filings.yml` /
-`embed-annuals.yml`), recorded line-precisely in `zizmor.yml`:**
+`embed-annuals.yml`), recorded rule+file-scoped in `zizmor.yml`:**
 
-- `embed-annuals.yml:58` / `refresh-filings.yml:49` — `artipacked`: checkout
-  without `persist-credentials: false`.
-- `embed-annuals.yml:122` / `refresh-filings.yml:115` — `template-injection`
+- `embed-annuals.yml` / `refresh-filings.yml` — `artipacked`: checkout without
+  `persist-credentials: false`.
+- `embed-annuals.yml` / `refresh-filings.yml` — `template-injection`
   (low confidence, ×2 each): `${{ steps.guard.outputs.summary }}` interpolated
   into a git commit message.
 
+The entries are keyed by rule + file **without line anchors** on purpose: PR #25
+(`fix/db-copy-hf-runner`) rewrites both workflows and line anchors would drift.
+Trade-off, stated plainly: while these entries exist, *new* findings of these
+two rules in these two files will not be caught — remove each entry as soon as
+the owning PR lands (or zizmor reports those files clean).
+
 Three findings of the same kinds in `deploy.yml` were **fixed** in this PR
 (checkouts got `persist-credentials: false`; `github.event.inputs.force-seed`
-now reaches the shell through `env:`). The `zizmor.yml` entries should be
-removed as soon as the owning PR lands.
+now reaches the shell through `env:`).
 
 **hadolint 2.12.0:** DL3059 (consecutive `RUN`s) fixed by merging. DL3008
 (apt version pinning) waived inline in the `Dockerfile` with the reason: distro
@@ -596,13 +617,23 @@ cannot be fixed via `uv.lock` because they are not in it:
   malicious wheel file.
 
 The venv layer (exact `uv.lock` export) has **0** fixable HIGH/CRITICAL
-findings (pip-audit agrees). Caveat, stated plainly: the build environment for
+findings (pip-audit agrees). The Trivy gate runs `scanners: vuln` on purpose:
+its default secret scanner produced 11 CRITICAL false positives on
+API-shaped strings inside vendored SDK sources (e.g. the anthropic SDK's
+`gcp-service-account` test fixtures) — secret scanning is this repo's gitleaks
++ TruffleHog jobs. Caveat, stated plainly: the build environment for
 this change had **no Docker daemon**, so the full image could not be built
 locally — the base image was scanned daemonlessly and the venv layer via its
 locked requirements export. The `docker.yml` job is the full measurement; if it
 surfaces further fixable HIGH/CRITICAL findings (e.g. from the apt layers),
 they must be reported and either fixed or added to `.trivyignore` with the same
 documentation standard — never dropped from the gate.
+
+**dependency-review:** the job stays in place and blocking (it is not silently
+disabled). It currently fails with "Dependency graph not supported on this
+repository" because the **repo setting** is off — a maintainer must enable
+Settings → Code security → Dependency graph. That is the only prerequisite;
+once enabled, the job works as documented above.
 
 **actionlint 1.7.7 / pip-audit:** clean at scan time.
 

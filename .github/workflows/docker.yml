@@ -50,14 +50,19 @@ jobs:
         run: docker build -f Dockerfile -t rag-workbench:ci .
       # Fails on fixable HIGH/CRITICAL vulnerabilities only (--ignore-unfixed),
       # in the built image: OS packages from the base + apt layers and the
-      # uv-managed /opt/venv. Pre-existing, documented findings are listed in
-      # .trivyignore (nothing is ever dropped from the gate silently) and
-      # reported in README "CI & security".
+      # uv-managed /opt/venv. `scanners: vuln` on purpose: Trivy's default also
+      # runs a secret scanner, which produced false positives on API-shaped
+      # strings inside vendored SDK sources (e.g. the anthropic SDK) — secret
+      # scanning is this repo's gitleaks + TruffleHog jobs, not this vuln gate.
+      # Pre-existing, documented findings are listed in .trivyignore (nothing is
+      # ever dropped from the gate silently) and reported in README
+      # "CI & security".
       - name: Trivy image scan (fail on fixable HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
         with:
           image-ref: "rag-workbench:ci"
           version: "v0.69.3"
+          scanners: "vuln"
           format: "table"
           severity: "HIGH,CRITICAL"
           ignore-unfixed: true

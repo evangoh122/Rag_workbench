@@ -5,6 +5,10 @@ on:
     branches: [main]
   # No path filter: secrets can be introduced anywhere, so this runs on every PR.
   pull_request:
+  schedule:
+    # Weekly full sweep (Mondays 03:41 UTC, off the hour on purpose): the
+    # gitleaks job re-scans the whole history even when nothing is pushed.
+    - cron: "41 3 * * 1"
 
 permissions:
   contents: read
@@ -13,25 +17,24 @@ jobs:
   secrets:
     name: Secret scanning (gitleaks, full history)
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write # gitleaks-action comments on the PR when a leak is found
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Scan full git history for secrets
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Same release the documented baseline and the local pre-commit hook
-          # (.pre-commit-config.yaml) were validated against — see README
-          # "CI & security".
-          GITLEAKS_VERSION: "8.28.0"
-          # Explicit so the run always uses the repo's documented allowlist
-          # (.gitleaks.toml) rather than gitleaks' built-in default config.
-          GITLEAKS_CONFIG: .gitleaks.toml
+      # Full history, honestly: `--log-opts=--all` scans every commit on every
+      # ref fetched by checkout (fetch-depth: 0), not just the PR/push range —
+      # the same scan the README documents and the pre-commit hook approximates.
+      # The gitleaks binary is pinned by release AND verified against a
+      # hardcoded sha256 (no third-party action involved). The repo's
+      # .gitleaks.toml (documented allowlist) is passed explicitly.
+      - name: gitleaks (pinned 8.28.0, checksum-verified, all refs)
+        run: |
+          curl -sSLo /tmp/gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz
+          echo "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks detect --log-opts=--all --redact --config .gitleaks.toml
 
   trufflehog:
     name: Secret scanning (TruffleHog, verified)
@@ -85,6 +88,10 @@ jobs:
     name: Dependency review (introduced advisories)
     # The action diffs the PR's dependency manifests/lockfiles against the base
     # branch, so it only means something on pull_request events.
+    # Prerequisite: the repo's Dependency graph must be enabled (Settings >
+    # Code security > Dependency graph) — until then this job fails with
+    # "Dependency graph not supported on this repository". Kept blocking on
+    # purpose (not silently disabled); see README "CI & security".
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
