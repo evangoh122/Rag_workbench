@@ -56,9 +56,9 @@
 
 | # | Issue | File | Fix |
 |---|-------|------|-----|
-| 25 | Missing `requests` in requirements | `requirements.txt` | Added `requests>=2.31.0` |
-| 26 | Missing dev dependencies | `requirements-dev.txt` | Created with pytest, httpx, ruff |
-| 27 | `edgartools` allows breaking v3.x | `requirements.txt` | Pinned `>=2.26.0,<3.0.0` |
+| 25 | Missing `requests` in requirements | `pyproject.toml` | Added `requests>=2.31.0` |
+| 26 | Missing dev dependencies | `pyproject.toml` (`dev` group) | Created with pytest, pytest-asyncio, httpx, ruff |
+| 27 | `edgartools` allows breaking v3.x | `pyproject.toml` | Pinned `>=2.26.0,<3.0.0` |
 | 29 | BM25 index rebuilt on every restart | `asymmetric_rag.py` | Deleted — moot after removal |
 | 30 | Embedding one-at-a-time | `asymmetric_rag.py` | Deleted — moot after removal |
 | 31 | Non-deterministic `hash()` | `rag_engine.py` | `hashlib.sha256()` |
@@ -77,9 +77,9 @@
 | N1 | `_load_env()` undefined | Replaced with `Config.validate_startup()` |
 | N2 | `traceback.print_exc()` in API | Replaced with `logger.exception()` |
 | N3 | `print()` in service code | Replaced with `logger` + imports |
-| N4 | Deps unpinned | Pinned all in `requirements.txt` |
-| N5 | `pydantic` missing | Added to `requirements.txt` |
-| N6 | `requirements-dev.txt` missing | Created file |
+| N4 | Deps unpinned | Pinned all in `pyproject.toml` + `uv.lock` |
+| N5 | `pydantic` missing | Added to `pyproject.toml` |
+| N6 | Dev dependencies missing | Created `dev` dependency group in `pyproject.toml` |
 | N7 | `verify_numeric` unused | Removed import |
 | N8 | `execution_rails` unused | Deleted dead file |
 | N9 | `graph_extractor.py` dead code | Deleted dead file |
@@ -129,7 +129,7 @@
 | ID | Task | File(s) | Detail |
 |----|------|---------|--------|
 | PH1-01 | Create `eval_types.py` dataclasses (PLAN-01) | `api/models/eval_types.py`, `tests/test_eval_types.py`, `api/models/__init__.py` | **Done** — 8 types including PolygonData; 15 tests pass; `__init__.py` re-exports all 8 |
-| PH1-02 | EdgarTools adapter (PLAN-02, blocks on PH1-01) | `api/services/edgar_adapter.py`, `tests/test_edgar_adapter.py`, `requirements.txt` | `fetch_filing(cik, accession) -> ExtractionResult`; XBRL→Provenance.XBRL, HTML→Provenance.STRUCTURED_TABLE. Plan: `.planning/phases/01-data-structures-reader-adapter/01-PLAN-02.md` |
+| PH1-02 | EdgarTools adapter (PLAN-02, blocks on PH1-01) | `api/services/edgar_adapter.py`, `tests/test_edgar_adapter.py`, `pyproject.toml` | `fetch_filing(cik, accession) -> ExtractionResult`; XBRL→Provenance.XBRL, HTML→Provenance.STRUCTURED_TABLE. Plan: `.planning/phases/01-data-structures-reader-adapter/01-PLAN-02.md` |
 
 ### Health Tracking — Pending Fixes (from code review)
 

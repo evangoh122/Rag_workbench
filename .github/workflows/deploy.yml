@@ -22,6 +22,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 # ── 1. Sync secrets ─────────────────────────────────────────────────────────
 jobs:
   sync-secrets:
@@ -104,7 +107,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           lfs: true
@@ -162,6 +165,13 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
+      # The inline helper below is stdlib-only (json module), so no project
+      # dependencies are needed: --no-project runs it with the runner's Python.
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: "0.12.23"
+          enable-cache: false
+
       - name: Trigger incremental XBRL refresh (skips existing tickers)
         env:
           HF_USERNAME:   ${{ secrets.HF_USERNAME }}
@@ -188,7 +198,7 @@ jobs:
             echo "ERROR: Could not reach admin endpoint after 5 attempts." && exit 1
           fi
           echo "Response: $RESPONSE"
-          echo "$RESPONSE" | python3 -c "
+          echo "$RESPONSE" | uv run --no-project python -c "
           import sys, json
           d = json.load(sys.stdin)
           assert d.get('status') in ('ok', 'partial'), f'Seed failed: {d}'
@@ -208,6 +218,13 @@ jobs:
     needs: await-space
     runs-on: ubuntu-latest
     steps:
+      # The inline helper below is stdlib-only (json/os), so no project
+      # dependencies are needed: --no-project runs it with the runner's Python.
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: "0.12.23"
+          enable-cache: false
+
       - name: "Verify restored dataset DB (poll /api/stats)"
         env:
           HF_USERNAME:   ${{ secrets.HF_USERNAME }}
@@ -233,7 +250,7 @@ jobs:
           echo "Polling $SPACE_URL/api/stats — require model=$EXPECTED_MODEL, all stored dims=$EXPECTED_DIM, >=$TARGET companies..."
           for i in $(seq 1 20); do   # 20 * 20s = ~7 min budget
             STATS=$(curl -sS --max-time 30 "$SPACE_URL/api/stats" || echo '{"error": "curl failed"}')
-            RESULT=$(echo "$STATS" | EXPECTED_MODEL="$EXPECTED_MODEL" EXPECTED_DIM="$EXPECTED_DIM" TARGET="$TARGET" python3 -c "
+            RESULT=$(echo "$STATS" | EXPECTED_MODEL="$EXPECTED_MODEL" EXPECTED_DIM="$EXPECTED_DIM" TARGET="$TARGET" uv run --no-project python -c "
           import sys, json, os
           try:
               line = sys.stdin.read().strip()
@@ -297,7 +314,10 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: "0.12.23"
       - name: "RAG pipeline -- all 31 tickers (chunk -> hybrid BM25+vector -> rerank -> RRF)"
         env:
           HF_USERNAME:    ${{ secrets.HF_USERNAME }}
@@ -306,4 +326,6 @@ jobs:
         run: |
           SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
           export SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
-          python3 scripts/rag_pipeline_ci.py
+          # rag_pipeline_ci.py uses only the stdlib (urllib/json), so run it via
+          # uv without creating the project env (no ML stack needed for this gate).
+          uv run --no-project python scripts/rag_pipeline_ci.py

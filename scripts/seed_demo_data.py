@@ -5,7 +5,7 @@ Used when SEC EDGAR API is unreachable (e.g., sandbox environment).
 Data is based on publicly available annual report figures for semiconductor companies.
 
 Usage:
-    python3 scripts/seed_demo_data.py [--db-path ./data/rag.duckdb]
+    uv run python scripts/seed_demo_data.py [--db-path ./data/rag.duckdb]
 """
 from __future__ import annotations
 

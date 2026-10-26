@@ -10,8 +10,8 @@ on:
       - "tests/**"
       - "main.py"
       - "run.py"
-      - "requirements.txt"
-      - "requirements-dev.txt"
+      - "pyproject.toml"
+      - "uv.lock"
       - "ruff.toml"
       - ".github/workflows/python.yml"
 
@@ -29,14 +29,14 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-      # Plain pip + requirements.txt, not a uv workspace (no pyproject.toml/
-      # uv.lock exists here, unlike haze_watch) - uv is just a much faster
-      # pip-compatible installer for these requirements files, same deps.
+        with:
+          version: "0.12.23"
+      # Dependencies come from pyproject.toml + uv.lock (the `dev` group is
+      # installed by default). --locked fails if uv.lock is out of date.
       - name: Install dependencies
-        run: uv pip install --system -r requirements.txt -r requirements-dev.txt
+        run: uv sync --locked
       - name: Lint
-        run: ruff check api scripts tests main.py run.py
+        run: uv run ruff check api scripts tests main.py run.py
       - name: Tests
-        # Not `pytest tests` - that omits the repo root from sys.path, so
-        # `import api` fails. `-m` makes Python add the cwd itself.
-        run: python -m pytest tests
+        # pyproject.toml sets `pythonpath = ["."]` so the suite can import `api`.
+        run: uv run pytest tests

@@ -11,7 +11,7 @@ progress is committed every COMMIT_EVERY batches, so re-running continues where
 it stopped. graph_triples / xbrl_facts are untouched (dimension-independent).
 
 Usage:
-    python scripts/reembed_qwen06.py [--db-path ./data/rag.duckdb] [--batch 32]
+    uv run python scripts/reembed_qwen06.py [--db-path ./data/rag.duckdb] [--batch 32]
 """
 from __future__ import annotations
 

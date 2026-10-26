@@ -246,15 +246,18 @@ repo, which serves it directly in production. This repo is backend/API-only.
 ### Prerequisites
 
 - Python 3.11+ (the Docker image pins 3.11)
+- [uv](https://docs.astral.sh/uv/) for Python dependencies (replaces pip/venv)
 - Docker (for the container build)
 
 ### Local development
 
 ```bash
-# 1. Clone and install
+# 1. Clone and install (Python deps come from pyproject.toml + uv.lock)
 git clone https://github.com/evangoh122/Rag_workbench.git
 cd Rag_workbench
-pip install -r requirements.txt
+uv sync                 # creates .venv and installs the locked dependencies
+# Dev tools (pytest, pytest-asyncio, httpx, ruff) are in the `dev` group and are
+# installed by default; use `uv sync --no-dev` for a runtime-only environment.
 
 # 2. Configure environment
 cp .env.example .env
@@ -267,11 +270,22 @@ cp .env.example .env
 # needed). Override with EMBEDDING_PROVIDER / ST_EMBEDDING_MODEL if desired.
 
 # 3. Start the backend
-uvicorn api.main:app --reload --port 8000
+uv run uvicorn api.main:app --reload --port 8000
+
+# 4. Tests (from the repo root)
+uv run pytest -m "not spark and not lakebase and not databricks" -q
 ```
 
 The frontend lives in the separate `evangoh-frontend` repo — see its own
 README for local dev setup.
+
+### Dependency management
+
+- **Python:** dependencies are declared in `pyproject.toml` and pinned in
+  `uv.lock`. Run `uv lock` after editing dependencies, and commit both files.
+  CI and Docker use `uv sync --locked`, which fails if `uv.lock` is out of date
+  (run `uv lock --check` locally to verify the lock matches `pyproject.toml`).
+  `requirements.txt` / `requirements-dev.txt` are retired; nothing needs them.
 
 ### Docker (single container)
 
@@ -319,10 +333,10 @@ Retrieval is reranked by a CrossEncoder (`RERANKER_MODEL`, default `cross-encode
 
 ```bash
 # Ingest the semiconductor ticker universe (10-K, latest available)
-python -m scripts.embed_edgar
+uv run python -m scripts.embed_edgar
 
 # Or specific tickers
-EMBED_TICKERS=NVDA,AMD python -m scripts.embed_edgar
+EMBED_TICKERS=NVDA,AMD uv run python -m scripts.embed_edgar
 ```
 
 Each chunk is stored with `ticker`, `accession`, `cik`, `section_id`, `form_type`, `period_of_report`, `chunk_index`. The retriever uses this metadata to build the audit trail. The ticker universe (see `api/config.py` `TICKER_TO_CIK`) covers ~33 semiconductor names — chip designers (NVDA, AMD, QCOM, AVGO, INTC, MU, TXN, …) and equipment/materials (AMAT, LRCX, KLAC, ENTG, …).
@@ -337,17 +351,17 @@ Related scripts: `extract_xbrl_facts.py`, `extract_graph_triples.py`, `backfill_
 # Start the API first, then:
 
 # 1. Deterministic scoring (fast, free)
-python evals/run_eval.py
+uv run python evals/run_eval.py
 
 # 2. LLM-judge scoring (uses your configured provider)
-python evals/ragas_eval.py
+uv run python evals/ragas_eval.py
 
 # Debug a single question
-python evals/run_eval.py --id 5
-python evals/ragas_eval.py --id 5 --metrics faithfulness,answer_relevancy
+uv run python evals/run_eval.py --id 5
+uv run python evals/ragas_eval.py --id 5 --metrics faithfulness,answer_relevancy
 
 # Filter by failure mode
-python evals/run_eval.py --mode gaap_vs_nongaap
+uv run python evals/run_eval.py --mode gaap_vs_nongaap
 ```
 
 ### Golden set failure modes
@@ -404,7 +418,7 @@ The HF Space has **no persistent volume**, so runtime state survives restarts th
 
 ### Operational notes
 
-- **DuckDB version alignment:** the old Hugging Face image cap of `duckdb<1.1.0` caused serialization failures with locally generated DuckDB 1.5.3 files. `requirements.txt` now requires DuckDB 1.5.3+, and `.venv_duck10` is obsolete.
+- **DuckDB version alignment:** the old Hugging Face image cap of `duckdb<1.1.0` caused serialization failures with locally generated DuckDB 1.5.3 files. `pyproject.toml` (locked in `uv.lock`) requires DuckDB 1.5.3+, and `.venv_duck10` is obsolete.
 - **Section extraction:** `_extract_sections_with_labels()` now uses `re.finditer()` plus longest-match selection so TOC entries do not steal section labels. Existing data was corrected with `scripts/retag_sections.py`.
 - **Review queue behavior:** an empty `review_decisions` table is expected when queries route to `AUTO` at high confidence. Use narrative-heavy questions to exercise `SAMPLED_REVIEW` and `ESCALATE`.
 - **Feedback caveat:** `/api/chat/feedback` can create `reviewer_verdicts` rows that are not linked to formal review-queue decisions because it uses the message timestamp as the decision ID.

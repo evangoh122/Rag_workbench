@@ -12,10 +12,10 @@ Conventions preserved to match existing rows:
   - period_of_report = 20{YY}-12-31 from the accession's middle segment (matches the
     existing fallback convention used for both 10-K and 10-Q rows in this corpus)
 
-Run with the duckdb-1.5.x venv (the on-disk DB is 1.5.x format):
-  .venv\\Scripts\\python.exe scripts/embed_additional.py --forms annual --dry-run
-  .venv\\Scripts\\python.exe scripts/embed_additional.py --forms annual
-  .venv\\Scripts\\python.exe scripts/embed_additional.py --forms 10-Q
+Run with uv (the on-disk DB is duckdb 1.5.x format; uv.lock pins it):
+  uv run python scripts/embed_additional.py --forms annual --dry-run
+  uv run python scripts/embed_additional.py --forms annual
+  uv run python scripts/embed_additional.py --forms 10-Q
 """
 
 import sys

@@ -2,7 +2,7 @@
 tests/test_eval_types.py
 
 Round-trip serialisation and provenance enforcement tests for eval_types.py.
-Run with: python -m pytest tests/test_eval_types.py -v
+Run with: uv run pytest tests/test_eval_types.py -v
 """
 import dataclasses
 import pytest

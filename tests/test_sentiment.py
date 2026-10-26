@@ -2,7 +2,7 @@
 tests/test_sentiment.py
 
 Unit tests for Loughran-McDonald sentiment analysis.
-Run with: python -m pytest tests/test_sentiment.py -v
+Run with: uv run pytest tests/test_sentiment.py -v
 """
 import pytest
 from api.services.sentiment import (

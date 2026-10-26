@@ -1,5 +1,8 @@
-# Stage 1: Install Python dependencies
+# Stage 1: Install Python dependencies with uv
 FROM python:3.11-slim AS python-builder
+
+# Official uv binary — pinned so image builds are reproducible.
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -11,10 +14,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    -r requirements.txt
+# Install into a dedicated venv, byte-compiled and copied (no hardlinks) so the
+# venv can be copied into the final stage. UV_PYTHON_DOWNLOADS=never keeps uv on
+# the image interpreter instead of fetching its own Python.
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PYTHON=/usr/local/bin/python3.11
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project
 
 # Stage 2: Final runtime image
 FROM python:3.11-slim AS runtime
@@ -31,8 +41,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -m -u 1000 user
 RUN chown -R user:user /app
 
-# Copy Python packages from builder
-COPY --from=python-builder /install /usr/local
+# Copy the uv-managed virtualenv from the builder
+COPY --from=python-builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application code
 COPY api/ ./api/
@@ -59,5 +70,9 @@ USER user
 # foreground process now (exec, no supervisord) and binds the Space's public
 # port directly — there's no nginx in front of it anymore (the frontend moved
 # to evangoh-frontend, which serves the portfolio + RAG Workbench UI directly).
+#
+# The CMD runs bare `python`/`uvicorn` on purpose: PATH points at the copied
+# /opt/venv created by `uv sync`, so it is the locked environment, not a
+# system interpreter.
 CMD ["sh", "-c", "cd /app && PYTHONPATH=/app python -m scripts.fetch_db_from_dataset || true; PYTHONPATH=/app python -m scripts.restore_review_db || true; python scripts/seed_on_startup.py & exec uvicorn api.main:app --host 0.0.0.0 --port 7860"]
-# build: v7 — backend-only (frontend moved to evangoh-frontend); uvicorn serves 7860 directly, no nginx/supervisord
+# build: v7 — backend-only (frontend moved to evangoh-frontend); uv (pyproject.toml + uv.lock)
