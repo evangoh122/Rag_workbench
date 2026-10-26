@@ -152,6 +152,65 @@ def test_byte_budget_spans_multiple_tables(source, monkeypatch):
         mirror_tables(source, ["polygon_bars", "graph_triples"], time.monotonic() + 20)
 
 
+def test_wide_row_view_refused_with_bounded_parent_growth():
+    conn = duckdb.connect(":memory:")
+    conn.execute("CREATE VIEW xbrl_facts AS SELECT repeat('x', 100000) AS s FROM range(3000)")
+    before = _rss_kb()
+    try:
+        with pytest.raises(ChatQueryLimitError, match="too large"):
+            mirror_tables(conn, ["xbrl_facts"], time.monotonic() + 60)
+    finally:
+        conn.close()
+    assert _rss_kb() - before < 150 * 1024  # KiB; unpaged fetch grew ~580-790MiB
+
+
+def test_paging_reassembles_every_row(source, monkeypatch):
+    monkeypatch.setattr(chat_sandbox, "PAGE_BYTES", 2048)
+    source.execute("CREATE TABLE polygon_bars AS SELECT range AS ts, 'pad' AS p FROM range(5000)")
+    blobs = mirror_tables(source, ["polygon_bars"], time.monotonic() + 20)
+    assert _worker("SELECT count(*) AS n, sum(ts) AS t FROM polygon_bars", blobs) == [
+        {"n": 5000, "t": sum(range(5000))}
+    ]
+
+
+class _PausingCursor:
+    """Cursor proxy that idles before its second execute (deadline-gap probe)."""
+
+    def __init__(self, real, pause):
+        self._real, self._pause, self.calls = real, pause, 0
+
+    def execute(self, *a, **k):
+        self.calls += 1
+        if self.calls == 2:
+            time.sleep(self._pause)
+        return self._real.execute(*a, **k)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+class _PausingSource:
+    def __init__(self, real, pause):
+        self._real, self._pause = real, pause
+
+    def cursor(self):
+        return _PausingCursor(self._real.cursor(), self._pause)
+
+
+def test_deadline_cannot_be_missed_while_cursor_is_idle():
+    conn = duckdb.connect(":memory:")
+    conn.execute("CREATE TABLE polygon_bars AS SELECT 1 AS x")
+    conn.execute("CREATE VIEW xbrl_facts AS SELECT sum(sin(range)) AS s FROM range(1000000000000)")
+    start = time.monotonic()
+    try:
+        with pytest.raises(ChatQueryLimitError):
+            # deadline passes during the 0.4s idle gap before the slow second statement
+            mirror_tables(_PausingSource(conn, 0.4), ["polygon_bars", "xbrl_facts"], time.monotonic() + 0.1)
+    finally:
+        conn.close()
+    assert time.monotonic() - start < 3
+
+
 # ----------------------------------------------- memory amplification (child limit)
 @pytest.mark.parametrize(
     "sql",
@@ -316,6 +375,10 @@ def test_blocklist_defense_in_depth(sql):
         ("WITH xbrl_facts AS (SELECT 1 n) SELECT * FROM xbrl_facts JOIN (SELECT * FROM polygon_bars) p ON 1=1", ["polygon_bars"]),
         # a CTE defined later does not shadow an earlier real reference
         ("WITH a AS (SELECT * FROM polygon_bars), polygon_bars AS (SELECT 1) SELECT * FROM a, polygon_bars", ["polygon_bars"]),
+        # non-recursive: a CTE is not in scope inside its own body
+        ("WITH xbrl_facts AS (SELECT * FROM xbrl_facts) SELECT * FROM xbrl_facts", ["xbrl_facts"]),
+        ("WITH a AS (SELECT * FROM polygon_bars), b AS (SELECT * FROM a) SELECT * FROM b", ["polygon_bars"]),
+        ("WITH RECURSIVE xbrl_facts(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM xbrl_facts WHERE n<3) SELECT * FROM xbrl_facts", []),
         ("SELECT * FROM xbrl_facts x JOIN polygon_bars b ON 1=1 WHERE x.ticker IN (SELECT ticker FROM graph_triples)",
          ["graph_triples", "polygon_bars", "xbrl_facts"]),
     ],
@@ -332,6 +395,8 @@ def test_ast_table_resolution(sql, expected):
         "SELECT * FROM other_db.main.xbrl_facts",
         "SELECT * FROM xbrl_facts JOIN private_tokens ON 1=1",
         "COPY xbrl_facts TO 'x.csv'",
+        "WITH private_tokens AS (SELECT * FROM private_tokens) SELECT * FROM private_tokens",
+        "WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n FROM t JOIN private_tokens ON 1=1) SELECT * FROM t",
     ],
 )
 def test_ast_resolution_fails_closed(sql):

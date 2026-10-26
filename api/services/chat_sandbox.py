@@ -32,7 +32,9 @@ ALLOWED_TABLES = frozenset({
 })
 
 MAX_MIRROR_BYTES = 256 * 1024 * 1024   # total across all mirrored tables
-BATCH_ROWS = 50_000
+PAGE_BYTES = 8 * 1024 * 1024           # target bytes per page; bounds parent overshoot
+PROBE_ROWS = 64
+MAX_PAGE_ROWS = 200_000
 QUERY_DEADLINE_SECONDS = 10.0          # whole operation: load + execute
 CHILD_EXTRA_ADDRESS_SPACE = 1024 * 1024 * 1024   # RLIMIT_AS above the loaded baseline
 MAX_RESULT_ROWS = 100
@@ -63,9 +65,14 @@ def _collect(node: Any, scope: frozenset, out: set, bad: set) -> None:
     if isinstance(cte_map, dict) and cte_map.get("map"):
         names: list[str] = []
         for entry in cte_map["map"]:
-            names.append(entry["key"].lower())
-            # A CTE body sees earlier CTEs (and itself, for RECURSIVE).
-            _collect(entry["value"], scope | frozenset(names), out, bad)
+            key = entry["key"].lower()
+            body = entry["value"]["query"]["node"]
+            # A body sees earlier CTEs; itself only when WITH RECURSIVE.
+            body_scope = scope | frozenset(names)
+            if body.get("type") == "RECURSIVE_CTE_NODE":
+                body_scope |= {key}
+            _collect(entry["value"], body_scope, out, bad)
+            names.append(key)
         inner = scope | frozenset(names)
     for key, value in node.items():
         if key == "cte_map":
@@ -101,35 +108,73 @@ def referenced_tables(sql: str) -> list[str]:
 
 
 # --------------------------------------------------------------------- mirroring
+def _check_deadline(deadline: float) -> None:
+    if time.monotonic() > deadline:
+        raise ChatQueryLimitError("Chat query timed out while loading data.")
+
+
 def mirror_tables(source: Any, names: list[str], deadline: float) -> dict[str, bytes]:
-    """Copy tables to Arrow IPC bytes via a request-owned cursor under the budgets."""
+    """Copy tables to Arrow IPC bytes via a request-owned cursor under the budgets.
+
+    The deadline is enforced two ways that cannot miss a later statement: it is
+    checked before every execute/fetch, and a watchdog thread keeps interrupting
+    the cursor every 50ms once the deadline has passed.
+    """
     cursor = source.cursor()
-    remaining = max(deadline - time.monotonic(), 0.001)
-    timer = threading.Timer(remaining, cursor.interrupt)
-    timer.start()
+    stop = threading.Event()
+
+    def watchdog() -> None:
+        if stop.wait(max(deadline - time.monotonic(), 0)):
+            return
+        while not stop.is_set():
+            try:
+                cursor.interrupt()
+            except Exception:  # noqa: BLE001 - cursor may already be closed
+                return
+            stop.wait(0.05)
+
+    thread = threading.Thread(target=watchdog, daemon=True)
+    thread.start()
     budget = MAX_MIRROR_BYTES
     blobs: dict[str, bytes] = {}
     try:
         for name in names:
+            _check_deadline(deadline)
             try:
-                reader = cursor.execute(f'SELECT * FROM "{name}"').to_arrow_reader(BATCH_ROWS)
+                probe = cursor.execute(f'SELECT * FROM "{name}" LIMIT {PROBE_ROWS}').to_arrow_table()
             except duckdb.CatalogException:
                 continue  # table absent in this database
+            # DuckDB materialises whole 2048-row vectors when streaming, which for
+            # wide rows overshoots the budget by hundreds of MiB.  Page with LIMIT
+            # sized from the widest row seen so far so each fetch stays ~PAGE_BYTES.
             sink = pa.BufferOutputStream()
-            with pa.ipc.new_stream(sink, reader.schema) as writer:
-                for batch in reader:
-                    if time.monotonic() > deadline:
-                        raise ChatQueryLimitError("Chat query timed out while loading data.")
-                    budget -= batch.nbytes
+            with pa.ipc.new_stream(sink, probe.schema) as writer:
+                page, offset, n = probe, 0, PROBE_ROWS
+                width = max(probe.nbytes / max(probe.num_rows, 1), 1.0)
+                if probe.num_rows == PROBE_ROWS:  # cheap early refusal, before buffering anything
+                    total = cursor.execute(f'SELECT count(*) FROM "{name}"').fetchone()[0]
+                    if total * width > budget:
+                        raise ChatQueryLimitError(f"Table data is too large for chat queries (at {name}).")
+                while True:
+                    budget -= page.nbytes
                     if budget < 0:
                         raise ChatQueryLimitError(f"Table data is too large for chat queries (at {name}).")
-                    writer.write_batch(batch)
+                    writer.write_table(page)
+                    if page.num_rows < n:
+                        break
+                    offset += page.num_rows
+                    width = max(width, page.nbytes / max(page.num_rows, 1))
+                    n = int(max(1, min(MAX_PAGE_ROWS, PAGE_BYTES // width)))
+                    _check_deadline(deadline)
+                    page = cursor.execute(
+                        f'SELECT * FROM "{name}" LIMIT {n} OFFSET {offset}'
+                    ).to_arrow_table()
             blobs[name] = sink.getvalue().to_pybytes()
     except duckdb.InterruptException as exc:
         raise ChatQueryLimitError("Chat query timed out while loading data.") from exc
     finally:
-        timer.cancel()
-        timer.join()
+        stop.set()
+        thread.join()
         cursor.close()
     return blobs
 
