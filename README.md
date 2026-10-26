@@ -429,7 +429,8 @@ docker build -f Dockerfile.hf-gpu -t <registry>/rag-workbench-hf-gpu:<tag> . && 
 hf jobs run --flavor l4x1 --timeout 6h \
   --secrets HF_TOKEN \
   -e DATASET_REPO=<user>/Rag-workbench -e BACKFILL_TICKERS=AAPL,MSFT -e BACKFILL_FORMS=annual \
-  <registry>/rag-workbench-hf-gpu:<tag>
+  <registry>/rag-workbench-hf-gpu:<tag> \
+  bash scripts/run_hf_backfill.sh
 ```
 
 **Rollback target:** dataset commit `7640a4bd`. Resolve and confirm the full hash before relying on it (the short hash alone is not verified here):

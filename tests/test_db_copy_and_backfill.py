@@ -169,7 +169,34 @@ def test_runner_never_publishes_or_restarts():
     assert re.search(r"^set -euo pipefail", text, re.M)
 
 
-def test_gpu_dockerfile_keeps_cpu_lock_untouched():
+def test_gpu_dockerfile_torch_pin_matches_lock_and_base_image():
     text = (ROOT / "Dockerfile.hf-gpu").read_text()
-    assert "uv sync --locked" in text and "whl/cu" in text
-    assert "uv lock" not in text
+    lock = (ROOT / "uv.lock").read_text()
+    locked = re.search(r'name = "torch"\nversion = "(\d+\.\d+\.\d+)"\nsource = \{ registry = "https://pypi', lock).group(1)
+    tag = re.search(r"ARG TORCH_CUDA_TAG=(cu\d+)", text).group(1)
+    pin = re.search(r'"torch==([\d.]+)\+\$\{TORCH_CUDA_TAG\}"', text)
+    assert pin and pin.group(1) == locked  # same torch version as uv.lock
+    assert "whl/${TORCH_CUDA_TAG}" in text
+    base = re.search(r"FROM nvidia/cuda:(\d+)\.(\d+)", text)
+    assert tag == f"cu{base.group(1)}{base.group(2)}"  # wheel CUDA == base image CUDA
+    assert "torch.version.cuda" in text and "+cpu" in text  # build-time assertion
+    assert "uv sync --locked" in text and "uv lock" not in text
+
+
+def test_copy_writable_follows_symlink_source(tmp_path):
+    real = tmp_path / "blob"
+    _make_db(real, [("A", "x", 0)])
+    os.chmod(real, stat.S_IRUSR)
+    link = tmp_path / "snapshots_link.duckdb"
+    link.symlink_to(real)
+    dst = tmp_path / "rag.duckdb"
+    prepare_db_copy.copy_writable(str(link), str(dst))
+    assert not dst.is_symlink() and os.access(dst, os.W_OK)
+    prepare_db_copy.check_writable(str(dst))
+
+
+def test_copy_writable_missing_source_raises_and_keeps_dst(tmp_path):
+    dst = tmp_path / "rag.duckdb"
+    with pytest.raises(FileNotFoundError):
+        prepare_db_copy.copy_writable(str(tmp_path / "nope"), str(dst))
+    assert not dst.exists()
