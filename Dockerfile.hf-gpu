@@ -1,0 +1,32 @@
+# GPU image for HF Jobs backfills (scripts/run_hf_backfill.sh). Separate from the
+# CPU-only Dockerfile: pyproject.toml / uv.lock pin torch to the CPU index, so the
+# CUDA torch build is installed on top of the locked env here, without touching
+# either file.
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_DOWNLOADS=never
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-venv libxml2 libxslt1.1 git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project --python python3.11
+
+# CUDA torch, installed separately into the venv (replaces the locked CPU wheel there only).
+RUN uv pip install --python /opt/venv/bin/python --reinstall-package torch \
+    --index-url https://download.pytorch.org/whl/cu124 \
+    --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match "torch>=2.0.0"
+
+COPY . .
+
+# `uv run` would re-sync to the CPU lock; call the venv directly.
+ENV PYTHON=/opt/venv/bin/python
+CMD ["bash", "scripts/run_hf_backfill.sh"]

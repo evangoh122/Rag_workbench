@@ -416,6 +416,37 @@ See `docs/FINANCIAL_CALC_INSTRUCTIONS.md` for the full instruction set used by t
 
 The HF Space has **no persistent volume**, so runtime state survives restarts through a daily Parquet snapshot (`runtime_snapshot.py`, driven by `.github/workflows/snapshot.yml` → `POST /api/admin/snapshot`) to a private HF dataset, restored on boot by `scripts/restore_review_db.py`. The main corpus DB is fetched by `scripts/fetch_db_from_dataset.py` before Uvicorn opens its connection. `DB_PATH` is validated against an allowlist to prevent path traversal.
 
+### Refresh runbook (filings ETL)
+
+- **DB copy in CI:** `refresh-filings.yml` and `embed-annuals.yml` copy the HF-cached `rag.duckdb` with `scripts/prepare_db_copy.py` (`copyfile` + `chmod u+w`). The HF cache blob is read-only and `shutil.copy` kept that, so the embed step failed with `Permission denied` (run 2026-09-21). A fail-fast step (`prepare_db_copy.py check`) opens the copy read-write and does a rolled-back write before any embedding.
+- **GPU backfill on HF Jobs (staging only):** `Dockerfile.hf-gpu` (CUDA runtime, uv; CUDA torch installed on top of the locked env, so `pyproject.toml`/`uv.lock` stay CPU-only) runs `scripts/run_hf_backfill.sh`. It fails unless `torch.cuda.is_available()`, pins and downloads the dataset head, records sha256 + row/filing counts, runs `embed_additional.py` for a bounded `BACKFILL_TICKERS` list, then verifies counts, duplicate `(ticker, accession, chunk_index)` keys and `etl_guardrail.py`. The result stays in `$STAGING_DIR/rag.duckdb`. The runner never uploads to the production dataset or restarts the Space.
+
+Build the image and run the job (nothing here has been executed by CI or the PR):
+
+```bash
+docker build -f Dockerfile.hf-gpu -t <registry>/rag-workbench-hf-gpu:<tag> . && docker push <registry>/rag-workbench-hf-gpu:<tag>
+
+hf jobs run --flavor l4x1 --timeout 6h \
+  --secrets HF_TOKEN \
+  -e DATASET_REPO=<user>/Rag-workbench -e BACKFILL_TICKERS=AAPL,MSFT -e BACKFILL_FORMS=annual \
+  <registry>/rag-workbench-hf-gpu:<tag>
+```
+
+**Rollback target:** dataset commit `7640a4bd`. Resolve and confirm the full hash before relying on it (the short hash alone is not verified here):
+
+```bash
+python -c "from huggingface_hub import HfApi; [print(c.commit_id, c.title) for c in HfApi().list_repo_commits('<user>/Rag-workbench', repo_type='dataset') if c.commit_id.startswith('7640a4bd')]"
+```
+
+**Guarded publish (documented, not executed by the runner).** Review the staged DB first, then, from a machine with a write token:
+
+```bash
+HF_TOKEN=... uv run python scripts/hf_backfill.py publish \
+  "$STAGING_DIR/rag.duckdb" "$STAGING_DIR/before.json" --repo <user>/Rag-workbench --confirm
+```
+
+It exits non-zero without `--confirm`, and aborts if the dataset head differs from the `dataset_head` recorded in `before.json` (the upload is also pinned with `parent_commit`). Restarting the Space is a separate manual step.
+
 ### Operational notes
 
 - **DuckDB version alignment:** the old Hugging Face image cap of `duckdb<1.1.0` caused serialization failures with locally generated DuckDB 1.5.3 files. `pyproject.toml` (locked in `uv.lock`) requires DuckDB 1.5.3+, and `.venv_duck10` is obsolete.
