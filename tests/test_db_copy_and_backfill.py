@@ -195,8 +195,70 @@ def test_copy_writable_follows_symlink_source(tmp_path):
     prepare_db_copy.check_writable(str(dst))
 
 
-def test_copy_writable_missing_source_raises_and_keeps_dst(tmp_path):
+def _valid_dst(tmp_path):
     dst = tmp_path / "rag.duckdb"
+    _make_db(dst, [("KEEP", "x", 0)])
+    return dst, dst.read_bytes()
+
+
+def test_copy_writable_missing_source_keeps_existing_dst(tmp_path):
+    dst, before = _valid_dst(tmp_path)
     with pytest.raises(FileNotFoundError):
         prepare_db_copy.copy_writable(str(tmp_path / "nope"), str(dst))
-    assert not dst.exists()
+    assert dst.read_bytes() == before
+    assert [p.name for p in tmp_path.iterdir()] == ["rag.duckdb"]  # no temp left
+
+
+def test_copy_writable_midcopy_failure_keeps_existing_dst(tmp_path, monkeypatch, readonly_src):
+    dst, before = _valid_dst(tmp_path)
+
+    def boom(src, tmp):
+        Path(tmp).write_bytes(b"partial")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(prepare_db_copy.shutil, "copyfile", boom)
+    with pytest.raises(OSError):
+        prepare_db_copy.copy_writable(str(readonly_src), str(dst))
+    assert dst.read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["cache_blob.duckdb", "rag.duckdb"]
+
+
+def test_copy_writable_replaces_symlink_dest_not_target(readonly_src, tmp_path):
+    target = tmp_path / "target.duckdb"
+    target.write_bytes(b"orig")
+    link = tmp_path / "rag.duckdb"
+    link.symlink_to(target)
+    prepare_db_copy.copy_writable(str(readonly_src), str(link))
+    assert not link.is_symlink()
+    assert target.read_bytes() == b"orig"
+    prepare_db_copy.check_writable(str(link))
+
+
+def test_copy_writable_dest_may_not_exist(readonly_src, tmp_path):
+    dst = tmp_path / "sub_rag.duckdb"
+    prepare_db_copy.copy_writable(str(readonly_src), str(dst))
+    assert dst.exists()
+
+
+# ── effective DB path through the real config code ──────────────────────────
+
+
+def test_effective_db_rejects_path_config_would_substitute(monkeypatch):
+    monkeypatch.setenv("DB_PATH", "/tmp/hf_backfill_staging/rag.duckdb")
+    monkeypatch.setenv("PERSIST_DIR", "")
+    with pytest.raises(RuntimeError, match="effective DB_PATH"):
+        hf_backfill.assert_effective_db("/tmp/hf_backfill_staging/rag.duckdb")
+
+
+def test_effective_db_accepts_staging_dir_under_repo(monkeypatch):
+    staging = ROOT / "data" / "hf_backfill_staging" / "rag.duckdb"
+    monkeypatch.setenv("DB_PATH", str(staging))
+    assert hf_backfill.assert_effective_db(str(staging)) == str(staging.resolve())
+
+
+def test_runner_default_staging_is_allowed_by_config(monkeypatch):
+    text = (ROOT / "scripts" / "run_hf_backfill.sh").read_text()
+    assert "/tmp/hf_backfill_staging" not in text.replace("# ", "").split("STAGING_DIR=")[1]
+    assert 'ROOT/data/hf_backfill_staging' in text
+    assert "effective-db" in text and text.index("effective-db") < text.index("embed_additional.py")
+    assert 'export DB_PATH="$WORK_DB"' in text

@@ -3,6 +3,7 @@
     check-cuda                                       fail unless torch.cuda.is_available()
     snapshot  <db> <out.json> [--dataset-head SHA]   sha256 + row/filing counts
     verify    <db> <before.json>                     counts + duplicate-chunk check
+    effective-db <db>                                fail unless Config.DB_PATH resolves to <db>
     publish   <db> <before.json> --repo R --confirm  GUARDED; never run by the runner
 
 Only `publish` can touch the production dataset. It refuses without --confirm
@@ -49,6 +50,22 @@ def duplicate_chunks(db_path: str) -> int:
         ).fetchone()[0]
     finally:
         con.close()
+
+
+def effective_db_path() -> str:
+    """The DB path embed_additional.py will really open (api.config applies an allowlist)."""
+    from api.config import _validate_db_path
+
+    return _validate_db_path(os.getenv("DB_PATH", "./data/rag.duckdb"))
+
+
+def assert_effective_db(expected: str) -> str:
+    """Fail closed if the config code would silently substitute a different DB."""
+    got = os.path.realpath(effective_db_path())
+    want = os.path.realpath(expected)
+    if got != want:
+        raise RuntimeError(f"effective DB_PATH {got} != intended staging DB {want}; refusing to embed")
+    return got
 
 
 def check_cuda() -> None:
@@ -121,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
     v = sub.add_parser("verify")
     v.add_argument("db")
     v.add_argument("before")
+    e = sub.add_parser("effective-db")
+    e.add_argument("db")
     u = sub.add_parser("publish")
     u.add_argument("db")
     u.add_argument("before")
@@ -130,6 +149,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if a.cmd == "check-cuda":
             check_cuda()
+        elif a.cmd == "effective-db":
+            print(f"EFFECTIVE DB OK: {assert_effective_db(a.db)}")
         elif a.cmd == "snapshot":
             snap = take_snapshot(a.db, a.out, a.dataset_head)
             print(f"SNAPSHOT: sha256={snap['sha256']} rows={snap['rows']} filings={snap['filings']}")

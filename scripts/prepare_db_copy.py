@@ -19,12 +19,24 @@ import duckdb
 
 
 def copy_writable(src: str, dst: str) -> str:
-    """Copy contents only (no mode bits) and force the owner write bit on."""
-    if os.path.lexists(dst):
-        os.chmod(dst, os.stat(dst).st_mode | stat.S_IWUSR)
-        os.remove(dst)
-    shutil.copyfile(src, dst)
-    os.chmod(dst, os.stat(dst).st_mode | stat.S_IWUSR)
+    """Copy contents only (no mode bits) and force the owner write bit on.
+
+    Writes a temp sibling then os.replace()s it over `dst`, so a failed copy
+    (missing/unreadable source, disk full) leaves an existing `dst` untouched.
+    os.replace ignores the destination's permissions and replaces a symlink
+    itself rather than its target.
+    """
+    tmp = f"{dst}.tmp.{os.getpid()}"
+    try:
+        shutil.copyfile(src, tmp)
+        os.chmod(tmp, os.stat(tmp).st_mode | stat.S_IWUSR)
+        with open(tmp, "rb") as f:
+            os.fsync(f.fileno())
+        os.replace(tmp, dst)
+    except BaseException:
+        if os.path.lexists(tmp):
+            os.remove(tmp)
+        raise
     return dst
 
 

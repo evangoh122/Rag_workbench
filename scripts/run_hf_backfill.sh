@@ -9,12 +9,16 @@
 #   BACKFILL_TICKERS  required, comma list (bounds the run), e.g. AAPL,MSFT
 #   BACKFILL_FORMS    annual | 10-Q (default annual)
 #   BACKFILL_QUARTERS for 10-Q (default 3)
-#   STAGING_DIR       output dir (default /tmp/hf_backfill_staging)
+#   STAGING_DIR       output dir (default <repo>/data/hf_backfill_staging; must be
+#                     under the repo root or PERSIST_DIR, else the run aborts)
 set -euo pipefail
 
 : "${DATASET_REPO:?DATASET_REPO required}"
 TICKERS="${BACKFILL_TICKERS:?BACKFILL_TICKERS required (bounded ticker list, e.g. AAPL,MSFT)}"
-STAGING_DIR="${STAGING_DIR:-/tmp/hf_backfill_staging}"
+# Must live under the project root (or PERSIST_DIR): api/config.py silently swaps
+# any other DB_PATH for data/rag.duckdb. Default is inside the repo's data/ dir.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STAGING_DIR="${STAGING_DIR:-$ROOT/data/hf_backfill_staging}"
 FORMS="${BACKFILL_FORMS:-annual}"
 QUARTERS="${BACKFILL_QUARTERS:-3}"
 PY="${PYTHON:-uv run --locked --no-dev python}"
@@ -23,6 +27,7 @@ mkdir -p "$STAGING_DIR"
 WORK_DB="$STAGING_DIR/rag.duckdb"
 BEFORE="$STAGING_DIR/before.json"
 export STAGING_DIR WORK_DB
+export DB_PATH="$WORK_DB"
 
 # Fail unless a GPU is visible; never silently embed on CPU for 6h.
 $PY scripts/hf_backfill.py check-cuda
@@ -43,13 +48,15 @@ PY
 )
 HEAD_SHA=$(echo "$HEAD_SHA" | tail -n1)
 
+# Fail closed unless the config code resolves DB_PATH to exactly the staged DB.
+$PY scripts/hf_backfill.py effective-db "$WORK_DB"
 $PY scripts/prepare_db_copy.py check "$WORK_DB"
 $PY scripts/hf_backfill.py snapshot "$WORK_DB" "$BEFORE" --dataset-head "$HEAD_SHA"
 $PY scripts/etl_guardrail.py snapshot "$WORK_DB" "$STAGING_DIR/guardrail_before.json"
 
 EXTRA=()
 if [ "$FORMS" = "10-Q" ]; then EXTRA=(--quarters "$QUARTERS"); fi
-DB_PATH="$WORK_DB" $PY scripts/embed_additional.py --forms "$FORMS" "${EXTRA[@]}" --tickers "$TICKERS"
+$PY scripts/embed_additional.py --forms "$FORMS" "${EXTRA[@]}" --tickers "$TICKERS"
 
 $PY scripts/hf_backfill.py verify "$WORK_DB" "$BEFORE"
 $PY scripts/etl_guardrail.py verify "$WORK_DB" "$STAGING_DIR/guardrail_before.json"
