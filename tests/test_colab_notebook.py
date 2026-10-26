@@ -117,3 +117,94 @@ def test_config_cell_defines_plans_and_dry_run():
             else:
                 sys.modules[k] = v
     assert callable(ns["dry_run"]) and ns["PLANS"]
+
+
+def _extract_func(step, name, ns):
+    import ast
+    src = _steps()[step]
+    node = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == name)
+    exec(compile(ast.Module([node], []), f"step{step}:{name}", "exec"), ns)  # noqa: S102
+    return ns[name]
+
+
+def test_save_checkpoint_refuses_when_wal_exists(tmp_path):
+    db = tmp_path / "rag.duckdb"
+    db.write_bytes(b"x")
+    (tmp_path / "rag.duckdb.wal").write_bytes(b"w")
+    import os
+    ns = {"os": os, "DB": str(db), "CKPT_DIR": str(tmp_path / "ck"), "CKPT_DB": str(tmp_path / "ck" / "d")}
+    save = _extract_func(4, "save_checkpoint", ns)
+    with pytest.raises(RuntimeError, match="wal"):
+        save()
+    assert not (tmp_path / "ck" / "d").exists()
+
+
+def test_copy_writable_is_non_destructive(tmp_path):
+    import os
+    import shutil
+    import stat
+    ns = {"os": os, "shutil": shutil, "stat": stat}
+    copy = _extract_func(4, "copy_writable", ns)
+    src = tmp_path / "src"
+    src.write_bytes(b"new")
+    os.chmod(src, 0o444)
+    dst = tmp_path / "dst"
+    dst.write_bytes(b"old")
+    copy(str(src), str(dst))
+    assert dst.read_bytes() == b"new" and os.access(dst, os.W_OK)
+    assert not (tmp_path / "dst.tmp").exists()
+    # failure (missing source) leaves the existing destination untouched
+    with pytest.raises(FileNotFoundError):
+        copy(str(tmp_path / "missing"), str(dst))
+    assert dst.read_bytes() == b"new" and not (tmp_path / "dst.tmp").exists()
+
+
+def _publish_ns(tmp_path, chunks, before_total, wal=False):
+    import os
+    import pathlib
+    import sys
+    import time
+    import duckdb
+    db = tmp_path / "rag.duckdb"
+    con = duckdb.connect(str(db))
+    con.execute("CREATE TABLE edgar_embeddings (ticker VARCHAR)")
+    for i in range(chunks):
+        con.execute("INSERT INTO edgar_embeddings VALUES (?)", [f"T{i % 3}"])
+    con.close()
+    if wal:
+        (tmp_path / "rag.duckdb.wal").write_bytes(b"w")
+    before = tmp_path / "before.json"
+    before.write_text(json.dumps({"total": before_total}))
+    calls = []
+
+    class Api:
+        def repo_info(self, *a, **k):
+            calls.append("repo_info")
+            raise AssertionError("must refuse before talking to HF")
+
+    ns = {"os": os, "sys": sys, "json": json, "pathlib": pathlib, "time": time, "DB": str(db),
+          "BEFORE_JSON": str(before), "WORK": str(tmp_path), "REMAINING": [], "ACCEPT_INCOMPLETE": False,
+          "run": lambda *a, **k: None, "api": Api(), "DATASET_REPO": "d", "PINNED_SHA": "p"}
+    publish = _extract_func(8, "publish", ns)
+    return publish, calls
+
+
+def test_publish_refuses_when_chunks_did_not_grow(tmp_path):
+    publish, calls = _publish_ns(tmp_path, chunks=5, before_total=5)
+    with pytest.raises(RuntimeError, match="Nothing new"):
+        publish()
+    assert calls == []
+
+
+def test_publish_refuses_when_wal_exists(tmp_path):
+    publish, calls = _publish_ns(tmp_path, chunks=9, before_total=5, wal=True)
+    with pytest.raises(RuntimeError, match="wal"):
+        publish()
+    assert calls == []
+
+
+def test_config_has_repo_ref_note_and_early_space_health_check():
+    src = "\n".join(_steps().values())
+    assert "chore/colab-refresh" in src and "space_health.py is missing" in src
+    nb = json.loads(DEFAULT_NB.read_text())
+    assert "chore/colab-refresh" in "".join(nb["cells"][0]["source"])
