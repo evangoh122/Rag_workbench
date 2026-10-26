@@ -124,7 +124,7 @@ Every request additionally passes through **guardrails** — input rails (inject
 Alternative answer paths share the same retrieval and audit layer:
 - **`/api/chat/graph-rag`** — knowledge-graph retrieval over extracted filing triples.
 - **`/api/chat/rag`** — plain hybrid RAG (no math/verify spine).
-- **`/api/chat/sql`** — natural language → DuckDB query.
+- **`/api/chat/sql`** — natural language → read-only DuckDB query. Markdown SQL fences and a single trailing semicolon from model output are normalized before validation; multiple statements remain rejected.
 
 ---
 

@@ -9,27 +9,25 @@ from api.db.database import db_manager
 SCHEMA = """
 You have access to a DuckDB financial database with these tables:
 
-IBKR live data:
-- stock_quotes(ticker, ts, bid, ask, last, close, open, high, low, volume, vwap, created_at)
-- option_quotes(ticker, expiry, strike, right, ts, bid, ask, last, volume, open_interest, implied_vol, delta, gamma, theta, vega, und_price, pv_dividend)
-- option_chains(ticker, expiry, strike, right, exchange, fetched_at)
-- etl_runs(id, run_type, status, rows_written, started_at, finished_at, message)
-
-Polygon historical data:
-- polygon_bars(ticker, ts, timespan, open, high, low, close, volume, vwap, transactions)
-- polygon_snapshots(ticker, ts, bid, ask, last, prev_close, day_volume)
-- polygon_option_snapshots(underlying, expiry, strike, right, ts, day_open, day_close, day_volume, open_interest, implied_vol, delta, gamma, theta, vega)
-- polygon_tickers(ticker, name, market, primary_exchange, type, active, currency_name, cik, market_cap, phone_number, address, city, state, postal_code, description, sic_code, sic_description, homepage_url, total_employees, list_date, shares_outstanding)
-
 SEC EDGAR financials:
-- edgar_filings(ticker, cik, form_type, filed_date, accession_number, primary_doc)
-- xbrl_facts(ticker, cik, concept, value, unit, period_end, period_start, form_type, accession, filed, fiscal_year, fiscal_period)
+- xbrl_facts(id, ticker, cik, concept, value, unit, period_end, period_start, form_type, accession, filed, fiscal_year, fiscal_period, frame)
+- edgar_embeddings(ticker, accession, text, embedding, updated_at, cik, section_id, form_type, period_of_report, chunk_index, section_type, content_type)
+
+Company metadata:
+- ticker_embeddings(ticker, description, sector, industry, text, embedding, updated_at)
+- polygon_tickers(ticker, name, market, primary_exchange, type, active, currency_name, cik, composite_figi, market_cap, phone_number, address, city, state, postal_code, description, sic_code, sic_description, homepage_url, total_employees, list_date, shares_outstanding, weighted_shares_outstanding, last_updated)
+
+Historical market data:
+- polygon_bars(ticker, ts, close, volume, timespan)
+
+Knowledge graph:
+- graph_triples(id, ticker, subject, predicate, object, confidence, source_file, source_loc, subject_type, object_type, chunk_id)
 
 Notes:
 - Use DuckDB SQL syntax.
-- Dates are stored as TEXT in ISO-8601 format. Cast with ::TIMESTAMP or ::DATE as needed.
+- SEC dates are stored as TEXT in ISO-8601 format. Cast with ::DATE as needed.
 - Always LIMIT results to 100 rows unless the user asks for more.
-- For latest queries use QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY ts DESC) = 1.
+- For latest market-data queries use QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY ts DESC) = 1.
 """
 
 SYSTEM_PROMPT = f"""You are a financial data analyst assistant. The user will ask questions about their market data.
@@ -56,7 +54,10 @@ def clean_sql(text: str) -> str:
     if text.startswith("```"):
         lines = text.splitlines()
         text = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
-    return text.strip()
+    text = text.strip()
+    if text.endswith(";"):
+        text = text[:-1]
+    return text.rstrip()
 
 def strip_sql_comments(sql: str) -> str:
     sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)
@@ -71,7 +72,7 @@ def validate_read_only_sql(sql: str) -> Optional[str]:
     if len(compact) > 4096:
         return "Rejected overly long SQL statement."
 
-    if compact.count(";") > 1:
+    if ";" in compact:
         return "Rejected SQL with multiple statements."
 
     first = compact.lstrip().split(None, 1)[0].lower()
