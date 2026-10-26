@@ -1,0 +1,65 @@
+name: Docker image
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".trivyignore"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "api/**"
+      - "scripts/**"
+      - "data/sentiment_dict/**"
+      - "main.py"
+      - "run.py"
+      - ".github/workflows/docker.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".trivyignore"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "api/**"
+      - "scripts/**"
+      - "data/sentiment_dict/**"
+      - "main.py"
+      - "run.py"
+      - ".github/workflows/docker.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-scan:
+    name: Build image + Trivy scan
+    runs-on: ubuntu-latest
+    # The build syncs the full locked ML stack (CPU torch) with uv; give it
+    # room on a cold cache.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # Backend-only Dockerfile, CPU-only torch (the uv.lock torch source pins
+      # the pytorch.org CPU index on Linux). This is the same image the HF
+      # Space deploys, so the build here is the real build contract.
+      - name: Build backend image
+        run: docker build -f Dockerfile -t rag-workbench:ci .
+      # Fails on fixable HIGH/CRITICAL vulnerabilities only (--ignore-unfixed),
+      # in the built image: OS packages from the base + apt layers and the
+      # uv-managed /opt/venv. Pre-existing, documented findings are listed in
+      # .trivyignore (nothing is ever dropped from the gate silently) and
+      # reported in README "CI & security".
+      - name: Trivy image scan (fail on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
+        with:
+          image-ref: "rag-workbench:ci"
+          version: "v0.69.3"
+          format: "table"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: ".trivyignore"

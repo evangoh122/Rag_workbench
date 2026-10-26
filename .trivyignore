@@ -1,0 +1,34 @@
+# Trivy ignore list — PRE-EXISTING, documented findings only (README
+# "CI & security" reports these separately and honestly). The Docker+Trivy job
+# fails on any other fixable HIGH/CRITICAL finding.
+#
+# Pre-scan method (2026-10-26, Trivy 0.69.3, no local Docker daemon available
+# in the build environment): the final image is `python:3.11-slim` + apt
+# packages + the uv-managed /opt/venv from uv.lock. The base image was scanned
+# daemonlessly (trivy pulls the image itself) and the venv contents were
+# scanned as the exact locked requirements export — the venv layer has 0
+# fixable HIGH/CRITICAL findings (pip-audit agrees). What remains are two
+# packages that ship INSIDE python:3.11-slim's system site-packages; they are
+# not dependencies of this application (the app runs from /opt/venv and never
+# imports them) and they cannot be fixed through uv.lock because they are not
+# in it. They are ignored here explicitly — not silently — and should be
+# revisited when the base image tag moves (or removed in favour of upgrading
+# them inside the Dockerfile if they ever become app-reachable).
+#
+# Note: the Docker build could not be executed in the build environment (no
+# Docker daemon). If the first CI run of the docker-scan job reports further
+# fixable HIGH/CRITICAL findings (e.g. from the apt layer), they must be
+# reported and either fixed or added here with the same documentation standard
+# — never dropped from the gate.
+
+# jaraco.context 5.3.0 (fixed 6.1.0) — path traversal via malicious tar
+# archives. Preinstalled build tooling in python:3.11-slim
+# (/usr/local/lib/python3.11/site-packages); not imported by the app and not
+# present in /opt/venv.
+CVE-2026-23949
+
+# wheel 0.45.1 (fixed 0.46.2) — privilege escalation / code execution via a
+# malicious wheel file. Same story: preinstalled in the base image's system
+# site-packages; only relevant when *building* wheels from untrusted input,
+# which this image never does at runtime.
+CVE-2026-24049

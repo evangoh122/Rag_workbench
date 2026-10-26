@@ -1,0 +1,35 @@
+# Gitleaks configuration for RAG Workbench (full-history secret scanning in
+# .github/workflows/security.yml and the pre-commit hook in
+# .pre-commit-config.yaml). Starts from gitleaks' default rule set; the
+# allowlist below lists ONLY justified false positives found in the repo's
+# history by a full-history scan on 2026-10-26 (gitleaks 8.28.0). No real
+# secret has ever been committed: the scan found 2 findings, both listed here,
+# and a TruffleHog verified-secrets scan of the full history found 0.
+#
+# Keep this list minimal. A new finding must be investigated before it is ever
+# allowlisted here, and a real secret must be rotated + reported, not ignored.
+title = "RAG Workbench gitleaks allowlist"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Pre-existing, reviewed false positives (full-history scan 2026-10-26)"
+paths = [
+  # Committed virtualenv debris that once lived in history (removed before HEAD;
+  # deploy.yml:123 references .venv_duck10 wheels in the history cleanup note).
+  # The finding is setuptools' vendored msvccompiler.py line `RegEnumKey =
+  # win32api.RegEnumKey` (commit 9b44f3b6) matching the generic-api-key rule —
+  # a Win32 registry API name, not a credential.
+  '''\.venv_duck10/''',
+]
+regexes = [
+  # frontend/src/components/Disclaimer.tsx line 4 (commit f2fe15b0): the
+  # constant `ACK_KEY = 'rw_disclaimer_ack_v1';` is a localStorage flag name
+  # for the disclaimer acknowledgement banner — fixed literal, not a
+  # credential. The frontend has since moved to the evangoh-frontend repo; the
+  # match only exists in history. The regex is the exact fixed literal (gitleaks
+  # matches allowlist regexes against the finding's value), so a real key
+  # cannot slip past.
+  '''rw_disclaimer_ack_v1''',
+]

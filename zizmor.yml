@@ -1,0 +1,27 @@
+# zizmor configuration — see README "CI & security" for how this gate runs.
+#
+# The two ignore lists below hold PRE-EXISTING findings in workflows that a
+# different PR is currently rewriting (owner instruction 2026-10-26: this PR
+# must not touch refresh-filings.yml or embed-annuals.yml). They are listed
+# honestly rather than silently suppressed:
+#
+#   embed-annuals.yml:58    artipacked       — checkout without persist-credentials: false
+#   embed-annuals.yml:122   template-injection (x2, low confidence) — ${{ steps.guard.outputs.summary }}
+#                                               interpolated into a git commit message
+#   refresh-filings.yml:49  artipacked       — checkout without persist-credentials: false
+#   refresh-filings.yml:115 template-injection (x2, low confidence) — same commit-message pattern
+#
+# Each entry is line-precise (base filename + 1-based line, any column).
+# Remove the corresponding entry as soon as the owning PR lands (or as soon as
+# zizmor reports those lines clean) — they must not outlive the pre-existing
+# findings they document. deploy.yml's findings of the same kinds were fixed in
+# this PR instead of being ignored.
+rules:
+  artipacked:
+    ignore:
+      - embed-annuals.yml:58
+      - refresh-filings.yml:49
+  template-injection:
+    ignore:
+      - embed-annuals.yml:122
+      - refresh-filings.yml:115

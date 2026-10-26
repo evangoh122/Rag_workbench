@@ -38,7 +38,7 @@ INSERT_SQL = f"""
 INSERT INTO edgar_embeddings ({", ".join(COLS)})
 VALUES ({", ".join(["%s"] * len(COLS))})
 ON CONFLICT (ticker, accession, chunk_index) DO NOTHING
-"""
+"""  # nosec B608: COLS is a static literal column list
 
 
 def main() -> None:
@@ -54,7 +54,7 @@ def main() -> None:
 
     con = duckdb.connect(duckdb_path, read_only=True)
     total = con.execute("SELECT count(*) FROM edgar_embeddings").fetchone()[0]
-    q = f"SELECT {', '.join(COLS)} FROM edgar_embeddings"
+    q = f"SELECT {', '.join(COLS)} FROM edgar_embeddings"  # nosec B608: COLS is a static list; args.limit is an int from argparse
     if args.limit:
         q += f" LIMIT {args.limit}"
     cur_duck = con.execute(q)

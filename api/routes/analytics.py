@@ -96,7 +96,8 @@ def summary(days: int = 14):
         ).fetchall()
         daily = conn.execute(
             "SELECT substr(ts, 1, 10) d, COUNT(*) c FROM analytics_events "
-            f"GROUP BY d ORDER BY d DESC LIMIT {days}"
+            "GROUP BY d ORDER BY d DESC LIMIT ?",
+            [days],
         ).fetchall()
         recent = conn.execute(
             "SELECT event, view, ts FROM analytics_events ORDER BY id DESC LIMIT 25"

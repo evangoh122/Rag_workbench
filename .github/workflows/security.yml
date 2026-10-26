@@ -11,20 +11,47 @@ permissions:
 
 jobs:
   secrets:
-    name: Secret scanning (gitleaks)
+    name: Secret scanning (gitleaks, full history)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
+      pull-requests: write # gitleaks-action comments on the PR when a leak is found
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Scan for secrets
+      - name: Scan full git history for secrets
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Same release the documented baseline and the local pre-commit hook
+          # (.pre-commit-config.yaml) were validated against — see README
+          # "CI & security".
+          GITLEAKS_VERSION: "8.28.0"
+          # Explicit so the run always uses the repo's documented allowlist
+          # (.gitleaks.toml) rather than gitleaks' built-in default config.
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  trufflehog:
+    name: Secret scanning (TruffleHog, verified)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Verified-only: a finding fails the job only after TruffleHog has
+      # confirmed the credential live against its provider, so the gate has no
+      # unverified-secret noise. The action passes --fail, so any verified
+      # secret in the scanned range fails the job. On pull_request the range is
+      # base.sha..head.sha (new commits); the gitleaks job above covers the
+      # full history.
+      - name: TruffleHog (verified secrets)
+        uses: trufflesecurity/trufflehog@31ce31ee1abbcc7dc8eee5764c17121c3044c8b2 # v3.99.7
+        with:
+          version: "3.99.7"
+          extra_args: --only-verified
 
   dependency-audit:
     name: Dependency vulnerability scan
@@ -53,3 +80,35 @@ jobs:
         # Python 3.11 matches the project (Dockerfile) so pip resolves the same
         # versions; uvx otherwise picks the runner's newest interpreter.
         run: uvx --python 3.11 --from pip-audit pip-audit --no-deps -r /tmp/requirements-audit.txt
+
+  dependency-review:
+    name: Dependency review (introduced advisories)
+    # The action diffs the PR's dependency manifests/lockfiles against the base
+    # branch, so it only means something on pull_request events.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # Blocks a PR that introduces a dependency version with a known advisory
+      # (default severity floor: low). Changes to uv.lock / pyproject.toml are
+      # what it evaluates; PRs without dependency changes pass trivially.
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+
+  bandit:
+    name: SAST (bandit, medium+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          version: "0.12.23"
+      # -ll fails on MEDIUM and HIGH severity findings. The documented baseline
+      # lives in [tool.bandit] (pyproject.toml) plus per-site `# nosec` notes;
+      # see README "CI & security" for the findings table. Pinned to the exact
+      # bandit release the baseline was recorded with.
+      - name: bandit (medium+ severity)
+        run: uv run --with bandit==1.9.4 bandit -c pyproject.toml -r api scripts main.py run.py -ll

@@ -1,0 +1,34 @@
+name: CodeQL
+
+on:
+  pull_request:
+  schedule:
+    # Weekly, Monday 04:23 UTC — deliberately off the hour to avoid the
+    # top-of-hour scheduler rush.
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: CodeQL (python)
+    runs-on: ubuntu-latest
+    # Per-job elevation: CodeQL only needs to upload its SARIF results to the
+    # repo's code-scanning dashboard. Nothing else gets write access.
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: python
+      - name: Analyze
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: "/language:python"

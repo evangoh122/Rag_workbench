@@ -470,6 +470,144 @@ Every chat call, RAG retrieval, and LangGraph node run produces a trace. Product
 
 ---
 
+## CI & security
+
+Every PR runs the checks below. All third-party actions are pinned by commit
+SHA; workflows hold top-level `permissions: contents: read` and elevate only
+per job where needed (CodeQL → `security-events: write`; gitleaks →
+`pull-requests: write` so it can comment when a leak is found). The suites live
+in `.github/workflows/`: `python.yml`, `security.yml`, `codeql.yml`,
+`quality.yml`, `docker.yml` (plus weekly Dependabot via
+`.github/dependabot.yml`). `refresh-filings.yml` / `embed-annuals.yml` are
+operational ETL workflows and are not part of this pipeline.
+
+| Check | Where | What it blocks | Run locally |
+|---|---|---|---|
+| Ruff lint | `python.yml` | lint regressions in `api/ scripts/ tests/ main.py run.py` | `uv run ruff check api scripts tests main.py run.py` |
+| pytest + coverage gate | `python.yml` | test failures; `api/`+`scripts/` line coverage below **48%** (measured **49.3%** on 2026-10-26 with Python 3.12; `coverage.xml` uploaded as an artifact) | `uv run pytest tests -m "not spark and not lakebase and not databricks" --cov=api --cov=scripts --cov-fail-under=48` |
+| uv.lock consistency | `python.yml` | `pyproject.toml` changed without re-locking | `uv lock --check` |
+| Python 3.11 + 3.12 matrix | `python.yml` | test failures on either interpreter (both verified against `uv.lock`: 397 passed / 3 skipped on 3.11.17 and 3.12.13) | `uv run --python 3.11 pytest tests -m "not spark and not lakebase and not databricks"` |
+| gitleaks, full git history | `security.yml` | committed secrets anywhere in history (config: `.gitleaks.toml`) | `pre-commit run gitleaks --all-files` (or `gitleaks git .`) |
+| TruffleHog, verified-only | `security.yml` | credentials confirmed live against their provider in the pushed range | `trufflehog git file://. --only-verified` |
+| pip-audit | `security.yml` | known advisories in the locked dependency tree (CPU-torch-stripped `uv export`) | `uvx --python 3.11 --from pip-audit pip-audit --no-deps -r <exported requirements>` (see job for the exact export) |
+| dependency-review-action | `security.yml` | PRs that introduce a dependency version with a known advisory | GitHub-only (diffs PR against base) |
+| bandit, medium+ severity | `security.yml` | MEDIUM/HIGH SAST findings outside the documented baseline (`[tool.bandit]` in `pyproject.toml`) | `uv run --with bandit==1.9.4 bandit -c pyproject.toml -r api scripts main.py run.py -ll` |
+| CodeQL (python) | `codeql.yml` | code-scanning alerts on PRs + weekly full scan (Mondays 04:23 UTC) | GitHub-only |
+| actionlint + zizmor | `quality.yml` | invalid workflow files; GitHub Actions security findings (config: `zizmor.yml`) | `actionlint` (pinned 1.7.7 binary) · `uvx zizmor==1.31.1 .github/workflows/` |
+| hadolint | `quality.yml` | Dockerfile findings at warning level and above | `hadolint Dockerfile` |
+| Docker build + Trivy image scan | `docker.yml` | image build breakage; **fixable HIGH/CRITICAL** image vulnerabilities (`.trivyignore` holds the documented pre-existing set) | `docker build -f Dockerfile -t rag-workbench:ci . && trivy image --severity HIGH,CRITICAL --ignore-unfixed rag-workbench:ci` |
+| Dependabot | `dependabot.yml` | — (opens weekly PRs for `uv`, `github-actions`, `docker`) | GitHub-only |
+
+Tool versions the baseline was recorded with: gitleaks 8.28.0 (also the
+pre-commit hook rev), TruffleHog 3.99.7, Trivy 0.69.3, bandit 1.9.4, zizmor
+1.31.1, actionlint 1.7.7, hadolint 2.12.0 (via hadolint-action v3.5.0).
+
+Local one-time setup: `uv sync` then `pre-commit install` (needs the
+`pre-commit` tool) so the gitleaks hook scans staged changes before each
+commit.
+
+### Pre-existing findings — honest list
+
+Scanned on 2026-10-26 at base `2c92d08`. **No real secret has ever been
+committed to this repository** — and therefore none has been allowlisted. The
+full-history secret scans found only the two false positives below.
+
+**Secrets (gitleaks 8.28.0, full history: 2 findings, both false positives,
+allowlisted in `.gitleaks.toml` with reasons):**
+
+1. `frontend/src/components/Disclaimer.tsx:4` (commit `f2fe15b0`) —
+   `ACK_KEY = 'rw_disclaimer_ack_v1'` is a localStorage flag name for the
+   disclaimer banner (the frontend has since moved to `evangoh-frontend`).
+2. `.venv_duck10/Lib/site-packages/setuptools/_distutils/msvccompiler.py:45`
+   (commit `9b44f3b6`) — `RegEnumKey = win32api.RegEnumKey`, i.e. setuptools'
+   vendored Win32 registry code inside a virtualenv that was once committed
+   (removed from HEAD; only history matches).
+
+TruffleHog 3.99.7 full history, verified-only: **0 verified, 0 unverified
+secrets**.
+
+**bandit 1.9.4 (gate: medium+ severity) — findings and disposition:**
+
+*Fixed in code (trivial real issues):*
+
+| Finding | Site | Fix |
+|---|---|---|
+| B608 SQL injection (real) | `api/routes/analytics.py` | `LIMIT {days}` → bound `LIMIT ?` parameter (was already int-clamped) |
+| B324 weak MD5 | `api/services/hybrid_retriever.py` | `usedforsecurity=False` (cache key only, not security) |
+| B324 weak SHA1 | `scripts/extract_graph_triples.py` | `usedforsecurity=False` (deterministic dedupe id only) |
+| B310 urlopen scheme | `scripts/rag_pipeline_ci.py` | `SPACE_URL` scheme asserted at startup; `# nosec B310` documents the guard |
+
+*Baselined per site (20× `# nosec B608`, each with its reason inline) — all are
+string-built SQL whose interpolated parts are not attacker-controlled:*
+
+| Sites | Pattern | Why it is safe |
+|---|---|---|
+| `api/db/review_queue.py` (1) | `{where_clause}` | joined from static `field = ?` fragments; values bound |
+| `api/services/chart_tool.py` (2) | `IN ({placeholders})` | `placeholders` is only `?` marks; values bound |
+| `api/services/chat_engine.py` (1) | wraps LLM SQL | SQL passed `validate_read_only_sql` before wrapping |
+| `api/services/graph_rag_engine.py` (1) | `{conditions_sql}` | static `ILIKE ?` fragments; values bound |
+| `api/services/hybrid_retriever.py` (2) | `{Config.EMBEDDING_DIM}` | trusted int config value |
+| `api/services/rag_engine.py` (8) | `IN ({ph})` / `{Config.EMBEDDING_DIM}` | `?` placeholder marks / trusted int config |
+| `api/services/runtime_snapshot.py` (2) | `"{t}"` identifiers | table names from `SHOW TABLES` on our own review DB; paths are tempdirs |
+| `api/services/sec_client.py` (1) | `{clauses}` | static `LIKE ?` fragments; values bound |
+| `scripts/migrate_duckdb_to_pg.py` (2) | `{COLS}` / `LIMIT {n}` | static literal column list; argparse int |
+
+*Skipped via `[tool.bandit]` (documented minimal skip list, `pyproject.toml`):*
+
+- **B104** (2: `run.py`, `api/main.py`) — binding `0.0.0.0` is the point of a
+  containerised uvicorn server; the port is published deliberately.
+- **B615** (2: `api/services/runtime_snapshot.py`,
+  `scripts/fetch_db_from_dataset.py`) — `hf_hub_download()` restores *our own*
+  dataset's rolling snapshot; pinning a revision would break restore-latest
+  semantics and the dataset is controlled by this codebase.
+
+Below the gate and not blocked: 17 LOW findings (B110 `try/except/pass` ×15,
+B311 `random` for non-crypto use ×1, B101 `assert` ×1) — reviewed, none
+security-relevant in their context.
+
+**zizmor 1.31.1 — 6 pre-existing findings, all in the two workflows another PR
+is rewriting (this PR must not touch `refresh-filings.yml` /
+`embed-annuals.yml`), recorded line-precisely in `zizmor.yml`:**
+
+- `embed-annuals.yml:58` / `refresh-filings.yml:49` — `artipacked`: checkout
+  without `persist-credentials: false`.
+- `embed-annuals.yml:122` / `refresh-filings.yml:115` — `template-injection`
+  (low confidence, ×2 each): `${{ steps.guard.outputs.summary }}` interpolated
+  into a git commit message.
+
+Three findings of the same kinds in `deploy.yml` were **fixed** in this PR
+(checkouts got `persist-credentials: false`; `github.event.inputs.force-seed`
+now reaches the shell through `env:`). The `zizmor.yml` entries should be
+removed as soon as the owning PR lands.
+
+**hadolint 2.12.0:** DL3059 (consecutive `RUN`s) fixed by merging. DL3008
+(apt version pinning) waived inline in the `Dockerfile` with the reason: distro
+package versions rotate; the base-image tag plus `uv.lock` are the
+reproducibility controls.
+
+**Trivy 0.69.3 (image): 2 pre-existing findings, in `.trivyignore` with full
+rationale** — both are packages that *ship inside* `python:3.11-slim`'s system
+site-packages, are not dependencies of this app (it runs from `/opt/venv`), and
+cannot be fixed via `uv.lock` because they are not in it:
+
+- `CVE-2026-23949` — jaraco.context 5.3.0 (fixed 6.1.0), path traversal via
+  malicious tar archives.
+- `CVE-2026-24049` — wheel 0.45.1 (fixed 0.46.2), code execution via a
+  malicious wheel file.
+
+The venv layer (exact `uv.lock` export) has **0** fixable HIGH/CRITICAL
+findings (pip-audit agrees). Caveat, stated plainly: the build environment for
+this change had **no Docker daemon**, so the full image could not be built
+locally — the base image was scanned daemonlessly and the venv layer via its
+locked requirements export. The `docker.yml` job is the full measurement; if it
+surfaces further fixable HIGH/CRITICAL findings (e.g. from the apt layers),
+they must be reported and either fixed or added to `.trivyignore` with the same
+documentation standard — never dropped from the gate.
+
+**actionlint 1.7.7 / pip-audit:** clean at scan time.
+
+---
+
 ## Regulatory alignment
 
 | Framework | How this project maps |

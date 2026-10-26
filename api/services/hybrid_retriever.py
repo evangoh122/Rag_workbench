@@ -78,7 +78,8 @@ def rrf_fuse(
             key = (
                 doc.metadata.get("ticker", ""),
                 doc.metadata.get("accession", ""),
-                hashlib.md5(doc.page_content.encode()).hexdigest()[:16],
+                # Cache key only, never security-relevant (bandit B324).
+                hashlib.md5(doc.page_content.encode(), usedforsecurity=False).hexdigest()[:16],
             )
             doc_map[key] = doc
             base = 1.0 / (k + rank + 1)
@@ -203,7 +204,7 @@ def vector_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document
                 WHERE ticker = ?
                 ORDER BY dist ASC
                 LIMIT ?
-            """, [qvec, ticker, top_k]).fetchall()
+            """, [qvec, ticker, top_k]).fetchall()  # nosec B608: EMBEDDING_DIM is a trusted int config value
         else:
             rows = conn.execute(f"""
                 SELECT ticker, text, accession, section_id, chunk_index, period_of_report, form_type,
@@ -211,7 +212,7 @@ def vector_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document
                 FROM edgar_embeddings
                 ORDER BY dist ASC
                 LIMIT ?
-            """, [qvec, top_k]).fetchall()
+            """, [qvec, top_k]).fetchall()  # nosec B608: EMBEDDING_DIM is a trusted int config value
 
         return [
             Document(
