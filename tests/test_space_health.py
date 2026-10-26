@@ -50,3 +50,19 @@ def _next(it):
     if isinstance(v, Exception):
         raise v
     return v
+
+
+def test_company_floor_gate_alone_fails():
+    # counts match exactly, but 11 < MIN_COMPANIES (12)
+    assert evaluate_stats(_stats(companies=11), 1000, 11)[0] is False
+    assert evaluate_stats(_stats(companies=12), 1000, 12)[0] is True
+
+
+def test_retryable_failures_do_not_crash_polling():
+    import http.client
+    seq = iter([["not", "an", "object"], http.client.IncompleteRead(b""), ConnectionResetError(),
+                TimeoutError(), None, _stats()])
+    t = [0.0]
+    sleep = lambda s: t.__setitem__(0, t[0] + s)  # noqa: E731
+    assert wait_for_new_corpus(lambda: _next(seq), 1000, 14, sleep=sleep,
+                               clock=lambda: t[0], log=lambda *a: None) is True

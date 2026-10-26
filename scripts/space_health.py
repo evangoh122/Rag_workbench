@@ -5,6 +5,7 @@ Mirrors the gates of embed-annuals.yml / refresh-filings.yml / deploy.yml
 requires the served chunk and company counts to equal the uploaded DB's counts,
 so the OLD container still answering mid-swap can never count as success.
 """
+import http.client
 import json
 import time
 import urllib.error
@@ -17,6 +18,8 @@ MIN_COMPANIES = 12
 
 def evaluate_stats(stats: dict, expected_chunks: int, expected_companies: int) -> tuple[bool, str]:
     """Return (ready, one-line status) for a parsed /api/stats response."""
+    if not isinstance(stats, dict):
+        return False, f"unexpected response type {type(stats).__name__}"
     data = stats.get("data", {}) or {}
     cfg = stats.get("config", {}) or {}
     if "error" in data:
@@ -52,7 +55,8 @@ def wait_for_new_corpus(fetch, expected_chunks, expected_companies, *, timeout_s
         sleep(interval_s)
         try:
             ready, status = evaluate_stats(fetch(), expected_chunks, expected_companies)
-        except (urllib.error.URLError, OSError, ValueError) as exc:
+        except (urllib.error.URLError, OSError, ValueError, AttributeError,
+                http.client.HTTPException) as exc:
             log("waiting for Space...", type(exc).__name__)
             continue
         log("health:", status)
