@@ -164,12 +164,119 @@ def test_wide_row_view_refused_with_bounded_parent_growth():
     assert _rss_kb() - before < 150 * 1024  # KiB; unpaged fetch grew ~580-790MiB
 
 
+def test_narrow_early_rows_do_not_hide_wide_later_rows():
+    """A 64-row probe underestimates a table that starts narrow and turns wide."""
+    conn = duckdb.connect(":memory:")
+    conn.execute(
+        "CREATE VIEW xbrl_facts AS SELECT CASE WHEN range < 64 THEN '' "
+        "ELSE repeat('x', 100000) END AS s FROM range(3000)"
+    )
+    before = _rss_kb()
+    try:
+        with pytest.raises(ChatQueryLimitError, match="too large"):
+            mirror_tables(conn, ["xbrl_facts"], time.monotonic() + 60)
+    finally:
+        conn.close()
+    assert _rss_kb() - before < 150 * 1024  # KiB; probe-sized paging grew ~570MiB
+
+
+def test_variable_width_rows_that_fit_are_copied_whole(source, monkeypatch):
+    monkeypatch.setattr(chat_sandbox, "PAGE_BYTES", 8192)
+    source.execute(
+        "CREATE TABLE polygon_bars AS SELECT range AS ts, "
+        "CASE WHEN range = 99 THEN repeat('x', 40000) ELSE 'n' END AS p FROM range(120)"
+    )
+    blobs = mirror_tables(source, ["polygon_bars"], time.monotonic() + 20)
+    assert _worker(
+        "SELECT count(*) AS n, max(strlen(p)) AS w, sum(ts) AS t FROM polygon_bars", blobs
+    ) == [{"n": 120, "w": 40000, "t": sum(range(120))}]
+
+
 def test_paging_reassembles_every_row(source, monkeypatch):
     monkeypatch.setattr(chat_sandbox, "PAGE_BYTES", 2048)
     source.execute("CREATE TABLE polygon_bars AS SELECT range AS ts, 'pad' AS p FROM range(5000)")
     blobs = mirror_tables(source, ["polygon_bars"], time.monotonic() + 20)
     assert _worker("SELECT count(*) AS n, sum(ts) AS t FROM polygon_bars", blobs) == [
         {"n": 5000, "t": sum(range(5000))}
+    ]
+
+
+class _RecordingCursor:
+    def __init__(self, real):
+        self._real, self.sql = real, []
+
+    def execute(self, sql, *a, **k):
+        self.sql.append(sql)
+        return self._real.execute(sql, *a, **k)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+class _RecordingSource:
+    def __init__(self, real):
+        self._real, self.cursor_obj = real, None
+
+    def cursor(self):
+        self.cursor_obj = _RecordingCursor(self._real.cursor())
+        return self.cursor_obj
+
+
+def test_pages_use_a_deterministic_order(source, monkeypatch):
+    monkeypatch.setattr(chat_sandbox, "PAGE_BYTES", 256)
+    source.execute("CREATE TABLE polygon_bars AS SELECT range AS ts, 'p' AS p FROM range(500)")
+    recording = _RecordingSource(source)
+    mirror_tables(recording, ["polygon_bars"], time.monotonic() + 20)
+    pages = [sql for sql in recording.cursor_obj.sql if " OFFSET " in sql]
+    assert len(pages) > 1
+    assert all("ORDER BY rowid" in sql for sql in pages)
+
+
+class _MutatingCursor:
+    """Cursor that runs a concurrent committed write before the second page."""
+
+    def __init__(self, real, owner):
+        self._real, self._owner = real, owner
+
+    def execute(self, sql, *a, **k):
+        if " OFFSET " in sql:
+            self._owner.pages += 1
+            if self._owner.pages == 2:
+                self._owner.mutate()
+        return self._real.execute(sql, *a, **k)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+class _MutatingSource:
+    def __init__(self, real, mutation):
+        self._real, self._mutation, self.pages = real, mutation, 0
+
+    def mutate(self):
+        writer = self._real.cursor()
+        try:
+            writer.execute(self._mutation)
+        finally:
+            writer.close()
+
+    def cursor(self):
+        return _MutatingCursor(self._real.cursor(), self)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "DELETE FROM polygon_bars WHERE ts < 200",
+        "INSERT INTO polygon_bars SELECT range + 1000 AS ts, 'late' AS p FROM range(50)",
+    ],
+)
+def test_concurrent_write_during_paging_cannot_skip_or_repeat_rows(source, monkeypatch, mutation):
+    monkeypatch.setattr(chat_sandbox, "PAGE_BYTES", 256)
+    source.execute("CREATE TABLE polygon_bars AS SELECT range AS ts, range::VARCHAR AS p FROM range(500)")
+    blobs = mirror_tables(_MutatingSource(source, mutation), ["polygon_bars"], time.monotonic() + 20)
+    assert _worker("SELECT count(*) AS n, sum(ts) AS t FROM polygon_bars", blobs) == [
+        {"n": 500, "t": sum(range(500))}
     ]
 
 

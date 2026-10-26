@@ -6,8 +6,9 @@ needs COPY/read_parquet).  Instead the parent:
 
 1. resolves the tables the query reads from DuckDB's own parsed AST
    (``json_serialize_sql``), failing closed on anything outside the allowlist;
-2. copies those tables through a request-owned cursor as Arrow IPC bytes under a
-   byte budget (the child never sees the real DB file);
+2. copies those tables through a request-owned cursor in a single read
+   transaction, as Arrow IPC bytes under a byte budget sized from the table's
+   true maximum row width (the child never sees the real DB file);
 3. runs the SQL in a short-lived child process (``chat_worker.py``) with
    ``RLIMIT_AS``/``RLIMIT_CPU``, external access disabled and config locked,
    under a single absolute wall-clock deadline that covers loading and
@@ -33,13 +34,15 @@ ALLOWED_TABLES = frozenset({
 
 MAX_MIRROR_BYTES = 256 * 1024 * 1024   # total across all mirrored tables
 PAGE_BYTES = 8 * 1024 * 1024           # target bytes per page; bounds parent overshoot
-PROBE_ROWS = 64
 MAX_PAGE_ROWS = 200_000
 QUERY_DEADLINE_SECONDS = 10.0          # whole operation: load + execute
 CHILD_EXTRA_ADDRESS_SPACE = 1024 * 1024 * 1024   # RLIMIT_AS above the loaded baseline
 MAX_RESULT_ROWS = 100
 MAX_CELL_CHARS = 10_000
 MAX_RESULT_BYTES = 2 * 1024 * 1024     # of the JSON actually returned to the route
+
+# Arrow per-column overhead: offsets for variable-width data plus validity bits.
+PAGE_COLUMN_OVERHEAD = 8
 
 _WORKER = str(Path(__file__).with_name("chat_worker.py"))
 
@@ -113,12 +116,90 @@ def _check_deadline(deadline: float) -> None:
         raise ChatQueryLimitError("Chat query timed out while loading data.")
 
 
+def _fixed_bytes(arrow_type: pa.DataType) -> int | None:
+    """Storage width of a fixed-width Arrow type, or ``None`` if variable."""
+    if pa.types.is_boolean(arrow_type):
+        return 1
+    try:
+        return max(1, arrow_type.bit_width // 8)
+    except (AttributeError, ValueError):
+        return None
+
+
+def _quote(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _list_width_expr(column: str, value_type: pa.DataType) -> str | None:
+    """SQL expression for the payload bytes of one list value."""
+    if pa.types.is_string(value_type) or pa.types.is_large_string(value_type):
+        return f"coalesce(list_sum(list_transform({column}, x -> strlen(x))), 0)"
+    if pa.types.is_binary(value_type) or pa.types.is_large_binary(value_type):
+        return f"coalesce(list_sum(list_transform({column}, x -> octet_length(x))), 0)"
+    width = _fixed_bytes(value_type)
+    if width is None:
+        return None
+    return f"coalesce(len({column}), 0) * {width}"
+
+
+def _width_expr(field: pa.Field) -> str:
+    """SQL expression giving the payload bytes of one column in one row.
+
+    Lengths are read from DuckDB's string metadata, so measuring them does not
+    copy the (possibly huge) values themselves into the parent process.
+    """
+    column = _quote(field.name)
+    arrow_type = field.type
+    if pa.types.is_string(arrow_type) or pa.types.is_large_string(arrow_type):
+        expr: str | None = f"coalesce(strlen({column}), 0)"
+    elif pa.types.is_binary(arrow_type) or pa.types.is_large_binary(arrow_type):
+        expr = f"coalesce(octet_length({column}), 0)"
+    elif (pa.types.is_list(arrow_type) or pa.types.is_large_list(arrow_type)
+          or pa.types.is_fixed_size_list(arrow_type)):
+        expr = _list_width_expr(column, arrow_type.value_type)
+    else:
+        width = _fixed_bytes(arrow_type)
+        expr = str(width) if width is not None else None
+    if expr is None:
+        # Unknown/nested type: measure its textual form rather than undercount.
+        expr = f"coalesce(strlen(CAST({column} AS VARCHAR)), 0)"
+    return expr
+
+
+def _measure_table(cursor: Any, name: str) -> tuple[pa.Schema, int, int]:
+    """Schema, row count and true maximum row payload width for ``name``."""
+    schema = cursor.execute(f'SELECT * FROM {_quote(name)} LIMIT 0').to_arrow_table().schema
+    widths = " + ".join(_width_expr(field) for field in schema) or "0"
+    total, max_row = cursor.execute(
+        f'SELECT count(*), max({widths}) FROM {_quote(name)}'
+    ).fetchone()
+    return schema, int(total or 0), int(max_row or 0)
+
+
+def _order_clause(cursor: Any, name: str) -> str:
+    """Deterministic page order: physical row id, or every column for a view."""
+    try:
+        cursor.execute(f'SELECT rowid FROM {_quote(name)} LIMIT 0')
+    except duckdb.Error:
+        return " ORDER BY ALL"
+    return " ORDER BY rowid"
+
+
+def _page_rows(max_row_bytes: int, columns: int) -> int:
+    width = max(max_row_bytes, 1) + PAGE_COLUMN_OVERHEAD * max(columns, 1)
+    return int(max(1, min(MAX_PAGE_ROWS, PAGE_BYTES // width)))
+
+
 def mirror_tables(source: Any, names: list[str], deadline: float) -> dict[str, bytes]:
     """Copy tables to Arrow IPC bytes via a request-owned cursor under the budgets.
 
     The deadline is enforced two ways that cannot miss a later statement: it is
     checked before every execute/fetch, and a watchdog thread keeps interrupting
     the cursor every 50ms once the deadline has passed.
+
+    Every table is copied inside one read transaction so a concurrent writer
+    cannot make ``LIMIT``/``OFFSET`` pages skip or repeat rows, and pages are
+    ordered by a stable key so the page boundaries are deterministic.
     """
     cursor = source.cursor()
     stop = threading.Event()
@@ -137,25 +218,30 @@ def mirror_tables(source: Any, names: list[str], deadline: float) -> dict[str, b
     thread.start()
     budget = MAX_MIRROR_BYTES
     blobs: dict[str, bytes] = {}
+    committed = False
     try:
+        cursor.execute("BEGIN TRANSACTION")
+        _check_deadline(deadline)
         for name in names:
             _check_deadline(deadline)
             try:
-                probe = cursor.execute(f'SELECT * FROM "{name}" LIMIT {PROBE_ROWS}').to_arrow_table()
+                schema, total, max_row = _measure_table(cursor, name)
             except duckdb.CatalogException:
                 continue  # table absent in this database
-            # DuckDB materialises whole 2048-row vectors when streaming, which for
-            # wide rows overshoots the budget by hundreds of MiB.  Page with LIMIT
-            # sized from the widest row seen so far so each fetch stays ~PAGE_BYTES.
+            # Refuse before buffering anything: if even the widest row cannot
+            # fit the remaining budget, no page size makes this table safe.
+            if total and max_row * total > budget:
+                raise ChatQueryLimitError(f"Table data is too large for chat queries (at {name}).")
+            order = _order_clause(cursor, name)
+            n = _page_rows(max_row, len(schema))
             sink = pa.BufferOutputStream()
-            with pa.ipc.new_stream(sink, probe.schema) as writer:
-                page, offset, n = probe, 0, PROBE_ROWS
-                width = max(probe.nbytes / max(probe.num_rows, 1), 1.0)
-                if probe.num_rows == PROBE_ROWS:  # cheap early refusal, before buffering anything
-                    total = cursor.execute(f'SELECT count(*) FROM "{name}"').fetchone()[0]
-                    if total * width > budget:
-                        raise ChatQueryLimitError(f"Table data is too large for chat queries (at {name}).")
+            with pa.ipc.new_stream(sink, schema) as writer:
+                offset = 0
                 while True:
+                    _check_deadline(deadline)
+                    page = cursor.execute(
+                        f'SELECT * FROM {_quote(name)}{order} LIMIT {n} OFFSET {offset}'
+                    ).to_arrow_table()
                     budget -= page.nbytes
                     if budget < 0:
                         raise ChatQueryLimitError(f"Table data is too large for chat queries (at {name}).")
@@ -163,18 +249,19 @@ def mirror_tables(source: Any, names: list[str], deadline: float) -> dict[str, b
                     if page.num_rows < n:
                         break
                     offset += page.num_rows
-                    width = max(width, page.nbytes / max(page.num_rows, 1))
-                    n = int(max(1, min(MAX_PAGE_ROWS, PAGE_BYTES // width)))
-                    _check_deadline(deadline)
-                    page = cursor.execute(
-                        f'SELECT * FROM "{name}" LIMIT {n} OFFSET {offset}'
-                    ).to_arrow_table()
             blobs[name] = sink.getvalue().to_pybytes()
+        cursor.execute("COMMIT")
+        committed = True
     except duckdb.InterruptException as exc:
         raise ChatQueryLimitError("Chat query timed out while loading data.") from exc
     finally:
         stop.set()
         thread.join()
+        if not committed:
+            try:
+                cursor.execute("ROLLBACK")
+            except Exception:  # noqa: BLE001 - transaction may already be gone
+                pass
         cursor.close()
     return blobs
 
