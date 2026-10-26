@@ -107,7 +107,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           lfs: true
@@ -167,7 +167,7 @@ jobs:
     steps:
       # The inline helper below is stdlib-only (json module), so no project
       # dependencies are needed: --no-project runs it with the runner's Python.
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: "0.12.23"
           enable-cache: false
@@ -220,7 +220,7 @@ jobs:
     steps:
       # The inline helper below is stdlib-only (json/os), so no project
       # dependencies are needed: --no-project runs it with the runner's Python.
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: "0.12.23"
           enable-cache: false
@@ -314,8 +314,8 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: "0.12.23"
       - name: "RAG pipeline -- all 31 tickers (chunk -> hybrid BM25+vector -> rerank -> RRF)"

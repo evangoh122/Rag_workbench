@@ -52,4 +52,4 @@ jobs:
       - name: pip-audit (backend)
         # Python 3.11 matches the project (Dockerfile) so pip resolves the same
         # versions; uvx otherwise picks the runner's newest interpreter.
-        run: uvx --python 3.11 --from pip-audit pip-audit -r /tmp/requirements-audit.txt
+        run: uvx --python 3.11 --from pip-audit pip-audit --no-deps -r /tmp/requirements-audit.txt

@@ -43,7 +43,7 @@ This document defines the roles, responsibilities, and ownership model for the A
 | Ingestion Scripts | Gemini | `scripts/embed_*.py` |
 | Data Pipelines | MiMo | `data/` |
 | Startup Logic | MiMo | `run.py` |
-| Integration | Main | `main.py`, `run.py` |
+| Integration | Main | `main.py` |
 
 ## Dependency Management
 
