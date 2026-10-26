@@ -48,6 +48,19 @@ class SentimentDictionary:
         return getattr(self, category)
 
 
+# Event filings (8-K / 6-K) carry real filing dates while periodic rows carry a
+# synthetic 20YY-12-31 period_of_report, so they must never be picked as the
+# "latest / prior filing" by period_of_report ordering. Exclude them (rather than
+# whitelisting periodic forms) so prospectus rows (S-1, 424B4, ...) and legacy
+# NULL form_type rows keep their existing behaviour.
+EVENT_FORMS = ("8-K", "6-K")
+_EXCLUDE_EVENT_FORMS_SQL = (
+    "(form_type IS NULL OR form_type NOT IN ("
+    + ", ".join(f"'{f}'" for f in EVENT_FORMS)
+    + "))"
+)
+
+
 def load_lm_dictionary() -> SentimentDictionary:
     """Load the bundled Loughran-McDonald word lists (cached across calls)."""
     return _load_lm_dictionary_cached()
@@ -260,13 +273,14 @@ def get_filing_sentiment(
             ).fetchall()
         else:
             rows = conn.execute(
-                """SELECT text, section_type, section_id, form_type, period_of_report, accession
+                f"""SELECT text, section_type, section_id, form_type, period_of_report, accession
                    FROM edgar_embeddings
                    WHERE ticker = ?
                    AND accession = (
                        SELECT DISTINCT accession
                        FROM edgar_embeddings
                        WHERE ticker = ?
+                       AND {_EXCLUDE_EVENT_FORMS_SQL}
                        ORDER BY period_of_report DESC
                        LIMIT 1
                    )
@@ -318,22 +332,25 @@ def compare_filing_sentiment(
         from api.db.database import db_manager
         conn = db_manager.get_connection()
 
-        # Fetch distinct filings ordered by period_of_report desc
-        filings = conn.execute(
-            """SELECT DISTINCT accession, period_of_report
-               FROM edgar_embeddings
-               WHERE ticker = ?
-               ORDER BY period_of_report DESC""",
-            [ticker.upper()],
-        ).fetchall()
-
-        if len(filings) < 2:
-            logger.info("Need at least 2 filings for comparison, found {} for {}", len(filings), ticker)
-            return None
-
         if accession_a and accession_b:
             acc_a, acc_b = accession_a, accession_b
         else:
+            # Automatic selection only: fetch distinct periodic filings ordered
+            # by period_of_report desc. Explicit accessions never need this, so
+            # they compare even when fewer than two periodic filings exist.
+            filings = conn.execute(
+                f"""SELECT DISTINCT accession, period_of_report
+                   FROM edgar_embeddings
+                   WHERE ticker = ?
+                   AND {_EXCLUDE_EVENT_FORMS_SQL}
+                   ORDER BY period_of_report DESC""",
+                [ticker.upper()],
+            ).fetchall()
+
+            if len(filings) < 2:
+                logger.info("Need at least 2 filings for comparison, found {} for {}", len(filings), ticker)
+                return None
+
             acc_b = filings[0][0]   # most recent
             acc_a = filings[1][0]   # prior
 
@@ -390,9 +407,10 @@ def get_sentiment_history(ticker: str) -> list[dict]:
         conn = db_manager.get_connection()
 
         filings = conn.execute(
-            """SELECT DISTINCT accession, period_of_report
+            f"""SELECT DISTINCT accession, period_of_report
                FROM edgar_embeddings
                WHERE ticker = ?
+               AND {_EXCLUDE_EVENT_FORMS_SQL}
                ORDER BY period_of_report DESC""",
             [ticker.upper()],
         ).fetchall()
@@ -453,9 +471,10 @@ def generate_tone_analysis(ticker: str) -> dict:
             from api.db.database import db_manager
             conn = db_manager.get_connection()
             filings = conn.execute(
-                """SELECT DISTINCT accession, period_of_report
+                f"""SELECT DISTINCT accession, period_of_report
                    FROM edgar_embeddings
                    WHERE ticker = ?
+                   AND {_EXCLUDE_EVENT_FORMS_SQL}
                    ORDER BY period_of_report DESC""",
                 [ticker],
             ).fetchall()
@@ -609,9 +628,10 @@ def compute_tone_shift(ticker: str) -> Optional[dict]:
 
         # Fetch distinct filings ordered by period desc
         filings = conn.execute(
-            """SELECT DISTINCT accession, period_of_report
+            f"""SELECT DISTINCT accession, period_of_report
                FROM edgar_embeddings
                WHERE ticker = ?
+               AND {_EXCLUDE_EVENT_FORMS_SQL}
                ORDER BY period_of_report DESC""",
             [ticker],
         ).fetchall()

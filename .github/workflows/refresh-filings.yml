@@ -1,7 +1,8 @@
 name: Refresh Filings (scheduled) → Dataset
 
 # Ongoing freshness: on a weekly schedule (and on demand) pick up any newly-filed
-# 10-K / 20-F / 10-Q that isn't in the corpus yet, embed it with the same
+# 10-K / 20-F / 10-Q (and, only when the manual `include_8k` input is true, recent
+# 8-K / 6-K event filings) that isn't in the corpus yet, embed it with the same
 # Qwen/Qwen3-Embedding-0.6B (1024-dim) model, and publish — entirely on GitHub's
 # runner. embed_additional.py only fetches each company's latest annuals (2) and
 # latest quarterlies (3) and skips accessions already stored, so a scheduled run
@@ -18,6 +19,10 @@ on:
     inputs:
       dry_run:
         description: 'Dry run (list what would be embedded; no embed/upload/restart)'
+        type: boolean
+        default: false
+      include_8k:
+        description: 'Also ingest recent 8-K (6-K for foreign filers) event filings (manual runs only)'
         type: boolean
         default: false
 
@@ -42,6 +47,7 @@ jobs:
       EMBEDDING_DIM: '1024'
       # Real run unless explicitly dispatched as a dry run.
       DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+      INCLUDE_8K: ${{ github.event_name == 'workflow_dispatch' && inputs.include_8k == true }}
     steps:
       - uses: actions/checkout@v4
 
@@ -74,13 +80,17 @@ jobs:
       - name: Snapshot corpus BEFORE embedding
         run: python scripts/etl_guardrail.py snapshot data/rag.duckdb /tmp/before.json
 
-      - name: Embed new annual + quarterly filings
+      - name: Embed new annual + quarterly filings (+ 8-K/6-K if include_8k)
         run: |
           FLAGS=""
           if [ "$DRY" = "true" ]; then FLAGS="--dry-run"; fi
           # Annual (latest 2 x 10-K/20-F) then quarterly (latest 3 x 10-Q = ~1yr).
           python scripts/embed_additional.py --forms annual $FLAGS
           python scripts/embed_additional.py --forms 10-Q --quarters 3 $FLAGS
+          # Opt-in (workflow_dispatch include_8k): last 180 days, max 8 per company.
+          if [ "$INCLUDE_8K" = "true" ]; then
+            python scripts/embed_additional.py --forms 8-K --days 180 --max-filings 8 $FLAGS
+          fi
 
       - name: 'Guardrail: block any destructive change to the vector DB'
         if: ${{ env.DRY != 'true' }}
