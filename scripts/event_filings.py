@@ -24,11 +24,21 @@ DEFAULT_8K_MAX_CHUNKS = 200
 _ITEM_RE = re.compile(r"^[ \t]*item\s+(\d{1,2}\.\d{2})\b[.:\s\-–—]*", re.I | re.M)
 
 
+# A table-of-contents entry: one line, dot leader, ending in a page number
+# (e.g. "Results of Operations ........ 3").
+_TOC_LINE_RE = re.compile(r"^[^\n]*\.{3,}\s*\d{1,4}$")
+
+
+def _is_toc_entry(body: str) -> bool:
+    return bool(_TOC_LINE_RE.match(body.strip()))
+
+
 def split_8k_items(text: str) -> list[tuple[str, str]]:
     """Split 8-K text into [(\"item_2.02\", body), ...].
 
-    Repeated headings for one item (e.g. a TOC-style summary) are merged, keeping
-    document order of first appearance. Text before the first item is kept as
+    Slices that are only a table-of-contents entry (single dot-leader line ending in
+    a page number) are dropped. Other repeated headings for one item are merged,
+    keeping document order of first appearance. Text before the first item is kept as
     `item_preamble`. Returns [] when no item headings are found so the caller can
     fall back to a single full_text section.
     """
@@ -46,7 +56,9 @@ def split_8k_items(text: str) -> list[tuple[str, str]]:
     for i, m in enumerate(matches):
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[m.end():end].strip()
-        if body:
+        if body and _is_toc_entry(body):
+            logger.debug(f"8-K item {m.group(1)}: dropped table-of-contents entry")
+        elif body:
             bodies.setdefault(f"item_{m.group(1)}", []).append(body)
     return [(label, "\n\n".join(parts)) for label, parts in bodies.items()]
 

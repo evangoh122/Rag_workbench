@@ -332,23 +332,25 @@ def compare_filing_sentiment(
         from api.db.database import db_manager
         conn = db_manager.get_connection()
 
-        # Fetch distinct filings ordered by period_of_report desc
-        filings = conn.execute(
-            f"""SELECT DISTINCT accession, period_of_report
-               FROM edgar_embeddings
-               WHERE ticker = ?
-               AND {_EXCLUDE_EVENT_FORMS_SQL}
-               ORDER BY period_of_report DESC""",
-            [ticker.upper()],
-        ).fetchall()
-
-        if len(filings) < 2:
-            logger.info("Need at least 2 filings for comparison, found {} for {}", len(filings), ticker)
-            return None
-
         if accession_a and accession_b:
             acc_a, acc_b = accession_a, accession_b
         else:
+            # Automatic selection only: fetch distinct periodic filings ordered
+            # by period_of_report desc. Explicit accessions never need this, so
+            # they compare even when fewer than two periodic filings exist.
+            filings = conn.execute(
+                f"""SELECT DISTINCT accession, period_of_report
+                   FROM edgar_embeddings
+                   WHERE ticker = ?
+                   AND {_EXCLUDE_EVENT_FORMS_SQL}
+                   ORDER BY period_of_report DESC""",
+                [ticker.upper()],
+            ).fetchall()
+
+            if len(filings) < 2:
+                logger.info("Need at least 2 filings for comparison, found {} for {}", len(filings), ticker)
+                return None
+
             acc_b = filings[0][0]   # most recent
             acc_a = filings[1][0]   # prior
 

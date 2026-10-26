@@ -88,3 +88,18 @@ def test_tests_fail_without_the_filter(mgr, monkeypatch):
     # the SQL is f-string-evaluated at call time, so patching the module constant suffices
     assert sent.get_filing_sentiment("DOM")["accession"] == "0000000001-26-000005"
     assert sent.get_filing_sentiment("FOR")["accession"] == "0000000002-26-000009"
+
+
+def test_explicit_accessions_compare_even_with_one_periodic_filing(mgr):
+    """Explicit accessions must not be gated on the periodic-filing count."""
+    from api.db import database
+    c = database.db_manager.get_connection()
+    c.execute("DELETE FROM edgar_embeddings WHERE accession = '0000000001-24-000001'")
+    # DOM now has 1 periodic filing + 1 8-K; auto-selection cannot pick two
+    assert sent.compare_filing_sentiment("DOM") is None
+    cmp_ = sent.compare_filing_sentiment(
+        "DOM", "0000000001-25-000001", "0000000001-26-000005"
+    )
+    assert cmp_ is not None
+    assert cmp_["filing_a"]["accession"] == "0000000001-25-000001"
+    assert cmp_["filing_b"]["accession"] == "0000000001-26-000005"

@@ -280,3 +280,32 @@ def test_get_filings_called_without_amendments(tmp_path, monkeypatch):
     ea.main()
     assert calls and calls[0]["amendments"] is False and calls[0]["form"] == "8-K"
     assert calls[0]["filing_date"].endswith(":")
+
+
+def test_toc_entries_are_dropped_but_real_bodies_kept():
+    text = (
+        "Item 2.02 Results of Operations ........ 3\n"
+        "Item 5.02 Departure of Officers .......... 4\n"
+        "Item 2.02 Results of Operations.\n"
+        "Revenue grew 10%.\n"
+        "Item 5.02 Departure of Officers.\n"
+        "The CFO resigned.\n"
+    )
+    items = dict(split_8k_items(text))
+    assert items["item_2.02"] == "Results of Operations.\nRevenue grew 10%."
+    assert "......" not in items["item_2.02"] + items["item_5.02"]
+
+
+def test_toc_only_item_produces_no_section():
+    assert split_8k_items("Item 2.02 Results ...... 3\n") == []
+
+
+def test_repeated_real_bodies_are_both_retained():
+    text = (
+        "Item 8.01 Other Events.\nFirst event ends 2026. 3\n"
+        "Item 9.01 Exhibits.\nEx.\n"
+        "Item 8.01 Other Events (cont).\nSecond event."
+    )
+    body = dict(split_8k_items(text))["item_8.01"]
+    assert "First event ends 2026. 3" in body  # trailing digit but no dot leader
+    assert "Second event." in body
