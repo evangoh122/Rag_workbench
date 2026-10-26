@@ -65,14 +65,17 @@ def strip_sql_comments(sql: str) -> str:
     return sql.strip()
 
 def validate_read_only_sql(sql: str) -> Optional[str]:
+    raw = sql.strip()
     compact = strip_sql_comments(sql)
     if not compact:
         return "The model did not return a SQL query."
 
-    if len(compact) > 4096:
+    if len(raw) > 4096:
         return "Rejected overly long SQL statement."
 
-    if ";" in compact:
+    # Check the unmodified SQL so quote-like comment text cannot hide a
+    # statement delimiter from the validation that precedes execution.
+    if ";" in raw:
         return "Rejected SQL with multiple statements."
 
     first = compact.lstrip().split(None, 1)[0].lower()
@@ -89,15 +92,16 @@ def validate_read_only_sql(sql: str) -> Optional[str]:
         "postgres_attach", "mysql_scan", "mysql_attach",
         "information_schema",
     }
-    tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", compact.lower()))
+    tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", raw.lower()))
+    tokens.update(re.findall(r"\b[a-z_][a-z0-9_]*\b", compact.lower()))
     found = sorted(tokens & blocked)
     if found:
         return f"Rejected SQL containing blocked keyword/function: {', '.join(found)}."
 
-    if re.search(r"\bduckdb_\w+\s*\(", compact.lower()):
+    if re.search(r"\bduckdb_\w+\s*\(", raw.lower()):
         return "Rejected SQL referencing internal DuckDB functions."
 
-    if re.search(r"\bduckdb_\w+\b", compact.lower()):
+    if re.search(r"\bduckdb_\w+\b", raw.lower()):
         return "Rejected SQL referencing internal DuckDB system tables/views."
 
     return None
