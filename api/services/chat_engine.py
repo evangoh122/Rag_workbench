@@ -106,8 +106,6 @@ def validate_read_only_sql(sql: str) -> Optional[str]:
         "sqlite_master", "sqlite_schema", "sqlite_temp_master",
         "pragma_table_info", "pragma_database_list", "current_setting",
         "getenv", "read_xlsx", "read_csv_auto",
-        # string amplification (memory exhaustion)
-        "repeat", "lpad", "rpad",
     }
     tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", raw.lower()))
     tokens.update(re.findall(r"\b[a-z_][a-z0-9_]*\b", compact.lower()))
@@ -190,12 +188,13 @@ def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> D
 
     try:
         # Isolated, locked-down in-memory instance; never the shared connection.
-        df = run_chat_query(db_manager.get_connection(), sql).to_pandas()
+        rows = run_chat_query(db_manager.get_connection(), sql)
+        df = pd.DataFrame(rows)
         answer = summarise_results(question, df)
         return {
             "type": "table",
             "sql": sql,
-            "data": df.to_dict(orient="records"),
+            "data": rows,
             "answer": answer
         }
     except Exception:

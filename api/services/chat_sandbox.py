@@ -1,22 +1,29 @@
-"""Isolated DuckDB instance for LLM-generated chat SQL.
+"""Isolated execution of LLM-generated chat SQL.
 
-``enable_external_access`` and ``lock_configuration`` are instance-wide in
-DuckDB, so they cannot be applied to the shared app connection without breaking
-the runtime snapshot export (COPY / read_parquet) and other writers.  Instead,
-each chat query runs on a throwaway in-memory instance that only contains copies
-of the allow-listed tables the query references, with external access disabled
-and the configuration locked before the generated SQL executes.
+``enable_external_access`` / ``lock_configuration`` are instance-wide in DuckDB,
+so they cannot be applied to the shared app connection (runtime snapshot export
+needs COPY/read_parquet).  Instead the parent:
 
-Mirroring reads through a request-owned cursor (never the shared connection's
-own result slot) and streams Arrow batches under a byte budget.
+1. resolves the tables the query reads from DuckDB's own parsed AST
+   (``json_serialize_sql``), failing closed on anything outside the allowlist;
+2. copies those tables through a request-owned cursor as Arrow IPC bytes under a
+   byte budget (the child never sees the real DB file);
+3. runs the SQL in a short-lived child process (``chat_worker.py``) with
+   ``RLIMIT_AS``/``RLIMIT_CPU``, external access disabled and config locked,
+   under a single absolute wall-clock deadline that covers loading and
+   execution, killing and reaping the child on expiry.
 """
-import re
+import json
+import os
+import subprocess
+import sys
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 import duckdb
-import polars as pl
+import pyarrow as pa
 
 # Tables the chat model is told about (see chat_engine.SCHEMA).
 ALLOWED_TABLES = frozenset({
@@ -25,125 +32,162 @@ ALLOWED_TABLES = frozenset({
 })
 
 MAX_MIRROR_BYTES = 256 * 1024 * 1024   # total across all mirrored tables
-QUERY_HEADROOM_BYTES = 128 * 1024 * 1024
 BATCH_ROWS = 50_000
-QUERY_DEADLINE_SECONDS = 10.0
+QUERY_DEADLINE_SECONDS = 10.0          # whole operation: load + execute
+CHILD_EXTRA_ADDRESS_SPACE = 1024 * 1024 * 1024   # RLIMIT_AS above the loaded baseline
 MAX_RESULT_ROWS = 100
 MAX_CELL_CHARS = 10_000
-MAX_RESULT_BYTES = 2 * 1024 * 1024
+MAX_RESULT_BYTES = 2 * 1024 * 1024     # of the JSON actually returned to the route
+
+_WORKER = str(Path(__file__).with_name("chat_worker.py"))
 
 
-class ChatQueryLimitError(Exception):
+class ChatQueryError(Exception):
+    """Chat SQL could not be executed (rejected, failed or hit a limit)."""
+
+
+class ChatQueryLimitError(ChatQueryError):
     """Raised when a chat query exceeds a size or time budget."""
 
 
-def _strip_literals_and_comments(sql: str) -> str:
-    sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)
-    sql = re.sub(r"--[^\n\r]*", " ", sql)
-    return re.sub(r"'(?:[^']|'')*'", "''", sql)
-
-
-_CTE_RE = re.compile(
-    r'(?:\bwith\b|,)\s*(?:recursive\s+)?"?([a-z_][a-z0-9_]*)"?\s*(?:\([^()]*\))?\s+as\s*'
-    r"(?:(?:not\s+)?materialized\s*)?\(",
-    re.IGNORECASE,
-)
-_REF_RE = re.compile(r'(?:\bfrom\b|\bjoin\b|,)\s*"?([a-z_][a-z0-9_]*)"?', re.IGNORECASE)
+# ---------------------------------------------------------------- table resolution
+def _collect(node: Any, scope: frozenset, out: set, bad: set) -> None:
+    if isinstance(node, list):
+        for item in node:
+            _collect(item, scope, out, bad)
+        return
+    if not isinstance(node, dict):
+        return
+    inner = scope
+    cte_map = node.get("cte_map")
+    if isinstance(cte_map, dict) and cte_map.get("map"):
+        names: list[str] = []
+        for entry in cte_map["map"]:
+            names.append(entry["key"].lower())
+            # A CTE body sees earlier CTEs (and itself, for RECURSIVE).
+            _collect(entry["value"], scope | frozenset(names), out, bad)
+        inner = scope | frozenset(names)
+    for key, value in node.items():
+        if key == "cte_map":
+            continue
+        _collect(value, inner, out, bad)
+    if node.get("type") == "BASE_TABLE":
+        name = str(node.get("table_name", "")).lower()
+        schema = str(node.get("schema_name", "")).lower()
+        catalog = str(node.get("catalog_name", "")).lower()
+        if not schema and not catalog and name in scope:
+            return  # reference to an in-scope CTE
+        if catalog not in ("", "memory") or schema not in ("", "main") or name not in ALLOWED_TABLES:
+            bad.add(".".join(p for p in (catalog, schema, name) if p) or "?")
+        else:
+            out.add(name)
 
 
 def referenced_tables(sql: str) -> list[str]:
-    """Allow-listed tables referenced in FROM/JOIN positions, excluding CTE names."""
-    text = _strip_literals_and_comments(sql)
-    ctes = {m.lower() for m in _CTE_RE.findall(text)}
-    refs = {m.lower() for m in _REF_RE.findall(text)}
-    return sorted((refs - ctes) & ALLOWED_TABLES)
-
-
-def _mirror_table(source: Any, sandbox: Any, name: str, budget: list[int], deadline: float) -> None:
-    reader = source.execute(f'SELECT * FROM "{name}"').to_arrow_reader(BATCH_ROWS)
-    created = False
-    for batch in reader:
-        if time.monotonic() > deadline:
-            raise ChatQueryLimitError("Chat query timed out while loading data.")
-        budget[0] -= batch.nbytes
-        if budget[0] < 0:
-            raise ChatQueryLimitError(f"Table data is too large for chat queries (at {name}).")
-        sandbox.register("_mirror", pl.from_arrow(batch))
-        if created:
-            sandbox.execute(f'INSERT INTO "{name}" SELECT * FROM _mirror')
-        else:
-            sandbox.execute(f'CREATE TABLE "{name}" AS SELECT * FROM _mirror')
-            created = True
-        sandbox.unregister("_mirror")
-    if not created:  # empty table: keep the schema
-        sandbox.register("_mirror", pl.from_arrow(reader.schema.empty_table()))
-        sandbox.execute(f'CREATE TABLE "{name}" AS SELECT * FROM _mirror')
-        sandbox.unregister("_mirror")
-
-
-def build_chat_sandbox(source: Any, sql: str, deadline: float | None = None) -> duckdb.DuckDBPyConnection:
-    """Return a locked-down in-memory connection holding the tables ``sql`` needs.
-
-    ``source`` is only used through a request-owned cursor that is closed here.
-    """
-    if deadline is None:
-        deadline = time.monotonic() + QUERY_DEADLINE_SECONDS
-    sandbox = duckdb.connect(":memory:")
-    cursor = source.cursor()
-    budget = [MAX_MIRROR_BYTES]
+    """Allow-listed base tables read by ``sql``; fail closed on anything else."""
+    probe = duckdb.connect(":memory:")
     try:
-        # Limits first, so the copy itself is bounded.
-        sandbox.execute("SET threads TO 2")
-        sandbox.execute(f"SET memory_limit TO '{max(MAX_MIRROR_BYTES * 2 // (1024 * 1024), 64)}MB'")
-        for name in referenced_tables(sql):
+        parsed = json.loads(probe.execute("SELECT json_serialize_sql(?)", [sql]).fetchone()[0])
+    finally:
+        probe.close()
+    if parsed.get("error"):
+        raise ChatQueryError("Only a single SELECT query can be run.")
+    found: set[str] = set()
+    bad: set[str] = set()
+    _collect(parsed["statements"], frozenset(), found, bad)
+    if bad:
+        raise ChatQueryError(f"Query references tables that are not available: {', '.join(sorted(bad))}.")
+    return sorted(found)
+
+
+# --------------------------------------------------------------------- mirroring
+def mirror_tables(source: Any, names: list[str], deadline: float) -> dict[str, bytes]:
+    """Copy tables to Arrow IPC bytes via a request-owned cursor under the budgets."""
+    cursor = source.cursor()
+    remaining = max(deadline - time.monotonic(), 0.001)
+    timer = threading.Timer(remaining, cursor.interrupt)
+    timer.start()
+    budget = MAX_MIRROR_BYTES
+    blobs: dict[str, bytes] = {}
+    try:
+        for name in names:
             try:
-                _mirror_table(cursor, sandbox, name, budget, deadline)
+                reader = cursor.execute(f'SELECT * FROM "{name}"').to_arrow_reader(BATCH_ROWS)
             except duckdb.CatalogException:
                 continue  # table absent in this database
-        used = MAX_MIRROR_BYTES - budget[0]
-        limit_mb = (used * 2 + QUERY_HEADROOM_BYTES) // (1024 * 1024) + 1
-        sandbox.execute(f"SET memory_limit TO '{limit_mb}MB'")
-        sandbox.execute("SET python_enable_replacements=false")
-        sandbox.execute("SET enable_external_access=false")
-        sandbox.execute("SET lock_configuration=true")
-    except BaseException:
-        sandbox.close()
-        raise
-    finally:
-        cursor.close()
-    return sandbox
-
-
-# DuckDB does not account single huge string allocations against memory_limit,
-# so string-amplifying functions are refused outright.
-_AMPLIFIERS_RE = re.compile(r"\b(repeat|lpad|rpad)\b", re.IGNORECASE)
-
-
-def run_chat_query(source: Any, sql: str) -> pl.DataFrame:
-    """Run generated SQL in a sandbox with a deadline and output caps."""
-    if _AMPLIFIERS_RE.search(_strip_literals_and_comments(sql)):
-        raise ChatQueryLimitError("String-expanding functions are not allowed in chat queries.")
-    deadline = time.monotonic() + QUERY_DEADLINE_SECONDS
-    sandbox = build_chat_sandbox(source, sql, deadline)
-    timer = threading.Timer(max(deadline - time.monotonic(), 0.01), sandbox.interrupt)
-    timer.start()
-    try:
-        cols = sandbox.execute(f"DESCRIBE SELECT * FROM ({sql}) AS q").fetchall()
-        aliases = ", ".join(f"c{i}" for i in range(len(cols)))
-        exprs = []
-        for i, (name, ctype, *_rest) in enumerate(cols):
-            alias = '"' + str(name).replace('"', '""') + '"'
-            if re.fullmatch(r"(U?(TINY|SMALL|BIG|HUGE)?INT(EGER)?|FLOAT|DOUBLE|BOOLEAN|DATE|TIMESTAMP.*|DECIMAL.*|TIME.*)", ctype):
-                exprs.append(f"c{i} AS {alias}")
-            else:
-                exprs.append(f"left(CAST(c{i} AS VARCHAR), {MAX_CELL_CHARS}) AS {alias}")
-        wrapped = f"SELECT {', '.join(exprs)} FROM (SELECT * FROM ({sql}) AS q({aliases})) LIMIT {MAX_RESULT_ROWS}"
-        result = sandbox.execute(wrapped).pl()
+            sink = pa.BufferOutputStream()
+            with pa.ipc.new_stream(sink, reader.schema) as writer:
+                for batch in reader:
+                    if time.monotonic() > deadline:
+                        raise ChatQueryLimitError("Chat query timed out while loading data.")
+                    budget -= batch.nbytes
+                    if budget < 0:
+                        raise ChatQueryLimitError(f"Table data is too large for chat queries (at {name}).")
+                    writer.write_batch(batch)
+            blobs[name] = sink.getvalue().to_pybytes()
     except duckdb.InterruptException as exc:
-        raise ChatQueryLimitError("Chat query exceeded its time limit.") from exc
+        raise ChatQueryLimitError("Chat query timed out while loading data.") from exc
     finally:
         timer.cancel()
-        sandbox.close()
-    if result.estimated_size() > MAX_RESULT_BYTES:
+        timer.join()
+        cursor.close()
+    return blobs
+
+
+# -------------------------------------------------------------------- child run
+def _run_in_worker(blobs: dict[str, bytes], sql: str, deadline: float) -> list[dict]:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise ChatQueryLimitError("Chat query exceeded its time limit.")
+    header = {
+        "sql": sql,
+        "tables": [[n, len(b)] for n, b in blobs.items()],
+        "limits": {
+            "as_bytes": CHILD_EXTRA_ADDRESS_SPACE,
+            "cpu_seconds": int(remaining) + 2,
+            "memory_mb": 512,
+            "max_rows": MAX_RESULT_ROWS,
+            "max_cell_chars": MAX_CELL_CHARS,
+            "max_result_bytes": MAX_RESULT_BYTES,
+        },
+    }
+    payload = json.dumps(header).encode() + b"\n" + b"".join(blobs.values())
+    # No ambient credentials; cap glibc per-thread arenas (64MB of address space
+    # each) so RLIMIT_AS measures real use, and use the plain system allocator.
+    env = {"PATH": os.environ.get("PATH", ""), "MALLOC_ARENA_MAX": "2",
+           "ARROW_DEFAULT_MEMORY_POOL": "system"}
+    proc = subprocess.Popen(
+        [sys.executable, "-I", _WORKER],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env,
+    )
+    try:
+        out, _ = proc.communicate(payload, timeout=max(deadline - time.monotonic(), 0.001))
+    except subprocess.TimeoutExpired as exc:
+        proc.kill()
+        proc.communicate()
+        raise ChatQueryLimitError("Chat query exceeded its time limit.") from exc
+    except BaseException:
+        proc.kill()
+        proc.communicate()
+        raise
+    finally:
+        if proc.poll() is None:  # defensive: never leak the child
+            proc.kill()
+            proc.wait()
+    if proc.returncode != 0 or not out:
+        raise ChatQueryLimitError("Chat query was stopped by its resource limits.")
+    if len(out) > MAX_RESULT_BYTES + 4096:
         raise ChatQueryLimitError("Chat query result is too large.")
-    return result
+    result = json.loads(out)
+    if not result.get("ok"):
+        cls = ChatQueryLimitError if result.get("limit") else ChatQueryError
+        raise cls(result.get("error", "Query execution failed."))
+    return result["rows"]
+
+
+def run_chat_query(source: Any, sql: str) -> list[dict]:
+    """Run generated SQL under one deadline; returns size-capped JSON-ready rows."""
+    deadline = time.monotonic() + QUERY_DEADLINE_SECONDS
+    names = referenced_tables(sql)
+    blobs = mirror_tables(source, names, deadline)
+    return _run_in_worker(blobs, sql, deadline)
