@@ -341,6 +341,10 @@ EMBED_TICKERS=NVDA,AMD uv run python -m scripts.embed_edgar
 
 Each chunk is stored with `ticker`, `accession`, `cik`, `section_id`, `form_type`, `period_of_report`, `chunk_index`. The retriever uses this metadata to build the audit trail. The ticker universe (see `api/config.py` `TICKER_TO_CIK`) covers ~33 semiconductor names — chip designers (NVDA, AMD, QCOM, AVGO, INTC, MU, TXN, …) and equipment/materials (AMAT, LRCX, KLAC, ENTG, …).
 
+### Refresh the corpus on a free Colab GPU
+
+`notebooks/colab_backfill.ipynb` embeds the newest 10-K/20-F and 10-Q filings with `scripts/embed_additional.py` on a Colab T4 (upload the notebook; add `HF_TOKEN` and `GH_TOKEN` as Colab secrets). Run its cells in order, not "Run all": GPU gate, configuration (pinned dataset revision), install (keeps Colab's CUDA torch, not the locked CPU torch), prepare DB (resumable from a Drive checkpoint), **dry run** (lists the accessions it would add), embed (batch 16; lower to 8/4 on CUDA OOM), verify (`etl_guardrail.py`), and finally a separate **publish** cell that stays off until `CONFIRM_PUBLISH = True`. Publish aborts if the dataset head moved from the pinned revision, prints the previous commit as the rollback target, restarts the Space and checks `/api/stats`. Static checks: `uv run --with nbformat python scripts/check_colab_notebook.py`.
+
 Related scripts: `extract_xbrl_facts.py`, `extract_graph_triples.py`, `backfill_xbrl_coverage.py`, `reembed_qwen06.py`.
 
 ---
