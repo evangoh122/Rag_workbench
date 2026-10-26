@@ -37,8 +37,19 @@ jobs:
         with:
           version: "0.12.23"
       # Audit the exact locked tree without syncing the ML stack: uv exports
-      # pyproject.toml + uv.lock to a requirements file, pip-audit scans it.
+      # pyproject.toml + uv.lock to a pinned requirements file, pip-audit scans
+      # it. Hashes are omitted because pip-audit resolves the pins via pip.
       - name: Export locked requirements
-        run: uv export --locked --no-dev --no-emit-project --format requirements-txt -o /tmp/requirements-audit.txt
+        run: |
+          uv export --locked --no-dev --no-emit-project --no-hashes \
+            --format requirements-txt -o /tmp/requirements-audit.txt >/dev/null
+          # torch is pinned to the CPU index (e.g. torch==2.14.1+cpu); PyPI has
+          # no PEP 440 local-build variant, so strip the +cpu suffix. pip-audit
+          # then checks torch against its public version (advisories are keyed
+          # by release, not build tag).
+          sed -i -E 's/^(torch==[^ ;]*)\+[A-Za-z0-9.]+/\1/' /tmp/requirements-audit.txt
+          grep -q '^torch==' /tmp/requirements-audit.txt
       - name: pip-audit (backend)
-        run: uvx --from pip-audit pip-audit -r /tmp/requirements-audit.txt
+        # Python 3.11 matches the project (Dockerfile) so pip resolves the same
+        # versions; uvx otherwise picks the runner's newest interpreter.
+        run: uvx --python 3.11 --from pip-audit pip-audit -r /tmp/requirements-audit.txt
