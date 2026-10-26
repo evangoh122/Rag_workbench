@@ -30,8 +30,33 @@ concurrency:
   group: embed-dataset
   cancel-in-progress: false
 
+env:
+  # Scheduled runs are limited to this UTC window (inclusive). GitHub cron has no
+  # end date, so the `window` job skips `schedule` runs outside it. To extend,
+  # change REFRESH_WINDOW_END (and START if re-enabling later) and merge.
+  # workflow_dispatch runs are never gated.
+  REFRESH_WINDOW_START: '2026-10-27'
+  REFRESH_WINDOW_END: '2026-12-26'
+
 jobs:
+  window:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: scripts/ci_window_check.sh
+      - id: check
+        run: |
+          out=$(bash scripts/ci_window_check.sh "$GITHUB_EVENT_NAME" "$REFRESH_WINDOW_START" "$REFRESH_WINDOW_END")
+          echo "$out" >> "$GITHUB_OUTPUT"
+          echo "$out (event=$GITHUB_EVENT_NAME, window $REFRESH_WINDOW_START..$REFRESH_WINDOW_END)"
+
   refresh:
+    needs: window
+    if: ${{ needs.window.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 300
     env:
