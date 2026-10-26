@@ -124,7 +124,7 @@ Every request additionally passes through **guardrails** — input rails (inject
 Alternative answer paths share the same retrieval and audit layer:
 - **`/api/chat/graph-rag`** — knowledge-graph retrieval over extracted filing triples.
 - **`/api/chat/rag`** — plain hybrid RAG (no math/verify spine).
-- **`/api/chat/sql`** — natural language → read-only DuckDB query. Markdown SQL fences and a single trailing semicolon from model output are normalized before validation; multiple statements remain rejected. As a fail-closed safeguard, semicolons inside SQL string literals are also rejected.
+- **`/api/chat/sql`** — natural language → read-only DuckDB query. Markdown SQL fences and a single trailing semicolon from model output are normalized before validation; multiple statements remain rejected. As a fail-closed safeguard, semicolons inside SQL string literals are also rejected. Generated SQL then runs on an isolated in-memory DuckDB instance (`services/chat_sandbox.py`) holding copies of only the allow-listed tables the query references, with `enable_external_access=false`, `lock_configuration=true`, a 10s deadline and row/byte caps on mirrored data and results, so prompt-injected SQL cannot read server files or the catalog; the keyword blocklist stays as defense in depth.
 
 ---
 
