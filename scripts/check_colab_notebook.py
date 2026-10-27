@@ -84,9 +84,13 @@ def check_notebook(path: Path) -> list[str]:
         elif not all(k in steps for k in ("7", "8")) or not steps["7"] < steps["7b"] < steps["8"]:
             problems.append("STEP 7b must sit between STEP 7 and STEP 8 (compaction must precede the append-only proof)")
         else:
-            hit = HF_CALL_RE.search(_source(nb["cells"][steps["7b"]]))
+            step7b = _source(nb["cells"][steps["7b"]])
+            hit = HF_CALL_RE.search(step7b)
             if hit:
                 problems.append(f"STEP 7b makes a Hugging Face call ({hit.group(0)!r}); it must be local only")
+            for key in ("committed", "warning"):
+                if not re.search(rf"res\[['\"]{key}['\"]\]", step7b):
+                    problems.append(f"STEP 7b does not inspect compaction result {key!r}")
     for flag in ("CONFIRM_EXECUTE", "CONFIRM_COMPACT", "CONFIRM_STAGE"):
         if not re.search(rf"^{flag}\s*=\s*False\b", joined, re.MULTILINE):
             problems.append(f"{flag} = False not found (must be off by default)")

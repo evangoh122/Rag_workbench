@@ -1,4 +1,5 @@
 """Tests for scripts/colab_backfill_checks.py: append-only proof, runner caps, resume bookkeeping."""
+import errno
 import json
 import os
 import re
@@ -964,17 +965,50 @@ def test_symlinked_source_workdir_or_destination_is_refused(frag, tmp_path):
 
 def test_fsync_dir_failure_after_swap_is_a_committed_warning(frag, tmp_path, monkeypatch):
     before = _snapshot(frag)
+    real_fsync = os.fsync
+    directory_fds = set()
+    real_open = os.open
 
-    def boom(path):
-        raise OSError("injected fsync failure")
+    def track_open(path, flags, *args, **kwargs):
+        fd = real_open(path, flags, *args, **kwargs)
+        if Path(path).is_dir():
+            directory_fds.add(fd)
+        return fd
 
-    monkeypatch.setattr(chk, "_fsync_dir", boom)
+    def fail_directory_fsync(fd):
+        if fd in directory_fds:
+            raise OSError(errno.EIO, "injected directory fsync failure")
+        return real_fsync(fd)
+
+    monkeypatch.setattr(chk.os, "open", track_open)
+    monkeypatch.setattr(chk.os, "fsync", fail_directory_fsync)
     res = chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "work"))
     assert res["committed"] is True
     assert "fsync" in res["warning"]
     assert res["bytes_after"] == frag.stat().st_size
     assert _snapshot(frag) == before  # the swap happened and its content is valid
     assert sorted(p.name for p in tmp_path.iterdir() if p.is_file()) == ["staged.duckdb"]
+
+
+def test_compaction_fsyncs_temp_file_before_replace(frag, tmp_path, monkeypatch):
+    events = []
+    real_fsync_file = chk._fsync_file
+    real_replace = os.replace
+
+    def record_fsync(path):
+        if Path(path).name == "db.duckdb":
+            events.append("temp-fsync")
+        return real_fsync_file(path)
+
+    def record_replace(src, dst):
+        events.append("replace")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(chk, "_fsync_file", record_fsync)
+    monkeypatch.setattr(chk.os, "replace", record_replace)
+    res = chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "work"))
+    assert res["committed"] is True
+    assert events == ["temp-fsync", "replace"]
 
 
 @pytest.mark.parametrize("src_value, dst_value, identical", [

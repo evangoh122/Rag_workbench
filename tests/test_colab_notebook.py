@@ -10,6 +10,22 @@ def test_committed_notebook_is_clean():
     assert check_notebook(DEFAULT_NB) == []
 
 
+def test_compaction_step_checks_committed_and_prints_warning():
+    step = _steps()["7b"]
+    assert "res['committed']" in step
+    assert "res['warning']" in step
+    assert "WARNING:" in step
+
+
+def test_notebook_check_requires_compaction_warning(tmp_path):
+    nb = json.loads(DEFAULT_NB.read_text())
+    cell = next(c for c in nb["cells"] if c.get("id") == "step7b")
+    cell["source"] = [line.replace("res['warning']", "False") for line in cell["source"]]
+    path = tmp_path / "missing-warning.ipynb"
+    path.write_text(json.dumps(nb))
+    assert any("does not inspect compaction result 'warning'" in p for p in check_notebook(path))
+
+
 def test_nbformat_validates():
     nbformat = pytest.importorskip("nbformat")
     nbformat.validate(nbformat.read(str(DEFAULT_NB), as_version=4))

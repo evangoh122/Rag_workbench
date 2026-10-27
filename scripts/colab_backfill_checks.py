@@ -10,6 +10,7 @@ private repo; this module is the guard that the copy only ever gained rows.
 """
 import array
 import contextlib
+import errno
 import fcntl
 import hashlib
 import json
@@ -205,14 +206,16 @@ def _fsync_file(path: str) -> None:
 
 
 def _fsync_dir(path: str) -> None:
+    fd = os.open(path, os.O_RDONLY)
     try:
-        fd = os.open(path, os.O_RDONLY)
         try:
             os.fsync(fd)
-        finally:
-            os.close(fd)
-    except OSError:  # some network/FUSE mounts cannot fsync a directory
-        pass
+        except OSError as exc:
+            # Some filesystems explicitly report that directory fsync is unsupported.
+            if exc.errno not in {errno.EINVAL, errno.ENOTSUP}:
+                raise
+    finally:
+        os.close(fd)
 
 
 @contextlib.contextmanager
