@@ -48,6 +48,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           sparse-checkout: scripts/ci_window_check.sh
+          sparse-checkout-cone-mode: false
       - id: check
         run: |
           out=$(bash scripts/ci_window_check.sh "$GITHUB_EVENT_NAME" "$REFRESH_WINDOW_START" "$REFRESH_WINDOW_END")

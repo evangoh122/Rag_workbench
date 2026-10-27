@@ -281,7 +281,7 @@ README for local dev setup.
 
 ### Scheduled filings refresh (`refresh-filings.yml`)
 
-Every Monday 07:00 UTC the `Refresh Filings` workflow looks for newly filed 10-K / 20-F / 10-Q, embeds them and (guardrail permitting) updates the HF dataset and restarts the Space. Scheduled runs are limited to a **60-day window, 2026-10-27 to 2026-12-26 (UTC, inclusive)**; outside it the `window` job reports `run=false` and the refresh job is skipped (not failed). Manual `workflow_dispatch` runs are never gated.
+Every Monday 07:00 UTC the `Refresh Filings` workflow looks for newly filed 10-K / 20-F / 10-Q, embeds them and (guardrail permitting) updates the HF dataset and restarts the Space. Scheduled runs are limited to a fixed window **from 2026-10-27 through 2026-12-26 inclusive (UTC, 61 calendar dates)**; outside it the `window` job reports `run=false` and the refresh job is skipped (not failed). Manual `workflow_dispatch` runs are never gated.
 
 - **Extend:** edit `REFRESH_WINDOW_END` (and `REFRESH_WINDOW_START` if needed) in the workflow's top-level `env`. Check the logic with `bash tests/test_ci_window_check.sh`.
 - GitHub auto-disables scheduled workflows after 60 days of repository inactivity; re-enable from the Actions tab (or push a commit) if that happens.
