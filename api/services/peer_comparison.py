@@ -137,11 +137,15 @@ def _name_to_ticker(text: str) -> Optional[str]:
     return None
 
 
-def _tickers_named_in_query(query: str) -> List[str]:
+def _tickers_named_in_query(query: str, strict_symbols: bool = False) -> List[str]:
     """Return covered tickers explicitly named in the query, in first-seen order.
 
     Matches both company names ("Intel") and ticker symbols length >= 3
     ("INTC") on a word boundary, mirroring the single-ticker resolver.
+
+    ``strict_symbols`` makes symbol-like matches (explicit tickers and aliases
+    equal to a ticker, e.g. "stm") case-sensitive so English words such as
+    "form", "onto" or "ter" are not read as companies. Default is unchanged.
     """
     q = (query or "")
     found: List[str] = []
@@ -163,14 +167,17 @@ def _tickers_named_in_query(query: str) -> List[str]:
                 else:
                     continue
             # Use word boundary to prevent matching substrings of other words (e.g. 'on' in 'micron')
-            m = re.search(r"\b" + re.escape(n) + r"\b", ql)
+            if strict_symbols and n.upper() == ticker:
+                m = re.search(r"\b" + re.escape(ticker) + r"\b", q)
+            else:
+                m = re.search(r"\b" + re.escape(n) + r"\b", ql)
             if m:
                 name_hits.append((m.start(), ticker))
                 break
     # Explicit symbols (>=3 chars, word boundary)
     for ticker in covered:
         if len(ticker) >= 3:
-            m = re.search(r"\b" + re.escape(ticker) + r"\b", q, re.IGNORECASE)
+            m = re.search(r"\b" + re.escape(ticker) + r"\b", q, 0 if strict_symbols else re.IGNORECASE)
             if m:
                 name_hits.append((m.start(), ticker))
 

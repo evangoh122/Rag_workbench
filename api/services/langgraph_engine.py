@@ -1878,7 +1878,18 @@ def _named_uncovered_company(query: str) -> Optional[str]:
 def _other_covered_named(query: str) -> str:
     """Covered ticker named in the query besides Anthropic/ANTH, else ""."""
     stripped = re.sub(r"\b(anthropic(\s+pbc)?|anth)\b", " ", query or "", flags=re.IGNORECASE)
-    return _resolve_query_ticker(stripped, "")
+    try:
+        from api.services.hybrid_retriever import resolve_ticker_from_query
+        by_name = resolve_ticker_from_query(stripped, "")
+        if by_name and by_name != "ANTH":
+            return by_name
+    except Exception:
+        pass
+    # Same alias set comparison routing uses; symbols must be written as symbols
+    # so words like "form"/"onto" are not read as covered companies.
+    from api.services.peer_comparison import _tickers_named_in_query
+    others = [t for t in _tickers_named_in_query(stripped, strict_symbols=True) if t != "ANTH"]
+    return others[0] if others else ""
 
 
 def _abstain_response(company: str) -> Dict[str, Any]:

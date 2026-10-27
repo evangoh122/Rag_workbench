@@ -85,6 +85,47 @@ def test_anthropic_alone_with_uncovered_company_abstains(query):
     assert result["resolved_ticker"] == ""
 
 
+def _alias_cases():
+    from api.services.peer_comparison import _TICKER_TO_NAMES
+    cases = []
+    for ticker, names in _TICKER_TO_NAMES.items():
+        if ticker == "ANTH":
+            continue
+        for alias in sorted(set(names) | {ticker}):
+            # "on"/"stm"-style bare words are only companies when written as symbols
+            written = alias.upper() if alias.upper() == ticker or alias == "on" else alias.title()
+            cases.append(written)
+    return cases
+
+
+@pytest.mark.parametrize("alias", _alias_cases())
+def test_every_covered_alias_with_anthropic_and_uncovered_does_not_abstain(alias):
+    class _Reached(Exception):
+        pass
+
+    query = f"What were {alias}'s sales to Microsoft and Anthropic?"
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached), \
+         patch("api.services.langgraph_engine._abstain_response") as mock_abstain:
+        with pytest.raises(_Reached):
+            run_auditable_rag(query, "MU")
+
+    mock_abstain.assert_not_called()
+
+
+@pytest.mark.parametrize("query", [
+    "Compare Anthropic vs OpenAI in the form of a table",
+    "Map Anthropic onto OpenAI",
+    "What does Anthropic's Form S-1 say about OpenAI?",
+    "Anthropic PBC vs OpenAI",
+    "ANTH vs OpenAI",
+])
+def test_english_words_matching_tickers_do_not_count_as_covered(query):
+    result = run_auditable_rag(query, "MU")
+
+    assert result["verification_status"] == "ABSTAIN"
+
+
 def test_spacex_anthropic_microsoft_does_not_abstain():
     # Intended behaviour: SPCX is another covered company, so the ANTH-only
     # abstain exception does not apply (same as a real ticker naming a customer).
