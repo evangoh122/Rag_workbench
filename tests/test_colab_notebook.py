@@ -1,4 +1,4 @@
-"""Static checks on notebooks/colab_backfill.ipynb (syntax, cleared outputs, publish off)."""
+"""Static checks on notebooks/colab_backfill.ipynb and the logic in scripts/colab_backfill_checks.py."""
 import json
 
 import pytest
@@ -33,20 +33,64 @@ def test_magics_are_tolerated():
     assert _blank_magics("!pip install x\n%cd foo\nx = 1") == "pass\npass\nx = 1"
 
 
-def test_publish_flag_required_and_default_off(tmp_path):
-    ok = "CONFIRM_PUBLISH = False\napi.create_commit(parent_commit=1)"
-    assert check_notebook(_write(tmp_path, ok)) == []
-    assert any("CONFIRM_PUBLISH" in p for p in check_notebook(_write(tmp_path, "x = 1")))
-    on = "CONFIRM_PUBLISH = True\nparent_commit = 1"
-    assert any("is True" in p for p in check_notebook(_write(tmp_path, on)))
+GOOD = (
+    "CONFIRM_EXECUTE = False\nCONFIRM_STAGE = False\nSTAGING_REPO = 'egoh33/rag-staging'\n"
+    "x = 'stage-upload append_only_proof dry_run()'"
+)
 
 
-def test_secret_print_and_outputs_are_caught(tmp_path):
-    src = "CONFIRM_PUBLISH = False\nparent_commit = 1\nprint('t', HF_TOKEN)"
-    assert any("secret" in p for p in check_notebook(_write(tmp_path, src)))
-    p = _write(tmp_path, "CONFIRM_PUBLISH = False\nparent_commit = 1",
-               outputs=[{"output_type": "stream"}])
-    assert any("outputs" in x for x in check_notebook(p))
+def test_minimal_good_source_passes(tmp_path):
+    assert check_notebook(_write(tmp_path, GOOD)) == []
+
+
+@pytest.mark.parametrize("flag", ["CONFIRM_EXECUTE", "CONFIRM_STAGE"])
+def test_confirm_flags_required_and_default_off(tmp_path, flag):
+    assert any(flag in p and "not found" in p for p in check_notebook(_write(tmp_path, GOOD.replace(f"{flag} = False", "pass"))))
+    on = GOOD.replace(f"{flag} = False", f"{flag} = True")
+    assert any(f"{flag} is True" in p for p in check_notebook(_write(tmp_path, on)))
+
+
+def test_staging_repo_must_not_be_production(tmp_path):
+    prod = GOOD.replace("egoh33/rag-staging", "egoh33/Rag-workbench")
+    assert any("production" in p for p in check_notebook(_write(tmp_path, prod)))
+    assert any("STAGING_REPO literal" in p for p in check_notebook(_write(tmp_path, GOOD.replace("STAGING_REPO", "OTHER"))))
+
+
+@pytest.mark.parametrize("call", ["api.create_commit(x)", "api.upload_file(x)", "CommitOperationAdd(x)",
+                                  "api.restart_space(x)", "api.delete_file(x)"])
+def test_notebook_may_not_publish(tmp_path, call):
+    assert any("forbidden call" in p for p in check_notebook(_write(tmp_path, GOOD + "\n" + call)))
+
+
+def test_required_steps_must_be_present(tmp_path):
+    for needle in ("stage-upload", "append_only_proof", "dry_run()"):
+        assert any(needle in p for p in check_notebook(_write(tmp_path, GOOD.replace(needle, "zzz"))))
+
+
+def test_token_and_secret_leaks_are_caught(tmp_path):
+    for tok in ("hf_" + "a" * 30, "ghp_" + "b" * 30, "github_pat_" + "c" * 30):
+        assert any("token-shaped" in p for p in check_notebook(_write(tmp_path, GOOD + f"\nt = '{tok}'")))
+    for name in ("HF_TOKEN", "EDGAR_USER_AGENT"):
+        assert any("print()" in p for p in check_notebook(_write(tmp_path, GOOD + f"\nprint(f'v {{{name}}}')")))
+        assert any("shell magic" in p for p in check_notebook(_write(tmp_path, GOOD + f"\n!echo ${name}")))
+
+
+def test_outputs_and_execution_count_are_caught(tmp_path):
+    assert any("outputs" in x for x in check_notebook(_write(tmp_path, GOOD, outputs=[{"output_type": "stream"}])))
+    p = _write(tmp_path, GOOD)
+    nb = json.loads(p.read_text())
+    nb["cells"][0]["execution_count"] = 3
+    p.write_text(json.dumps(nb))
+    assert any("execution_count" in x for x in check_notebook(p))
+
+
+def test_committed_notebook_has_no_secret_values_or_outputs():
+    nb = json.loads(DEFAULT_NB.read_text())
+    for c in nb["cells"]:
+        if c["cell_type"] == "code":
+            assert c["outputs"] == [] and c["execution_count"] is None
+    raw = DEFAULT_NB.read_text()
+    assert "@" not in raw.replace("Your Name you@example.com", ""), "no email/identity may be embedded"
 
 
 def _steps():
@@ -79,132 +123,126 @@ def _bound_names(tree):
     return names
 
 
-def test_documented_recovery_order_has_no_undefined_names():
-    """After a disconnect the doc says: re-run steps 1-4, then 6 (and 7). Simulate it."""
+def _loads(nodes):
+    import ast
+    return {x.id for node in nodes for x in ast.walk(node) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Load)}
+
+
+def test_steps_run_in_order_without_undefined_names():
+    """Reconnect order is 1-4 then 5..9 sequentially. Module-level code may only use names bound by
+    earlier steps; function bodies run later, so they may use any name some step binds."""
     import ast
     import builtins
     steps = _steps()
+    assert sorted(steps) == list(range(1, 10))
+    trees = {n: ast.parse(src) for n, src in steps.items()}
+    everything = set(dir(builtins)).union(*(_bound_names(t) for t in trees.values()))
     defined = set(dir(builtins))
-    for n in (1, 2, 3, 4):
-        defined |= _bound_names(ast.parse(steps[n]))
-    for target in (6, 7):
-        tree = ast.parse(steps[target])
-        defined |= _bound_names(tree)  # names the cell itself binds (incl. locals)
-        used = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
-        assert not (used - defined), f"step {target} uses undefined {used - defined}"
-        defined = set(dir(builtins))
-        for n in (1, 2, 3, 4):
-            defined |= _bound_names(ast.parse(steps[n]))
+    for n, tree in trees.items():
+        defined |= _bound_names(tree)
+        funcs = [x for x in tree.body if isinstance(x, ast.FunctionDef)]
+        top = [x for x in tree.body if not isinstance(x, ast.FunctionDef)]
+        assert not (_loads(top) - defined), f"step {n} uses undefined {_loads(top) - defined}"
+        assert not (_loads(funcs) - everything), f"step {n} function uses unbound {_loads(funcs) - everything}"
 
 
-def test_config_cell_defines_plans_and_dry_run():
-    """Exec the config cell with stubbed Colab secrets: PLANS / dry_run must exist after it."""
+def _exec_config(monkeypatch, secrets):
     import sys
     import types
     colab = types.ModuleType("google.colab")
-    colab.userdata = types.SimpleNamespace(get=lambda name: "x")
+    colab.userdata = types.SimpleNamespace(get=lambda name: secrets.get(name))
     google = types.ModuleType("google")
     google.colab = colab
-    saved = {k: sys.modules.get(k) for k in ("google", "google.colab")}
-    sys.modules.update({"google": google, "google.colab": colab})
-    try:
-        ns = {}
-        exec(compile(_steps()[2], "step2", "exec"), ns)  # noqa: S102
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
-    assert callable(ns["dry_run"]) and ns["PLANS"]
+    monkeypatch.setitem(sys.modules, "google", google)
+    monkeypatch.setitem(sys.modules, "google.colab", colab)
+    for k in ("HF_TOKEN", "EDGAR_USER_AGENT", "DB_PATH", "EMBED_DOC_BATCH", "EMBEDDING_PROVIDER",
+              "ST_EMBEDDING_MODEL", "EMBEDDING_DIM", "PYTORCH_CUDA_ALLOC_CONF"):
+        monkeypatch.setenv(k, "orig")  # restored by monkeypatch afterwards
+    ns = {}
+    exec(compile(_steps()[2], "step2", "exec"), ns)  # noqa: S102
+    return ns
+
+
+def test_config_defaults_are_safe_and_secrets_never_printed(monkeypatch, capsys):
+    ns = _exec_config(monkeypatch, {"HF_TOKEN": "tok-SECRET-1", "EDGAR_USER_AGENT": "ua SECRET-2 a@b.c"})
+    out = capsys.readouterr()
+    assert "SECRET" not in out.out + out.err
+    assert ns["CONFIRM_EXECUTE"] is False and ns["CONFIRM_STAGE"] is False and ns["ACCEPT_INCOMPLETE"] is False
+    assert ns["STAGING_REPO"] == "egoh33/rag-staging" and ns["STAGING_REPO"].lower() != ns["DATASET_REPO"].lower()
+    assert ns["EXTRA_TICKERS"] == ["ANTH"] and ns["FORMS"] == ["annual", "10-Q"]
+    assert callable(ns["dry_run"]) and ns["form_args"]("10-Q") == ["--quarters", "3"] and ns["form_args"]("annual") == []
+    import os
+    assert os.environ["EDGAR_USER_AGENT"] == "ua SECRET-2 a@b.c"  # set for the embed subprocesses only
+    from scripts import colab_backfill_checks as chk
+    chk.validate_caps(["AAPL"], ns["QUARTERS"], ns["GROUP_SIZE"], ns["SESSION_DEADLINE_SECONDS"])
+
+
+@pytest.mark.parametrize("missing", ["HF_TOKEN", "EDGAR_USER_AGENT"])
+def test_config_fails_without_a_required_secret(monkeypatch, missing):
+    secrets = {"HF_TOKEN": "t", "EDGAR_USER_AGENT": "u"}
+    secrets[missing] = "  "
+    with pytest.raises(RuntimeError, match=missing):
+        _exec_config(monkeypatch, secrets)
 
 
 def _extract_func(step, name, ns):
     import ast
-    src = _steps()[step]
-    node = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == name)
+    node = next(n for n in ast.parse(_steps()[step]).body if isinstance(n, ast.FunctionDef) and n.name == name)
     exec(compile(ast.Module([node], []), f"step{step}:{name}", "exec"), ns)  # noqa: S102
     return ns[name]
 
 
-def test_save_checkpoint_refuses_when_wal_exists(tmp_path):
-    db = tmp_path / "rag.duckdb"
-    db.write_bytes(b"x")
-    (tmp_path / "rag.duckdb.wal").write_bytes(b"w")
+def _stage_ns(tmp_path, **over):
+    import hashlib
     import os
-    ns = {"os": os, "DB": str(db), "CKPT_DIR": str(tmp_path / "ck"), "CKPT_DB": str(tmp_path / "ck" / "d")}
-    save = _extract_func(4, "save_checkpoint", ns)
-    with pytest.raises(RuntimeError, match="wal"):
-        save()
-    assert not (tmp_path / "ck" / "d").exists()
-
-
-def test_copy_writable_is_non_destructive(tmp_path):
-    import os
-    import shutil
-    import stat
-    ns = {"os": os, "shutil": shutil, "stat": stat}
-    copy = _extract_func(4, "copy_writable", ns)
-    src = tmp_path / "src"
-    src.write_bytes(b"new")
-    os.chmod(src, 0o444)
-    dst = tmp_path / "dst"
-    dst.write_bytes(b"old")
-    copy(str(src), str(dst))
-    assert dst.read_bytes() == b"new" and os.access(dst, os.W_OK)
-    assert not (tmp_path / "dst.tmp").exists()
-    # failure (missing source) leaves the existing destination untouched
-    with pytest.raises(FileNotFoundError):
-        copy(str(tmp_path / "missing"), str(dst))
-    assert dst.read_bytes() == b"new" and not (tmp_path / "dst.tmp").exists()
-
-
-def _publish_ns(tmp_path, chunks, before_total, wal=False):
-    import os
-    import pathlib
     import sys
-    import time
-    import duckdb
     db = tmp_path / "rag.duckdb"
-    con = duckdb.connect(str(db))
-    con.execute("CREATE TABLE edgar_embeddings (ticker VARCHAR)")
-    for i in range(chunks):
-        con.execute("INSERT INTO edgar_embeddings VALUES (?)", [f"T{i % 3}"])
-    con.close()
-    if wal:
-        (tmp_path / "rag.duckdb.wal").write_bytes(b"w")
-    before = tmp_path / "before.json"
-    before.write_text(json.dumps({"total": before_total}))
+    db.write_bytes(b"db-bytes")
+    sha = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()  # noqa: E731
     calls = []
-
-    class Api:
-        def repo_info(self, *a, **k):
-            calls.append("repo_info")
-            raise AssertionError("must refuse before talking to HF")
-
-    ns = {"os": os, "sys": sys, "json": json, "pathlib": pathlib, "time": time, "DB": str(db),
-          "BEFORE_JSON": str(before), "WORK": str(tmp_path), "REMAINING": [], "ACCEPT_INCOMPLETE": False,
-          "run": lambda *a, **k: None, "api": Api(), "DATASET_REPO": "d", "PINNED_SHA": "p"}
-    publish = _extract_func(8, "publish", ns)
-    return publish, calls
+    ns = {"os": os, "sys": sys, "DB": str(db), "PROOF_SHA": sha(db), "REMAINING": [], "ACCEPT_INCOMPLETE": False,
+          "sha256_file": sha, "run": lambda cmd, **k: calls.append(cmd), "WORK": str(tmp_path),
+          "BEFORE_JSON": "/b.json", "STAGING_REPO": "egoh33/rag-staging", "DATASET_REPO": "egoh33/Rag-workbench",
+          "meta": {"run_id": "colab-r1"}, **over}
+    return _extract_func(9, "stage", ns), ns, calls
 
 
-def test_publish_refuses_when_chunks_did_not_grow(tmp_path):
-    publish, calls = _publish_ns(tmp_path, chunks=5, before_total=5)
-    with pytest.raises(RuntimeError, match="Nothing new"):
-        publish()
+def test_stage_happy_path_checks_then_uploads_to_staging_only(tmp_path):
+    stage, ns, calls = _stage_ns(tmp_path)
+    stage()
+    assert [c[3] for c in calls] == ["stage-check", "stage-upload"]
+    upload = calls[1]
+    assert upload[upload.index("--repo") + 1] == "egoh33/rag-staging"
+    assert upload[upload.index("--prod-repo") + 1] == "egoh33/Rag-workbench"
+    assert upload[upload.index("--run-id") + 1] == "colab-r1"
+    assert not any("publish" in c for cmd in calls for c in cmd)
+
+
+def test_stage_refuses_without_proof_or_after_db_change(tmp_path):
+    stage, ns, calls = _stage_ns(tmp_path)
+    del ns["PROOF_SHA"]
+    with pytest.raises(RuntimeError, match="append-only proof"):
+        stage()
+    stage, ns, calls = _stage_ns(tmp_path)
+    open(ns["DB"], "ab").write(b"x")  # DB changed after the proof
+    with pytest.raises(RuntimeError, match="changed after"):
+        stage()
     assert calls == []
 
 
-def test_publish_refuses_when_wal_exists(tmp_path):
-    publish, calls = _publish_ns(tmp_path, chunks=9, before_total=5, wal=True)
+def test_stage_refuses_wal_remaining_and_missing_completeness(tmp_path):
+    stage, ns, calls = _stage_ns(tmp_path)
+    (tmp_path / "rag.duckdb.wal").write_bytes(b"w")
     with pytest.raises(RuntimeError, match="wal"):
-        publish()
-    assert calls == []
-
-
-def test_config_has_repo_ref_note_and_early_space_health_check():
-    src = "\n".join(_steps().values())
-    assert "chore/colab-refresh" in src and "space_health.py is missing" in src
-    nb = json.loads(DEFAULT_NB.read_text())
-    assert "chore/colab-refresh" in "".join(nb["cells"][0]["source"])
+        stage()
+    (tmp_path / "rag.duckdb.wal").unlink()
+    ns["REMAINING"] = [("AAPL", "10-K", "0-1")]
+    with pytest.raises(RuntimeError, match="still missing"):
+        stage()
+    ns["ACCEPT_INCOMPLETE"] = True
+    stage()  # the explicit override is honoured
+    stage2, ns2, calls2 = _stage_ns(tmp_path)
+    del ns2["REMAINING"]
+    with pytest.raises(RuntimeError, match="step 7"):
+        stage2()
+    assert calls2 == []

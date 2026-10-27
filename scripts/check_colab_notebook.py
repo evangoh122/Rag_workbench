@@ -4,8 +4,10 @@
     uv run --with nbformat python scripts/check_colab_notebook.py   # also nbformat.validate
 
 Checks: valid JSON; every code cell parses with ast (shell/cell magics are blanked
-first); outputs and execution counts are cleared; publish is disabled by default;
-no cell prints a secret variable.
+first); outputs and execution counts are cleared; embedding and staging are disabled by
+default; the notebook can only write to a staging repo that is not production (no upload,
+commit or Space-restart call against the dataset); no hardcoded token; no cell prints or
+echoes a secret.
 """
 import ast
 import json
@@ -14,7 +16,12 @@ import sys
 from pathlib import Path
 
 DEFAULT_NB = Path(__file__).resolve().parent.parent / "notebooks" / "colab_backfill.ipynb"
-SECRET_NAMES = ("HF_TOKEN", "GH_TOKEN", "auth")
+SECRET_NAMES = ("HF_TOKEN", "GH_TOKEN", "EDGAR_USER_AGENT", "auth")
+PROD_REPO = "egoh33/rag-workbench"
+# The notebook may only stage through `scripts.hf_backfill stage-upload`; publishing is out of scope.
+FORBIDDEN_CALLS = ("create_commit", "upload_file", "upload_folder", "CommitOperationAdd",
+                   "CommitOperationDelete", "delete_file", "delete_repo", "restart_space")
+TOKEN_RE = re.compile(r"\b(hf_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})")
 
 
 def _source(cell: dict) -> str:
@@ -63,12 +70,32 @@ def check_notebook(path: Path) -> list[str]:
                 problems.append(f"cell {i}: print() references a secret variable")
 
     joined = "\n".join(_source(c) for c in code_cells)
-    if not re.search(r"^CONFIRM_PUBLISH\s*=\s*False\b", joined, re.MULTILINE):
-        problems.append("CONFIRM_PUBLISH = False not found (publish must be off by default)")
-    if re.search(r"^CONFIRM_PUBLISH\s*=\s*True\b", joined, re.MULTILINE):
-        problems.append("CONFIRM_PUBLISH is True")
-    if "parent_commit" not in joined:
-        problems.append("publish must use create_commit with parent_commit")
+    for flag in ("CONFIRM_EXECUTE", "CONFIRM_STAGE"):
+        if not re.search(rf"^{flag}\s*=\s*False\b", joined, re.MULTILINE):
+            problems.append(f"{flag} = False not found (must be off by default)")
+        if re.search(rf"^{flag}\s*=\s*True\b", joined, re.MULTILINE):
+            problems.append(f"{flag} is True")
+    m = re.search(r"^STAGING_REPO\s*=\s*['\"]([^'\"]+)['\"]", joined, re.MULTILINE)
+    if not m:
+        problems.append("STAGING_REPO literal not found")
+    elif m.group(1).strip().lower() == PROD_REPO:
+        problems.append("STAGING_REPO is the production dataset")
+    for needle in ("stage-upload", "append_only_proof", "dry_run()"):
+        if needle not in joined:
+            problems.append(f"{needle} not found")
+    for name in FORBIDDEN_CALLS:
+        if re.search(rf"\b{name}\b", joined):
+            problems.append(f"forbidden call {name}: the notebook must not publish")
+    # Whole file, markdown cells and metadata included.
+    raw = Path(path).read_text(encoding="utf-8")
+    if TOKEN_RE.search(raw):
+        problems.append("a token-shaped string is present")
+    for i, cell in enumerate(nb.get("cells", [])):
+        if cell.get("cell_type") != "code":
+            continue
+        for line in _source(cell).splitlines():
+            if line.lstrip().startswith(("!", "%")) and any(n in line for n in SECRET_NAMES[:3]):
+                problems.append(f"cell {i}: shell magic references a secret")
     return problems
 
 

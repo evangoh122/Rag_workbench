@@ -352,7 +352,7 @@ Questions that name two covered companies currently enter explicit comparison mo
 
 ### Refresh the corpus on a free Colab GPU
 
-`notebooks/colab_backfill.ipynb` embeds the newest 10-K/20-F and 10-Q filings with `scripts/embed_additional.py` on a Colab T4 (upload the notebook; add `HF_TOKEN` and `GH_TOKEN` as Colab secrets). Run its cells in order, not "Run all": GPU gate, configuration (pinned dataset revision), install (keeps Colab's CUDA torch, not the locked CPU torch), prepare DB (resumable from a Drive checkpoint), **dry run** (lists the accessions it would add), embed (batch 16; lower to 8/4 on CUDA OOM), verify (`etl_guardrail.py`), and finally a separate **publish** cell that stays off until `CONFIRM_PUBLISH = True`. Publish aborts if the dataset head moved from the pinned revision, prints the previous commit as the rollback target, restarts the Space and checks `/api/stats`. Static checks: `uv run --with nbformat python scripts/check_colab_notebook.py`.
+`notebooks/colab_backfill.ipynb` is the Colab (T4/L4) path for the same backfill, **staging only**. See [Colab path](#colab-path-staging-only) below.
 
 Related scripts: `extract_xbrl_facts.py`, `extract_graph_triples.py`, `backfill_xbrl_coverage.py`, `reembed_qwen06.py`.
 
@@ -473,6 +473,25 @@ uv run python -m scripts.hf_backfill publish <dir>/rag.duckdb <dir>/before.json 
 With `--staging-repo` it downloads `runs/<run id>/rag.duckdb`, `before.json` and `after.json` into a private temp dir, refuses if any is missing, if the staging repo is the production repo, or if the DB's sha256 differs from the post-backfill hash in `after.json` (a backfill changes the DB, so its pre-embedding `before.json` hash no longer matches), and then runs the guards below.
 
 It exits non-zero without `--confirm`, and aborts if the dataset head differs from the `dataset_head` recorded in `before.json` (the upload is also pinned with `parent_commit`). Immediately before uploading it copies the staged file to a private temp snapshot, runs the DB integrity, shrink and duplicate checks on that snapshot, re-hashes it, and uploads that same snapshot, so a staged path swapped after verification is never uploaded; it refuses on any failure. Restarting the Space is a separate manual step.
+
+#### Colab path (staging only)
+
+`notebooks/colab_backfill.ipynb` runs the backfill on a Colab GPU for the case where HF Jobs is not used. It follows the same owner rule as the runner: **original data is never deleted or modified, only appended to**, and the notebook never writes to the production dataset. It embeds into a working copy of a pinned revision of `egoh33/Rag-workbench`, keeps the downloaded original untouched, and uploads the result to the private staging dataset `egoh33/rag-staging` through the runner's own `stage-upload` command (`rag.duckdb`, `before.json`, `after.json` under `runs/<run id>/`, one commit, refused for a non-private repo, the production repo or an alias of it, or an existing run id). It contains no publish code and does not restart the Space.
+
+- **Run it step by step, not "Run all".** Step 5 is a dry run that lists the filings it would add. Embedding (step 6) and staging (step 9) each do nothing until you set `CONFIRM_EXECUTE = True` / `CONFIRM_STAGE = True` in step 2; both default to `False`.
+- **Secrets** come from Colab Secrets only: `HF_TOKEN` (read the production dataset, write `egoh33/rag-staging`; it needs no write access to production) and `EDGAR_USER_AGENT`. Neither is printed, and the committed notebook has no outputs. Clear outputs before saving a copy.
+- **GPU check:** step 1 fails on a CPU-only runtime and warns when the GPU is not a T4 or L4.
+- **Scope:** every ticker already in the pinned corpus plus `ANTH` (CIK 0002130357), annual (latest 2 of the form the ticker already files) and 10-Q (latest `QUARTERS`, default 3). "Missing" means the accession is not yet in the pinned DB; `embed_additional.py` has no date filter, so step 4 prints the corpus's newest `updated_at` to compare with a cut-off such as 2026-07-27, and step 5 lists the exact accessions. Caps mirror the runner (1..50 tickers, quarters 1..8, deadline 60..21600 s; groups of at most 10 tickers) and are validated by `scripts/colab_backfill_checks.py`, whose limits a test compares with `run_hf_backfill.sh`.
+- **Resume:** after every ticker group the notebook checkpoints the working DB, both snapshots and a completed ticker/form set (plus the run id) to Google Drive (`USE_DRIVE = True`). After a disconnect, re-run steps 1-4, then 5 and 6: completed groups are skipped and stored filings are not re-embedded. Without Drive the checkpoint is lost with the runtime. A per-run time cap stops launching new groups; step 6 can be re-run to continue.
+- **Append-only proof (step 8):** per table of the original DB, the table and all its columns must still exist, the row count must not shrink, and every original row (all original columns, compared as a multiset with `EXCEPT ALL`) must be present with identical values; otherwise the cell raises. Staging re-checks that the DB is unchanged since the proof, that the proof ran, and that no filing is missing (unless `ACCEPT_INCOMPLETE`).
+- **Publishing is a separate, explicit step** run from a repo checkout after reviewing the staged run, with a token that can read staging and write production (the notebook prints the exact command but does not run it):
+
+```bash
+uv run python -m scripts.hf_backfill publish \
+  --staging-repo egoh33/rag-staging --run-id <run id> --repo egoh33/Rag-workbench --confirm
+```
+
+Static checks (no Colab, GPU or network): `uv run --with nbformat python scripts/check_colab_notebook.py` (JSON/nbformat validity, every code cell parses, no outputs, both confirm flags off, staging repo is not production, no upload/commit/restart call, no token-shaped strings, no printed secrets) and `uv run pytest tests/test_colab_notebook.py tests/test_colab_backfill_checks.py`. The notebook itself has not been executed on Colab by this change; the GPU, install, download, embedding and staging cells are verified by reading and by unit tests of the extracted logic only.
 
 **Scope of the GPU runner:** it is a manually launched, staging-only job. Neither this PR nor #30 routes the scheduled `refresh-filings.yml` embedding onto the GPU, so scheduled refresh runs still use the CPU runner and its 300-minute timeout is unchanged; this runner does not make them finish. `Dockerfile.hf-gpu` runs as a non-root `app` user (writable `HOME`, HF cache, uv cache and `data/`); the image has not been built in CI or by this PR.
 
