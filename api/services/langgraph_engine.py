@@ -1208,9 +1208,8 @@ def _ticker_has_xbrl(ticker: str) -> bool:
     """True if this ticker has any structured XBRL facts in the DB.
 
     Companies ingested only from an S-1/424B4 IPO prospectus (e.g. SPCX and
-    ANTH) carry
-    rich filing text but no XBRL facts, so deterministic numeric verification
-    can't run. Callers use this to allow text-grounded (clearly unverified)
+    ANTH) carry rich filing text but no XBRL facts, so deterministic numeric
+    verification can't run. Callers use this to allow text-grounded (clearly unverified)
     numeric answers for such tickers instead of abstaining outright. Cached
     per-ticker for the process lifetime. On any error, assumes XBRL is present
     so we fall back to the safe deterministic-verify path.
@@ -1376,9 +1375,8 @@ def classifier_node(state: GraphState) -> Dict[str, Any]:
     text_grounded = False
     # A numeric question about a ticker with no XBRL facts (e.g. an S-1
     # prospectus filer like SPCX or ANTH) can't be deterministically verified.
-    # Rather
-    # than abstain at the verification gate, route it through the LLM/text path
-    # and flag the answer as quoted-from-text / not XBRL-verified.
+    # Rather than abstain at the verification gate, route it through the LLM/text
+    # path and flag the answer as quoted-from-text / not XBRL-verified.
     if qtype == "numeric" and not _ticker_has_xbrl(state.get("ticker", "")):
         logger.info(
             "--- CLASSIFIER: numeric query for {} but no XBRL facts — "
@@ -2182,12 +2180,13 @@ def run_auditable_rag(query: str, ticker: str,
     # Ground on the company named in the question, not the UI's default ticker.
     # If the query names a company we DON'T cover, abstain rather than answering
     # with the default ticker's data ("SpaceX revenue" must not return Micron's).
+    uncovered = _named_uncovered_company(query)
+    if uncovered:
+        logger.info(f"Abstaining — query names uncovered company {uncovered!r}")
+        return _abstain_response(uncovered)
+
     by_name = _resolve_query_ticker(query, "")  # covered ticker, or "" if none recognised
     if not by_name:
-        uncovered = _named_uncovered_company(query)
-        if uncovered:
-            logger.info(f"Abstaining — query names uncovered company {uncovered!r}")
-            return _abstain_response(uncovered)
         by_name = ticker  # no company named -> honour the UI's selected ticker
     if by_name != ticker:
         logger.info(f"Ticker override: query resolved to {by_name!r} (caller passed {ticker!r})")

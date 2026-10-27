@@ -26,7 +26,7 @@ from sec_edgar_downloader import Downloader
 from api.services.embeddings import get_embeddings as _get_model
 from api.services.structure_chunker import StructureChunker
 
-from api.config import Config
+from api.config import Config, TICKER_TO_CIK
 
 DB_PATH = Config.DB_PATH
 
@@ -41,7 +41,6 @@ _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 # CIK lookup for well-known tickers
 _TICKER_CIK: dict[str, str] = {
     # ── Private / pre-ticker issuers ──
-    "ANTH": "0002130357",  # Anthropic PBC — internal key for its S-1 corpus
     # ── Aerospace / Launch ──
     "SPCX": "0001181412",  # Space Exploration Technologies (SpaceX) — IPO'd 2026, S-1 / 424B4 prospectus
     "RKLB": "0001819994",  # Rocket Lab USA, Inc.
@@ -146,12 +145,9 @@ _TICKER_CIK: dict[str, str] = {
     "VECO": "0000103145",  # Veeco Instruments
 }
 
-# Merge central config mappings to prevent CIK divergence
-try:
-    from api.config import TICKER_TO_CIK as _CONFIG_TICKER_CIK
-    _TICKER_CIK.update(_CONFIG_TICKER_CIK)
-except ImportError:
-    pass
+# Central config is authoritative for every application-supported ticker,
+# including internal prospectus corpus keys such as ANTH.
+_TICKER_CIK.update(TICKER_TO_CIK)
 
 # All tickers for ingestion
 DEMO_TICKERS: List[str] = [
@@ -236,6 +232,15 @@ def _filing_lookup_key(ticker: str) -> str:
     if normalized in _CIK_LOOKUP_ALIASES:
         return _TICKER_CIK[normalized]
     return ticker
+
+
+def _downloader_filing_dir(lookup_key: str, form_type: str) -> Path:
+    """Return the directory layout used by sec-edgar-downloader.
+
+    Numeric lookup keys are already normalized to the package's zero-padded
+    10-digit CIK format by ``_filing_lookup_key`` / ``TICKER_TO_CIK``.
+    """
+    return _DOWNLOAD_DIR / "sec-edgar-filings" / lookup_key / form_type
 
 
 def _extract_prospectus_sections(text: str, section_map: Dict[str, str]) -> List[tuple[str, str]]:
@@ -346,7 +351,7 @@ def _fetch_filing_with_downloader(ticker: str, form_types: List[str] = None) -> 
             if num_downloaded == 0:
                 continue
 
-            ticker_dir = _DOWNLOAD_DIR / "sec-edgar-filings" / lookup_key / form_type
+            ticker_dir = _downloader_filing_dir(lookup_key, form_type)
             if not ticker_dir.exists():
                 continue
 

@@ -42,6 +42,35 @@ def test_anthropic_numeric_query_uses_text_grounded_path(mock_has_xbrl):
     assert result["query_type"] == "qualitative"
     assert result["numeric_text_grounded"] is True
 
+
+@pytest.mark.parametrize("uncovered", ["OpenAI", "Stripe"])
+def test_uncovered_company_still_abstains_when_anthropic_is_also_named(uncovered):
+    result = run_auditable_rag(
+        f"How does {uncovered} compare with Anthropic?",
+        "ANTH",
+    )
+
+    assert result["verification_status"] == "ABSTAIN"
+    assert result["resolved_ticker"] == ""
+    assert uncovered.lower() in result["verification_reasoning"].lower()
+
+
+@patch("api.services.peer_comparison.compute_metric")
+def test_nvidia_investment_in_anthropic_uses_multi_company_comparison(mock_metric):
+    # Known tradeoff: merely naming two covered companies selects explicit
+    # comparison mode, matching the existing SPCX alias behaviour.
+    mock_metric.return_value = {"value": 1.0, "period": "2026"}
+
+    result = run_auditable_rag(
+        "How does NVIDIA's investment in Anthropic affect its revenue?",
+        "NVDA",
+    )
+
+    assert result["resolved_ticker"] == "NVDA"
+    assert "| NVDA *(subject)* |" in result["final_answer"]
+    assert "| ANTH |" in result["final_answer"]
+    assert mock_metric.call_count == 2
+
 class TestLangGraphNodes:
     @patch("api.services.langgraph_engine.EDGARHybridRetriever")
     @patch("api.services.langgraph_engine.rerank_docs")

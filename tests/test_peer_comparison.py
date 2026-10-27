@@ -6,6 +6,7 @@ from api.services.peer_comparison import (
     _name_to_ticker,
     _format_value,
     _parse_year_horizon,
+    run_peer_comparison,
     _wants_multiyear,
     _MULTIYEAR_CHARTABLE,
     _MAX_TREND_YEARS,
@@ -87,10 +88,22 @@ class TestNameResolution:
         assert _name_to_ticker("Broadcom Inc.") == "AVGO"
         assert _name_to_ticker("Anthropic PBC") == "ANTH"
 
-    def test_anthropic_has_no_curated_peers(self):
-        from api.services.peer_comparison import _PEER_GROUPS
+    def test_anthropic_peer_comparison_abstains_without_covered_peers(self, monkeypatch):
+        from api.db.database import db_manager
 
-        assert _PEER_GROUPS["ANTH"] == []
+        monkeypatch.setattr(
+            db_manager, "get_connection", lambda: (_ for _ in ()).throw(RuntimeError("no DB"))
+        )
+        result = run_peer_comparison(
+            "How does Anthropic compare with its peers?",
+            {"mode": "peer", "subject": "ANTH", "explicit": ["ANTH"]},
+        )
+
+        assert result["verification_status"] == "SKIPPED"
+        assert result["verification_reasoning"] == (
+            "Peer comparison requested but no covered peers resolved."
+        )
+        assert "don't have other covered companies" in result["final_answer"]
 
     def test_unknown_name_returns_none(self):
         assert _name_to_ticker("MediaTek") is None

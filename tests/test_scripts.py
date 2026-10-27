@@ -15,6 +15,8 @@ from unittest.mock import patch, mock_open  # noqa: E402
 
 # Now we can import the scripts
 from scripts.embed_edgar import (  # noqa: E402
+    _TICKER_CIK,
+    _downloader_filing_dir,
     _fetch_filing_with_downloader,
     _fetch_filing_with_edgartools,
     _filing_lookup_key,
@@ -34,6 +36,22 @@ def test_internal_alias_lookup_only_changes_anthropic():
     assert _filing_lookup_key("ANTH") == "0002130357"
     assert _filing_lookup_key("SPCX") == "SPCX"
     assert _filing_lookup_key("NVDA") == "NVDA"
+
+
+def test_anthropic_cik_comes_from_central_config():
+    from api.config import TICKER_TO_CIK
+
+    assert TICKER_TO_CIK["ANTH"] == "0002130357"
+    assert _TICKER_CIK["ANTH"] == TICKER_TO_CIK["ANTH"]
+
+
+def test_downloader_path_uses_zero_padded_anthropic_cik(tmp_path):
+    import scripts.embed_edgar as module
+
+    with patch.object(module, "_DOWNLOAD_DIR", tmp_path):
+        path = _downloader_filing_dir(_filing_lookup_key("ANTH"), "S-1")
+
+    assert path == tmp_path / "sec-edgar-filings" / "0002130357" / "S-1"
 
 
 @pytest.mark.parametrize(
