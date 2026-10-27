@@ -31,7 +31,18 @@ RUN uv pip install --python /opt/venv/bin/python --reinstall-package torch \
 # No GPU at build time: assert the wheel is a CUDA build of the base image's CUDA major.
 RUN /opt/venv/bin/python -c 'import torch; assert torch.version.cuda and "+cpu" not in torch.__version__ and torch.version.cuda.split(".")[0] == "12", (torch.__version__, torch.version.cuda)'
 
-COPY . .
+# Run as a non-root user. HOME, the HF hub cache and the uv cache are writable, and
+# so is /app/data (the default STAGING_DIR is /app/data/hf_backfill_staging).
+RUN useradd --create-home --uid 1000 --shell /bin/bash app
+ENV HOME=/home/app \
+    HF_HOME=/home/app/.cache/huggingface \
+    UV_CACHE_DIR=/home/app/.cache/uv
+
+COPY --chown=app:app . .
+RUN mkdir -p /app/data/hf_backfill_staging \
+    && chown -R app:app /app/data /home/app
+
+USER app
 
 # `uv run` would re-sync to the CPU lock; call the venv directly.
 ENV PYTHON=/opt/venv/bin/python

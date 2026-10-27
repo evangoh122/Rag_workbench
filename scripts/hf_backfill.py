@@ -1,13 +1,18 @@
 """Helpers for the HF Jobs GPU backfill (scripts/run_hf_backfill.sh).
 
+Run as a module from the repo root (`python -m scripts.hf_backfill ...`) so the
+`api` package is importable; running the file directly puts scripts/ on sys.path
+and breaks `import api.config`.
+
     check-cuda                                       fail unless torch.cuda.is_available()
     snapshot  <db> <out.json> [--dataset-head SHA]   sha256 + row/filing counts
     verify    <db> <before.json>                     counts + duplicate-chunk check
     effective-db <db>                                fail unless Config.DB_PATH resolves to <db>
     publish   <db> <before.json> --repo R --confirm  GUARDED; never run by the runner
 
-Only `publish` can touch the production dataset. It refuses without --confirm
-and aborts if the dataset head moved since the snapshot was taken.
+Only `publish` can touch the production dataset. It refuses without --confirm,
+aborts if the dataset head moved since the snapshot was taken, and re-runs the
+integrity + duplicate guards on the exact staged file right before uploading.
 """
 import argparse
 import hashlib
@@ -41,12 +46,19 @@ def counts(db_path: str) -> dict:
 
 
 def duplicate_chunks(db_path: str) -> int:
-    """Number of (ticker, accession, chunk_index) keys stored more than once."""
+    """Number of (ticker, accession, section_id, chunk_index) keys stored more than once.
+
+    StructureChunker restarts chunk_index at 0 for every section and embed_additional
+    stores it unchanged, so chunk_index alone is only unique within a section.
+    """
     con = duckdb.connect(db_path, read_only=True)
     try:
+        cols = {r[0] for r in con.execute("DESCRIBE edgar_embeddings").fetchall()}
+        if "section_id" not in cols:
+            raise RuntimeError("edgar_embeddings has no section_id column; cannot check duplicates")
         return con.execute(
             "SELECT count(*) FROM (SELECT 1 FROM edgar_embeddings "
-            "GROUP BY ticker, accession, chunk_index HAVING count(*) > 1)"
+            "GROUP BY ticker, accession, COALESCE(section_id, ''), chunk_index HAVING count(*) > 1)"
         ).fetchone()[0]
     finally:
         con.close()
@@ -87,7 +99,10 @@ def verify_after(db_path: str, before_path: str) -> dict:
     """Raise on shrink or duplicate chunk keys; return the after-counts."""
     with open(before_path, encoding="utf-8") as f:
         before = json.load(f)
-    after = counts(db_path)
+    try:
+        after = counts(db_path)
+    except duckdb.Error as exc:
+        raise RuntimeError(f"staged DB failed integrity check: {exc}") from exc
     errors = []
     if after["rows"] < before["rows"]:
         errors.append(f"rows shrank {before['rows']} -> {after['rows']}")
@@ -95,7 +110,7 @@ def verify_after(db_path: str, before_path: str) -> dict:
         errors.append(f"filings shrank {before['filings']} -> {after['filings']}")
     dups = duplicate_chunks(db_path)
     if dups:
-        errors.append(f"{dups} duplicated (ticker, accession, chunk_index) keys")
+        errors.append(f"{dups} duplicated (ticker, accession, section_id, chunk_index) keys")
     if errors:
         raise RuntimeError("; ".join(errors))
     return after
@@ -116,6 +131,8 @@ def guarded_publish(db_path: str, before_path: str, repo: str, confirm: bool, ap
     head = api.repo_info(repo, repo_type="dataset").sha
     if head != before["dataset_head"]:
         raise RuntimeError(f"dataset head moved since snapshot: {before['dataset_head']} -> {head}; aborting")
+    # Guard the exact file being uploaded, immediately before the upload.
+    verify_after(db_path, before_path)
     api.upload_file(
         path_or_fileobj=db_path,
         path_in_repo=DB_FILENAME,

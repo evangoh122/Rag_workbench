@@ -419,16 +419,20 @@ The HF Space has **no persistent volume**, so runtime state survives restarts th
 ### Refresh runbook (filings ETL)
 
 - **DB copy in CI:** `refresh-filings.yml` and `embed-annuals.yml` copy the HF-cached `rag.duckdb` with `scripts/prepare_db_copy.py` (`copyfile` + `chmod u+w`). The HF cache blob is read-only and `shutil.copy` kept that, so the embed step failed with `Permission denied` (run 2026-09-21). A fail-fast step (`prepare_db_copy.py check`) opens the copy read-write and does a rolled-back write before any embedding.
-- **GPU backfill on HF Jobs (staging only):** `Dockerfile.hf-gpu` (CUDA runtime, uv; CUDA torch installed on top of the locked env, so `pyproject.toml`/`uv.lock` stay CPU-only) runs `scripts/run_hf_backfill.sh`. It fails unless `torch.cuda.is_available()`, pins and downloads the dataset head, records sha256 + row/filing counts, runs `embed_additional.py` for a bounded `BACKFILL_TICKERS` list, then verifies counts, duplicate `(ticker, accession, chunk_index)` keys and `etl_guardrail.py`. The result stays in `$STAGING_DIR/rag.duckdb` (default `data/hf_backfill_staging/`, which must be under the repo root or `PERSIST_DIR` because `api/config.py` silently replaces any other `DB_PATH`; the runner aborts if the effective path differs). The runner never uploads to the production dataset or restarts the Space.
+- **GPU backfill on HF Jobs (staging only):** `Dockerfile.hf-gpu` (CUDA runtime, uv; CUDA torch installed on top of the locked env, so `pyproject.toml`/`uv.lock` stay CPU-only) runs `scripts/run_hf_backfill.sh`. It fails unless `torch.cuda.is_available()`, pins and downloads the dataset head, records sha256 + row/filing counts, runs `embed_additional.py` for a bounded `BACKFILL_TICKERS` list, then verifies counts, duplicate `(ticker, accession, section_id, chunk_index)` keys (`chunk_index` restarts at 0 in every section, so section identity is part of the key) and `etl_guardrail.py`. The result stays in `$STAGING_DIR/rag.duckdb` (default `data/hf_backfill_staging/`, which must be under the repo root or `PERSIST_DIR` because `api/config.py` silently replaces any other `DB_PATH`; the runner aborts if the effective path differs). The runner never uploads to the production dataset or restarts the Space.
+
+**The runner is a dry run by default**: it validates its inputs, prints the plan (tickers, forms, quarters, estimated filings) and exits 0 without downloading or embedding anything. It only executes with `BACKFILL_CONFIRM=yes` (or `--execute`). Caps are validated and any invalid value fails loudly (exit 2): `BACKFILL_TICKERS` (required, at most `BACKFILL_MAX_TICKERS`, default 10, allowed 1..50), `BACKFILL_QUARTERS` (integer 1..8, default 3, used for `10-Q`), `BACKFILL_FORMS` (`annual` or `10-Q`), and a hard deadline `BACKFILL_TIMEOUT_SECONDS` (60..21600, default 18000) enforced inside the script with `timeout`, independent of the `hf jobs --timeout` flag. Python helpers run as modules from the repo root (`python -m scripts.hf_backfill ...`), because running the file directly cannot import `api`.
 
 Build the image and run the job (nothing here has been executed by CI or the PR):
 
 ```bash
 docker build -f Dockerfile.hf-gpu -t <registry>/rag-workbench-hf-gpu:<tag> . && docker push <registry>/rag-workbench-hf-gpu:<tag>
 
+# Drop BACKFILL_CONFIRM=yes for a dry run that only prints the plan.
 hf jobs run --flavor l4x1 --timeout 6h \
   --secrets HF_TOKEN \
   -e DATASET_REPO=<user>/Rag-workbench -e BACKFILL_TICKERS=AAPL,MSFT -e BACKFILL_FORMS=annual \
+  -e BACKFILL_CONFIRM=yes \
   <registry>/rag-workbench-hf-gpu:<tag> \
   bash scripts/run_hf_backfill.sh
 ```
@@ -442,11 +446,13 @@ python -c "from huggingface_hub import HfApi; [print(c.commit_id, c.title) for c
 **Guarded publish (documented, not executed by the runner).** Review the staged DB first, then, from a machine with a write token:
 
 ```bash
-HF_TOKEN=... uv run python scripts/hf_backfill.py publish \
+HF_TOKEN=... uv run python -m scripts.hf_backfill publish \
   "$STAGING_DIR/rag.duckdb" "$STAGING_DIR/before.json" --repo <user>/Rag-workbench --confirm
 ```
 
-It exits non-zero without `--confirm`, and aborts if the dataset head differs from the `dataset_head` recorded in `before.json` (the upload is also pinned with `parent_commit`). Restarting the Space is a separate manual step.
+It exits non-zero without `--confirm`, and aborts if the dataset head differs from the `dataset_head` recorded in `before.json` (the upload is also pinned with `parent_commit`). Immediately before uploading it re-runs the DB integrity, shrink and duplicate checks on the exact staged file and refuses on any failure. Restarting the Space is a separate manual step.
+
+**Scope of the GPU runner:** it is a manually launched, staging-only job. Neither this PR nor #30 routes the scheduled `refresh-filings.yml` embedding onto the GPU, so scheduled refresh runs still use the CPU runner and its 300-minute timeout is unchanged; this runner does not make them finish. `Dockerfile.hf-gpu` runs as a non-root `app` user (writable `HOME`, HF cache, uv cache and `data/`); the image has not been built in CI or by this PR.
 
 ### Operational notes
 
