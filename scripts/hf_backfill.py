@@ -8,9 +8,15 @@ and breaks `import api.config`.
     snapshot  <db> <out.json> [--dataset-head SHA]   sha256 + row/filing counts
     verify    <db> <before.json>                     counts + duplicate-chunk check
     effective-db <db>                                fail unless Config.DB_PATH resolves to <db>
+    stage-check  --repo S --prod-repo P              fail unless S is an existing PRIVATE dataset != P
+    stage-upload <db> <before.json> --repo S --prod-repo P --run-id ID
+                                                     copy the result to S under runs/ID/ (never P)
     publish   <db> <before.json> --repo R --confirm  GUARDED; never run by the runner
+    publish   --staging-repo S --run-id ID --repo R --confirm
+                                                     same, after downloading runs/ID/ from S
 
-Only `publish` can touch the production dataset. It refuses without --confirm,
+A job container is ephemeral, so the runner uploads its result to a private staging
+dataset (stage-upload); only `publish` can touch the production dataset. It refuses without --confirm,
 aborts if the dataset head moved since the snapshot was taken, and re-runs the
 integrity + duplicate guards on a private snapshot of the staged file and uploads that
 same verified snapshot.
@@ -19,6 +25,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -26,6 +33,8 @@ import tempfile
 import duckdb
 
 DB_FILENAME = "rag.duckdb"
+BEFORE_FILENAME = "before.json"
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
 
 
 def sha256_file(path: str) -> str:
@@ -156,6 +165,84 @@ def guarded_publish(db_path: str, before_path: str, repo: str, confirm: bool, ap
     return head
 
 
+def _norm_repo(repo: str) -> str:
+    return repo.strip().lower()
+
+
+def _check_run_id(run_id: str) -> str:
+    if not RUN_ID_RE.match(run_id or "") or ".." in run_id:
+        raise RuntimeError(f"invalid run id {run_id!r}; use 1-80 chars of [A-Za-z0-9._-]")
+    return run_id
+
+
+def check_staging_repo(staging_repo: str, prod_repo: str, api=None) -> None:
+    """Fail unless staging_repo is an existing private dataset that is not production."""
+    if not staging_repo or not staging_repo.strip():
+        raise RuntimeError("STAGING_REPO is required to keep the result outside the ephemeral job container")
+    if _norm_repo(staging_repo) == _norm_repo(prod_repo):
+        raise RuntimeError(f"staging repo {staging_repo} is the production dataset; refusing")
+    if api is None:
+        from huggingface_hub import HfApi
+
+        api = HfApi(token=os.environ["HF_TOKEN"])
+    info = api.repo_info(staging_repo, repo_type="dataset")
+    if info.private is not True:
+        raise RuntimeError(f"staging repo {staging_repo} is not private; refusing to upload")
+
+
+def stage_upload(db_path: str, before_path: str, staging_repo: str, prod_repo: str, run_id: str, api=None) -> str:
+    """Upload the staged DB + snapshot to runs/<run_id>/ of the private staging repo, in one commit."""
+    _check_run_id(run_id)
+    for path in (db_path, before_path):
+        if not os.path.isfile(path):
+            raise RuntimeError(f"cannot stage missing file {path}")
+    if api is None:
+        from huggingface_hub import HfApi
+
+        api = HfApi(token=os.environ["HF_TOKEN"])
+    check_staging_repo(staging_repo, prod_repo, api)
+    from huggingface_hub import CommitOperationAdd
+
+    prefix = f"runs/{run_id}"
+    api.create_commit(
+        repo_id=staging_repo,
+        repo_type="dataset",
+        operations=[
+            CommitOperationAdd(path_in_repo=f"{prefix}/{DB_FILENAME}", path_or_fileobj=db_path),
+            CommitOperationAdd(path_in_repo=f"{prefix}/{BEFORE_FILENAME}", path_or_fileobj=before_path),
+        ],
+        commit_message=f"stage gpu-backfill {run_id}",
+    )
+    return prefix
+
+
+def fetch_staged(staging_repo: str, prod_repo: str, run_id: str, dest_dir: str, api=None) -> tuple[str, str]:
+    """Download runs/<run_id>/ files from the staging repo; refuse if absent or the DB hash differs from before.json."""
+    _check_run_id(run_id)
+    if _norm_repo(staging_repo) == _norm_repo(prod_repo):
+        raise RuntimeError(f"staging repo {staging_repo} is the production dataset; refusing")
+    if api is None:
+        from huggingface_hub import HfApi
+
+        api = HfApi(token=os.environ["HF_TOKEN"])
+    paths = []
+    for name in (DB_FILENAME, BEFORE_FILENAME):
+        try:
+            cached = api.hf_hub_download(
+                repo_id=staging_repo, repo_type="dataset", filename=f"runs/{run_id}/{name}"
+            )
+        except Exception as exc:
+            raise RuntimeError(f"staged file runs/{run_id}/{name} missing in {staging_repo}: {exc}") from exc
+        dst = os.path.join(dest_dir, name)
+        shutil.copyfile(cached, dst)
+        paths.append(dst)
+    with open(paths[1], encoding="utf-8") as f:
+        want = json.load(f).get("sha256")
+    if not want or sha256_file(paths[0]) != want:
+        raise RuntimeError("staged rag.duckdb sha256 does not match before.json; refusing")
+    return paths[0], paths[1]
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -169,9 +256,20 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("before")
     e = sub.add_parser("effective-db")
     e.add_argument("db")
+    c = sub.add_parser("stage-check")
+    c.add_argument("--repo", required=True)
+    c.add_argument("--prod-repo", required=True)
+    g = sub.add_parser("stage-upload")
+    g.add_argument("db")
+    g.add_argument("before")
+    g.add_argument("--repo", required=True)
+    g.add_argument("--prod-repo", required=True)
+    g.add_argument("--run-id", required=True)
     u = sub.add_parser("publish")
-    u.add_argument("db")
-    u.add_argument("before")
+    u.add_argument("db", nargs="?")
+    u.add_argument("before", nargs="?")
+    u.add_argument("--staging-repo", default=None)
+    u.add_argument("--run-id", default=None)
     u.add_argument("--repo", required=True)
     u.add_argument("--confirm", action="store_true")
     a = p.parse_args(argv)
@@ -186,7 +284,23 @@ def main(argv: list[str] | None = None) -> int:
         elif a.cmd == "verify":
             after = verify_after(a.db, a.before)
             print(f"VERIFY OK: rows={after['rows']} filings={after['filings']}, no duplicate chunks")
+        elif a.cmd == "stage-check":
+            check_staging_repo(a.repo, a.prod_repo)
+            print(f"STAGING REPO OK: {a.repo} is private and not production")
+        elif a.cmd == "stage-upload":
+            prefix = stage_upload(a.db, a.before, a.repo, a.prod_repo, a.run_id)
+            print(f"STAGED to {a.repo}:{prefix}")
+        elif a.staging_repo:
+            if a.db or a.before or not a.run_id:
+                raise RuntimeError("use either <db> <before> or --staging-repo with --run-id, not both")
+            with tempfile.TemporaryDirectory(prefix="hf_fetch_") as tmp:
+                os.chmod(tmp, 0o700)
+                db, before = fetch_staged(a.staging_repo, a.repo, a.run_id, tmp)
+                head = guarded_publish(db, before, a.repo, a.confirm)
+            print(f"PUBLISHED on top of {head}")
         else:
+            if not a.db or not a.before:
+                raise RuntimeError("publish needs <db> <before> or --staging-repo with --run-id")
             head = guarded_publish(a.db, a.before, a.repo, a.confirm)
             print(f"PUBLISHED on top of {head}")
     except Exception as exc:

@@ -332,7 +332,7 @@ if [ "$1" = "-" ]; then cat >/dev/null; echo deadbeef; fi
 exit 0
 """
 
-BASE_ENV = {"DATASET_REPO": "u/r", "BACKFILL_TICKERS": "AAPL,MSFT"}
+BASE_ENV = {"DATASET_REPO": "u/r", "STAGING_REPO": "u/stage", "BACKFILL_TICKERS": "AAPL,MSFT"}
 
 
 def _run_runner(tmp_path, extra_env=None, args=(), timeout=60):
@@ -518,3 +518,167 @@ def test_gpu_dockerfile_runs_non_root_with_writable_dirs():
     for var in ("HOME=", "HF_HOME=", "UV_CACHE_DIR="):
         assert var in text
     assert text.index("USER app") > text.index("COPY --chown=app:app . .")
+
+
+# ── durable staging output (job containers are ephemeral) ───────────────────
+
+def _staging_api(private=True):
+    api = MagicMock()
+    api.repo_info.return_value.private = private
+    return api
+
+
+def _staged_files(tmp_path):
+    db = tmp_path / "rag.duckdb"
+    _make_db(db, [("A", "x", 0)])
+    before = tmp_path / "before.json"
+    hf_backfill.take_snapshot(str(db), str(before), "aaa")
+    return db, before
+
+
+def test_stage_upload_goes_to_run_prefix_of_staging_repo_only(tmp_path):
+    db, before = _staged_files(tmp_path)
+    api = _staging_api()
+    prefix = hf_backfill.stage_upload(str(db), str(before), "u/stage", "u/prod", "run1", api)
+    assert prefix == "runs/run1"
+    kw = api.create_commit.call_args.kwargs
+    assert kw["repo_id"] == "u/stage" and kw["repo_type"] == "dataset"
+    assert sorted(op.path_in_repo for op in kw["operations"]) == ["runs/run1/before.json", "runs/run1/rag.duckdb"]
+    api.upload_file.assert_not_called()
+
+
+def test_stage_refuses_production_repo_as_staging(tmp_path):
+    db, before = _staged_files(tmp_path)
+    api = _staging_api()
+    for same in ("u/prod", "U/Prod"):
+        with pytest.raises(RuntimeError, match="production"):
+            hf_backfill.stage_upload(str(db), str(before), same, "u/prod", "run1", api)
+    api.create_commit.assert_not_called()
+    with pytest.raises(RuntimeError, match="production"):
+        hf_backfill.check_staging_repo("u/prod", "u/prod", api)
+
+
+@pytest.mark.parametrize("private", [False, None])
+def test_stage_refuses_non_private_repo(tmp_path, private):
+    db, before = _staged_files(tmp_path)
+    api = _staging_api(private)
+    with pytest.raises(RuntimeError, match="not private"):
+        hf_backfill.stage_upload(str(db), str(before), "u/stage", "u/prod", "run1", api)
+    api.create_commit.assert_not_called()
+
+
+@pytest.mark.parametrize("run_id", ["", "../x", "a/b", "..", "a..b"])
+def test_stage_refuses_bad_run_id(tmp_path, run_id):
+    db, before = _staged_files(tmp_path)
+    api = _staging_api()
+    with pytest.raises(RuntimeError, match="run id"):
+        hf_backfill.stage_upload(str(db), str(before), "u/stage", "u/prod", run_id, api)
+    api.create_commit.assert_not_called()
+
+
+def test_runner_requires_staging_repo_only_when_executing(tmp_path):
+    r, calls = _run_runner(tmp_path, {"STAGING_REPO": ""})
+    assert r.returncode == 0 and "DRY RUN" in r.stdout and calls == ""
+    r, calls = _run_runner(tmp_path, {"STAGING_REPO": "", "BACKFILL_CONFIRM": "yes"})
+    assert r.returncode != 0 and "STAGING_REPO" in r.stderr and calls == ""
+
+
+@pytest.mark.parametrize("confirm", ["yes", ""])
+def test_runner_rejects_staging_equal_to_production(tmp_path, confirm):
+    r, calls = _run_runner(tmp_path, {"STAGING_REPO": "U/R", "BACKFILL_CONFIRM": confirm})
+    assert r.returncode != 0 and "production" in r.stderr
+    assert calls == ""
+
+
+def test_runner_uploads_only_when_executing_and_checks_staging_first(tmp_path):
+    r, calls = _run_runner(tmp_path)
+    assert r.returncode == 0 and "stage-upload" not in calls and "stage-check" not in calls
+    r, calls = _run_runner(tmp_path, {"BACKFILL_CONFIRM": "yes", "BACKFILL_RUN_ID": "run7"})
+    assert r.returncode == 0, r.stderr
+    assert calls.index("stage-check") < calls.index("embed_additional.py") < calls.index("stage-upload")
+    up = [ln for ln in calls.splitlines() if "stage-upload" in ln]
+    assert len(up) == 1
+    assert "--repo u/stage" in up[0] and "--prod-repo u/r" in up[0] and "--run-id run7" in up[0]
+    assert "rag.duckdb" in up[0] and "before.json" in up[0]
+    assert up[0] == calls.splitlines()[-1]  # last step: after verify and guardrail
+
+
+def test_runner_rejects_bad_run_id(tmp_path):
+    r, calls = _run_runner(tmp_path, {"BACKFILL_CONFIRM": "yes", "BACKFILL_RUN_ID": "../evil"})
+    assert r.returncode != 0 and "stage-upload" not in calls
+
+
+def test_dry_run_makes_no_network_calls(tmp_path, monkeypatch):
+    import huggingface_hub
+
+    def boom(*a, **k):
+        raise AssertionError("network used in dry run")
+
+    for name in ("HfApi", "hf_hub_download"):
+        monkeypatch.setattr(huggingface_hub, name, boom)
+    r, calls = _run_runner(tmp_path)  # stub interpreter: any python call would be logged
+    assert r.returncode == 0 and calls == ""
+
+
+def test_cli_stage_upload_does_not_use_network_before_checks(tmp_path, monkeypatch):
+    db, before = _staged_files(tmp_path)
+    monkeypatch.setenv("HF_TOKEN", "x")
+    import huggingface_hub
+
+    api = _staging_api()
+    monkeypatch.setattr(huggingface_hub, "HfApi", lambda token=None: api)
+    rc = hf_backfill.main(["stage-upload", str(db), str(before), "--repo", "u/prod", "--prod-repo", "u/prod",
+                           "--run-id", "r"])
+    assert rc == 1
+    api.repo_info.assert_not_called()
+    api.create_commit.assert_not_called()
+
+
+def _fake_download(files):
+    def dl(repo_id, repo_type, filename):
+        if filename not in files:
+            raise FileNotFoundError(filename)
+        return files[filename]
+
+    return dl
+
+
+def test_publish_from_staging_refuses_missing_files(tmp_path):
+    db, before = _staged_files(tmp_path)
+    (tmp_path / "d").mkdir()
+    api = MagicMock()
+    api.hf_hub_download.side_effect = _fake_download({"runs/r/before.json": str(before)})
+    with pytest.raises(RuntimeError, match="missing"):
+        hf_backfill.fetch_staged("u/stage", "u/prod", "r", str(tmp_path / "d"), api)
+    api.hf_hub_download.side_effect = _fake_download({"runs/r/rag.duckdb": str(db)})
+    with pytest.raises(RuntimeError, match="missing"):
+        hf_backfill.fetch_staged("u/stage", "u/prod", "r", str(tmp_path / "d"), api)
+
+
+def test_publish_from_staging_downloads_then_runs_guards_before_upload(tmp_path, monkeypatch):
+    db, before = _staged_files(tmp_path)
+    import huggingface_hub
+
+    files = {"runs/r/rag.duckdb": str(db), "runs/r/before.json": str(before)}
+    api = MagicMock()
+    api.hf_hub_download.side_effect = _fake_download(files)
+    api.repo_info.return_value.sha = "aaa"
+    monkeypatch.setenv("HF_TOKEN", "x")
+    monkeypatch.setattr(huggingface_hub, "HfApi", lambda token=None: api)
+    rc = hf_backfill.main(["publish", "--staging-repo", "u/stage", "--run-id", "r", "--repo", "u/prod", "--confirm"])
+    assert rc == 0
+    assert api.upload_file.call_args.kwargs["repo_id"] == "u/prod"
+
+    # a tampered staged DB is refused before any production upload
+    api.upload_file.reset_mock()
+    bad = tmp_path / "bad.duckdb"
+    _make_db(bad, [("A", "x", 0), ("B", "y", 0)])
+    files["runs/r/rag.duckdb"] = str(bad)
+    assert hf_backfill.main(["publish", "--staging-repo", "u/stage", "--run-id", "r", "--repo", "u/prod",
+                             "--confirm"]) == 1
+    api.upload_file.assert_not_called()
+
+    # staging repo equal to production is refused
+    assert hf_backfill.main(["publish", "--staging-repo", "u/prod", "--run-id", "r", "--repo", "u/prod",
+                             "--confirm"]) == 1
+    api.upload_file.assert_not_called()

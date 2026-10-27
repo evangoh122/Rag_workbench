@@ -419,9 +419,9 @@ The HF Space has **no persistent volume**, so runtime state survives restarts th
 ### Refresh runbook (filings ETL)
 
 - **DB copy in CI:** `refresh-filings.yml` and `embed-annuals.yml` copy the HF-cached `rag.duckdb` with `scripts/prepare_db_copy.py` (`copyfile` + `chmod u+w`). The HF cache blob is read-only and `shutil.copy` kept that, so the embed step failed with `Permission denied` (run 2026-09-21). A fail-fast step (`prepare_db_copy.py check`) opens the copy read-write and does a rolled-back write before any embedding.
-- **GPU backfill on HF Jobs (staging only):** `Dockerfile.hf-gpu` (CUDA runtime, uv; CUDA torch installed on top of the locked env, so `pyproject.toml`/`uv.lock` stay CPU-only) runs `scripts/run_hf_backfill.sh`. It fails unless `torch.cuda.is_available()`, pins and downloads the dataset head, records sha256 + row/filing counts, runs `embed_additional.py` for a bounded `BACKFILL_TICKERS` list, then verifies counts, duplicate `(ticker, accession, section_id, chunk_index)` keys (`chunk_index` restarts at 0 in every section, so section identity is part of the key) and `etl_guardrail.py`. The result stays in `$STAGING_DIR/rag.duckdb` (default `data/hf_backfill_staging/`, which must be under the repo root or `PERSIST_DIR` because `api/config.py` silently replaces any other `DB_PATH`; the runner aborts if the effective path differs). The runner never uploads to the production dataset or restarts the Space.
+- **GPU backfill on HF Jobs (staging only):** `Dockerfile.hf-gpu` (CUDA runtime, uv; CUDA torch installed on top of the locked env, so `pyproject.toml`/`uv.lock` stay CPU-only) runs `scripts/run_hf_backfill.sh`. It fails unless `torch.cuda.is_available()`, pins and downloads the dataset head, records sha256 + row/filing counts, runs `embed_additional.py` for a bounded `BACKFILL_TICKERS` list, then verifies counts, duplicate `(ticker, accession, section_id, chunk_index)` keys (`chunk_index` restarts at 0 in every section, so section identity is part of the key) and `etl_guardrail.py`. The result is built in `$STAGING_DIR/rag.duckdb` (default `data/hf_backfill_staging/`, which must be under the repo root or `PERSIST_DIR` because `api/config.py` silently replaces any other `DB_PATH`; the runner aborts if the effective path differs). An HF Job container is ephemeral and `hf jobs run` mounts no volume by default, so once every check passes the runner uploads `rag.duckdb` and `before.json` to a **private staging dataset repo** (`STAGING_REPO`) under `runs/<run id>/`, in one commit. The runner never uploads to the production dataset or restarts the Space.
 
-**The runner is a dry run by default**: it validates its inputs, prints the plan (tickers, forms, quarters, estimated filings) and exits 0 without downloading or embedding anything. It only executes with `BACKFILL_CONFIRM=yes` (or `--execute`). Caps are validated and any invalid value fails loudly (exit 2): `BACKFILL_TICKERS` (required, at most `BACKFILL_MAX_TICKERS`, default 10, allowed 1..50), `BACKFILL_QUARTERS` (integer 1..8, default 3, used for `10-Q`), `BACKFILL_FORMS` (`annual` or `10-Q`), and a hard deadline `BACKFILL_TIMEOUT_SECONDS` (60..21600, default 18000) enforced inside the script with `timeout`, independent of the `hf jobs --timeout` flag. Python helpers run as modules from the repo root (`python -m scripts.hf_backfill ...`), because running the file directly cannot import `api`.
+**The runner is a dry run by default**: it validates its inputs, prints the plan (tickers, forms, quarters, estimated filings) and exits 0 without downloading or embedding anything. It only executes with `BACKFILL_CONFIRM=yes` (or `--execute`). Caps are validated and any invalid value fails loudly (exit 2): `BACKFILL_TICKERS` (required, at most `BACKFILL_MAX_TICKERS`, default 10, allowed 1..50), `BACKFILL_QUARTERS` (integer 1..8, default 3, used for `10-Q`), `BACKFILL_FORMS` (`annual` or `10-Q`), and a hard deadline `BACKFILL_TIMEOUT_SECONDS` (60..21600, default 18000) enforced inside the script with `timeout`, independent of the `hf jobs --timeout` flag. `STAGING_REPO` is required to execute (not for a dry run): it must be an existing **private** dataset repo and must differ from `DATASET_REPO` (the runner refuses otherwise, before downloading anything and again before uploading). The run id is `BACKFILL_RUN_ID` or `<UTC time>-<dataset head>`; the final log line prints the repo and path. Python helpers run as modules from the repo root (`python -m scripts.hf_backfill ...`), because running the file directly cannot import `api`.
 
 Build the image and run the job (nothing here has been executed by CI or the PR):
 
@@ -433,9 +433,14 @@ hf jobs run --flavor l4x1 --timeout 6h \
   --secrets HF_TOKEN \
   -e DATASET_REPO=<user>/Rag-workbench -e BACKFILL_TICKERS=AAPL,MSFT -e BACKFILL_FORMS=annual \
   -e BACKFILL_CONFIRM=yes \
+  -e STAGING_REPO=<user>/Rag-workbench-staging \
   <registry>/rag-workbench-hf-gpu:<tag> \
   bash scripts/run_hf_backfill.sh
 ```
+
+Create the staging repo first (private, so the checks pass): `hf repos create <user>/Rag-workbench-staging --repo-type dataset --private`. Token scopes (names only): the job's `HF_TOKEN` needs read access to the production dataset and write access to the staging dataset; the publish step's token needs read access to the staging dataset and write access to the production dataset. Use separate fine-grained tokens where possible.
+
+**Alternative: persistent volume.** The installed `hf` CLI (huggingface_hub 1.33.0) supports `hf jobs run -v hf://buckets/<user>/<bucket>:/mnt:rw` (buckets are read-write; datasets, models and spaces mount read-only). To keep the result on a bucket as well, add that flag plus `-e STAGING_DIR=/mnt/stage -e PERSIST_DIR=/mnt` (`api/config.py` only accepts a DB path under the repo or `PERSIST_DIR`). `STAGING_REPO` is still required, so the dataset upload remains the documented source for publishing; the bucket copy is a second copy, and publishing from it uses the local-path form below with the bucket mounted or downloaded.
 
 **Rollback target:** dataset commit `7640a4bd`. Resolve and confirm the full hash before relying on it (the short hash alone is not verified here):
 
@@ -443,12 +448,16 @@ hf jobs run --flavor l4x1 --timeout 6h \
 python -c "from huggingface_hub import HfApi; [print(c.commit_id, c.title) for c in HfApi().list_repo_commits('<user>/Rag-workbench', repo_type='dataset') if c.commit_id.startswith('7640a4bd')]"
 ```
 
-**Guarded publish (documented, not executed by the runner).** Review the staged DB first, then, from a machine with a write token:
+**Guarded publish (documented, not executed by the runner).** Use the run id from the job log, from a machine with a write token (`HF_TOKEN` in the environment):
 
 ```bash
-HF_TOKEN=... uv run python -m scripts.hf_backfill publish \
-  "$STAGING_DIR/rag.duckdb" "$STAGING_DIR/before.json" --repo <user>/Rag-workbench --confirm
+uv run python -m scripts.hf_backfill publish \
+  --staging-repo <user>/Rag-workbench-staging --run-id <run id> --repo <user>/Rag-workbench --confirm
+# From local files instead (e.g. a mounted bucket or an already-downloaded copy):
+uv run python -m scripts.hf_backfill publish <dir>/rag.duckdb <dir>/before.json --repo <user>/Rag-workbench --confirm
 ```
+
+With `--staging-repo` it downloads `runs/<run id>/rag.duckdb` and `before.json` into a private temp dir, refuses if either is missing, if the staging repo is the production repo, or if the DB's sha256 differs from `before.json`, and then runs the guards below.
 
 It exits non-zero without `--confirm`, and aborts if the dataset head differs from the `dataset_head` recorded in `before.json` (the upload is also pinned with `parent_commit`). Immediately before uploading it copies the staged file to a private temp snapshot, runs the DB integrity, shrink and duplicate checks on that snapshot, re-hashes it, and uploads that same snapshot, so a staged path swapped after verification is never uploaded; it refuses on any failure. Restarting the Space is a separate manual step.
 

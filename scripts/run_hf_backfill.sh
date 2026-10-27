@@ -9,7 +9,12 @@
 #
 # Env:
 #   DATASET_REPO      source dataset (read only), e.g. <user>/Rag-workbench
-#   HF_TOKEN          read token
+#   HF_TOKEN          read token for DATASET_REPO plus write access to STAGING_REPO
+#   STAGING_REPO      required when executing: an existing PRIVATE dataset repo, never
+#                     DATASET_REPO. A job container is ephemeral, so the result
+#                     (rag.duckdb + before.json) is uploaded there under runs/<run id>/
+#                     once every check passes. Dry runs do no network work.
+#   BACKFILL_RUN_ID   optional run id for that path (default <UTC time>-<dataset head>)
 #   BACKFILL_TICKERS  required, comma list (bounds the run), e.g. AAPL,MSFT
 #   BACKFILL_MAX_TICKERS  cap on the list length (default 10, allowed 1..50)
 #   BACKFILL_FORMS    annual | 10-Q (default annual)
@@ -71,12 +76,19 @@ done
 if [ "$FORMS" = "10-Q" ]; then PER_TICKER="$QUARTERS"; else PER_TICKER=2; fi
 EST=$(( ${#TICKER_LIST[@]} * PER_TICKER ))
 
+if [ -n "${STAGING_REPO:-}" ]; then
+  [ "${STAGING_REPO,,}" != "${DATASET_REPO,,}" ] \
+    || die "STAGING_REPO must not be the production dataset DATASET_REPO"
+fi
 echo "PLAN: repo=$DATASET_REPO forms=$FORMS quarters=$QUARTERS tickers=${TICKER_LIST[*]}"
 echo "PLAN: up to $EST filings to embed (<= $PER_TICKER per ticker), deadline ${DEADLINE}s"
 if [ "$EXECUTE" -ne 1 ]; then
   echo "DRY RUN: nothing downloaded or embedded. Set BACKFILL_CONFIRM=yes or pass --execute to run."
   exit 0
 fi
+
+# Executing needs somewhere outside the ephemeral container to keep the result.
+: "${STAGING_REPO:?STAGING_REPO required to execute (private dataset repo that receives the result)}"
 
 # ── hard deadline: re-exec the whole run under `timeout` ────────────────────
 # The outer run always re-execs. The inner run is recognised only by `--inner=DIR`
@@ -110,6 +122,9 @@ export DB_PATH="$WORK_DB"
 # Fail unless a GPU is visible; never silently embed on CPU for 6h.
 "${PY[@]}" -m scripts.hf_backfill check-cuda
 
+# Before spending hours on a GPU: the staging repo must exist, be private and not production.
+"${PY[@]}" -m scripts.hf_backfill stage-check --repo "$STAGING_REPO" --prod-repo "$DATASET_REPO"
+
 # Pin the dataset head, download that exact revision, copy to a writable file.
 HEAD_SHA=$("${PY[@]}" - <<'PYCODE'
 import os
@@ -139,4 +154,9 @@ if [ "$FORMS" = "10-Q" ]; then EXTRA=(--quarters "$QUARTERS"); fi
 "${PY[@]}" -m scripts.hf_backfill verify "$WORK_DB" "$BEFORE"
 "${PY[@]}" scripts/etl_guardrail.py verify "$WORK_DB" "$STAGING_DIR/guardrail_before.json"
 
-echo "Staged result: $WORK_DB (dataset head at snapshot: $HEAD_SHA). NOT published."
+RUN_ID="${BACKFILL_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-${HEAD_SHA:0:12}}"
+[[ "$RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ ]] || die "invalid BACKFILL_RUN_ID '$RUN_ID'"
+"${PY[@]}" -m scripts.hf_backfill stage-upload "$WORK_DB" "$BEFORE" \
+  --repo "$STAGING_REPO" --prod-repo "$DATASET_REPO" --run-id "$RUN_ID"
+
+echo "Staged result: $STAGING_REPO runs/$RUN_ID (dataset head at snapshot: $HEAD_SHA). NOT published."
