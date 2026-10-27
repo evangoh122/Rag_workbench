@@ -198,18 +198,39 @@ _20F_SECTIONS: Dict[str, str] = {
 }
 
 
-# S-1 / 424B4 IPO prospectus sections. Unlike 10-K "Item N" headings, a
-# prospectus uses titled sections, so these are matched as standalone header
-# lines (see _extract_prospectus_sections) rather than item-bounded regexes.
-_S1_SECTIONS: Dict[str, str] = {
-    "prospectus_summary": r"prospectus\s+summary",
-    "risk_factors":       r"risk\s+factors",
-    "use_of_proceeds":    r"use\s+of\s+proceeds",
-    "capitalization":     r"capitalization",
-    "dilution":           r"dilution",
-    "md_and_a":           r"management['’]?s\s+discussion\s+and\s+analysis",
-    "business":           r"business(?:\s+overview)?",
-}
+# S-1 / 424B4 IPO prospectus headings, in the order they appear in a prospectus.
+# Unlike 10-K "Item N" headings these are plain titles, so they are matched only
+# as a STANDALONE heading (the whole line, see _prospectus_heading_re) and the
+# extractor picks one ordered chain through them (_extract_prospectus_sections).
+# Entries with a label are stored as sections; entries with label None are only
+# delimiters that end the preceding section (e.g. so Business stops at
+# "Management" instead of running to end-of-document, and Use of Proceeds stops
+# at "Dividend Policy").
+_PROSPECTUS_HEADINGS: List[tuple[str | None, str]] = [
+    ("prospectus_summary", r"prospectus\s+summary"),
+    ("risk_factors",       r"risk\s+factors"),
+    (None, r"special\s+note\s+regarding\s+forward[-\s]looking\s+statements"),
+    (None, r"(?:industry|market)(?:,?\s+(?:market|industry))?\s+(?:and\s+other\s+)?data"),
+    ("use_of_proceeds",    r"use\s+of\s+proceeds"),
+    (None, r"dividend\s+policy"),
+    ("capitalization",     r"capitalization"),
+    ("dilution",           r"dilution"),
+    ("md_and_a",           r"management['’]?s\s+discussion\s+and\s+analysis"
+                           r"(?:\s+of\s+financial\s+condition\s+and\s+results\s+of\s+operations)?"),
+    ("business",           r"business(?:\s+overview)?"),
+    (None, r"our\s+governance\s+structure\s+and\s+its\s+goals"),
+    (None, r"management"),
+    (None, r"(?:executive|director)\s+compensation"),
+    (None, r"certain\s+relationships\s+and\s+related[-\s]party\s+transactions"),
+    (None, r"principal(?:\s+and\s+selling)?\s+(?:stock|share)holders"),
+    (None, r"description\s+of\s+(?:capital\s+stock|share\s+capital)"),
+    (None, r"shares\s+eligible\s+for\s+future\s+sale"),
+    (None, r"underwriting(?:\s*\(conflicts\s+of\s+interest\))?"),
+    (None, r"legal\s+matters"),
+    (None, r"experts"),
+    (None, r"where\s+you\s+can\s+find\s+(?:more|additional)\s+information"),
+    (None, r"index\s+to\s+(?:consolidated\s+)?financial\s+statements"),
+]
 
 # Forms whose text is a prospectus (titled sections), not a 10-K-style report.
 _PROSPECTUS_FORMS = {"S-1", "S-1/A", "424B4", "424B3", "424B1", "F-1", "F-1/A"}
@@ -219,6 +240,9 @@ _PROSPECTUS_FORMS = {"S-1", "S-1/A", "424B4", "424B3", "424B1", "F-1", "F-1/A"}
 # have no periodic report yet (e.g. SPCX). 424B4 = final prospectus, then the
 # latest amendment, then the original S-1.
 _DEFAULT_FORM_TYPES = ["10-K", "20-F", "10-Q", "424B4", "S-1/A", "S-1"]
+
+# Forms sec-edgar-downloader rejects ("'S-1/A' forms are not supported").
+_DOWNLOADER_UNSUPPORTED_FORMS = {"S-1/A", "F-1/A"}
 
 # Internal corpus keys which are not EDGAR ticker symbols. Keep historical
 # aliases such as SPCX on their existing lookup behavior.
@@ -242,50 +266,119 @@ def _downloader_filing_dir(lookup_key: str, form_type: str) -> Path:
     return _DOWNLOAD_DIR / "sec-edgar-filings" / lookup_key / form_type
 
 
-def _extract_prospectus_sections(text: str, section_map: Dict[str, str]) -> List[tuple[str, str]]:
-    """
-    Extract titled sections from an IPO prospectus (S-1 / 424B4).
+# Running page furniture left at the end of a slice ("Table of Contents" page
+# header, bare page number) when the next heading sits at the top of a page.
+_PAGE_FURNITURE_TAIL = re.compile(r"(?:\n[ \t]*(?:table\s+of\s+contents|\d{1,3})[ \t]*)+\s*$", re.IGNORECASE)
 
-    Prospectus documents have no "Item N" boundaries, so we locate every section
-    header as a standalone line, sort the hits by position, and slice the body of
-    each section up to the next header. A document's table of contents lists the
-    same headers, but those slices are tiny (just the TOC line), so for each label
-    we keep only the longest slice — which is the real section body, not the TOC
-    entry. Falls back to the full text if no headers match.
-    """
-    matches: List[tuple[int, str]] = []
-    for label, pat in section_map.items():
-        # Header must START the line and the line must END within a short distance
-        # of the match (real headers like "MANAGEMENT'S DISCUSSION AND ANALYSIS OF
-        # FINANCIAL CONDITION..." carry trailing words; body paragraphs are long
-        # single lines and so won't satisfy the end-of-line anchor).
-        header_re = re.compile(r"(?im)^[ \t]*" + pat + r"[^\n]{0,80}$")
-        for m in header_re.finditer(text):
-            matches.append((m.start(), label))
 
-    if not matches:
+def _prospectus_heading_re(pattern: str) -> re.Pattern[str]:
+    """Match ``pattern`` only when it is the ENTIRE line (optional trailing . or :).
+
+    Whitespace inside the pattern may span line breaks so a heading wrapped over
+    two lines still matches. A body line that merely *starts* with the word
+    ("business, financial condition, and results of operations ...") does not.
+    """
+    return re.compile(r"(?im)^[ \t]*" + pattern + r"[ \t]*[.:]?[ \t]*$")
+
+
+def _extract_prospectus_sections(text: str) -> List[tuple[str, str]]:
+    """
+    Extract the main sections of an IPO prospectus (S-1 / 424B4) from normalized
+    text in which headings sit on their own line (see ``parse_prospectus_file``).
+
+    Strategy (ordered, exact main-heading boundaries):
+
+    1. Every heading in ``_PROSPECTUS_HEADINGS`` is located as a standalone line.
+       Those hits include the table of contents and "The Offering" summary rows
+       ("Use of proceeds", "Risk Factors"), which look like headings but sit only
+       a few chars from the next heading.
+    2. One candidate is chosen per label such that the chosen starts follow the
+       canonical prospectus order (Summary -> Risk Factors -> Use of Proceeds ->
+       Capitalization -> Dilution -> MD&A -> Business), maximizing the summed
+       distance from each chosen heading to the next heading-like line of any
+       kind. Real section bodies are long; TOC / summary-table hits are not, so
+       they lose even when they come first. (A greedy "first match" or "longest
+       slice ignoring order" pick cannot do this - it is what truncated Risk
+       Factors at a body paragraph starting "business, financial condition".)
+    3. A section ends at the next chosen heading or, if sooner, the first
+       delimiter heading (Dividend Policy, Management, Underwriting, ...) that is
+       canonically positioned after it, so Business does not run to end of file.
+
+    Falls back to the full text if no section of >200 chars is found.
+    """
+    stages = _PROSPECTUS_HEADINGS
+    hits: List[tuple[int, int]] = []  # (char offset, stage index)
+    for stage, (_, pat) in enumerate(stages):
+        for m in _prospectus_heading_re(pat).finditer(text):
+            hits.append((m.start(), stage))
+    hits.sort()
+    if not hits:
         return [("full_text", text)]
 
-    matches.sort()
-    longest: Dict[str, str] = {}
-    for i, (pos, label) in enumerate(matches):
-        end = matches[i + 1][0] if i + 1 < len(matches) else len(text)
-        segment = text[pos:end].strip()
-        if len(segment) > len(longest.get(label, "")):
-            longest[label] = segment
-
-    # Preserve section_map order; drop short slices (TOC remnants / stray headers).
-    # 200-char floor matches the sibling _extract_sections_with_labels threshold.
-    extracted = [
-        (label, longest[label])
-        for label in section_map
-        if label in longest and len(longest[label]) > 200
+    # Score each hit by the distance to the next hit of ANY stage (or EOF). A real
+    # section is closed by a LATER canonical heading, so a hit whose next hit is
+    # of the same or an earlier stage is a reference row (e.g. "Risk factors" in
+    # "The Offering" table, followed further down by the real heading) and scores 0.
+    positions = [pos for pos, _ in hits]
+    score = [
+        0 if i + 1 < len(hits) and hits[i + 1][1] <= stage
+        else (positions[i + 1] if i + 1 < len(hits) else len(text)) - pos
+        for i, (pos, stage) in enumerate(hits)
     ]
+
+    # Best ordered chain over the labeled stages (hits are sorted by position,
+    # labeled stages are increasing, so only compare to earlier hits).
+    labeled = [i for i, hit in enumerate(hits) if stages[hit[1]][0] is not None]
+    best: Dict[int, tuple[int, int | None]] = {}  # hit idx -> (chain score, prev hit idx)
+    for i in labeled:
+        stage_i = hits[i][1]
+        prev, prev_total = None, 0
+        for j in labeled:
+            if j >= i:
+                break
+            if hits[j][1] < stage_i and positions[j] < positions[i] and best[j][0] > prev_total:
+                prev, prev_total = j, best[j][0]
+        best[i] = (prev_total + score[i], prev)
+    if not best:
+        return [("full_text", text)]
+    tail: int | None = max(best, key=lambda k: best[k][0])
+    chain: List[int] = []
+    while tail is not None:
+        chain.append(tail)
+        tail = best[tail][1]
+    chain.reverse()
+
+    extracted: List[tuple[str, str]] = []
+    for n, i in enumerate(chain):
+        pos, stage = hits[i]
+        end = positions[chain[n + 1]] if n + 1 < len(chain) else len(text)
+        next_stage = hits[chain[n + 1]][1] if n + 1 < len(chain) else len(stages)
+        for hpos, hstage in hits:
+            if hpos > pos and hpos < end and stage < hstage < next_stage and stages[hstage][0] is None:
+                end = hpos
+                break
+        segment = _PAGE_FURNITURE_TAIL.sub("", text[pos:end]).strip()
+        if len(segment) > 200:
+            extracted.append((stages[stage][0], segment))
+
     if not extracted:
         return [("full_text", text)]
-
     logger.debug(f"Extracted {len(extracted)} prospectus sections")
     return extracted
+
+
+def _canonical_accession(accession: str) -> str:
+    """Return the dashed form (0001628280-26-067168) used by production rows.
+
+    sec-edgar-downloader names its directories with dashes, edgartools'
+    ``accession_number`` is dashed too but this module used to strip them; one
+    canonical form keeps ticker+accession deletes/idempotent re-runs working
+    whichever fetch path produced the filing.
+    """
+    digits = re.sub(r"\D", "", accession)
+    if len(digits) == 18:
+        return f"{digits[:10]}-{digits[10:12]}-{digits[12:]}"
+    return accession.strip()
 
 
 def _fetch_filing_with_edgartools(ticker: str, form_types: List[str] = None) -> tuple[str, str, str]:
@@ -313,7 +406,7 @@ def _fetch_filing_with_edgartools(ticker: str, form_types: List[str] = None) -> 
                 logger.debug(f"No {form_type} filing for {ticker}: {e}")
                 continue
 
-            accession = filing.accession_number.replace("-", "")
+            accession = _canonical_accession(filing.accession_number)
             safe_dir = _DOWNLOAD_DIR / "sec-edgar-filings" / ticker / form_type / accession
             safe_dir.mkdir(parents=True, exist_ok=True)
 
@@ -337,7 +430,13 @@ def _fetch_filing_with_edgartools(ticker: str, form_types: List[str] = None) -> 
 
 def _fetch_filing_with_downloader(ticker: str, form_types: List[str] = None) -> tuple[str, str]:
     """Download the latest filing for the given form types. Returns (file_path, form_type).
-    Falls back to edgartools if sec_edgar_downloader is blocked."""
+    Falls back to edgartools if sec_edgar_downloader is blocked.
+
+    The form order in ``form_types`` is honoured on both fetch paths: forms the
+    downloader cannot fetch (``_DOWNLOADER_UNSUPPORTED_FORMS``, e.g. S-1/A) are
+    tried through edgartools at their place in the order, instead of being
+    skipped so a stale original S-1 wins over the latest amendment.
+    """
     if form_types is None:
         form_types = _DEFAULT_FORM_TYPES
 
@@ -345,6 +444,11 @@ def _fetch_filing_with_downloader(ticker: str, form_types: List[str] = None) -> 
     lookup_key = _filing_lookup_key(ticker)
 
     for form_type in form_types:
+        if form_type in _DOWNLOADER_UNSUPPORTED_FORMS:
+            path, form, _ = _fetch_filing_with_edgartools(ticker, [form_type])
+            if path:
+                return path, form
+            continue
         try:
             num_downloaded = dl.get(form_type, lookup_key, limit=1, download_details=True)
             if num_downloaded == 0:
@@ -505,6 +609,72 @@ def parse_html_file(file_path: str) -> tuple[str, str]:
         return "", ""
 
 
+_BLOCK_TAGS = ["div", "p", "tr", "td", "th", "li", "br", "h1", "h2", "h3", "h4", "h5", "h6",
+               "table", "section", "ul", "ol", "body"]
+_STYLE_PT = {k: re.compile(rf"{k}:\s*(-?[\d.]+)pt") for k in ("left", "width")}
+
+
+def _html_to_layout_text(content: str) -> str:
+    """Layout-aware HTML -> text for positioned (PDF-style) SEC prospectuses.
+
+    ``BeautifulSoup.get_text("\\n")`` puts every inline ``<font>``/``<span>``
+    fragment on its own line, so a heading drawn as ``Use`` ``of`` ``Proceeds``
+    (or ``Prospectus`` ``Summary``) never forms a heading line. Here only block
+    elements (div/p/tr/...) break lines and the fragments inside one visual line
+    are concatenated; a space is inserted where positioned fragments are visibly
+    apart (``left`` beyond the previous fragment's ``left + width``).
+    """
+    soup = BeautifulSoup(content, "lxml")
+    for tag in soup(["script", "style", "ix:nonnumeric", "ix:nonfraction", "ix:header"]):
+        tag.decompose()
+
+    for line in soup.find_all("div"):
+        prev_end = None
+        for frag in line.find_all("font", recursive=False):
+            style = frag.get("style", "")
+            left, width = (_STYLE_PT[k].search(style) for k in ("left", "width"))
+            if left and prev_end is not None and float(left.group(1)) - prev_end > 1.0:
+                frag.insert_before(" ")
+            prev_end = float(left.group(1)) + float(width.group(1)) if left and width else None
+
+    for tag in soup.find_all(_BLOCK_TAGS):
+        tag.insert_before("\n")
+        tag.insert_after("\n")
+    text = soup.get_text("")
+    text = re.sub(r"[ \t\xa0]+", " ", text)
+    text = re.sub(r" ?\n[ \n]*", "\n", text)
+    return text.strip()
+
+
+def parse_prospectus_file(file_path: str) -> tuple[str, str]:
+    """Return (normalized_text, raw_content) for an S-1 / 424B4 style prospectus.
+
+    Both fetch paths feed the same section splitter, so both are reduced to ONE
+    representation: plain text with headings on their own line. The downloader
+    saves raw positioned HTML (-> ``_html_to_layout_text``); edgartools saves
+    ``filing.text()`` which is already text (used as-is, only whitespace and the
+    repeated "Table of Contents" page header are normalized).
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        logger.warning(f"Failed to read {file_path}: {e}")
+        return "", ""
+
+    if re.search(r"<(?:html|body|div|p|font|table)\b", content[:200_000], re.IGNORECASE):
+        try:
+            text = _html_to_layout_text(content)
+        except Exception as e:
+            logger.warning(f"Failed to parse {file_path}: {e}")
+            return "", ""
+    else:
+        text = re.sub(r"[ \t\xa0]+", " ", content)
+        text = re.sub(r" ?\n[ \n]*", "\n", text)
+    text = re.sub(r"(?im)^table of contents$\n?", "", text)
+    return text.strip(), content
+
+
 def _ensure_schema(conn) -> None:
     """Ensure edgar_embeddings table exists with all required columns (idempotent)."""
     conn.execute("""
@@ -595,10 +765,10 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
         # Ensure schema is up to date
         _ensure_schema(conn)
 
-        # Embeddings from different models cannot coexist safely: DuckDB vector
-        # distance requires every stored vector to match the query dimension.
-        # Clear an incompatible corpus before rebuilding ticker by ticker.
-        _reset_incompatible_embeddings(conn, Config.EMBEDDING_DIM)
+        # Append-only for data this run does not target: no global reset here.
+        # (A dimension-based reset used to wipe every ticker's rows whenever the
+        # corpus held another dimension.) Only the targeted ticker+accession rows
+        # are replaced, below.
 
         for ticker in tickers:
             logger.info(f"Processing filings for {ticker}...")
@@ -613,7 +783,10 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
                     logger.warning(f"No filings downloaded for {ticker}.")
                     continue
 
-                text, raw_html = parse_html_file(file_path)
+                if form_type.upper() in _PROSPECTUS_FORMS:
+                    text, raw_html = parse_prospectus_file(file_path)
+                else:
+                    text, raw_html = parse_html_file(file_path)
 
                 if not text:
                     continue
@@ -621,7 +794,7 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
                 # Extract period_of_report from HTML or accession dir name
                 accession_dir_name = Path(file_path).parent.name
                 period_of_report = _extract_period_of_report(raw_html, accession_dir_name)
-                accession = accession_dir_name
+                accession = _canonical_accession(accession_dir_name)
 
                 cik = _TICKER_CIK.get(ticker.upper(), "")
 
@@ -630,7 +803,7 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
                 # prospectus forms (S-1 / 424B4) use titled sections, not 10-K
                 # "Item N" headings, so route them through the prospectus splitter.
                 if form_type.upper() in _PROSPECTUS_FORMS:
-                    sections = _extract_prospectus_sections(text, _S1_SECTIONS)
+                    sections = _extract_prospectus_sections(text)
                 else:
                     sections = _extract_sections_with_labels(text)
 
@@ -659,10 +832,13 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
 
                 ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-                # Delete existing records for this ticker+accession
+                # Delete existing records for this ticker+accession. Compare with
+                # dashes stripped on both sides so rows written by either fetch
+                # path (dashed or undashed) are replaced, not duplicated.
                 conn.execute(
-                    "DELETE FROM edgar_embeddings WHERE ticker = ? AND accession = ?",
-                    [ticker, accession]
+                    "DELETE FROM edgar_embeddings WHERE ticker = ? "
+                    "AND replace(accession, '-', '') = ?",
+                    [ticker, accession.replace("-", "")]
                 )
 
                 for i in range(0, len(all_chunks), batch_size):

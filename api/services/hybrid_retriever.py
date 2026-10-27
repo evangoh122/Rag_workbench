@@ -195,20 +195,29 @@ def vector_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document
             return []
         qvec = embeddings.embed_query(query)
 
+        # edgar_embeddings.embedding is a variable-length FLOAT[] column, but
+        # array_distance only binds fixed-size ARRAY types: cast both sides
+        # (casting only the query raised a Binder Error that was swallowed
+        # below, silently disabling vector search). Rows stored with another
+        # dimension cannot be cast to FLOAT[dim], and one bad row aborts the
+        # whole query, so filter them out first. DuckDB applies WHERE before
+        # the SELECT list, so the cast only ever sees rows of the right length.
+        dim = int(Config.EMBEDDING_DIM)
         if ticker:
             rows = conn.execute(f"""
                 SELECT ticker, text, accession, section_id, chunk_index, period_of_report, form_type,
-                       array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
+                       array_distance(embedding::FLOAT[{dim}], ?::FLOAT[{dim}]) AS dist
                 FROM edgar_embeddings
-                WHERE ticker = ?
+                WHERE ticker = ? AND len(embedding) = {dim}
                 ORDER BY dist ASC
                 LIMIT ?
             """, [qvec, ticker, top_k]).fetchall()
         else:
             rows = conn.execute(f"""
                 SELECT ticker, text, accession, section_id, chunk_index, period_of_report, form_type,
-                       array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
+                       array_distance(embedding::FLOAT[{dim}], ?::FLOAT[{dim}]) AS dist
                 FROM edgar_embeddings
+                WHERE len(embedding) = {dim}
                 ORDER BY dist ASC
                 LIMIT ?
             """, [qvec, top_k]).fetchall()

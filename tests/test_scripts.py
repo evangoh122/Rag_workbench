@@ -104,8 +104,8 @@ def test_edgartools_uses_expected_lookup_key(tmp_path, ticker, expected_lookup):
 
     company_cls.assert_called_once_with(expected_lookup)
     assert form == "S-1"
-    assert accession == "000162828026067168"
-    assert path.endswith(f"{ticker}/S-1/000162828026067168/primary-document.html")
+    assert accession == "0001628280-26-067168"
+    assert path.endswith(f"{ticker}/S-1/0001628280-26-067168/primary-document.html")
 
 
 @pytest.mark.parametrize(
