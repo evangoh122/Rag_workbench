@@ -1,6 +1,8 @@
 """Tests for scripts/colab_backfill_checks.py: append-only proof, runner caps, resume bookkeeping."""
 import json
+import os
 import re
+import threading
 from pathlib import Path
 
 import duckdb
@@ -400,3 +402,234 @@ def test_restore_rechecks_the_restored_db_hash(tmp_path):
     got, _ = chk.read_checkpoint(str(ck), "P1")
     with pytest.raises(RuntimeError, match="does not match the checkpoint manifest"):
         chk.restore_checkpoint({**got, "db_sha256": "0" * 64}, str(tmp_path / "db"), {})
+
+
+# ── concurrent writers ──────────────────────────────────────────────────────
+
+def _versions(ck):
+    return sorted(d.name for d in ck.iterdir() if d.name.startswith("v-"))
+
+
+def test_two_synchronised_writers_both_succeed_and_current_is_a_verified_version(tmp_path):
+    for round_ in range(8):
+        ck = tmp_path / f"ck{round_}"
+        srcs = {tag: _src(tmp_path, f"{tag}{round_}") for tag in "ab"}
+        barrier = threading.Barrier(2)
+        results, errors = {}, []
+
+        def writer(tag):
+            db, files = srcs[tag]
+            try:
+                barrier.wait(timeout=10)
+                results[tag] = chk.write_checkpoint(str(ck), db, files, {"tag": tag, "completed": [tag]}, "P1")
+            except BaseException as exc:  # noqa: BLE001
+                errors.append((tag, repr(exc)))
+
+        threads = [threading.Thread(target=writer, args=(t,)) for t in "ab"]
+        [t.start() for t in threads]
+        [t.join(timeout=60) for t in threads]
+        assert not errors, errors
+        got, why = chk.read_checkpoint(str(ck), "P1")
+        assert why == "ok"
+        current = (ck / "CURRENT").read_text()
+        # a returned success means that writer's own, fully verified version existed; CURRENT is one of them
+        assert current in {m["version"] for m in results.values()}
+        assert got["meta"]["tag"] in {"a", "b"} and (ck / current / "manifest.json").is_file()
+        assert not [d for d in ck.iterdir() if d.name.endswith(".tmp")]
+
+
+def test_writers_are_serialised_by_an_exclusive_lock(tmp_path):
+    ck = tmp_path / "ck"
+    first_in, release = threading.Event(), threading.Event()
+    second_done = threading.Event()
+    (da, fa), (db_, fb) = _src(tmp_path, "a"), _src(tmp_path, "b")
+
+    def hold(name):
+        if name == "db":
+            first_in.set()
+            release.wait(timeout=20)
+
+    def first():
+        chk.write_checkpoint(str(ck), da, fa, {"tag": "a", "completed": []}, "P1", hold)
+
+    def second():
+        chk.write_checkpoint(str(ck), db_, fb, {"tag": "b", "completed": []}, "P1")
+        second_done.set()
+
+    t1 = threading.Thread(target=first)
+    t1.start()
+    assert first_in.wait(timeout=10)
+    t2 = threading.Thread(target=second)
+    t2.start()
+    assert not second_done.wait(timeout=0.5), "second writer ran while the first still held the lock"
+    assert len(_versions(ck)) == 1  # it has not even created its version directory
+    release.set()
+    t1.join(timeout=20)
+    t2.join(timeout=20)
+    assert second_done.is_set()
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert why == "ok" and got["meta"]["tag"] == "b"  # the last writer wins
+
+
+def test_lock_timeout_gives_a_clear_error(tmp_path):
+    import fcntl
+    ck = tmp_path / "ck"
+    ck.mkdir()
+    fd = os.open(ck / ".lock", os.O_RDWR | os.O_CREAT)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    outcome = []
+
+    def contender():
+        try:
+            with chk._writer_lock(str(ck), timeout=0.2):
+                outcome.append("acquired")
+        except RuntimeError as exc:
+            outcome.append(str(exc))
+
+    t = threading.Thread(target=contender, daemon=True)  # daemon + bounded join: a broken timeout fails, not hangs
+    t.start()
+    t.join(timeout=5)
+    try:
+        assert outcome and "checkpoint lock" in outcome[0], outcome or "timed out waiting for the timeout"
+        assert _versions(ck) == []
+    finally:
+        os.close(fd)  # releases the lock so a leaked contender can finish
+        t.join(timeout=5)
+
+
+def test_temp_pointer_is_writer_unique_and_only_own_temp_is_cleaned(tmp_path):
+    ck = tmp_path / "ck"
+    ck.mkdir()
+    foreign = ck / "CURRENT.999.abcd1234.tmp"
+    foreign.write_text("someone else")
+    seen = []
+
+    def boom(name):
+        if name == "pointer_tmp":
+            seen.extend(sorted(d.name for d in ck.iterdir() if d.name.startswith("CURRENT.")))
+            raise Crash
+
+    with pytest.raises(Crash):
+        _write(tmp_path, ck, "a", on_step=boom)
+    own = [n for n in seen if n != foreign.name]
+    assert len(own) == 1 and re.fullmatch(rf"CURRENT\.{os.getpid()}\.[0-9a-f]{{8}}\.tmp", own[0])
+    assert foreign.read_text() == "someone else"  # not ours: untouched
+    assert sorted(d.name for d in ck.iterdir() if d.name.startswith("CURRENT.")) == [foreign.name]
+    assert chk.read_checkpoint(str(ck))[0] is None
+
+
+# ── symlinks and path traversal ─────────────────────────────────────────────
+
+def _checkpoint(tmp_path, tag="a"):
+    ck = tmp_path / "ck"
+    _write(tmp_path, ck, tag)
+    return ck, ck / (ck / "CURRENT").read_text()
+
+
+def _outside_copy(tmp_path, src):
+    dst = tmp_path / "outside" / src.name
+    dst.parent.mkdir(exist_ok=True)
+    dst.write_bytes(src.read_bytes())  # identical bytes: hashes still match, only the link is wrong
+    return dst
+
+
+def _swap_for_link(path, target):
+    path.unlink()
+    path.symlink_to(target)
+
+
+@pytest.mark.parametrize("member", ["rag.duckdb", "before.json", "manifest.json"])
+def test_symlinked_member_is_refused_even_when_its_bytes_match(tmp_path, member):
+    ck, vdir = _checkpoint(tmp_path)
+    outside = _outside_copy(tmp_path, vdir / member)
+    _swap_for_link(vdir / member, outside)
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert got is None and ("symlink" in why or "not a regular file" in why), why
+
+
+def test_symlinked_current_is_refused(tmp_path):
+    ck, vdir = _checkpoint(tmp_path)
+    outside = _outside_copy(tmp_path, ck / "CURRENT")
+    _swap_for_link(ck / "CURRENT", outside)
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert got is None and "CURRENT is not a regular file" in why
+    # also a link to a perfectly valid CURRENT inside the tree
+    _swap_for_link(ck / "CURRENT", vdir.parent / "CURRENT.real")  # dangling target is refused too
+    assert chk.read_checkpoint(str(ck), "P1")[0] is None
+
+
+def test_symlinked_version_directory_is_refused(tmp_path):
+    ck, vdir = _checkpoint(tmp_path)
+    moved = tmp_path / "elsewhere" / vdir.name
+    moved.parent.mkdir()
+    vdir.rename(moved)
+    vdir.symlink_to(moved)  # the whole version directory (parent of every file) is a link
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert got is None and "not a real directory" in why
+
+
+def test_symlinked_checkpoint_root_itself_is_allowed(tmp_path):
+    ck, vdir = _checkpoint(tmp_path)
+    link = tmp_path / "alias"
+    link.symlink_to(ck)  # the folder the user chose may sit behind a link (e.g. a mounted drive)
+    assert chk.read_checkpoint(str(link), "P1")[1] == "ok"
+
+
+@pytest.mark.parametrize("name", ["../evil.json", "../../evil.json", "/tmp/evil.json", "a/b", "..", ".", "",
+                                  "sub\\evil", "x\0y"])
+def test_manifest_file_names_with_separators_or_traversal_are_refused(tmp_path, name):
+    ck, vdir = _checkpoint(tmp_path)
+    (ck / "evil.json").write_text("{}")  # a file the name would reach if it were followed
+    m = json.loads((vdir / "manifest.json").read_text())
+    m["files"][name] = chk.sha256_file(str(ck / "evil.json"))
+    (vdir / "manifest.json").write_text(json.dumps(m))
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert got is None and why != "ok"
+
+
+def test_absolute_name_pointing_at_a_real_file_is_refused(tmp_path):
+    ck, vdir = _checkpoint(tmp_path)
+    evil = tmp_path / "evil.json"
+    evil.write_text("{}")
+    m = json.loads((vdir / "manifest.json").read_text())
+    m["files"][str(evil)] = chk.sha256_file(str(evil))
+    (vdir / "manifest.json").write_text(json.dumps(m))
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert got is None and "invalid file" in why
+
+
+def test_restore_refuses_a_symlinked_or_foreign_source(tmp_path):
+    ck, vdir = _checkpoint(tmp_path)
+    got, _ = chk.read_checkpoint(str(ck), "P1")
+    outside = _outside_copy(tmp_path, vdir / "rag.duckdb")
+    _swap_for_link(vdir / "rag.duckdb", outside)  # swapped after the read, before the restore
+    with pytest.raises(RuntimeError, match="symlink|regular file"):
+        chk.restore_checkpoint(got, str(tmp_path / "db"), {})
+    assert not (tmp_path / "db").exists()
+    ck2 = tmp_path / "ck2"
+    _write(tmp_path, ck2, "z")
+    got2, _ = chk.read_checkpoint(str(ck2), "P1")
+    foreign = {**got2, "files": {"before.json": str(tmp_path / "outside" / "rag.duckdb")}}
+    with pytest.raises(RuntimeError, match="not inside|regular file"):
+        chk.restore_checkpoint(foreign, str(tmp_path / "db2"), {"before.json": str(tmp_path / "b")})
+
+
+def test_restore_rechecks_restored_snapshot_hashes(tmp_path):
+    ck, vdir = _checkpoint(tmp_path)
+    got, _ = chk.read_checkpoint(str(ck), "P1")
+    chk.restore_checkpoint(got, str(tmp_path / "db"), {"before.json": str(tmp_path / "b.json")})
+    bad = {**got, "hashes": {"before.json": "0" * 64}}
+    with pytest.raises(RuntimeError, match="restored before.json does not match"):
+        chk.restore_checkpoint(bad, str(tmp_path / "db"), {"before.json": str(tmp_path / "b.json")})
+
+
+def test_prune_does_not_follow_a_planted_version_link(tmp_path):
+    ck = tmp_path / "ck"
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "keep.txt").write_text("keep")
+    ck.mkdir()
+    for ts in ("20200101T000000Z", "20200102T000000Z", "20200103T000000Z"):
+        (ck / f"v-{ts}-deadbeef").symlink_to(victim)
+    _write(tmp_path, ck, "a")
+    assert (victim / "keep.txt").read_text() == "keep"
