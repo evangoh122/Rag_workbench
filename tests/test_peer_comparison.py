@@ -85,6 +85,12 @@ class TestNameResolution:
         assert _name_to_ticker("NVIDIA Corporation") == "NVDA"
         assert _name_to_ticker("Texas Instruments") == "TXN"
         assert _name_to_ticker("Broadcom Inc.") == "AVGO"
+        assert _name_to_ticker("Anthropic PBC") == "ANTH"
+
+    def test_anthropic_has_no_curated_peers(self):
+        from api.services.peer_comparison import _PEER_GROUPS
+
+        assert _PEER_GROUPS["ANTH"] == []
 
     def test_unknown_name_returns_none(self):
         assert _name_to_ticker("MediaTek") is None

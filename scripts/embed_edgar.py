@@ -40,6 +40,8 @@ _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 
 # CIK lookup for well-known tickers
 _TICKER_CIK: dict[str, str] = {
+    # ── Private / pre-ticker issuers ──
+    "ANTH": "0002130357",  # Anthropic PBC — internal key for its S-1 corpus
     # ── Aerospace / Launch ──
     "SPCX": "0001181412",  # Space Exploration Technologies (SpaceX) — IPO'd 2026, S-1 / 424B4 prospectus
     "RKLB": "0001819994",  # Rocket Lab USA, Inc.
@@ -153,6 +155,8 @@ except ImportError:
 
 # All tickers for ingestion
 DEMO_TICKERS: List[str] = [
+    # Private / pre-ticker issuer (S-1 prospectus; internal key)
+    "ANTH",
     # Aerospace / Launch (IPO prospectus, not a 10-K filer yet)
     "SPCX",
     # Aerospace / Launch (10-K filer)
@@ -221,6 +225,18 @@ _PROSPECTUS_FORMS = {"S-1", "S-1/A", "424B4", "424B3", "424B1", "F-1", "F-1/A"}
 # latest amendment, then the original S-1.
 _DEFAULT_FORM_TYPES = ["10-K", "20-F", "10-Q", "424B4", "S-1/A", "S-1"]
 
+# Internal corpus keys which are not EDGAR ticker symbols. Keep historical
+# aliases such as SPCX on their existing lookup behavior.
+_CIK_LOOKUP_ALIASES = {"ANTH"}
+
+
+def _filing_lookup_key(ticker: str) -> str:
+    """Return the EDGAR lookup identifier while preserving the corpus key."""
+    normalized = ticker.upper()
+    if normalized in _CIK_LOOKUP_ALIASES:
+        return _TICKER_CIK[normalized]
+    return ticker
+
 
 def _extract_prospectus_sections(text: str, section_map: Dict[str, str]) -> List[tuple[str, str]]:
     """
@@ -280,7 +296,7 @@ def _fetch_filing_with_edgartools(ticker: str, form_types: List[str] = None) -> 
         form_types = _DEFAULT_FORM_TYPES
 
     try:
-        company = Company(ticker)
+        company = Company(_filing_lookup_key(ticker))
         for form_type in form_types:
             try:
                 filings = company.get_filings(form=form_type)
@@ -322,14 +338,15 @@ def _fetch_filing_with_downloader(ticker: str, form_types: List[str] = None) -> 
         form_types = _DEFAULT_FORM_TYPES
 
     dl = Downloader(_COMPANY, _EMAIL, _DOWNLOAD_DIR)
+    lookup_key = _filing_lookup_key(ticker)
 
     for form_type in form_types:
         try:
-            num_downloaded = dl.get(form_type, ticker, limit=1, download_details=True)
+            num_downloaded = dl.get(form_type, lookup_key, limit=1, download_details=True)
             if num_downloaded == 0:
                 continue
 
-            ticker_dir = _DOWNLOAD_DIR / "sec-edgar-filings" / ticker / form_type
+            ticker_dir = _DOWNLOAD_DIR / "sec-edgar-filings" / lookup_key / form_type
             if not ticker_dir.exists():
                 continue
 

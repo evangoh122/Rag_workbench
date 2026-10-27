@@ -9,7 +9,8 @@ import polars as pl
 from api.services.langgraph_engine import (
     retrieval_node, extraction_node, math_node, verification_node,
     eval_node, output_node, abstention_node, run_auditable_rag,
-    _humanize_concept,
+    _humanize_concept, _named_uncovered_company, _resolve_query_ticker,
+    classifier_node,
 )
 
 @pytest.fixture
@@ -26,6 +27,20 @@ def base_state():
         "final_answer": "",
         "status": {},
     }
+
+
+def test_anthropic_resolves_and_is_not_out_of_universe():
+    assert _resolve_query_ticker("What revenue did Anthropic report?", "NVDA") == "ANTH"
+    assert _named_uncovered_company("What revenue did Anthropic report?") is None
+
+
+@patch("api.services.langgraph_engine._ticker_has_xbrl", return_value=False)
+def test_anthropic_numeric_query_uses_text_grounded_path(mock_has_xbrl):
+    result = classifier_node({"query": "What was Anthropic revenue?", "ticker": "ANTH", "status": {}})
+
+    mock_has_xbrl.assert_called_once_with("ANTH")
+    assert result["query_type"] == "qualitative"
+    assert result["numeric_text_grounded"] is True
 
 class TestLangGraphNodes:
     @patch("api.services.langgraph_engine.EDGARHybridRetriever")

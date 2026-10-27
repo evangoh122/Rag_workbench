@@ -260,6 +260,7 @@ _COMPANY_ALIASES: dict[str, str] = {
     "aehr test systems": "AEHR",
     "texas instruments": "TXN",
     "micron technology": "MU",
+    "anthropic pbc": "ANTH",
     "space exploration technologies": "SPCX",
     "space exploration": "SPCX",
     "space x": "SPCX",
@@ -268,6 +269,7 @@ _COMPANY_ALIASES: dict[str, str] = {
     "rocketlab": "RKLB",
     # Single-word aliases — unambiguous, >= 5 chars, not common English words
     "spacex": "SPCX",
+    "anthropic": "ANTH",
     "broadcom": "AVGO",
     "intel": "INTC",
     "micron": "MU",

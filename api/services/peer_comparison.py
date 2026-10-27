@@ -38,6 +38,7 @@ _TICKER_TO_NAMES: Dict[str, List[str]] = {
     "MCHP": ["microchip"],
     "ADI":  ["analog devices"],
     "SPCX": ["spacex", "space exploration"],
+    "ANTH": ["anthropic", "anthropic pbc"],
     "RKLB": ["rocket lab", "rocket labs", "rocketlab", "rocket lab usa", "rklb"],
     "ON":   ["on semi", "on semiconductor", "onsemi", "on"],
     "STM":  ["stmicroelectronics", "stmicro", "stm"],
@@ -81,6 +82,7 @@ _PEER_GROUPS: Dict[str, List[str]] = {
     "LRCX": ["AMAT", "KLAC"],
     "KLAC": ["AMAT", "LRCX"],
     "SPCX": [],
+    "ANTH": [],
 }
 
 _MAX_PEERS = 4  # subject + up to 4 peers keeps the table readable

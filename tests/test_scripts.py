@@ -1,6 +1,8 @@
 import sys
 from unittest.mock import MagicMock
 
+import pytest
+
 # Mock missing modules
 for mod in ["sec_edgar_downloader", "langchain_text_splitters", "bs4", "edgar"]:
     sys.modules[mod] = MagicMock()
@@ -12,7 +14,13 @@ scripts.embed_tickers.get_embeddings = MagicMock()
 from unittest.mock import patch, mock_open  # noqa: E402
 
 # Now we can import the scripts
-from scripts.embed_edgar import _reset_incompatible_embeddings, run_embed_edgar_etl  # noqa: E402
+from scripts.embed_edgar import (  # noqa: E402
+    _fetch_filing_with_downloader,
+    _fetch_filing_with_edgartools,
+    _filing_lookup_key,
+    _reset_incompatible_embeddings,
+    run_embed_edgar_etl,
+)
 from scripts.embed_tickers import (  # noqa: E402
     _load_ticker_rows,
     _reset_incompatible_embeddings as _reset_incompatible_ticker_embeddings,
@@ -21,6 +29,57 @@ from scripts.init_graph_triples import init_graph_triples  # noqa: E402
 from scripts.run_shadow import load_extractions, main as shadow_main  # noqa: E402
 
 # ── Embed Edgar Script Tests ─────────────────────────────────────────────────
+
+def test_internal_alias_lookup_only_changes_anthropic():
+    assert _filing_lookup_key("ANTH") == "0002130357"
+    assert _filing_lookup_key("SPCX") == "SPCX"
+    assert _filing_lookup_key("NVDA") == "NVDA"
+
+
+@pytest.mark.parametrize(
+    ("ticker", "expected_lookup"),
+    [("ANTH", "0002130357"), ("SPCX", "SPCX"), ("NVDA", "NVDA")],
+)
+def test_edgartools_uses_expected_lookup_key(tmp_path, ticker, expected_lookup):
+    import scripts.embed_edgar as module
+
+    filing = MagicMock(accession_number="0001628280-26-067168")
+    filing.text.return_value = "Anthropic S-1"
+    filings = MagicMock(empty=False)
+    filings.latest.return_value = filing
+    company = MagicMock()
+    company.get_filings.return_value = filings
+    with (
+        patch.object(module, "_DOWNLOAD_DIR", tmp_path),
+        patch("edgar.Company", return_value=company) as company_cls,
+        patch("api.services._edgar_identity.ensure_edgar_identity"),
+    ):
+        path, form, accession = _fetch_filing_with_edgartools(ticker, ["S-1"])
+
+    company_cls.assert_called_once_with(expected_lookup)
+    assert form == "S-1"
+    assert accession == "000162828026067168"
+    assert path.endswith(f"{ticker}/S-1/000162828026067168/primary-document.html")
+
+
+@pytest.mark.parametrize(
+    ("ticker", "expected_lookup"),
+    [("ANTH", "0002130357"), ("SPCX", "SPCX"), ("NVDA", "NVDA")],
+)
+def test_downloader_uses_expected_lookup_key(tmp_path, ticker, expected_lookup):
+    import scripts.embed_edgar as module
+
+    primary = tmp_path / "sec-edgar-filings" / expected_lookup / "S-1" / "accession" / "primary-document.html"
+    primary.parent.mkdir(parents=True)
+    primary.write_text("Anthropic S-1", encoding="utf-8")
+    downloader = MagicMock()
+    downloader.get.return_value = 1
+    with patch.object(module, "_DOWNLOAD_DIR", tmp_path), patch.object(module, "Downloader", return_value=downloader):
+        path, form = _fetch_filing_with_downloader(ticker, ["S-1"])
+
+    downloader.get.assert_called_once_with("S-1", expected_lookup, limit=1, download_details=True)
+    assert (path, form) == (str(primary), "S-1")
+
 
 def test_reset_incompatible_embeddings_clears_mixed_dimensions():
     import duckdb
