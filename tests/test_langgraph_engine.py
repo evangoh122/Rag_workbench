@@ -86,15 +86,20 @@ def test_anthropic_alone_with_uncovered_company_abstains(query):
 
 
 def _alias_cases():
-    from api.services.peer_comparison import _TICKER_TO_NAMES
+    from api.services.peer_comparison import _ENGLISH_WORD_TICKERS, _TICKER_TO_NAMES
     cases = []
     for ticker, names in _TICKER_TO_NAMES.items():
         if ticker == "ANTH":
             continue
         for alias in sorted(set(names) | {ticker}):
-            # "on"/"stm"-style bare words are only companies when written as symbols
-            written = alias.upper() if alias.upper() == ticker or alias == "on" else alias.title()
-            cases.append(written)
+            if ticker in _ENGLISH_WORD_TICKERS and alias.upper() == ticker or alias == "on":
+                # English-word symbols are only companies when written upper-case
+                cases.append(alias.upper())
+            elif alias.upper() == ticker:
+                # ticker-equal aliases are not English words: any casing counts
+                cases.extend([alias.lower(), alias.title(), alias.upper()])
+            else:
+                cases.append(alias.title())
     return cases
 
 
@@ -114,11 +119,52 @@ def test_every_covered_alias_with_anthropic_and_uncovered_does_not_abstain(alias
 
 
 @pytest.mark.parametrize("query", [
+    "Did tsm supply Anthropic and OpenAI?",
+    "Did stm sell to Anthropic or Google?",
+    "Does plab supply Anthropic or OpenAI?",
+    "What were Amd's sales to Microsoft and Anthropic?",
+])
+def test_lowercase_ticker_equal_aliases_with_anthropic_do_not_abstain(query):
+    class _Reached(Exception):
+        pass
+
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached), \
+         patch("api.services.langgraph_engine._abstain_response") as mock_abstain:
+        with pytest.raises(_Reached):
+            run_auditable_rag(query, "MU")
+
+    mock_abstain.assert_not_called()
+
+
+def test_prose_upper_case_on_and_tsm_still_recognised():
+    from api.services.peer_comparison import _tickers_named_in_query
+    assert _tickers_named_in_query("Compare ON and TSM", strict_symbols=True) == ["ON", "TSM"]
+    assert _tickers_named_in_query("revenue on tsm", strict_symbols=True) == ["TSM"]
+
+
+def test_default_path_is_case_insensitive_and_pinned():
+    from api.services.peer_comparison import _tickers_named_in_query
+    assert _tickers_named_in_query("compare intc and txn") == ["INTC", "TXN"]
+    assert _tickers_named_in_query("in the form of onto") == ["FORM", "ONTO"]
+
+
+def test_detect_comparison_uses_default_strict_symbols():
+    from api.services import peer_comparison as pc
+    with patch.object(pc, "_tickers_named_in_query", wraps=pc._tickers_named_in_query) as spy:
+        pc.detect_comparison("compare intc and txn", "MU")
+    spy.assert_called_once_with("compare intc and txn")
+
+
+@pytest.mark.parametrize("query", [
     "Compare Anthropic vs OpenAI in the form of a table",
     "Map Anthropic onto OpenAI",
     "What does Anthropic's Form S-1 say about OpenAI?",
     "Anthropic PBC vs OpenAI",
     "ANTH vs OpenAI",
+    "Anthropic vs OpenAI in the form of a table",
+    "Anthropic vs OpenAI onto ter",
+    "Anthropic vs OpenAI on revenue",
 ])
 def test_english_words_matching_tickers_do_not_count_as_covered(query):
     result = run_auditable_rag(query, "MU")

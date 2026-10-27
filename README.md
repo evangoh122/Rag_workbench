@@ -340,7 +340,7 @@ EMBED_TICKERS=NVDA,AMD uv run python -m scripts.embed_edgar
 ```
 
 Each chunk is stored with `ticker`, `accession`, `cik`, `section_id`, `form_type`, `period_of_report`, `chunk_index`. The retriever uses this metadata to build the audit trail. The coverage universe (see `api/config.py` `TICKER_TO_CIK`) includes major semiconductor names, SpaceX prospectus filings under `SPCX`, and Anthropic's public S-1 under the internal key `ANTH`. Anthropic has no public ticker; `ANTH` must be renamed and its stored data migrated when one is assigned. The weekly `refresh-filings` / `scripts/embed_additional.py` workflow cannot ingest S-1-only companies, so prospectus-only coverage must be loaded through `scripts/embed_edgar.py`; `embed_additional.py` resolves internal keys such as `ANTH` to their CIK via the same `_filing_lookup_key` helper as `embed_edgar` rather than looking them up as stock tickers.
-Questions that name two covered companies currently enter explicit comparison mode even without comparison wording (the same known tradeoff applies to the `SPCX` alias).
+Questions that name two covered companies currently enter explicit comparison mode even without comparison wording (the same known tradeoff applies to the `SPCX` alias). The Anthropic-only abstain exception treats `ON`, `FORM`, `ONTO` and `TER` as companies only when upper-case, so an all-caps question such as `ANTHROPIC VS OPENAI ON REVENUE` still counts `ON` as covered and does not abstain (accepted).
 
 Related scripts: `extract_xbrl_facts.py`, `extract_graph_triples.py`, `backfill_xbrl_coverage.py`, `reembed_qwen06.py`.
 

@@ -85,6 +85,10 @@ _PEER_GROUPS: Dict[str, List[str]] = {
     "ANTH": [],
 }
 
+# Covered tickers that are also ordinary English words. In strict mode they only
+# count as companies when written in upper case ("ON" is always upper-case-only).
+_ENGLISH_WORD_TICKERS = frozenset({"ON", "FORM", "ONTO", "TER"})
+
 _MAX_PEERS = 4  # subject + up to 4 peers keeps the table readable
 
 # Words that signal "compare me to my competitors / the field".
@@ -143,9 +147,10 @@ def _tickers_named_in_query(query: str, strict_symbols: bool = False) -> List[st
     Matches both company names ("Intel") and ticker symbols length >= 3
     ("INTC") on a word boundary, mirroring the single-ticker resolver.
 
-    ``strict_symbols`` makes symbol-like matches (explicit tickers and aliases
-    equal to a ticker, e.g. "stm") case-sensitive so English words such as
-    "form", "onto" or "ter" are not read as companies. Default is unchanged.
+    ``strict_symbols`` makes the symbols in ``_ENGLISH_WORD_TICKERS`` (FORM,
+    ONTO, TER) case-sensitive so the English words "form", "onto" or "ter" are
+    not read as companies. Other symbols/aliases (amd, tsm, stm...) stay
+    case-insensitive. Default is unchanged.
     """
     q = (query or "")
     found: List[str] = []
@@ -167,17 +172,15 @@ def _tickers_named_in_query(query: str, strict_symbols: bool = False) -> List[st
                 else:
                     continue
             # Use word boundary to prevent matching substrings of other words (e.g. 'on' in 'micron')
-            if strict_symbols and n.upper() == ticker:
-                m = re.search(r"\b" + re.escape(ticker) + r"\b", q)
-            else:
-                m = re.search(r"\b" + re.escape(n) + r"\b", ql)
+            m = re.search(r"\b" + re.escape(n) + r"\b", ql)
             if m:
                 name_hits.append((m.start(), ticker))
                 break
     # Explicit symbols (>=3 chars, word boundary)
     for ticker in covered:
         if len(ticker) >= 3:
-            m = re.search(r"\b" + re.escape(ticker) + r"\b", q, 0 if strict_symbols else re.IGNORECASE)
+            case_sensitive = strict_symbols and ticker in _ENGLISH_WORD_TICKERS
+            m = re.search(r"\b" + re.escape(ticker) + r"\b", q, 0 if case_sensitive else re.IGNORECASE)
             if m:
                 name_hits.append((m.start(), ticker))
 
