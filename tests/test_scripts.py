@@ -41,8 +41,36 @@ def test_internal_alias_lookup_only_changes_anthropic():
 def test_anthropic_cik_comes_from_central_config():
     from api.config import TICKER_TO_CIK
 
-    assert TICKER_TO_CIK["ANTH"] == "0002130357"
-    assert _TICKER_CIK["ANTH"] == TICKER_TO_CIK["ANTH"]
+    assert TICKER_TO_CIK.get("ANTH") == "0002130357"
+    assert _TICKER_CIK.get("ANTH") == TICKER_TO_CIK.get("ANTH")
+
+
+@pytest.mark.parametrize(
+    ("ticker", "expected_lookup"),
+    [("ANTH", "0002130357"), ("SPCX", "SPCX"), ("NVDA", "NVDA")],
+)
+def test_embed_additional_uses_cik_lookup_key(ticker, expected_lookup):
+    import duckdb
+
+    sys.modules["bs4"].XMLParsedAsHTMLWarning = UserWarning  # mocked bs4 stub
+    import scripts.embed_additional as module
+
+    conn = duckdb.connect(":memory:")
+    conn.execute("CREATE TABLE edgar_embeddings (ticker VARCHAR, form_type VARCHAR, accession VARCHAR)")
+    conn.execute("INSERT INTO edgar_embeddings VALUES (?, '10-K', 'a')", [ticker])
+    company = MagicMock()
+    company.get_filings.return_value = MagicMock(empty=True)
+    with (
+        patch.object(sys, "argv", ["embed_additional", "--dry-run", "--tickers", ticker]),
+        patch.object(module, "ensure_edgar_identity"),
+        patch.object(module, "get_embeddings", return_value=MagicMock()),
+        patch.object(module, "StructureChunker"),
+        patch.object(module.duckdb, "connect", return_value=conn),
+        patch.object(module, "Company", return_value=company) as company_cls,
+    ):
+        module.main()
+
+    company_cls.assert_called_once_with(expected_lookup)
 
 
 def test_downloader_path_uses_zero_padded_anthropic_cik(tmp_path):

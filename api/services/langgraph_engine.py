@@ -2180,12 +2180,14 @@ def run_auditable_rag(query: str, ticker: str,
     # Ground on the company named in the question, not the UI's default ticker.
     # If the query names a company we DON'T cover, abstain rather than answering
     # with the default ticker's data ("SpaceX revenue" must not return Micron's).
+    by_name = _resolve_query_ticker(query, "")  # covered ticker, or "" if none recognised
     uncovered = _named_uncovered_company(query)
-    if uncovered:
+    # Normally only abstain when NO covered company is named. Narrow exception:
+    # ANTH is a pre-ticker issuer, so "OpenAI vs Anthropic" must not answer from
+    # ANTH alone. Real tickers (QCOM, NVDA...) naming a big customer still answer.
+    if uncovered and (not by_name or by_name == "ANTH"):
         logger.info(f"Abstaining — query names uncovered company {uncovered!r}")
         return _abstain_response(uncovered)
-
-    by_name = _resolve_query_ticker(query, "")  # covered ticker, or "" if none recognised
     if not by_name:
         by_name = ticker  # no company named -> honour the UI's selected ticker
     if by_name != ticker:

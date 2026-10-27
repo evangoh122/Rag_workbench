@@ -40,7 +40,6 @@ _DOWNLOAD_DIR = Path("./data/edgar_downloads")
 
 # CIK lookup for well-known tickers
 _TICKER_CIK: dict[str, str] = {
-    # ── Private / pre-ticker issuers ──
     # ── Aerospace / Launch ──
     "SPCX": "0001181412",  # Space Exploration Technologies (SpaceX) — IPO'd 2026, S-1 / 424B4 prospectus
     "RKLB": "0001819994",  # Rocket Lab USA, Inc.

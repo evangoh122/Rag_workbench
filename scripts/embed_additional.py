@@ -68,6 +68,7 @@ from scripts.embed_edgar import (  # noqa: E402
     _extract_sections_with_labels,
     _ensure_schema,
     _TICKER_CIK,
+    _filing_lookup_key,
 )
 
 from edgar import Company  # noqa: E402
@@ -238,7 +239,7 @@ def main():
                 # Pull a wider window, then keep only EXACT-form filings (drop
                 # amendments like 10-K/A) and take the n most recent.
                 try:
-                    filings = Company(ticker).get_filings(form=form_code)
+                    filings = Company(_filing_lookup_key(ticker)).get_filings(form=form_code)
                     if filings is None or getattr(filings, "empty", False):
                         logger.info(f"[{ticker}] No {form_code} filings found.")
                         continue

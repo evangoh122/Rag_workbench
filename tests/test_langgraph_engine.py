@@ -55,6 +55,39 @@ def test_uncovered_company_still_abstains_when_anthropic_is_also_named(uncovered
     assert uncovered.lower() in result["verification_reasoning"].lower()
 
 
+@pytest.mark.parametrize("query,ticker", [
+    ("What share of Qualcomm revenue comes from Apple?", "QCOM"),
+    ("How much does NVIDIA sell to Microsoft?", "NVDA"),
+    ("Broadcom custom accelerator revenue from Google", "AVGO"),
+])
+def test_real_ticker_naming_uncovered_customer_does_not_abstain(query, ticker):
+    class _Reached(Exception):
+        pass
+
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached), \
+         patch("api.services.langgraph_engine._abstain_response") as mock_abstain:
+        with pytest.raises(_Reached):
+            run_auditable_rag(query, "MU")
+
+    mock_abstain.assert_not_called()
+
+
+@pytest.mark.parametrize("query", ["Micron revenue", "SpaceX revenue", "Tesla revenue"])
+def test_plain_company_questions_unchanged(query):
+    # Micron/SpaceX are covered (reach the graph); Tesla is uncovered (abstains).
+    class _Reached(Exception):
+        pass
+
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached):
+        if "Tesla" in query:
+            assert run_auditable_rag(query, "MU")["verification_status"] == "ABSTAIN"
+        else:
+            with pytest.raises(_Reached):
+                run_auditable_rag(query, "MU")
+
+
 @patch("api.services.peer_comparison.compute_metric")
 def test_nvidia_investment_in_anthropic_uses_multi_company_comparison(mock_metric):
     # Known tradeoff: merely naming two covered companies selects explicit
