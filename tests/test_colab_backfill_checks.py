@@ -633,3 +633,106 @@ def test_prune_does_not_follow_a_planted_version_link(tmp_path):
         (ck / f"v-{ts}-deadbeef").symlink_to(victim)
     _write(tmp_path, ck, "a")
     assert (victim / "keep.txt").read_text() == "keep"
+
+
+# ── version-directory TOCTOU (swap a directory for a symlink between check and open) ──
+
+def _attacker_dir(tmp_path, vname):
+    """An outside folder shaped like a valid version directory, with attacker metadata and matching hashes."""
+    evil = tmp_path / "outside" / vname
+    evil.mkdir(parents=True)
+    (evil / "rag.duckdb").write_bytes(b"ATTACKER-DB")
+    (evil / "before.json").write_text('{"tag": "attacker"}')
+    manifest = {"version": vname, "pinned_sha": "P1", "db_sha256": chk.sha256_file(str(evil / "rag.duckdb")),
+                "files": {"rag.duckdb": chk.sha256_file(str(evil / "rag.duckdb")),
+                          "before.json": chk.sha256_file(str(evil / "before.json"))},
+                "meta": {"tag": "attacker", "completed": ["attacker"]}}
+    (evil / "manifest.json").write_text(json.dumps(manifest))
+    return evil
+
+
+def _swapper(ck, vdir, evil):
+    """A hook that, at the chosen step, makes a barrier-synchronised thread swap vdir for a symlink to evil."""
+    barrier = threading.Barrier(2, timeout=10)
+    errors = []
+
+    def swap():
+        try:
+            barrier.wait()
+            vdir.rename(vdir.with_name(vdir.name + ".moved"))
+            vdir.symlink_to(evil)
+            barrier.wait()
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(repr(exc))
+
+    def hook_at(point):
+        thread = threading.Thread(target=swap, daemon=True)
+        state = {"thread": thread, "started": False}
+
+        def hook(name):
+            if name == point:
+                state["started"] = True
+                thread.start()
+                barrier.wait()   # the swapper now swaps while we are paused at this exact point
+                barrier.wait()
+        return hook, state
+
+    return hook_at, errors
+
+
+@pytest.mark.parametrize("point", ["root", "version", "manifest"])
+def test_read_checkpoint_never_returns_data_from_a_swapped_in_symlink(tmp_path, point):
+    ck, vdir = _checkpoint(tmp_path)
+    evil = _attacker_dir(tmp_path, vdir.name)
+    hook_at, errors = _swapper(ck, vdir, evil)
+    hook, state = hook_at(point)
+    got, why = chk.read_checkpoint(str(ck), "P1", on_step=hook)
+    state["thread"].join(timeout=10)
+    assert state["started"] and not errors, errors
+    assert vdir.is_symlink()  # the swap really happened while we were mid-read
+    if got is None:
+        assert point == "root" and "symlinks are refused" in why, (point, why)  # before the directory was opened
+    else:
+        # the directory was already open: everything came from the ORIGINAL directory's descriptor
+        assert point != "root" and got["meta"]["tag"] == "a", got["meta"]
+        assert got["meta"]["tag"] != "attacker" and got["db_sha256"] != chk.sha256_file(str(evil / "rag.duckdb"))
+
+
+@pytest.mark.parametrize("point", ["root", "version"])
+def test_restore_checkpoint_never_copies_through_a_swapped_in_symlink(tmp_path, point):
+    ck, vdir = _checkpoint(tmp_path)
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert why == "ok"
+    evil = _attacker_dir(tmp_path, vdir.name)
+    hook_at, errors = _swapper(ck, vdir, evil)
+    hook, state = hook_at(point)
+    db, snap = tmp_path / "work.duckdb", tmp_path / "work-before.json"
+    if point == "root":
+        with pytest.raises(RuntimeError, match="symlinks are refused"):
+            chk.restore_checkpoint(got, str(db), {"before.json": str(snap)}, on_step=hook)
+        assert not db.exists() and not snap.exists()
+    else:
+        chk.restore_checkpoint(got, str(db), {"before.json": str(snap)}, on_step=hook)
+        assert db.read_bytes() == b"db-a" * 100 and json.loads(snap.read_text()) == {"tag": "a"}
+    state["thread"].join(timeout=10)
+    assert state["started"] and not errors, errors
+    assert b"ATTACKER" not in (db.read_bytes() if db.exists() else b"")
+    assert not [p for p in tmp_path.iterdir() if ".tmp." in p.name]  # no partial copies left behind
+
+
+def test_restore_verifies_the_bytes_it_copied_not_an_earlier_read(tmp_path):
+    ck, vdir = _checkpoint(tmp_path)
+    got, _ = chk.read_checkpoint(str(ck), "P1")
+    (vdir / "rag.duckdb").write_bytes(b"changed after the verified read")  # same file, new bytes
+    db = tmp_path / "work.duckdb"
+    db.write_bytes(b"existing working copy")
+    with pytest.raises(RuntimeError, match="restored database does not match"):
+        chk.restore_checkpoint(got, str(db), {})
+    assert db.read_bytes() == b"existing working copy"  # a bad copy never replaces the destination
+    assert not [p for p in tmp_path.iterdir() if ".tmp." in p.name]
+
+
+def test_fd_support_is_required(monkeypatch):
+    monkeypatch.delattr(os, "O_NOFOLLOW")
+    with pytest.raises(RuntimeError, match="need Linux"):
+        chk.read_checkpoint("/nonexistent")

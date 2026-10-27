@@ -21,8 +21,6 @@ import time
 
 import duckdb
 
-from scripts.prepare_db_copy import copy_writable
-
 # Limits copied from scripts/run_hf_backfill.sh (BACKFILL_MAX_TICKERS, BACKFILL_QUARTERS,
 # BACKFILL_TIMEOUT_SECONDS). tests/test_colab_notebook.py checks they have not drifted.
 MAX_TICKERS_LIMIT = (1, 50)
@@ -311,126 +309,190 @@ def _safe_name(name) -> bool:
             and "\0" not in name and not os.path.isabs(name) and os.path.basename(name) == name)
 
 
-def _is_plain(path: str, want=stat.S_ISREG) -> bool:
-    """True when `path` itself (not what it points to) is a regular file / directory, not a symlink."""
+def _require_fd_support() -> None:
+    """The descriptor-bound reads need openat-style opens (Linux/Colab); refuse loudly elsewhere."""
+    if not (hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW") and os.open in os.supports_dir_fd):
+        raise RuntimeError("this platform lacks O_DIRECTORY/O_NOFOLLOW/dir_fd; checkpoints need Linux (Colab)")
+
+
+class _Refused(Exception):
+    """A checkpoint member failed a descriptor-level check; the message is the user-facing reason."""
+
+
+def _open_dir(parent_fd: int, name: str, what: str) -> int:
+    """Open directory `name` inside `parent_fd` without following a symlink; fstat-verify it."""
     try:
-        return want(os.lstat(path).st_mode)
-    except OSError:
-        return False
+        fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
+    except OSError as exc:
+        raise _Refused(f"{what} is missing or is not a real directory (symlinks are refused)") from exc
+    if not stat.S_ISDIR(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise _Refused(f"{what} is not a real directory")
+    return fd
 
 
-def _inside(parent: str, path: str) -> bool:
-    """True when the fully resolved `path` is directly under the fully resolved `parent`."""
-    rp, rd = os.path.realpath(path), os.path.realpath(parent)
+def _open_file(dir_fd: int, name: str, what: str) -> int:
+    """Open regular file `name` inside `dir_fd` (no symlink at the last component); fstat-verify it."""
+    if not _safe_name(name):
+        raise _Refused(f"manifest names an invalid file {name!r}")
     try:
-        return os.path.commonpath([rp, rd]) == rd and os.path.dirname(rp) == rd
-    except ValueError:
-        return False
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dir_fd)
+    except OSError as exc:
+        raise _Refused(f"{what} is missing or is not a regular file (symlinks are refused)") from exc
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise _Refused(f"{what} is missing or is not a regular file (symlinks are refused)")
+    return fd
 
 
-def _read_nofollow(path: str) -> bytes:
-    fd = os.open(path, os.O_RDONLY | _NOFOLLOW)
-    with os.fdopen(fd, "rb") as f:
-        return f.read()
+def _read_all(fd: int) -> bytes:
+    chunks = []
+    while block := os.read(fd, 1 << 20):
+        chunks.append(block)
+    return b"".join(chunks)
 
 
-def _sha256_nofollow(path: str) -> str:
+def _sha256_fd(fd: int) -> str:
     h = hashlib.sha256()
-    fd = os.open(path, os.O_RDONLY | _NOFOLLOW)
-    with os.fdopen(fd, "rb") as f:
-        for block in iter(lambda: f.read(1 << 20), b""):
-            h.update(block)
+    while block := os.read(fd, 1 << 20):
+        h.update(block)
     return h.hexdigest()
 
 
-def _member_problem(vdir: str, name: str) -> str | None:
-    if not _safe_name(name):
-        return f"manifest names an invalid file {name!r}"
-    path = os.path.join(vdir, name)
-    if not _is_plain(path):
-        return f"{name} is missing or is not a regular file (symlinks are refused)"
-    if not _inside(vdir, path):
-        return f"{name} resolves outside the checkpoint"
-    return None
-
-
-def read_checkpoint(ckpt_dir: str, pinned_sha: str | None = None) -> tuple[dict | None, str]:
+def read_checkpoint(ckpt_dir: str, pinned_sha: str | None = None, on_step=None) -> tuple[dict | None, str]:
     """Return (checkpoint, 'ok') for a verified current checkpoint, else (None, reason).
 
     Verified means: CURRENT is a regular file naming a well-formed version directory (a real directory
-    inside `ckpt_dir`) whose manifest agrees with it, matches `pinned_sha` (when given), and every listed
-    file is a plain regular file inside that directory whose sha256 equals the manifest's. Symlinks
-    anywhere in that chain, path-like file names, torn writes, edits and other revisions are refused.
+    directly inside `ckpt_dir`) whose manifest agrees with it, matches `pinned_sha` (when given), and
+    every listed file is a plain regular file in that directory whose sha256 equals the manifest's.
+    The root is resolved once (a symlinked root such as a mounted drive is fine); from there everything
+    is opened relative to directory descriptors with O_NOFOLLOW and hashed from the open descriptor, never
+    re-opened by pathname, so swapping a directory for a symlink mid-read cannot redirect it. Symlinks,
+    path-like names, torn writes, edits and other revisions are refused. `on_step(name)` ('root',
+    'version', 'manifest') lets tests act between steps.
     """
-    root = os.path.realpath(ckpt_dir)  # the folder the caller chose may itself sit behind a link
-    cur = os.path.join(root, CURRENT)
-    if not os.path.lexists(cur):
+    _require_fd_support()
+    step = on_step or (lambda name: None)
+    root = os.path.realpath(ckpt_dir)
+    try:
+        root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
         return None, "no checkpoint"
-    if not _is_plain(cur):
-        return None, "CURRENT is not a regular file (symlinks are refused)"
+    fds = [root_fd]
     try:
-        version = _read_nofollow(cur).decode("utf-8").strip()
-    except (OSError, UnicodeDecodeError) as exc:
-        return None, f"CURRENT unreadable: {exc}"
-    if not VERSION_RE.match(version):
-        return None, f"CURRENT is not a valid version name: {version[:40]!r}"
-    vdir = os.path.join(root, version)
-    if not _is_plain(vdir, stat.S_ISDIR):
-        return None, "version directory is missing or is not a real directory (symlinks are refused)"
-    mpath = os.path.join(vdir, MANIFEST)
-    if not _is_plain(mpath):
-        return None, "manifest unreadable: missing or not a regular file"
-    try:
-        manifest = json.loads(_read_nofollow(mpath).decode("utf-8"))
-    except (OSError, ValueError) as exc:
-        return None, f"manifest unreadable: {exc}"
-    if not isinstance(manifest, dict) or manifest.get("version") != version:
-        return None, "manifest does not belong to the current version"
-    if pinned_sha is not None and manifest.get("pinned_sha") != pinned_sha:
-        return None, f"checkpoint is for revision {manifest.get('pinned_sha')}, not {pinned_sha}"
-    hashes = manifest.get("files")
-    if not isinstance(hashes, dict) or DB_NAME not in hashes or manifest.get("db_sha256") != hashes[DB_NAME]:
-        return None, "manifest has no consistent database hash"
-    paths = {}
-    for name, want in hashes.items():
-        problem = _member_problem(vdir, name)
-        if problem:
-            return None, problem
-        path = os.path.join(vdir, name)
         try:
-            ok = _sha256_nofollow(path) == want
+            cur_fd = os.open(CURRENT, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=root_fd)
+        except FileNotFoundError:
+            return None, "no checkpoint"
         except OSError:
-            ok = False
-        if not ok:
-            return None, f"{name} is missing or does not match its manifest hash"
-        paths[name] = path
-    db = paths.pop(DB_NAME)
-    return {"dir": vdir, "db": db, "files": paths, "meta": manifest.get("meta", {}),
-            "pinned_sha": manifest.get("pinned_sha"), "db_sha256": manifest["db_sha256"],
-            "hashes": {k: v for k, v in hashes.items() if k != DB_NAME}}, "ok"
+            return None, "CURRENT is not a regular file (symlinks are refused)"
+        fds.append(cur_fd)
+        if not stat.S_ISREG(os.fstat(cur_fd).st_mode):
+            return None, "CURRENT is not a regular file (symlinks are refused)"
+        try:
+            version = os.read(cur_fd, 4096).decode("utf-8").strip()
+        except (OSError, UnicodeDecodeError) as exc:
+            return None, f"CURRENT unreadable: {exc}"
+        if not VERSION_RE.match(version):
+            return None, f"CURRENT is not a valid version name: {version[:40]!r}"
+        step("root")
+        vfd = _open_dir(root_fd, version, "version directory")
+        fds.append(vfd)
+        step("version")
+        mfd = _open_file(vfd, MANIFEST, "manifest")
+        fds.append(mfd)
+        try:
+            manifest = json.loads(_read_all(mfd).decode("utf-8"))
+        except (OSError, ValueError) as exc:
+            return None, f"manifest unreadable: {exc}"
+        step("manifest")
+        if not isinstance(manifest, dict) or manifest.get("version") != version:
+            return None, "manifest does not belong to the current version"
+        if pinned_sha is not None and manifest.get("pinned_sha") != pinned_sha:
+            return None, f"checkpoint is for revision {manifest.get('pinned_sha')}, not {pinned_sha}"
+        hashes = manifest.get("files")
+        if not isinstance(hashes, dict) or DB_NAME not in hashes or manifest.get("db_sha256") != hashes[DB_NAME]:
+            return None, "manifest has no consistent database hash"
+        paths = {}
+        for name, want in hashes.items():
+            fd = _open_file(vfd, name, name)
+            try:
+                if _sha256_fd(fd) != want:
+                    return None, f"{name} is missing or does not match its manifest hash"
+            finally:
+                os.close(fd)
+            paths[name] = os.path.join(root, version, name)
+        db = paths.pop(DB_NAME)
+        return {"dir": os.path.join(root, version), "db": db, "files": paths, "meta": manifest.get("meta", {}),
+                "pinned_sha": manifest.get("pinned_sha"), "db_sha256": manifest["db_sha256"],
+                "hashes": {k: v for k, v in hashes.items() if k != DB_NAME}}, "ok"
+    except _Refused as exc:
+        return None, str(exc)
+    finally:
+        for fd in fds:
+            os.close(fd)
 
 
-def restore_checkpoint(ckpt: dict, db_dest: str, file_dests: dict) -> None:
-    """Copy a verified checkpoint to the working paths and re-check every restored file's hash.
+def _copy_fd_verified(src_fd: int, dest: str, want: str, label: str, make_writable: bool = False) -> None:
+    """Copy the open descriptor to `dest` via a temp sibling; replace dest only if the COPIED bytes hash to `want`."""
+    tmp = f"{dest}.tmp.{os.getpid()}.{secrets.token_hex(4)}"
+    h = hashlib.sha256()
+    try:
+        with open(tmp, "wb") as out:
+            while block := os.read(src_fd, 1 << 20):
+                h.update(block)
+                out.write(block)
+            out.flush()
+            os.fsync(out.fileno())
+        if h.hexdigest() != want:
+            raise RuntimeError(f"restored {label} does not match the checkpoint manifest")
+        if make_writable:
+            os.chmod(tmp, os.stat(tmp).st_mode | stat.S_IWUSR)
+        os.replace(tmp, dest)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp)
 
-    Sources are re-checked here (plain files directly inside the checkpoint's version directory), so a
-    hand-made or stale `ckpt` dict cannot make this copy something from outside the tree.
+
+def restore_checkpoint(ckpt: dict, db_dest: str, file_dests: dict, on_step=None) -> None:
+    """Copy a verified checkpoint to the working paths from descriptors, hashing the bytes copied.
+
+    The version directory is re-opened here relative to its (resolved) parent with O_NOFOLLOW and every
+    source is opened via that directory descriptor, so a swap after `read_checkpoint` cannot redirect the
+    copy; each destination is only replaced once the copied bytes match the manifest hash.
     """
+    _require_fd_support()
+    step = on_step or (lambda name: None)
     vdir = ckpt["dir"]
-    if not _is_plain(vdir, stat.S_ISDIR):
-        raise RuntimeError("checkpoint directory is not a real directory")
-    sources = {DB_NAME: ckpt["db"], **ckpt["files"]}
-    for name, path in sources.items():
-        problem = _member_problem(vdir, name)
-        if problem or os.path.realpath(path) != os.path.join(os.path.realpath(vdir), name):
-            raise RuntimeError(problem or f"{name} is not inside the checkpoint directory")
-    copy_writable(ckpt["db"], db_dest)
-    if sha256_file(db_dest) != ckpt["db_sha256"]:
-        raise RuntimeError("restored database does not match the checkpoint manifest")
+    root, version = os.path.dirname(vdir), os.path.basename(vdir)
+    if not VERSION_RE.match(version):
+        raise RuntimeError(f"invalid checkpoint version directory {version!r}")
+    wanted = {DB_NAME: (db_dest, ckpt["db_sha256"], "database", True)}
     for name, dest in file_dests.items():
-        if name not in ckpt["files"]:
+        if name not in ckpt["files"] or name not in ckpt.get("hashes", {}):
             raise RuntimeError(f"checkpoint has no {name}")
-        shutil.copyfile(ckpt["files"][name], dest)
-        want = ckpt.get("hashes", {}).get(name)
-        if want is not None and sha256_file(dest) != want:
-            raise RuntimeError(f"restored {name} does not match the checkpoint manifest")
+        wanted[name] = (dest, ckpt["hashes"][name], name, False)
+    for name, path in {DB_NAME: ckpt["db"], **ckpt["files"]}.items():
+        if not _safe_name(name) or path != os.path.join(vdir, name):
+            raise RuntimeError(f"{name} is not inside the checkpoint directory")
+    try:
+        root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError as exc:
+        raise RuntimeError(f"checkpoint root is unreadable: {exc}") from exc
+    fds = [root_fd]
+    try:
+        step("root")
+        vfd = _open_dir(root_fd, version, "version directory")
+        fds.append(vfd)
+        step("version")
+        for name, (dest, want, label, writable) in wanted.items():
+            fd = _open_file(vfd, name, name)
+            try:
+                _copy_fd_verified(fd, dest, want, label, writable)
+            finally:
+                os.close(fd)
+    except _Refused as exc:
+        raise RuntimeError(str(exc)) from exc
+    finally:
+        for fd in fds:
+            os.close(fd)
