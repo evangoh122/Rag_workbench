@@ -195,10 +195,14 @@ def vector_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document
             return []
         qvec = embeddings.embed_query(query)
 
+        # edgar_embeddings.embedding is a variable-length FLOAT[] column, but
+        # array_distance only binds fixed-size ARRAY types: cast both sides
+        # (casting only the query raised a Binder Error that was swallowed
+        # below, silently disabling vector search).
         if ticker:
             rows = conn.execute(f"""
                 SELECT ticker, text, accession, section_id, chunk_index, period_of_report, form_type,
-                       array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
+                       array_distance(embedding::FLOAT[{Config.EMBEDDING_DIM}], ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
                 FROM edgar_embeddings
                 WHERE ticker = ?
                 ORDER BY dist ASC
@@ -207,7 +211,7 @@ def vector_search(query: str, top_k: int = 5, ticker: str = "") -> list[Document
         else:
             rows = conn.execute(f"""
                 SELECT ticker, text, accession, section_id, chunk_index, period_of_report, form_type,
-                       array_distance(embedding, ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
+                       array_distance(embedding::FLOAT[{Config.EMBEDDING_DIM}], ?::FLOAT[{Config.EMBEDDING_DIM}]) AS dist
                 FROM edgar_embeddings
                 ORDER BY dist ASC
                 LIMIT ?
