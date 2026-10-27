@@ -1,0 +1,49 @@
+# GPU image for HF Jobs backfills (scripts/run_hf_backfill.sh). Separate from the
+# CPU-only Dockerfile: pyproject.toml / uv.lock pin torch to the CPU index, so the
+# CUDA torch build is installed on top of the locked env here, without touching
+# either file.
+FROM nvidia/cuda:12.6.3-runtime-ubuntu22.04
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_DOWNLOADS=never
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-venv libxml2 libxslt1.1 git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project --python python3.11
+
+# CUDA torch, installed separately into the venv (replaces the locked CPU wheel there
+# only). Same torch version as uv.lock (2.14.1), cu126 build to match the CUDA 12.6 base
+# image. Keep the base-image tag, TORCH_CUDA_TAG and this pin in sync (tests check it).
+ARG TORCH_CUDA_TAG=cu126
+RUN uv pip install --python /opt/venv/bin/python --reinstall-package torch \
+    --index-url https://download.pytorch.org/whl/${TORCH_CUDA_TAG} \
+    --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match \
+    "torch==2.14.1+${TORCH_CUDA_TAG}"
+# No GPU at build time: assert the wheel is a CUDA build of the base image's CUDA major.
+RUN /opt/venv/bin/python -c 'import torch; assert torch.version.cuda and "+cpu" not in torch.__version__ and torch.version.cuda.split(".")[0] == "12", (torch.__version__, torch.version.cuda)'
+
+# Run as a non-root user. HOME, the HF hub cache and the uv cache are writable, and
+# so is /app/data (the default STAGING_DIR is /app/data/hf_backfill_staging).
+RUN useradd --create-home --uid 1000 --shell /bin/bash app
+ENV HOME=/home/app \
+    HF_HOME=/home/app/.cache/huggingface \
+    UV_CACHE_DIR=/home/app/.cache/uv
+
+COPY --chown=app:app . .
+RUN mkdir -p /app/data/hf_backfill_staging \
+    && chown -R app:app /app/data /home/app
+
+USER app
+
+# `uv run` would re-sync to the CPU lock; call the venv directly.
+ENV PYTHON=/opt/venv/bin/python
+CMD ["bash", "scripts/run_hf_backfill.sh"]

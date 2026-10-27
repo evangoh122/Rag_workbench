@@ -416,6 +416,53 @@ See `docs/FINANCIAL_CALC_INSTRUCTIONS.md` for the full instruction set used by t
 
 The HF Space has **no persistent volume**, so runtime state survives restarts through a daily Parquet snapshot (`runtime_snapshot.py`, driven by `.github/workflows/snapshot.yml` → `POST /api/admin/snapshot`) to a private HF dataset, restored on boot by `scripts/restore_review_db.py`. The main corpus DB is fetched by `scripts/fetch_db_from_dataset.py` before Uvicorn opens its connection. `DB_PATH` is validated against an allowlist to prevent path traversal.
 
+### Refresh runbook (filings ETL)
+
+- **DB copy in CI:** `refresh-filings.yml` and `embed-annuals.yml` copy the HF-cached `rag.duckdb` with `scripts/prepare_db_copy.py` (`copyfile` + `chmod u+w`). The HF cache blob is read-only and `shutil.copy` kept that, so the embed step failed with `Permission denied` (run 2026-09-21). A fail-fast step (`prepare_db_copy.py check`) opens the copy read-write and does a rolled-back write before any embedding.
+- **GPU backfill on HF Jobs (staging only):** `Dockerfile.hf-gpu` (CUDA runtime, uv; CUDA torch installed on top of the locked env, so `pyproject.toml`/`uv.lock` stay CPU-only) runs `scripts/run_hf_backfill.sh`. It fails unless `torch.cuda.is_available()`, pins and downloads the dataset head, records sha256 + row/filing counts, runs `embed_additional.py` for a bounded `BACKFILL_TICKERS` list, then verifies counts, duplicate `(ticker, accession, section_id, chunk_index)` keys (`chunk_index` restarts at 0 in every section, so section identity is part of the key) and `etl_guardrail.py`. The result is built in `$STAGING_DIR/rag.duckdb` (default `data/hf_backfill_staging/`, which must be under the repo root or `PERSIST_DIR` because `api/config.py` silently replaces any other `DB_PATH`; the runner aborts if the effective path differs). An HF Job container is ephemeral and `hf jobs run` mounts no volume by default, so once every check passes the runner uploads `rag.duckdb`, `before.json` (the pre-embedding snapshot) and `after.json` (the post-backfill DB sha256) to a **private staging dataset repo** (`STAGING_REPO`) under `runs/<run id>/`, in one commit. The runner never uploads to the production dataset or restarts the Space.
+
+**The runner is a dry run by default**: it validates its inputs, prints the plan (tickers, forms, quarters, estimated filings) and exits 0 without downloading or embedding anything. It only executes with `BACKFILL_CONFIRM=yes` (or `--execute`). Caps are validated and any invalid value fails loudly (exit 2): `BACKFILL_TICKERS` (required, at most `BACKFILL_MAX_TICKERS`, default 10, allowed 1..50), `BACKFILL_QUARTERS` (integer 1..8, default 3, used for `10-Q`), `BACKFILL_FORMS` (`annual` or `10-Q`), and a hard deadline `BACKFILL_TIMEOUT_SECONDS` (60..21600, default 18000) enforced inside the script with `timeout`, independent of the `hf jobs --timeout` flag. `STAGING_REPO` is required to execute (not for a dry run): it must be an existing **private** dataset repo and must differ from `DATASET_REPO` both as a string and by canonical Hub repo id, so a renamed alias of production is refused too (before downloading anything and again before uploading). The run id is `BACKFILL_RUN_ID` or `<UTC time>-<dataset head>-<random>`; an explicit id is validated before any download or embedding, and staging refuses a run prefix that already exists instead of overwriting it. The final log line prints the repo and path. Python helpers run as modules from the repo root (`python -m scripts.hf_backfill ...`), because running the file directly cannot import `api`.
+
+Build the image and run the job (nothing here has been executed by CI or the PR):
+
+```bash
+docker build -f Dockerfile.hf-gpu -t <registry>/rag-workbench-hf-gpu:<tag> . && docker push <registry>/rag-workbench-hf-gpu:<tag>
+
+# Drop BACKFILL_CONFIRM=yes for a dry run that only prints the plan.
+hf jobs run --flavor l4x1 --timeout 6h \
+  --secrets HF_TOKEN \
+  -e DATASET_REPO=<user>/Rag-workbench -e BACKFILL_TICKERS=AAPL,MSFT -e BACKFILL_FORMS=annual \
+  -e BACKFILL_CONFIRM=yes \
+  -e STAGING_REPO=<user>/Rag-workbench-staging \
+  <registry>/rag-workbench-hf-gpu:<tag> \
+  bash scripts/run_hf_backfill.sh
+```
+
+Create the staging repo first (private, so the checks pass): `hf repos create <user>/Rag-workbench-staging --repo-type dataset --private`. Token scopes (names only): the job's `HF_TOKEN` needs read access to the production dataset and write access to the staging dataset; the publish step's token needs read access to the staging dataset and write access to the production dataset. Use separate fine-grained tokens where possible.
+
+**Alternative: persistent volume.** The installed `hf` CLI (huggingface_hub 1.33.0) supports `hf jobs run -v hf://buckets/<user>/<bucket>:/mnt:rw` (buckets are read-write; datasets, models and spaces mount read-only). To keep the result on a bucket as well, add that flag plus `-e STAGING_DIR=/mnt/stage -e PERSIST_DIR=/mnt` (`api/config.py` only accepts a DB path under the repo or `PERSIST_DIR`). `STAGING_REPO` is still required, so the dataset upload remains the documented source for publishing; the bucket copy is a second copy, and publishing from it uses the local-path form below with the bucket mounted or downloaded.
+
+**Rollback target:** dataset commit `7640a4bd`. Resolve and confirm the full hash before relying on it (the short hash alone is not verified here):
+
+```bash
+python -c "from huggingface_hub import HfApi; [print(c.commit_id, c.title) for c in HfApi().list_repo_commits('<user>/Rag-workbench', repo_type='dataset') if c.commit_id.startswith('7640a4bd')]"
+```
+
+**Guarded publish (documented, not executed by the runner).** Use the run id from the job log, from a machine with a write token (`HF_TOKEN` in the environment):
+
+```bash
+uv run python -m scripts.hf_backfill publish \
+  --staging-repo <user>/Rag-workbench-staging --run-id <run id> --repo <user>/Rag-workbench --confirm
+# From local files instead (e.g. a mounted bucket or an already-downloaded copy):
+uv run python -m scripts.hf_backfill publish <dir>/rag.duckdb <dir>/before.json --repo <user>/Rag-workbench --confirm
+```
+
+With `--staging-repo` it downloads `runs/<run id>/rag.duckdb`, `before.json` and `after.json` into a private temp dir, refuses if any is missing, if the staging repo is the production repo, or if the DB's sha256 differs from the post-backfill hash in `after.json` (a backfill changes the DB, so its pre-embedding `before.json` hash no longer matches), and then runs the guards below.
+
+It exits non-zero without `--confirm`, and aborts if the dataset head differs from the `dataset_head` recorded in `before.json` (the upload is also pinned with `parent_commit`). Immediately before uploading it copies the staged file to a private temp snapshot, runs the DB integrity, shrink and duplicate checks on that snapshot, re-hashes it, and uploads that same snapshot, so a staged path swapped after verification is never uploaded; it refuses on any failure. Restarting the Space is a separate manual step.
+
+**Scope of the GPU runner:** it is a manually launched, staging-only job. Neither this PR nor #30 routes the scheduled `refresh-filings.yml` embedding onto the GPU, so scheduled refresh runs still use the CPU runner and its 300-minute timeout is unchanged; this runner does not make them finish. `Dockerfile.hf-gpu` runs as a non-root `app` user (writable `HOME`, HF cache, uv cache and `data/`); the image has not been built in CI or by this PR.
+
 ### Operational notes
 
 - **DuckDB version alignment:** the old Hugging Face image cap of `duckdb<1.1.0` caused serialization failures with locally generated DuckDB 1.5.3 files. `pyproject.toml` (locked in `uv.lock`) requires DuckDB 1.5.3+, and `.venv_duck10` is obsolete.

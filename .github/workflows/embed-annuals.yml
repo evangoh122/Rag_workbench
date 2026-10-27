@@ -69,7 +69,8 @@ jobs:
       - name: Download current DB from the HF dataset
         run: |
           uv run --locked --no-dev python - <<'PY'
-          import os, shutil
+          import os
+          from scripts.prepare_db_copy import copy_writable
           from huggingface_hub import hf_hub_download
           os.makedirs("data", exist_ok=True)
           path = hf_hub_download(
@@ -78,9 +79,12 @@ jobs:
               repo_type="dataset",
               token=os.environ["HF_TOKEN"],
           )
-          shutil.copy(path, "data/rag.duckdb")
+          copy_writable(path, "data/rag.duckdb")
           print(f"Downloaded rag.duckdb -> {os.path.getsize('data/rag.duckdb')/1e6:.1f} MB")
           PY
+
+      - name: 'Fail fast: copied DB must open read-write (before any embedding)'
+        run: uv run --locked --no-dev python scripts/prepare_db_copy.py check data/rag.duckdb
 
       - name: Snapshot corpus BEFORE embedding
         run: uv run --locked --no-dev python scripts/etl_guardrail.py snapshot data/rag.duckdb /tmp/before.json
