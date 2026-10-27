@@ -10,16 +10,19 @@ and breaks `import api.config`.
     effective-db <db>                                fail unless Config.DB_PATH resolves to <db>
     stage-check  --repo S --prod-repo P              fail unless S is an existing PRIVATE dataset != P
     stage-upload <db> <before.json> --repo S --prod-repo P --run-id ID
-                                                     copy the result to S under runs/ID/ (never P)
+                                                     copy the result to S under runs/ID/ (never P),
+                                                     recording after.json with its post-backfill sha256
     publish   <db> <before.json> --repo R --confirm  GUARDED; never run by the runner
     publish   --staging-repo S --run-id ID --repo R --confirm
-                                                     same, after downloading runs/ID/ from S
+                                                     same, after downloading runs/ID/ from S and
+                                                     checking the DB against after.json (not before.json)
 
 A job container is ephemeral, so the runner uploads its result to a private staging
 dataset (stage-upload); only `publish` can touch the production dataset. It refuses without --confirm,
 aborts if the dataset head moved since the snapshot was taken, and re-runs the
 integrity + duplicate guards on a private snapshot of the staged file and uploads that
-same verified snapshot.
+same verified snapshot. before.json keeps the pre-embedding sha256 + counts for the
+head/count guards; after.json records the post-backfill sha256 for the download check.
 """
 import argparse
 import hashlib
@@ -34,6 +37,7 @@ import duckdb
 
 DB_FILENAME = "rag.duckdb"
 BEFORE_FILENAME = "before.json"
+AFTER_FILENAME = "after.json"
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
 
 
@@ -185,9 +189,23 @@ def check_staging_repo(staging_repo: str, prod_repo: str, api=None) -> None:
         from huggingface_hub import HfApi
 
         api = HfApi(token=os.environ["HF_TOKEN"])
-    info = api.repo_info(staging_repo, repo_type="dataset")
-    if info.private is not True:
+    staging_info = api.repo_info(staging_repo, repo_type="dataset")
+    if staging_info.private is not True:
         raise RuntimeError(f"staging repo {staging_repo} is not private; refusing to upload")
+    # Inputs can differ while resolving to the same Hub repo (renamed aliases), so
+    # compare the canonical repo ids too, not just the strings.
+    prod_info = api.repo_info(prod_repo, repo_type="dataset")
+    staging_id = str(getattr(staging_info, "id", "") or "").strip().lower()
+    prod_id = str(getattr(prod_info, "id", "") or "").strip().lower()
+    if not staging_id or not prod_id:
+        raise RuntimeError(f"cannot compare canonical repos {staging_repo!r}/{prod_repo!r}; refusing")
+    if staging_id == prod_id:
+        raise RuntimeError(f"staging repo {staging_repo} resolves to production dataset {prod_id}; refusing")
+
+
+def _after_metadata(db_path: str) -> bytes:
+    """Post-backfill sha256 of the DB being staged; before.json keeps the pre-embedding hash."""
+    return json.dumps({"sha256": sha256_file(db_path)}, indent=2).encode("utf-8")
 
 
 def stage_upload(db_path: str, before_path: str, staging_repo: str, prod_repo: str, run_id: str, api=None) -> str:
@@ -204,12 +222,16 @@ def stage_upload(db_path: str, before_path: str, staging_repo: str, prod_repo: s
     from huggingface_hub import CommitOperationAdd
 
     prefix = f"runs/{run_id}"
+    existing = api.list_repo_files(repo_id=staging_repo, repo_type="dataset")
+    if any(path == prefix or path.startswith(f"{prefix}/") for path in existing):
+        raise RuntimeError(f"staging run {prefix} already exists in {staging_repo}; refusing to overwrite")
     api.create_commit(
         repo_id=staging_repo,
         repo_type="dataset",
         operations=[
             CommitOperationAdd(path_in_repo=f"{prefix}/{DB_FILENAME}", path_or_fileobj=db_path),
             CommitOperationAdd(path_in_repo=f"{prefix}/{BEFORE_FILENAME}", path_or_fileobj=before_path),
+            CommitOperationAdd(path_in_repo=f"{prefix}/{AFTER_FILENAME}", path_or_fileobj=_after_metadata(db_path)),
         ],
         commit_message=f"stage gpu-backfill {run_id}",
     )
@@ -217,7 +239,7 @@ def stage_upload(db_path: str, before_path: str, staging_repo: str, prod_repo: s
 
 
 def fetch_staged(staging_repo: str, prod_repo: str, run_id: str, dest_dir: str, api=None) -> tuple[str, str]:
-    """Download runs/<run_id>/ files from the staging repo; refuse if absent or the DB hash differs from before.json."""
+    """Download runs/<run_id>/ files; refuse if absent or the DB hash differs from after.json."""
     _check_run_id(run_id)
     if _norm_repo(staging_repo) == _norm_repo(prod_repo):
         raise RuntimeError(f"staging repo {staging_repo} is the production dataset; refusing")
@@ -226,7 +248,7 @@ def fetch_staged(staging_repo: str, prod_repo: str, run_id: str, dest_dir: str, 
 
         api = HfApi(token=os.environ["HF_TOKEN"])
     paths = []
-    for name in (DB_FILENAME, BEFORE_FILENAME):
+    for name in (DB_FILENAME, BEFORE_FILENAME, AFTER_FILENAME):
         try:
             cached = api.hf_hub_download(
                 repo_id=staging_repo, repo_type="dataset", filename=f"runs/{run_id}/{name}"
@@ -236,10 +258,10 @@ def fetch_staged(staging_repo: str, prod_repo: str, run_id: str, dest_dir: str, 
         dst = os.path.join(dest_dir, name)
         shutil.copyfile(cached, dst)
         paths.append(dst)
-    with open(paths[1], encoding="utf-8") as f:
+    with open(paths[2], encoding="utf-8") as f:
         want = json.load(f).get("sha256")
     if not want or sha256_file(paths[0]) != want:
-        raise RuntimeError("staged rag.duckdb sha256 does not match before.json; refusing")
+        raise RuntimeError("staged rag.duckdb sha256 does not match after.json; refusing")
     return paths[0], paths[1]
 
 

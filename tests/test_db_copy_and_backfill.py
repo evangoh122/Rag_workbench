@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -524,7 +525,15 @@ def test_gpu_dockerfile_runs_non_root_with_writable_dirs():
 
 def _staging_api(private=True):
     api = MagicMock()
-    api.repo_info.return_value.private = private
+
+    def info(repo_id, repo_type=None):
+        info_mock = MagicMock()
+        info_mock.private = private
+        info_mock.id = repo_id
+        return info_mock
+
+    api.repo_info.side_effect = info
+    api.list_repo_files.return_value = []
     return api
 
 
@@ -536,15 +545,66 @@ def _staged_files(tmp_path):
     return db, before
 
 
+def _stage_and_collect(tmp_path, db, before, run_id="r"):
+    """Run the real stage_upload and write its operations into a fake staging repo."""
+    api = _staging_api()
+    hf_backfill.stage_upload(str(db), str(before), "u/stage", "u/prod", run_id, api)
+    repo = tmp_path / "fake_staging"
+    files = {}
+    for op in api.create_commit.call_args.kwargs["operations"]:
+        obj = op.path_or_fileobj
+        dest = repo / op.path_in_repo
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(obj, bytes):
+            dest.write_bytes(obj)
+        else:
+            shutil.copyfile(obj, dest)
+        files[op.path_in_repo] = str(dest)
+    return files, api
+
+
 def test_stage_upload_goes_to_run_prefix_of_staging_repo_only(tmp_path):
     db, before = _staged_files(tmp_path)
+    before_sha = json.loads(before.read_text())["sha256"]
     api = _staging_api()
     prefix = hf_backfill.stage_upload(str(db), str(before), "u/stage", "u/prod", "run1", api)
     assert prefix == "runs/run1"
     kw = api.create_commit.call_args.kwargs
     assert kw["repo_id"] == "u/stage" and kw["repo_type"] == "dataset"
-    assert sorted(op.path_in_repo for op in kw["operations"]) == ["runs/run1/before.json", "runs/run1/rag.duckdb"]
+    ops = {op.path_in_repo: op for op in kw["operations"]}
+    assert sorted(ops) == ["runs/run1/after.json", "runs/run1/before.json", "runs/run1/rag.duckdb"]
+    # after.json records the staged (post-backfill) DB; before.json keeps its original hash
+    assert json.loads(ops["runs/run1/after.json"].path_or_fileobj)["sha256"] == hf_backfill.sha256_file(str(db))
+    assert before_sha == hf_backfill.sha256_file(str(db))
+    assert json.loads(before.read_text())["sha256"] == before_sha
     api.upload_file.assert_not_called()
+
+
+def test_stage_refuses_staging_alias_of_production(tmp_path):
+    db, before = _staged_files(tmp_path)
+    api = _staging_api()
+    canonical = {"u/stage-alias": "u/prod", "u/prod": "u/prod"}
+
+    def info(repo_id, repo_type=None):
+        info_mock = MagicMock()
+        info_mock.private = True
+        info_mock.id = canonical[repo_id]
+        return info_mock
+
+    api.repo_info.side_effect = info
+    with pytest.raises(RuntimeError, match="production"):
+        hf_backfill.stage_upload(str(db), str(before), "u/stage-alias", "u/prod", "run1", api)
+    api.create_commit.assert_not_called()
+    api.list_repo_files.assert_not_called()
+
+
+def test_stage_refuses_existing_run_prefix(tmp_path):
+    db, before = _staged_files(tmp_path)
+    api = _staging_api()
+    api.list_repo_files.return_value = ["runs/run10/rag.duckdb", "runs/run1/rag.duckdb"]
+    with pytest.raises(RuntimeError, match="already exists"):
+        hf_backfill.stage_upload(str(db), str(before), "u/stage", "u/prod", "run1", api)
+    api.create_commit.assert_not_called()
 
 
 def test_stage_refuses_production_repo_as_staging(tmp_path):
@@ -605,7 +665,29 @@ def test_runner_uploads_only_when_executing_and_checks_staging_first(tmp_path):
 
 def test_runner_rejects_bad_run_id(tmp_path):
     r, calls = _run_runner(tmp_path, {"BACKFILL_CONFIRM": "yes", "BACKFILL_RUN_ID": "../evil"})
-    assert r.returncode != 0 and "stage-upload" not in calls
+    assert r.returncode != 0 and "::error::" in r.stderr
+    assert calls == ""  # validated up front: no download, torch check or embed step ran
+
+
+def test_runner_default_run_id_is_randomized(tmp_path):
+    """A fixed clock must still yield distinct default ids, or two runs collide in staging."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    fake_date = bindir / "date"
+    fake_date.write_text("#!/usr/bin/env bash\necho 20261027T000000Z\n")
+    fake_date.chmod(0o755)
+    env = {"BACKFILL_CONFIRM": "yes", "PATH": f"{bindir}:{os.environ['PATH']}"}
+    ids = []
+    for _ in range(2):
+        r, calls = _run_runner(tmp_path, env)
+        assert r.returncode == 0, r.stderr
+        ups = [ln for ln in calls.splitlines() if "stage-upload" in ln]
+        assert len(ups) == 1
+        m = re.search(r"--run-id ([A-Za-z0-9._-]+)", ups[0])
+        assert m and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", m.group(1))
+        assert m.group(1).startswith("20261027T000000Z-deadbeef-")
+        ids.append(m.group(1))
+    assert ids[0] != ids[1]
 
 
 def test_dry_run_makes_no_network_calls(tmp_path, monkeypatch):
@@ -653,13 +735,44 @@ def test_publish_from_staging_refuses_missing_files(tmp_path):
     api.hf_hub_download.side_effect = _fake_download({"runs/r/rag.duckdb": str(db)})
     with pytest.raises(RuntimeError, match="missing"):
         hf_backfill.fetch_staged("u/stage", "u/prod", "r", str(tmp_path / "d"), api)
+    api.hf_hub_download.side_effect = _fake_download(
+        {"runs/r/rag.duckdb": str(db), "runs/r/before.json": str(before)}
+    )
+    with pytest.raises(RuntimeError, match="missing"):
+        hf_backfill.fetch_staged("u/stage", "u/prod", "r", str(tmp_path / "d"), api)
+
+
+def test_publish_from_staging_compares_post_backfill_hash_not_before_hash(tmp_path, monkeypatch):
+    db, before = _staged_files(tmp_path)  # before.json = pre-embedding snapshot
+    before_sha = json.loads(before.read_text())["sha256"]
+    con = duckdb.connect(str(db))
+    con.execute("INSERT INTO edgar_embeddings VALUES ('B', 'y', 0, 'business')")
+    con.close()
+    assert hf_backfill.sha256_file(str(db)) != before_sha  # the backfill changed the DB
+
+    files, _ = _stage_and_collect(tmp_path, db, before)
+    after = json.loads(Path(files["runs/r/after.json"]).read_text())
+    assert after["sha256"] == hf_backfill.sha256_file(str(db))
+    assert json.loads(before.read_text())["sha256"] == before_sha  # before.json is untouched
+
+    import huggingface_hub
+
+    api = MagicMock()
+    api.hf_hub_download.side_effect = _fake_download(files)
+    api.repo_info.return_value.sha = "aaa"
+    monkeypatch.setenv("HF_TOKEN", "x")
+    monkeypatch.setattr(huggingface_hub, "HfApi", lambda token=None: api)
+    assert hf_backfill.main(
+        ["publish", "--staging-repo", "u/stage", "--run-id", "r", "--repo", "u/prod", "--confirm"]
+    ) == 0
+    assert api.upload_file.call_args.kwargs["repo_id"] == "u/prod"
 
 
 def test_publish_from_staging_downloads_then_runs_guards_before_upload(tmp_path, monkeypatch):
     db, before = _staged_files(tmp_path)
     import huggingface_hub
 
-    files = {"runs/r/rag.duckdb": str(db), "runs/r/before.json": str(before)}
+    files, _ = _stage_and_collect(tmp_path, db, before)
     api = MagicMock()
     api.hf_hub_download.side_effect = _fake_download(files)
     api.repo_info.return_value.sha = "aaa"

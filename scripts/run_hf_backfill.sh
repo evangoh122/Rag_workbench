@@ -12,9 +12,9 @@
 #   HF_TOKEN          read token for DATASET_REPO plus write access to STAGING_REPO
 #   STAGING_REPO      required when executing: an existing PRIVATE dataset repo, never
 #                     DATASET_REPO. A job container is ephemeral, so the result
-#                     (rag.duckdb + before.json) is uploaded there under runs/<run id>/
-#                     once every check passes. Dry runs do no network work.
-#   BACKFILL_RUN_ID   optional run id for that path (default <UTC time>-<dataset head>)
+#                     (rag.duckdb + before.json + after.json) is uploaded there under
+#                     runs/<run id>/ once every check passes. Dry runs do no network work.
+#   BACKFILL_RUN_ID   optional run id for that path (default <UTC time>-<dataset head>-<random>)
 #   BACKFILL_TICKERS  required, comma list (bounds the run), e.g. AAPL,MSFT
 #   BACKFILL_MAX_TICKERS  cap on the list length (default 10, allowed 1..50)
 #   BACKFILL_FORMS    annual | 10-Q (default annual)
@@ -79,6 +79,12 @@ EST=$(( ${#TICKER_LIST[@]} * PER_TICKER ))
 if [ -n "${STAGING_REPO:-}" ]; then
   [ "${STAGING_REPO,,}" != "${DATASET_REPO,,}" ] \
     || die "STAGING_REPO must not be the production dataset DATASET_REPO"
+fi
+# Validate an operator-supplied run id up front: a bad id must fail before any
+# download, GPU work or embedding, not after the run has produced its result.
+if [ -n "${BACKFILL_RUN_ID:-}" ]; then
+  [[ "$BACKFILL_RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ && "$BACKFILL_RUN_ID" != *".."* ]] \
+    || die "invalid BACKFILL_RUN_ID '$BACKFILL_RUN_ID' (1-80 chars of [A-Za-z0-9._-], no '..')"
 fi
 echo "PLAN: repo=$DATASET_REPO forms=$FORMS quarters=$QUARTERS tickers=${TICKER_LIST[*]}"
 echo "PLAN: up to $EST filings to embed (<= $PER_TICKER per ticker), deadline ${DEADLINE}s"
@@ -154,7 +160,9 @@ if [ "$FORMS" = "10-Q" ]; then EXTRA=(--quarters "$QUARTERS"); fi
 "${PY[@]}" -m scripts.hf_backfill verify "$WORK_DB" "$BEFORE"
 "${PY[@]}" scripts/etl_guardrail.py verify "$WORK_DB" "$STAGING_DIR/guardrail_before.json"
 
-RUN_ID="${BACKFILL_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-${HEAD_SHA:0:12}}"
+# The random suffix keeps concurrent runs with the same dataset head apart; an
+# explicit BACKFILL_RUN_ID is validated up front and must be unique in staging.
+RUN_ID="${BACKFILL_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-${HEAD_SHA:0:12}-$(od -An -tx1 -N4 /dev/urandom | tr -d ' \n')}"
 [[ "$RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ ]] || die "invalid BACKFILL_RUN_ID '$RUN_ID'"
 "${PY[@]}" -m scripts.hf_backfill stage-upload "$WORK_DB" "$BEFORE" \
   --repo "$STAGING_REPO" --prod-repo "$DATASET_REPO" --run-id "$RUN_ID"
