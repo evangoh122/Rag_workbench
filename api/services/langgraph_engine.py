@@ -1875,6 +1875,12 @@ def _named_uncovered_company(query: str) -> Optional[str]:
     return None
 
 
+def _other_covered_named(query: str) -> str:
+    """Covered ticker named in the query besides Anthropic/ANTH, else ""."""
+    stripped = re.sub(r"\b(anthropic(\s+pbc)?|anth)\b", " ", query or "", flags=re.IGNORECASE)
+    return _resolve_query_ticker(stripped, "")
+
+
 def _abstain_response(company: str) -> Dict[str, Any]:
     """A grounded 'I don't have data on that' answer (shaped like graph output)."""
     msg = (
@@ -2185,7 +2191,7 @@ def run_auditable_rag(query: str, ticker: str,
     # Normally only abstain when NO covered company is named. Narrow exception:
     # ANTH is a pre-ticker issuer, so "OpenAI vs Anthropic" must not answer from
     # ANTH alone. Real tickers (QCOM, NVDA...) naming a big customer still answer.
-    if uncovered and (not by_name or by_name == "ANTH"):
+    if uncovered and (not by_name or (by_name == "ANTH" and not _other_covered_named(query))):
         logger.info(f"Abstaining — query names uncovered company {uncovered!r}")
         return _abstain_response(uncovered)
     if not by_name:

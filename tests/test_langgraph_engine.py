@@ -55,6 +55,51 @@ def test_uncovered_company_still_abstains_when_anthropic_is_also_named(uncovered
     assert uncovered.lower() in result["verification_reasoning"].lower()
 
 
+@pytest.mark.parametrize("query", [
+    "NVIDIA sales to Microsoft and Anthropic",
+    "Microsoft and Anthropic as NVIDIA customers",
+    "Does NVIDIA sell GPUs to Anthropic and OpenAI?",
+])
+def test_real_ticker_with_anthropic_and_uncovered_customers_does_not_abstain(query):
+    class _Reached(Exception):
+        pass
+
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached), \
+         patch("api.services.langgraph_engine._abstain_response") as mock_abstain:
+        with pytest.raises(_Reached):
+            run_auditable_rag(query, "MU")
+
+    mock_abstain.assert_not_called()
+
+
+@pytest.mark.parametrize("query", [
+    "Compare Anthropic vs OpenAI",
+    "OpenAI vs Anthropic",
+    "Anthropic and Stripe",
+])
+def test_anthropic_alone_with_uncovered_company_abstains(query):
+    result = run_auditable_rag(query, "MU")
+
+    assert result["verification_status"] == "ABSTAIN"
+    assert result["resolved_ticker"] == ""
+
+
+def test_spacex_anthropic_microsoft_does_not_abstain():
+    # Intended behaviour: SPCX is another covered company, so the ANTH-only
+    # abstain exception does not apply (same as a real ticker naming a customer).
+    class _Reached(Exception):
+        pass
+
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached), \
+         patch("api.services.langgraph_engine._abstain_response") as mock_abstain:
+        with pytest.raises(_Reached):
+            run_auditable_rag("SpaceX, Anthropic and Microsoft", "MU")
+
+    mock_abstain.assert_not_called()
+
+
 @pytest.mark.parametrize("query,ticker", [
     ("What share of Qualcomm revenue comes from Apple?", "QCOM"),
     ("How much does NVIDIA sell to Microsoft?", "NVDA"),
