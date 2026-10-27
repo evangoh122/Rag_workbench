@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import struct
 import threading
 from pathlib import Path
 
@@ -905,3 +906,128 @@ def test_wal_left_by_fresh_db_is_refused(frag, tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match=r"\.wal"):
         chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "w"))
     assert chk.sha256_file(str(frag)) == sha
+
+
+# ── compaction review fixes: source TOCTOU, commit ordering, bit-exact floats ──
+
+def _f32(bits: int) -> float:
+    return struct.unpack("<f", bits.to_bytes(4, "little"))[0]
+
+
+def _bits_db(path, embedding, scalar=0.0, double=0.0):
+    con = duckdb.connect(str(path))
+    con.execute("CREATE TABLE t (id INTEGER, embedding FLOAT[], z FLOAT, d DOUBLE[])")
+    con.execute("INSERT INTO t VALUES (1, ?::FLOAT[], ?::FLOAT, [?::DOUBLE])", [embedding, scalar, double])
+    con.execute("CHECKPOINT")
+    con.close()
+
+
+def test_source_write_between_proof_and_swap_is_refused(frag, tmp_path):
+    injected_sha = []
+
+    def inject(name):
+        if name != "proved":
+            return
+        con = duckdb.connect(str(frag))
+        con.execute("INSERT INTO edgar_embeddings VALUES (999999, 'INJECT', 'late', [1.0::FLOAT])")
+        con.execute("CHECKPOINT")
+        con.close()
+        injected_sha.append(chk.sha256_file(str(frag)))
+
+    with pytest.raises(RuntimeError, match="changed after the identity proof"):
+        chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "work"), on_step=inject)
+    assert chk.sha256_file(str(frag)) == injected_sha[0]  # the late write survived the refused compaction
+    con = duckdb.connect(str(frag), read_only=True)
+    try:
+        assert con.execute("SELECT count(*) FROM edgar_embeddings WHERE ticker = 'INJECT'").fetchone()[0] == 1
+    finally:
+        con.close()
+    assert sorted(p.name for p in tmp_path.iterdir() if p.is_file()) == ["staged.duckdb"]
+
+
+def test_symlinked_source_workdir_or_destination_is_refused(frag, tmp_path):
+    real_work = tmp_path / "real_work"
+    real_work.mkdir()
+    work_link = tmp_path / "work_link"
+    work_link.symlink_to(real_work, target_is_directory=True)
+    with pytest.raises(RuntimeError, match="symlink"):
+        chk.compact_duckdb(str(frag), str(frag), str(work_link))
+    dst_link = tmp_path / "dst_link.duckdb"
+    dst_link.symlink_to(frag)
+    with pytest.raises(RuntimeError, match="symlink"):
+        chk.compact_duckdb(str(frag), str(dst_link), str(tmp_path / "work"))
+    src_link = tmp_path / "src_link.duckdb"
+    src_link.symlink_to(frag)
+    with pytest.raises(RuntimeError, match="symlink"):
+        chk.compact_duckdb(str(src_link), str(tmp_path / "out.duckdb"), str(tmp_path / "work"))
+
+
+def test_fsync_dir_failure_after_swap_is_a_committed_warning(frag, tmp_path, monkeypatch):
+    before = _snapshot(frag)
+
+    def boom(path):
+        raise OSError("injected fsync failure")
+
+    monkeypatch.setattr(chk, "_fsync_dir", boom)
+    res = chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "work"))
+    assert res["committed"] is True
+    assert "fsync" in res["warning"]
+    assert res["bytes_after"] == frag.stat().st_size
+    assert _snapshot(frag) == before  # the swap happened and its content is valid
+    assert sorted(p.name for p in tmp_path.iterdir() if p.is_file()) == ["staged.duckdb"]
+
+
+@pytest.mark.parametrize("src_value, dst_value, identical", [
+    (0.0, -0.0, False),
+    (_f32(0x00000001), 0.0, False),
+    (_f32(0x7F7FFFFF), _f32(0x7F7FFFFF), True),
+    (float("inf"), 0.0, False),
+    (float("nan"), 1.0, False),
+    (float("nan"), float("nan"), True),
+])
+def test_identity_proof_compares_float_arrays_bit_exactly(tmp_path, src_value, dst_value, identical):
+    src, dst = tmp_path / "src.duckdb", tmp_path / "dst.duckdb"
+    _bits_db(src, [src_value, 1.5])
+    _bits_db(dst, [dst_value, 1.5])
+    if identical:
+        assert chk.compact_identity_proof(str(src), str(dst))["t"]["rows"] == 1
+    else:
+        with pytest.raises(RuntimeError, match="float bits differ"):
+            chk.compact_identity_proof(str(src), str(dst))
+
+
+def test_identity_proof_compares_scalar_double_signed_zero_bit_exactly(tmp_path):
+    src, dst = tmp_path / "src.duckdb", tmp_path / "dst.duckdb"
+    _bits_db(src, [1.0], double=0.0)
+    _bits_db(dst, [1.0], double=-0.0)
+    with pytest.raises(RuntimeError, match=r"t\.d: float bits differ"):
+        chk.compact_identity_proof(str(src), str(dst))
+
+
+def test_partial_import_failure_leaves_source_untouched_and_cleans_temp(frag, tmp_path, monkeypatch):
+    sha = chk.sha256_file(str(frag))
+    real_connect = duckdb.connect
+
+    class Partial:
+        def __init__(self, con):
+            self._con = con
+
+        def __getattr__(self, name):
+            return getattr(self._con, name)
+
+        def execute(self, sql, *args, **kwargs):
+            if str(sql).startswith("IMPORT DATABASE"):
+                self._con.execute("CREATE TABLE half_imported (x INTEGER)")
+                raise RuntimeError("injected partial IMPORT failure")
+            return self._con.execute(sql, *args, **kwargs)
+
+    def connect(path=":memory:", *a, **k):
+        con = real_connect(path, *a, **k)
+        return Partial(con) if ".compact-" in str(path) else con
+
+    monkeypatch.setattr(chk.duckdb, "connect", connect)
+    with pytest.raises(RuntimeError, match="partial IMPORT"):
+        chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "w"))
+    assert chk.sha256_file(str(frag)) == sha
+    assert list(tmp_path.glob("*.compact-*")) == []
+    assert list((tmp_path / "w").iterdir()) == []
