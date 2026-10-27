@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 import duckdb
 import pytest
+import yaml
 
 from scripts import hf_backfill, prepare_db_copy
 
@@ -89,6 +90,32 @@ def test_workflows_use_helper_and_failfast_before_embedding():
         assert "copy_writable(path" in text
         assert text.index("prepare_db_copy.py check") < text.index("Snapshot corpus BEFORE")
         assert text.index("prepare_db_copy.py check") < text.index("- name: Embed")
+
+
+def test_hf_gpu_image_workflow_publishes_expected_ghcr_tags():
+    path = ROOT / ".github" / "workflows" / "build-hf-gpu-image.yml"
+    workflow = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+    trigger = workflow["on"]
+    assert set(trigger) == {"workflow_dispatch", "push"}
+    assert trigger["push"]["branches"] == ["main"]
+    assert set(trigger["push"]["paths"]) == {
+        "Dockerfile.hf-gpu",
+        "scripts/hf_backfill.py",
+        "scripts/embed_additional.py",
+        "pyproject.toml",
+        "uv.lock",
+    }
+    assert workflow["permissions"] == {"contents": "read"}
+
+    job = workflow["jobs"]["build-and-push"]
+    assert job["permissions"] == {"contents": "read", "packages": "write"}
+    build = next(step for step in job["steps"] if step.get("name") == "Build and push")
+    tags = build["with"]["tags"].splitlines()
+    image = "ghcr.io/evangoh122/rag-workbench-hf-gpu"
+    assert tags == [f"{image}:${{{{ github.sha }}}}", f"{image}:latest"]
+    assert build["with"]["push"] == "true"
+    assert build["with"]["cache-from"] == "type=gha"
+    assert build["with"]["cache-to"] == "type=gha,mode=max"
 
 
 # ── HF backfill helpers ──────────────────────────────────────────────────────
