@@ -256,3 +256,39 @@ def test_reingest_replaces_rows_across_accession_forms(tmp_path, old_accession):
     assert "STALE" not in texts
     assert "KEEP" in texts
     assert accs == {"0001628280-26-067168"}
+
+
+@pytest.mark.parametrize("other_dim", [3, 4])
+def test_ingest_never_deletes_other_tickers_or_dimensions(tmp_path, other_dim):
+    db_path = tmp_path / "t.duckdb"
+    with duckdb.connect(str(db_path)) as conn:
+        _ensure_schema(conn)
+        conn.execute(
+            "INSERT INTO edgar_embeddings (ticker, accession, text, embedding) VALUES "
+            "('NVDA', '0000000000-00-000009', 'OTHER', ?::FLOAT[])", [[0.1] * other_dim])
+        conn.commit()
+
+    assert _run_etl_into(tmp_path, db_path, "0001628280-26-067168") > 0
+
+    with duckdb.connect(str(db_path)) as conn:
+        nvda = conn.execute(
+            "SELECT text, len(embedding) FROM edgar_embeddings WHERE ticker = 'NVDA'").fetchall()
+    assert nvda == [("OTHER", other_dim)]
+
+
+def test_summary_survives_offering_table_rows_when_longer_than_risk_factors():
+    text = _anthropic_style_text(risk_chars=12_000).replace(
+        _filler("Summary", 3000), _filler("Summary", 20_000))
+    sections = dict(_extract_prospectus_sections(text))
+    assert "Summary discussion" in sections["prospectus_summary"]
+    assert "Summary discussion" not in sections["risk_factors"]
+    assert "Competition risk" in sections["risk_factors"]
+
+
+@pytest.mark.parametrize("title", ["Business", "Business Overview"])
+def test_business_heading_variants(title):
+    text = _anthropic_style_text(risk_chars=6000).replace("\nBusiness\n", f"\n{title}\n")
+    sections = dict(_extract_prospectus_sections(text))
+    assert sections["business"].startswith(title)
+    assert "Business discussion" in sections["business"]
+    assert "Business discussion" not in sections["md_and_a"]

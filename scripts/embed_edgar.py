@@ -217,7 +217,7 @@ _PROSPECTUS_HEADINGS: List[tuple[str | None, str]] = [
     ("dilution",           r"dilution"),
     ("md_and_a",           r"management['’]?s\s+discussion\s+and\s+analysis"
                            r"(?:\s+of\s+financial\s+condition\s+and\s+results\s+of\s+operations)?"),
-    ("business",           r"business"),
+    ("business",           r"business(?:\s+overview)?"),
     (None, r"our\s+governance\s+structure\s+and\s+its\s+goals"),
     (None, r"management"),
     (None, r"(?:executive|director)\s+compensation"),
@@ -315,11 +315,15 @@ def _extract_prospectus_sections(text: str) -> List[tuple[str, str]]:
     if not hits:
         return [("full_text", text)]
 
-    # Score each hit by the distance to the next hit of ANY stage (or EOF).
+    # Score each hit by the distance to the next hit of ANY stage (or EOF). A real
+    # section is closed by a LATER canonical heading, so a hit whose next hit is
+    # of the same or an earlier stage is a reference row (e.g. "Risk factors" in
+    # "The Offering" table, followed further down by the real heading) and scores 0.
     positions = [pos for pos, _ in hits]
     score = [
-        (positions[i + 1] if i + 1 < len(hits) else len(text)) - pos
-        for i, pos in enumerate(positions)
+        0 if i + 1 < len(hits) and hits[i + 1][1] <= stage
+        else (positions[i + 1] if i + 1 < len(hits) else len(text)) - pos
+        for i, (pos, stage) in enumerate(hits)
     ]
 
     # Best ordered chain over the labeled stages (hits are sorted by position,
@@ -761,10 +765,10 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
         # Ensure schema is up to date
         _ensure_schema(conn)
 
-        # Embeddings from different models cannot coexist safely: DuckDB vector
-        # distance requires every stored vector to match the query dimension.
-        # Clear an incompatible corpus before rebuilding ticker by ticker.
-        _reset_incompatible_embeddings(conn, Config.EMBEDDING_DIM)
+        # Append-only for data this run does not target: no global reset here.
+        # (A dimension-based reset used to wipe every ticker's rows whenever the
+        # corpus held another dimension.) Only the targeted ticker+accession rows
+        # are replaced, below.
 
         for ticker in tickers:
             logger.info(f"Processing filings for {ticker}...")
