@@ -199,7 +199,7 @@ def detect_comparison(query: str, subject_ticker: str) -> Optional[Dict[str, Any
     if not query:
         return None
     q = query.lower()
-    named = _tickers_named_in_query(query)
+    named = _tickers_named_in_query(query, strict_symbols=True)
     has_peer_signal = any(s in q for s in _PEER_SIGNALS)
 
     # Explicit: 2+ covered companies named → compare exactly those.

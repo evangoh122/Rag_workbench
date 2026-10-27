@@ -76,6 +76,13 @@ class TestComparisonDetection:
     def test_plain_single_company_question_is_not_a_comparison(self):
         assert detect_comparison("What is NVDA's gross margin?", "NVDA") is None
 
+    def test_anthropic_form_s1_is_not_an_explicit_comparison(self):
+        # "Form" is the FORM ticker but here it is prose ("Form S-1"), so the
+        # query names only one company and must not become a comparison.
+        assert detect_comparison(
+            "What does the Anthropic Form S-1 say about risk factors?", "ANTH"
+        ) is None
+
     def test_peer_intent_uses_caller_ticker_when_query_names_none(self):
         d = detect_comparison("How does it compare to competitors?", "MU")
         assert d is not None and d["mode"] == "peer" and d["subject"] == "MU"

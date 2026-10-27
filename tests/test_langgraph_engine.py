@@ -153,7 +153,7 @@ def test_detect_comparison_uses_default_strict_symbols():
     from api.services import peer_comparison as pc
     with patch.object(pc, "_tickers_named_in_query", wraps=pc._tickers_named_in_query) as spy:
         pc.detect_comparison("compare intc and txn", "MU")
-    spy.assert_called_once_with("compare intc and txn")
+    spy.assert_called_once_with("compare intc and txn", strict_symbols=True)
 
 
 @pytest.mark.parametrize("query", [
