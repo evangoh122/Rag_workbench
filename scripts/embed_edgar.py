@@ -609,7 +609,7 @@ def parse_html_file(file_path: str) -> tuple[str, str]:
         return "", ""
 
 
-_BLOCK_TAGS = ["div", "p", "tr", "li", "br", "h1", "h2", "h3", "h4", "h5", "h6",
+_BLOCK_TAGS = ["div", "p", "tr", "td", "th", "li", "br", "h1", "h2", "h3", "h4", "h5", "h6",
                "table", "section", "ul", "ol", "body"]
 _STYLE_PT = {k: re.compile(rf"{k}:\s*(-?[\d.]+)pt") for k in ("left", "width")}
 

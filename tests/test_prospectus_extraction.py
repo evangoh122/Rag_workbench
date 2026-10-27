@@ -161,6 +161,25 @@ def test_font_fragments_are_joined_into_heading_lines(tmp_path):
     assert "Use" not in lines and "Proceeds" not in lines
 
 
+def test_bare_table_cells_keep_their_boundaries(tmp_path):
+    html = (
+        "<html><body><table>"
+        "<tr><td>Revenue</td><td>$1,234</td></tr>"
+        "<tr><th>Cost of revenue</th><th>$567</th></tr>"
+        "</table></body></html>"
+    )
+    f = tmp_path / "primary-document.html"
+    f.write_text(html, encoding="utf-8")
+
+    text, _ = parse_prospectus_file(str(f))
+
+    lines = text.split("\n")
+    assert "Revenue" in lines and "$1,234" in lines
+    assert "Cost of revenue" in lines and "$567" in lines
+    assert "Revenue$1,234" not in text
+    assert "Cost of revenue$567" not in text
+
+
 def test_plain_text_prospectus_is_used_as_is(tmp_path):
     f = tmp_path / "primary-document.html"
     f.write_text("Table of Contents\nRisk Factors\n  body   text \n", encoding="utf-8")
@@ -181,7 +200,7 @@ def test_canonical_accession_leaves_unrecognised_values():
 
 class _FakeEmbeddings:
     def embed_query(self, _q):
-        return [1.0, 0.0, 0.0, 0.0]
+        return [1.0] + [0.0] * 1023
 
 
 @pytest.mark.parametrize("ticker", ["", "ANTH"])
@@ -193,14 +212,17 @@ def test_vector_search_real_duckdb_variable_length_column(ticker):
             chunk_index INTEGER, period_of_report VARCHAR, form_type VARCHAR, embedding FLOAT[]
         )""")
     rows = [
-        ("ANTH", "far", "a1", "risk_factors", 0, "2026", "S-1", [0.0, 1.0, 0.0, 0.0]),
-        ("ANTH", "near", "a1", "risk_factors", 1, "2026", "S-1", [0.9, 0.1, 0.0, 0.0]),
-        ("NVDA", "other-ticker", "n1", "item_1a", 0, "2026", "10-K", [1.0, 0.0, 0.0, 0.0]),
+        ("ANTH", "far", "a1", "risk_factors", 0, "2026", "S-1", [0.0, 1.0] + [0.0] * 1022),
+        ("ANTH", "near", "a1", "risk_factors", 1, "2026", "S-1", [0.9, 0.1] + [0.0] * 1022),
+        ("NVDA", "other-ticker", "n1", "item_1a", 0, "2026", "10-K", [1.0] + [0.0] * 1023),
+        # Left over from a 768-dim model run: casting this row to FLOAT[1024]
+        # raises a Binder Error that used to abort (and silently empty) the query.
+        ("ANTH", "stale-768", "a0", "risk_factors", 0, "2025", "S-1", [0.5] * 768),
     ]
     conn.executemany("INSERT INTO edgar_embeddings VALUES (?,?,?,?,?,?,?,?)", rows)
     manager = MagicMock()
     manager.get_connection.return_value = conn
-    cfg = MagicMock(EMBEDDING_DIM=4)
+    cfg = MagicMock(EMBEDDING_DIM=1024)
     with patch.object(hybrid_retriever, "db_manager", manager), \
          patch.object(hybrid_retriever, "Config", cfg), \
          patch.object(hybrid_retriever, "get_embeddings", return_value=_FakeEmbeddings()):
@@ -208,6 +230,7 @@ def test_vector_search_real_duckdb_variable_length_column(ticker):
 
     assert docs, "vector search returned nothing (Binder Error swallowed?)"
     texts = [d.page_content for d in docs]
+    assert "stale-768" not in texts
     if ticker:
         assert texts == ["near", "far"]
     else:
