@@ -8,10 +8,13 @@
 The notebook embeds into a copy of the pinned production DB and stages the result in a
 private repo; this module is the guard that the copy only ever gained rows.
 """
+import array
 import contextlib
+import errno
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
@@ -203,14 +206,16 @@ def _fsync_file(path: str) -> None:
 
 
 def _fsync_dir(path: str) -> None:
+    fd = os.open(path, os.O_RDONLY)
     try:
-        fd = os.open(path, os.O_RDONLY)
         try:
             os.fsync(fd)
-        finally:
-            os.close(fd)
-    except OSError:  # some network/FUSE mounts cannot fsync a directory
-        pass
+        except OSError as exc:
+            # Some filesystems explicitly report that directory fsync is unsupported.
+            if exc.errno not in {errno.EINVAL, errno.ENOTSUP}:
+                raise
+    finally:
+        os.close(fd)
 
 
 @contextlib.contextmanager
@@ -496,3 +501,322 @@ def restore_checkpoint(ckpt: dict, db_dest: str, file_dests: dict, on_step=None)
     finally:
         for fd in fds:
             os.close(fd)
+
+
+# ── DuckDB compaction ───────────────────────────────────────────────────────
+# The Colab run appends in many checkpointed groups; DuckDB keeps the blocks it freed, so the file ends up
+# ~2x its compact size. EXPORT DATABASE -> IMPORT DATABASE into a fresh file rewrites it densely. The result
+# replaces the target only after a content-identity proof against the source passes.
+
+def _db_size(path: str) -> dict:
+    con = duckdb.connect(path, read_only=True)
+    try:
+        cur = con.execute("PRAGMA database_size")
+        cols = [d[0] for d in cur.description]
+        row = dict(zip(cols, cur.fetchone()))
+    finally:
+        con.close()
+    return {"bytes": os.path.getsize(path), "block_size": int(row["block_size"]),
+            "total_blocks": int(row["total_blocks"]), "free_blocks": int(row["free_blocks"])}
+
+
+def _schema_fingerprint(con, catalog: str) -> dict:
+    """Everything about the schema that a copy must preserve (tables, columns+types, indexes, constraints, views)."""
+    tables = _base_tables(con, catalog)
+    cols = {t: [(c, _column_types(con, catalog, t)[c]) for c in _columns(con, catalog, t)] for t in tables}
+    indexes = sorted(con.execute(
+        "SELECT table_name, index_name, sql FROM duckdb_indexes() WHERE database_name = ?", [catalog]).fetchall())
+    constraints = sorted(con.execute(
+        "SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE database_name = ?",
+        [catalog]).fetchall())
+    return {"tables": tables, "columns": cols, "indexes": indexes, "constraints": constraints,
+            "views": sorted(_views(con, catalog).items())}
+
+
+_FLOAT_SCALAR_WIDTH = {"FLOAT": 4, "REAL": 4, "DOUBLE": 8}
+_FLOAT_ARRAY_RE = re.compile(r"^(FLOAT|REAL|DOUBLE)\[\d*\]$")
+
+
+def _float_kind(data_type: str):
+    """(width in bytes, is_list) for FLOAT/DOUBLE scalars and arrays, else None."""
+    kind = data_type.upper().replace(" ", "")
+    if kind in _FLOAT_SCALAR_WIDTH:
+        return _FLOAT_SCALAR_WIDTH[kind], False
+    match = _FLOAT_ARRAY_RE.match(kind)
+    if match:
+        return _FLOAT_SCALAR_WIDTH[match.group(1)], True
+    return None
+
+
+def _float_bytes(values, width: int) -> bytes:
+    """Little-endian IEEE-754 bytes for a list of floats, preserving every bit.
+
+    `array` round-trips the values through the exact C float/double representation, so signed
+    zero, subnormals and infinities keep their bits; every NaN canonicalises to the platform
+    quiet-NaN pattern (identical-bit NaNs compare equal, a NaN vs a number does not).
+    """
+    try:
+        return array.array("f" if width == 4 else "d", values).tobytes()
+    except TypeError:  # a NULL inside the array: encode element-wise with sentinels
+        out = bytearray()
+        for value in values:
+            out += b"\x00" if value is None else b"\x01" + _float_bytes([value], width)
+        return bytes(out)
+
+
+def _float_bits_signature(con, catalog: str, table: str, column: str, width: int, is_list: bool) -> dict:
+    """Order-independent, bit-exact digest of one FLOAT/DOUBLE column (scalar or array).
+
+    Whole values (a float, an entire embedding vector, or NULL) are hashed one at a time and
+    summed modulo 2**128, so the digest is a multiset fingerprint that distinguishes +0.0 from
+    -0.0, subnormals, infinities and NaN where DuckDB's `hash` and `EXCEPT ALL` compare equal.
+    Also returns how many non-finite (NaN/Inf) values were seen so callers can flag them.
+    """
+    cursor = con.execute(f"SELECT {_ident(column)} FROM {catalog}.main.{_ident(table)}")
+    count, digest, nonfinite = 0, 0, 0
+    while True:
+        rows = cursor.fetchmany(4096)
+        if not rows:
+            break
+        for (value,) in rows:
+            count += 1
+            if value is None:
+                payload = b"N"
+            else:
+                values = value if is_list else [value]
+                nonfinite += sum(1 for item in values if item is not None and not math.isfinite(item))
+                payload = (b"L" if is_list else b"S") + len(values).to_bytes(8, "little") + _float_bytes(values, width)
+            digest = (digest + int.from_bytes(hashlib.blake2b(payload, digest_size=16).digest(), "big")) % (1 << 128)
+    return {"count": count, "digest": digest, "nonfinite": nonfinite}
+
+
+def compact_identity_proof(src_db: str, dst_db: str) -> dict:
+    """Prove dst_db holds exactly the same content as src_db. Raise RuntimeError on ANY difference.
+
+    Same tables, columns (order and type), indexes, constraints and views; equal row counts; the row multisets
+    are equal in both directions (EXCEPT ALL over every column) and a per-table order-independent hash over
+    whole rows agrees. Because DuckDB treats +0.0 == -0.0 and compares NaN as equal, every FLOAT/DOUBLE column
+    (scalars and arrays, so embeddings) is additionally compared by a bit-exact multiset digest of its IEEE-754
+    bytes. NaN policy: all NaNs canonicalise to the same quiet-NaN bit pattern, so identical-bit NaNs pass;
+    a NaN (or Inf) present on only one side, a flipped zero sign, or any subnormal/bit difference is a failure.
+    Non-finite values that match on both sides are counted in the report. Both files are opened read-only.
+    """
+    for path in (src_db, dst_db):
+        if not os.path.isfile(path):
+            raise RuntimeError(f"compaction proof: missing file {path}")
+    if os.path.realpath(src_db) == os.path.realpath(dst_db):
+        raise RuntimeError("compaction proof: source and compacted DB are the same file")
+    con = duckdb.connect()
+    problems: list[str] = []
+    report: dict = {}
+    try:
+        con.execute(f"ATTACH '{src_db.replace(chr(39), chr(39) * 2)}' AS src (READ_ONLY)")
+        con.execute(f"ATTACH '{dst_db.replace(chr(39), chr(39) * 2)}' AS dst (READ_ONLY)")
+        a, b = _schema_fingerprint(con, "src"), _schema_fingerprint(con, "dst")
+        for key in a:
+            if a[key] != b[key]:
+                problems.append(f"schema differs ({key})")
+        if not a["tables"]:
+            problems.append("source DB has no tables")
+        for t in sorted(set(a["tables"]) & set(b["tables"])):
+            if a["columns"][t] != b["columns"][t]:
+                continue  # already reported as a schema difference; the row comparison needs equal columns
+            q = _ident(t)
+            n_src = con.execute(f"SELECT count(*) FROM src.main.{q}").fetchone()[0]
+            n_dst = con.execute(f"SELECT count(*) FROM dst.main.{q}").fetchone()[0]
+            h_src = con.execute(f"SELECT coalesce(sum(hash(x)::HUGEINT), 0) FROM src.main.{q} x").fetchone()[0]
+            h_dst = con.execute(f"SELECT coalesce(sum(hash(x)::HUGEINT), 0) FROM dst.main.{q} x").fetchone()[0]
+            lost = con.execute(f"SELECT count(*) FROM (SELECT * FROM src.main.{q} "
+                               f"EXCEPT ALL SELECT * FROM dst.main.{q})").fetchone()[0]
+            extra = con.execute(f"SELECT count(*) FROM (SELECT * FROM dst.main.{q} "
+                                f"EXCEPT ALL SELECT * FROM src.main.{q})").fetchone()[0]
+            if n_src != n_dst:
+                problems.append(f"{t}: row count {n_src} -> {n_dst}")
+            if lost:
+                problems.append(f"{t}: {lost} source row(s) missing or changed in the compacted DB")
+            if extra:
+                problems.append(f"{t}: {extra} row(s) in the compacted DB not in the source")
+            if h_src != h_dst:
+                problems.append(f"{t}: row-multiset hash differs")
+            nonfinite = 0
+            for column, data_type in a["columns"][t]:
+                spec = _float_kind(data_type)
+                if spec is None:
+                    continue
+                s_sig = _float_bits_signature(con, "src", t, column, *spec)
+                d_sig = _float_bits_signature(con, "dst", t, column, *spec)
+                nonfinite += s_sig["nonfinite"]
+                if s_sig != d_sig:
+                    problems.append(f"{t}.{column}: float bits differ (signed zero, NaN/Inf or subnormal)")
+            report[t] = {"rows": n_src, "hash": str(h_src), "nonfinite": nonfinite}
+    finally:
+        con.close()
+    if problems:
+        raise RuntimeError("COMPACTION PROOF FAILED: " + "; ".join(problems))
+    return report
+
+
+def _free_bytes(path: str) -> int:
+    return shutil.disk_usage(path).free
+
+
+def _refuse_symlink(path: str, what: str) -> None:
+    """Refuse an existing symlink at a path we are about to create/open/replace."""
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(st.st_mode):
+        raise RuntimeError(f"compaction: {what} {path} is a symlink; refusing")
+
+
+def _open_source(src: str) -> tuple[int, dict]:
+    """Open the source read-only without following a symlink; snapshot its identity and bytes.
+
+    The descriptor is kept open for the whole operation (so the inode cannot be swapped underneath
+    us) and carries an exclusive advisory lock where the filesystem supports one. The snapshot is
+    re-checked from this same descriptor immediately before the commit.
+    """
+    try:
+        fd = os.open(src, os.O_RDONLY | _NOFOLLOW)
+    except OSError as exc:
+        raise RuntimeError(f"compaction: cannot open source {src} without following links: {exc}") from exc
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise RuntimeError(f"compaction: source {src} is not a regular file")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError(
+                f"compaction: another process holds a write lock on the source {src}; refusing") from exc
+        except OSError:
+            pass  # advisory locks are not supported on every Colab/Drive mount; the re-hash still guards us
+        snapshot = {"dev": st.st_dev, "ino": st.st_ino, "size": st.st_size,
+                    "mtime_ns": st.st_mtime_ns, "sha256": _sha256_fd(fd)}
+        return fd, snapshot
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _source_changed(fd: int, src: str, snapshot: dict) -> str | None:
+    """Why the source no longer matches the pre-export snapshot, or None if it is unchanged."""
+    st = os.fstat(fd)
+    if (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns) != (
+            snapshot["dev"], snapshot["ino"], snapshot["size"], snapshot["mtime_ns"]):
+        return "size, inode or mtime changed"
+    try:
+        path_st = os.lstat(src)
+    except FileNotFoundError:
+        return "path disappeared"
+    if (path_st.st_dev, path_st.st_ino) != (snapshot["dev"], snapshot["ino"]):
+        return "path now names a different file"
+    if os.lseek(fd, 0, os.SEEK_SET) != 0 or _sha256_fd(fd) != snapshot["sha256"]:
+        return "contents changed"
+    return None
+
+
+def compact_duckdb(src: str, dst: str, workdir: str, protect=(), on_step=None) -> dict:
+    """Rewrite `src` densely (EXPORT DATABASE parquet -> IMPORT DATABASE into a fresh file) and put it at `dst`.
+
+    `dst` may equal `src` (in-place). The fresh file is built in a private temp directory next to `dst`,
+    CHECKPOINTed and closed (no .wal), and proven content-identical (including bit-exact embeddings) to `src`
+    by compact_identity_proof. The source is opened with O_NOFOLLOW, held under an exclusive advisory lock,
+    and its size/inode/mtime and sha256 are re-checked immediately before the atomic replace; if it changed
+    in the meantime (a write injected between the proof and the swap) the replace is refused. Symlinked
+    source, destination or workdir are refused. `on_step(name)` is called at 'proved' (after the proof,
+    before the final re-check) so tests can inject a concurrent write.
+
+    Failure guarantee: before the commit point (`os.replace`) any failure leaves `src` and `dst` untouched
+    and removes the temporary files. The temp file is fsynced before the replace. A directory-fsync failure
+    *after* the replace is a committed-state outcome: the swap is not undone and cannot be raised as if it
+    had not happened, so it is returned as `warning` with `committed=True` instead. Paths in `protect` (for
+    example the pinned production cache file) are never read-write opened, replaced or removed: a protected
+    src/dst is refused, re-checked just before the swap. Needs ~2x the source size free (export + fresh file).
+    Returns before/after bytes and free blocks plus the per-table proof report.
+    """
+    step = on_step or (lambda name: None)
+    if not os.path.isfile(src):
+        raise RuntimeError(f"compaction: missing source {src}")
+    _refuse_symlink(src, "source")
+    _refuse_symlink(dst, "destination")
+    _refuse_symlink(workdir, "workdir")
+    for p in protect:
+        _refuse_symlink(p, "protected path")
+    real = {os.path.realpath(p) for p in protect}
+    for label, p in (("source", src), ("destination", dst)):
+        if os.path.realpath(p) in real:
+            raise RuntimeError(f"compaction: {label} {p} is protected (read-only original); refusing")
+    for p in (src, dst):
+        if os.path.exists(p + ".wal"):
+            raise RuntimeError(f"compaction: {p}.wal exists (DB not cleanly closed); refusing")
+    size = os.path.getsize(src)
+    os.makedirs(workdir, exist_ok=True)
+    _refuse_symlink(workdir, "workdir")
+    dst_dir = os.path.dirname(os.path.abspath(dst))
+    os.makedirs(dst_dir, exist_ok=True)
+    need = 2 * size
+    if os.stat(workdir).st_dev == os.stat(dst_dir).st_dev:
+        free = _free_bytes(dst_dir)
+        if free < need:
+            raise RuntimeError(f"compaction: not enough disk space: need ~{need} bytes free, have {free}")
+    else:
+        for d in (workdir, dst_dir):
+            free = _free_bytes(d)
+            if free < size:
+                raise RuntimeError(f"compaction: not enough disk space in {d}: need ~{size} bytes free, have {free}")
+    before = _db_size(src)
+    export_dir = os.path.join(workdir, f"export-{secrets.token_hex(4)}")
+    tmp_dir = os.path.join(dst_dir, f".{os.path.basename(dst)}.compact-{secrets.token_hex(4)}")
+    tmp = os.path.join(tmp_dir, "db.duckdb")
+    src_fd = None
+    committed = False
+    warning = None
+    try:
+        src_fd, snapshot = _open_source(src)
+        con = duckdb.connect(src, read_only=True)
+        try:
+            con.execute(f"EXPORT DATABASE '{export_dir.replace(chr(39), chr(39) * 2)}' (FORMAT PARQUET)")
+        finally:
+            con.close()
+        os.mkdir(tmp_dir, 0o700)  # atomic: fails if a symlink/file already sits at this random name
+        _refuse_symlink(tmp_dir, "temp destination")
+        if not stat.S_ISDIR(os.lstat(tmp_dir).st_mode):
+            raise RuntimeError(f"compaction: temp destination {tmp_dir} is not a directory")
+        con = duckdb.connect(tmp)
+        try:
+            con.execute(f"IMPORT DATABASE '{export_dir.replace(chr(39), chr(39) * 2)}'")
+            con.execute("CHECKPOINT")
+        finally:
+            con.close()
+        if os.path.exists(tmp + ".wal"):
+            raise RuntimeError("compaction: the fresh DB left a .wal after CHECKPOINT; refusing")
+        report = compact_identity_proof(src, tmp)  # raises on any diff, before anything is replaced
+        after = _db_size(tmp)
+        _fsync_file(tmp)  # durable before the replace; nothing after the replace can raise as a failure
+        step("proved")
+        changed = _source_changed(src_fd, src, snapshot)
+        if changed:
+            raise RuntimeError(
+                f"compaction: source {src} changed after the identity proof ({changed}); refusing to replace")
+        if os.path.realpath(src) in real or os.path.realpath(dst) in real:
+            raise RuntimeError("compaction: source or destination became the protected original; refusing")
+        _refuse_symlink(dst, "destination")
+        os.replace(tmp, dst)
+        committed = True
+        try:
+            _fsync_dir(dst_dir)
+        except Exception as exc:  # committed: report, never pretend the swap did not happen
+            warning = f"directory fsync failed after the swap was committed: {exc}"
+    finally:
+        if src_fd is not None:
+            os.close(src_fd)
+        shutil.rmtree(export_dir, ignore_errors=True)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    result = {"bytes_before": before["bytes"], "bytes_after": after["bytes"],
+              "free_blocks_before": before["free_blocks"], "free_blocks_after": after["free_blocks"],
+              "total_blocks_before": before["total_blocks"], "total_blocks_after": after["total_blocks"],
+              "sha256_after": sha256_file(dst), "tables": report,
+              "committed": committed, "warning": warning}
+    return result
