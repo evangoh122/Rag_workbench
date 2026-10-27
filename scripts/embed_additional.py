@@ -35,7 +35,6 @@ load_dotenv(ROOT / ".env")
 os.environ["EMBEDDING_PROVIDER"] = "sentence-transformers"
 os.environ["ST_EMBEDDING_MODEL"] = "Qwen/Qwen3-Embedding-0.6B"
 os.environ["EMBEDDING_DIM"] = "1024"
-os.environ.setdefault("EDGAR_USER_AGENT", "Evan Goh evangohsg@gmail.com")
 
 # ── performance: saturate CPU cores for local embedding ───────────────────────
 # The Space caps batch=4 / few threads for its 16Gi limit; this box has 8 physical
@@ -78,6 +77,15 @@ DB_PATH = Config.DB_PATH  # singleton instance attr (mirrors scripts/embed_edgar
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
+def _require_edgar_user_agent() -> None:
+    """SEC requires a real identity; refuse to run anonymously (no built-in default)."""
+    if not os.getenv("EDGAR_USER_AGENT", "").strip():
+        sys.exit(
+            "EDGAR_USER_AGENT is not set. Export it (e.g. EDGAR_USER_AGENT='Your Name you@example.com'), "
+            "put it in .env, or pass it as a CI/job secret; the SEC rejects anonymous requests."
+        )
+
 
 def _normalize_filings(fresult):
     """Return a list of Filing objects from the result of latest(n).
@@ -157,6 +165,8 @@ def main():
         help="Optional loguru file sink path.",
     )
     args = parser.parse_args()
+
+    _require_edgar_user_agent()
 
     if args.log:
         logger.add(args.log, rotation="10 MB", level="DEBUG")

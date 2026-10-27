@@ -339,6 +339,8 @@ Retrieval is reranked by a CrossEncoder (`RERANKER_MODEL`, default `cross-encode
 
 ## Ingest real filings
 
+Set `EDGAR_USER_AGENT` (your name and email, as the SEC requires) first: `scripts/embed_additional.py` exits with an error when it is unset. The weekly and manual workflows pass it from the `EDGAR_USER_AGENT` repository secret.
+
 ```bash
 # Ingest the semiconductor ticker universe (10-K, latest available)
 uv run python -m scripts.embed_edgar
@@ -443,7 +445,7 @@ docker build -f Dockerfile.hf-gpu -t <registry>/rag-workbench-hf-gpu:<tag> . && 
 
 # Drop BACKFILL_CONFIRM=yes for a dry run that only prints the plan.
 hf jobs run --flavor l4x1 --timeout 6h \
-  --secrets HF_TOKEN \
+  --secrets HF_TOKEN --secrets EDGAR_USER_AGENT \
   -e DATASET_REPO=<user>/Rag-workbench -e BACKFILL_TICKERS=AAPL,MSFT -e BACKFILL_FORMS=annual \
   -e BACKFILL_CONFIRM=yes \
   -e STAGING_REPO=<user>/Rag-workbench-staging \
@@ -478,12 +480,14 @@ It exits non-zero without `--confirm`, and aborts if the dataset head differs fr
 
 `notebooks/colab_backfill.ipynb` runs the backfill on a Colab GPU for the case where HF Jobs is not used. It follows the same owner rule as the runner: **original data is never deleted or modified, only appended to**, and the notebook never writes to the production dataset. It embeds into a working copy of a pinned revision of `egoh33/Rag-workbench`, keeps the downloaded original untouched, and uploads the result to the private staging dataset `egoh33/rag-staging` through the runner's own `stage-upload` command (`rag.duckdb`, `before.json`, `after.json` under `runs/<run id>/`, one commit, refused for a non-private repo, the production repo or an alias of it, or an existing run id). It contains no publish code and does not restart the Space.
 
+- **Pinned code:** set `REPO_COMMIT` in step 2 to the full 40-character sha of the reviewed repo revision (the PR head before #26 merges, a `main` commit after). Step 3 refuses to run while it is empty or not a 40-char lowercase sha, then checks out exactly that commit (detached) and verifies `HEAD`; there is no branch-name default. Delete `/content/Rag_workbench` before changing it on a runtime that already cloned.
 - **Run it step by step, not "Run all".** Step 5 is a dry run that lists the filings it would add. Embedding (step 6) and staging (step 9) each do nothing until you set `CONFIRM_EXECUTE = True` / `CONFIRM_STAGE = True` in step 2; both default to `False`.
-- **Secrets** come from Colab Secrets only: `HF_TOKEN` (read the production dataset, write `egoh33/rag-staging`; it needs no write access to production) and `EDGAR_USER_AGENT`. Neither is printed, and the committed notebook has no outputs. Clear outputs before saving a copy.
+- **Secrets** come from Colab Secrets only: `HF_TOKEN` (read the production dataset, write `egoh33/rag-staging`; it needs no write access to production) and `EDGAR_USER_AGENT` (required: `embed_additional.py` exits with an error when it is unset, and so does the HF runner when executing; the old built-in identity was removed). Neither is printed, and the committed notebook has no outputs. Clear outputs before saving a copy.
 - **GPU check:** step 1 fails on a CPU-only runtime and warns when the GPU is not a T4 or L4.
 - **Scope:** every ticker already in the pinned corpus plus `ANTH` (CIK 0002130357), annual (latest 2 of the form the ticker already files) and 10-Q (latest `QUARTERS`, default 3). "Missing" means the accession is not yet in the pinned DB; `embed_additional.py` has no date filter, so step 4 prints the corpus's newest `updated_at` to compare with a cut-off such as 2026-07-27, and step 5 lists the exact accessions. Caps mirror the runner (1..50 tickers, quarters 1..8, deadline 60..21600 s; groups of at most 10 tickers) and are validated by `scripts/colab_backfill_checks.py`, whose limits a test compares with `run_hf_backfill.sh`.
-- **Resume:** after every ticker group the notebook checkpoints the working DB, both snapshots and a completed ticker/form set (plus the run id) to Google Drive (`USE_DRIVE = True`). After a disconnect, re-run steps 1-4, then 5 and 6: completed groups are skipped and stored filings are not re-embedded. Without Drive the checkpoint is lost with the runtime. A per-run time cap stops launching new groups; step 6 can be re-run to continue.
-- **Append-only proof (step 8):** per table of the original DB, the table and all its columns must still exist, the row count must not shrink, and every original row (all original columns, compared as a multiset with `EXCEPT ALL`) must be present with identical values; otherwise the cell raises. Staging re-checks that the DB is unchanged since the proof, that the proof ran, and that no filing is missing (unless `ACCEPT_INCOMPLETE`).
+- **Resume:** after every ticker group the notebook writes a new versioned checkpoint folder on Google Drive (`USE_DRIVE = True`) holding the working DB, both snapshots and a manifest (sha256 of each file, the pinned revision, the run id and the completed ticker/form set), fsyncs it, and only then switches a small `CURRENT` pointer with an atomic `os.replace`. A disconnect at any point leaves the previous or the new complete checkpoint, never a mix. On resume the manifest hashes and pinned revision are verified; a torn, edited or mismatched checkpoint is ignored and the run restarts from the pinned dataset. After a disconnect re-run steps 1-4, then 5 and 6. Without Drive the checkpoint is lost with the runtime. A per-run time cap stops launching new groups; step 6 can be re-run to continue.
+- **Completeness, not exit codes:** `embed_additional.py` skips a filing whose embedding failed (it never stores a partial filing) and still exits 0. After every group step 6 therefore re-runs the dry run for that group and marks a ticker/form pair complete only when none of its filings is still missing; incomplete pairs are reported and retried on the next run of step 6.
+- **Append-only proof (step 8):** per table of the original DB, the table and all its columns must still exist with the same column types (e.g. `INTEGER` to `BIGINT` or `FLOAT` to `DOUBLE` fails), the row count must not shrink, and every original row (all original columns, compared as a multiset with `EXCEPT ALL`) must be present with identical values; every original view must still exist with the same definition; added tables, columns, views and rows and any column/row reordering are tolerated. Otherwise the cell raises. Staging re-checks that the DB is unchanged since the proof, that the proof ran, and that no filing is missing (unless `ACCEPT_INCOMPLETE`).
 - **Publishing is a separate, explicit step** run from a repo checkout after reviewing the staged run, with a token that can read staging and write production (the notebook prints the exact command but does not run it):
 
 ```bash

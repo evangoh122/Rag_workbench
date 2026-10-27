@@ -49,8 +49,10 @@ def test_anthropic_cik_comes_from_central_config():
     ("ticker", "expected_lookup"),
     [("ANTH", "0002130357"), ("SPCX", "SPCX"), ("NVDA", "NVDA")],
 )
-def test_embed_additional_uses_cik_lookup_key(ticker, expected_lookup):
+def test_embed_additional_uses_cik_lookup_key(ticker, expected_lookup, monkeypatch):
     import duckdb
+
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test User test@example.com")
 
     sys.modules["bs4"].XMLParsedAsHTMLWarning = UserWarning  # mocked bs4 stub
     import scripts.embed_additional as module
@@ -71,6 +73,36 @@ def test_embed_additional_uses_cik_lookup_key(ticker, expected_lookup):
         module.main()
 
     company_cls.assert_called_once_with(expected_lookup)
+
+
+@pytest.mark.parametrize("value", [None, "", "   "])
+def test_embed_additional_requires_edgar_user_agent_before_any_work(monkeypatch, value):
+    sys.modules["bs4"].XMLParsedAsHTMLWarning = UserWarning
+    import scripts.embed_additional as module
+
+    if value is None:
+        monkeypatch.delenv("EDGAR_USER_AGENT", raising=False)
+    else:
+        monkeypatch.setenv("EDGAR_USER_AGENT", value)
+    with (
+        patch.object(sys, "argv", ["embed_additional", "--dry-run"]),
+        patch.object(module, "ensure_edgar_identity") as ident,
+        patch.object(module, "get_embeddings") as model,
+        patch.object(module.duckdb, "connect") as connect,
+    ):
+        with pytest.raises(SystemExit) as exc:
+            module.main()
+    assert "EDGAR_USER_AGENT is not set" in str(exc.value)
+    ident.assert_not_called()
+    model.assert_not_called()
+    connect.assert_not_called()
+
+
+def test_embed_additional_has_no_hardcoded_identity():
+    import pathlib
+
+    src = (pathlib.Path(__file__).resolve().parent.parent / "scripts" / "embed_additional.py").read_text(encoding="utf-8")
+    assert "gmail.com" not in src and 'setdefault("EDGAR_USER_AGENT"' not in src
 
 
 def test_downloader_path_uses_zero_padded_anthropic_cik(tmp_path):

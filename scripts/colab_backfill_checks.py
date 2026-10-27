@@ -2,16 +2,23 @@
 
     append_only_proof(original_db, new_db)   row-level proof that nothing original changed
     validate_caps(tickers, quarters, ...)    the HF runner's caps (scripts/run_hf_backfill.sh)
-    pending_groups / mark_done               completed-set bookkeeping for Colab resume
+    pending_groups / mark_done / split_complete   completed-set bookkeeping for Colab resume
+    write_checkpoint / read_checkpoint / restore_checkpoint   atomic, verified checkpoints
 
 The notebook embeds into a copy of the pinned production DB and stages the result in a
 private repo; this module is the guard that the copy only ever gained rows.
 """
+import hashlib
 import json
 import os
 import re
+import secrets
+import shutil
+import time
 
 import duckdb
+
+from scripts.prepare_db_copy import copy_writable
 
 # Limits copied from scripts/run_hf_backfill.sh (BACKFILL_MAX_TICKERS, BACKFILL_QUARTERS,
 # BACKFILL_TIMEOUT_SECONDS). tests/test_colab_notebook.py checks they have not drifted.
@@ -40,12 +47,26 @@ def _columns(con, catalog: str, table: str) -> list[str]:
         "ORDER BY ordinal_position", [catalog, table]).fetchall()]
 
 
+def _column_types(con, catalog: str, table: str) -> dict[str, str]:
+    return dict(con.execute(
+        "SELECT column_name, data_type FROM information_schema.columns "
+        "WHERE table_catalog = ? AND table_schema = 'main' AND table_name = ?", [catalog, table]).fetchall())
+
+
+def _views(con, catalog: str) -> dict[tuple[str, str], str]:
+    return {(r[0], r[1]): r[2] for r in con.execute(
+        "SELECT schema_name, view_name, sql FROM duckdb_views() WHERE database_name = ? AND NOT internal",
+        [catalog]).fetchall()}
+
+
 def append_only_proof(original_db: str, new_db: str) -> dict:
     """Prove new_db is original_db plus appended rows. Raise RuntimeError otherwise.
 
-    Per table in the original: it still exists, keeps every original column, has at least as
-    many rows, and every original row (all original columns, as a multiset) is present with
-    identical values (EXCEPT ALL). Both files are opened read-only. Returns per-table counts.
+    Per table in the original: it still exists, keeps every original column with the same type
+    (INTEGER -> BIGINT fails), has at least as many rows, and every original row (all original
+    columns, as a multiset) is present with identical values (EXCEPT ALL). Every original view
+    must still exist with the same definition. Added tables, columns, views and rows, and column
+    or row order, are tolerated. Both files are opened read-only. Returns per-table counts.
     """
     for path in (original_db, new_db):
         if not os.path.isfile(path):
@@ -67,9 +88,14 @@ def append_only_proof(original_db: str, new_db: str) -> dict:
                 problems.append(f"{t}: table missing after")
                 continue
             ocols = _columns(con, "orig", t)
-            missing = [c for c in ocols if c not in set(_columns(con, "new", t))]
+            otypes, ntypes = _column_types(con, "orig", t), _column_types(con, "new", t)
+            missing = [c for c in ocols if c not in ntypes]
             if missing:
                 problems.append(f"{t}: columns dropped {missing}")
+                continue
+            retyped = [f"{c} {otypes[c]} -> {ntypes[c]}" for c in ocols if otypes[c] != ntypes[c]]
+            if retyped:
+                problems.append(f"{t}: column types changed {retyped}")
                 continue
             cols = ", ".join(_ident(c) for c in ocols)
             n_before = con.execute(f"SELECT count(*) FROM orig.main.{_ident(t)}").fetchone()[0]
@@ -82,6 +108,12 @@ def append_only_proof(original_db: str, new_db: str) -> dict:
             if lost:
                 problems.append(f"{t}: {lost} original row(s) missing or modified")
             report[t] = {"before": n_before, "after": n_after, "added": n_after - n_before}
+        new_views = _views(con, "new")
+        for (schema, name), sql in _views(con, "orig").items():
+            if (schema, name) not in new_views:
+                problems.append(f"view {schema}.{name}: missing after")
+            elif new_views[(schema, name)] != sql:
+                problems.append(f"view {schema}.{name}: definition changed")
     finally:
         con.close()
     if problems:
@@ -126,8 +158,156 @@ def mark_done(meta: dict, form: str, group) -> dict:
     return {**meta, "completed": sorted(keys)}
 
 
-def load_meta(path: str) -> dict | None:
-    if not os.path.isfile(path):
-        return None
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+
+
+def split_complete(group, missing):
+    """Split `group` into (complete, incomplete) tickers given the dry-run's still-missing filings.
+
+    `missing` holds (ticker, form, accession) triples from a dry run AFTER the embed call. embed_additional.py
+    skips a filing whose embedding failed and still exits 0, so exit status proves nothing: a ticker is
+    complete only when none of its expected accessions is still missing from the DB.
+    """
+    short = {str(m[0]).upper() for m in missing}
+    return ([t for t in group if t.upper() not in short], [t for t in group if t.upper() in short])
+
+
+# ── atomic, verified checkpoints ────────────────────────────────────────────
+# Layout:  <dir>/CURRENT            names the live version (switched with os.replace)
+#          <dir>/v-<utc>-<rand>/    rag.duckdb + extra files + manifest.json (sha256 of each, pinned revision)
+# A version directory is invisible until CURRENT points at it, so a disconnect at any step leaves either
+# the previous complete checkpoint or the new complete one, never a mix.
+
+DB_NAME = "rag.duckdb"
+CURRENT = "CURRENT"
+MANIFEST = "manifest.json"
+VERSION_RE = re.compile(r"^v-\d{8}T\d{6}Z-[0-9a-f]{8}$")
+
+
+def sha256_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _fsync_file(path: str) -> None:
+    with open(path, "rb") as f:
+        os.fsync(f.fileno())
+
+
+def _fsync_dir(path: str) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except OSError:  # some network/FUSE mounts cannot fsync a directory
+        pass
+
+
+def write_checkpoint(ckpt_dir: str, db_path: str, files: dict, meta: dict, pinned_sha: str, on_step=None) -> dict:
+    """Write a new checkpoint version and atomically make it current. Returns its manifest.
+
+    `files` maps a plain file name to the source path. `on_step(name)` is called after each durable step
+    ('db', 'files', 'manifest', 'pointer_tmp', 'pointer'); tests raise from it to simulate a disconnect.
+    """
+    step = on_step or (lambda name: None)
+    for name in files:
+        if os.path.basename(name) != name or name in (DB_NAME, MANIFEST, CURRENT):
+            raise ValueError(f"invalid checkpoint file name {name!r}")
+    os.makedirs(ckpt_dir, exist_ok=True)
+    version = f"v-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{secrets.token_hex(4)}"
+    vdir = os.path.join(ckpt_dir, version)
+    os.mkdir(vdir)
+    hashes = {}
+    dst = os.path.join(vdir, DB_NAME)
+    shutil.copyfile(db_path, dst)
+    _fsync_file(dst)
+    hashes[DB_NAME] = sha256_file(dst)  # hash the copy: it is what a resume will read
+    step("db")
+    for name, src in files.items():
+        dst = os.path.join(vdir, name)
+        shutil.copyfile(src, dst)
+        _fsync_file(dst)
+        hashes[name] = sha256_file(dst)
+    step("files")
+    manifest = {"version": version, "pinned_sha": pinned_sha, "db_sha256": hashes[DB_NAME],
+                "files": hashes, "meta": meta}
+    mpath = os.path.join(vdir, MANIFEST)
+    with open(mpath, "w", encoding="utf-8") as f:
+        json.dump(manifest, f)
+        f.flush()
+        os.fsync(f.fileno())
+    _fsync_dir(vdir)
+    step("manifest")
+    tmp = os.path.join(ckpt_dir, CURRENT + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(version)
+        f.flush()
+        os.fsync(f.fileno())
+    step("pointer_tmp")
+    os.replace(tmp, os.path.join(ckpt_dir, CURRENT))
+    _fsync_dir(ckpt_dir)
+    step("pointer")
+    _prune(ckpt_dir, version)
+    return manifest
+
+
+def _prune(ckpt_dir: str, current: str) -> None:
+    """Keep the current version and the newest other one; drop older and orphaned version dirs."""
+    others = sorted((d for d in os.listdir(ckpt_dir) if VERSION_RE.match(d) and d != current), reverse=True)
+    for d in others[1:]:
+        shutil.rmtree(os.path.join(ckpt_dir, d), ignore_errors=True)
+
+
+def read_checkpoint(ckpt_dir: str, pinned_sha: str | None = None) -> tuple[dict | None, str]:
+    """Return (checkpoint, 'ok') for a verified current checkpoint, else (None, reason).
+
+    Verified means: CURRENT names a well-formed version whose manifest agrees with it, matches
+    `pinned_sha` (when given), and every file's sha256 equals the manifest's. Anything else (torn
+    write, edited or truncated file, other revision) is refused rather than half-trusted.
+    """
+    cur = os.path.join(ckpt_dir, CURRENT)
+    if not os.path.isfile(cur):
+        return None, "no checkpoint"
+    with open(cur, encoding="utf-8") as f:
+        version = f.read().strip()
+    if not VERSION_RE.match(version):
+        return None, f"CURRENT is not a valid version name: {version[:40]!r}"
+    vdir = os.path.join(ckpt_dir, version)
+    try:
+        with open(os.path.join(vdir, MANIFEST), encoding="utf-8") as f:
+            manifest = json.load(f)
+    except (OSError, ValueError) as exc:
+        return None, f"manifest unreadable: {exc}"
+    if not isinstance(manifest, dict) or manifest.get("version") != version:
+        return None, "manifest does not belong to the current version"
+    if pinned_sha is not None and manifest.get("pinned_sha") != pinned_sha:
+        return None, f"checkpoint is for revision {manifest.get('pinned_sha')}, not {pinned_sha}"
+    hashes = manifest.get("files")
+    if not isinstance(hashes, dict) or DB_NAME not in hashes or manifest.get("db_sha256") != hashes[DB_NAME]:
+        return None, "manifest has no consistent database hash"
+    paths = {}
+    for name, want in hashes.items():
+        if os.path.basename(name) != name:
+            return None, f"manifest names an invalid file {name!r}"
+        path = os.path.join(vdir, name)
+        if not os.path.isfile(path) or sha256_file(path) != want:
+            return None, f"{name} is missing or does not match its manifest hash"
+        paths[name] = path
+    db = paths.pop(DB_NAME)
+    return {"dir": vdir, "db": db, "files": paths, "meta": manifest.get("meta", {}),
+            "pinned_sha": manifest.get("pinned_sha"), "db_sha256": manifest["db_sha256"]}, "ok"
+
+
+def restore_checkpoint(ckpt: dict, db_dest: str, file_dests: dict) -> None:
+    """Copy a verified checkpoint to the working paths and re-check the restored DB's hash."""
+    copy_writable(ckpt["db"], db_dest)
+    if sha256_file(db_dest) != ckpt["db_sha256"]:
+        raise RuntimeError("restored database does not match the checkpoint manifest")
+    for name, dest in file_dests.items():
+        if name not in ckpt["files"]:
+            raise RuntimeError(f"checkpoint has no {name}")
+        shutil.copyfile(ckpt["files"][name], dest)

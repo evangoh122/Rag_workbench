@@ -1,4 +1,5 @@
 """Tests for scripts/colab_backfill_checks.py: append-only proof, runner caps, resume bookkeeping."""
+import json
 import re
 from pathlib import Path
 
@@ -190,8 +191,212 @@ def test_mark_done_is_idempotent_sorted_and_non_mutating():
     assert meta == {"run_id": "r", "completed": ["annual:B"]}
 
 
-def test_load_meta(tmp_path):
-    assert chk.load_meta(str(tmp_path / "none.json")) is None
-    p = tmp_path / "m.json"
-    p.write_text('{"a": 1}')
-    assert chk.load_meta(str(p)) == {"a": 1}
+def test_split_complete_reports_tickers_with_missing_accessions():
+    missing = [("b", "10-K", "0-1"), ("C", "10-K", "0-2"), ("B", "10-K", "0-3")]
+    assert chk.split_complete(["A", "B", "C", "D"], missing) == (["A", "D"], ["B", "C"])
+    assert chk.split_complete(["A", "B"], []) == (["A", "B"], [])
+
+
+# ── B3: column types and views ──────────────────────────────────────────────
+
+def _typed(path, ddl, views=()):
+    con = duckdb.connect(str(path))
+    con.execute(ddl)
+    for v in views:
+        con.execute(v)
+    con.close()
+
+
+T_DDL = "CREATE TABLE t (id INTEGER, v FLOAT, e FLOAT[], s VARCHAR)"
+T_ROW = "INSERT INTO t VALUES (1, 0.5, [0.5], 'x')"
+
+
+@pytest.mark.parametrize("alter", [
+    "ALTER TABLE t ALTER id TYPE BIGINT",
+    "ALTER TABLE t ALTER v TYPE DOUBLE",
+    "ALTER TABLE t ALTER e TYPE DOUBLE[]",
+    "ALTER TABLE t ALTER s TYPE BLOB USING s::BLOB",
+])
+def test_changed_column_type_fails_even_if_values_survive(tmp_path, alter):
+    orig, new = tmp_path / "o.duckdb", tmp_path / "n.duckdb"
+    _typed(orig, T_DDL + ";" + T_ROW)
+    _typed(new, T_DDL + ";" + T_ROW + ";" + alter)
+    with pytest.raises(RuntimeError, match="column types changed"):
+        chk.append_only_proof(str(orig), str(new))
+
+
+def test_added_columns_and_reordering_are_tolerated(tmp_path):
+    orig, new = tmp_path / "o.duckdb", tmp_path / "n.duckdb"
+    _typed(orig, T_DDL + ";" + T_ROW + ";INSERT INTO t VALUES (2, 1.5, [1.5], 'y')")
+    _typed(new, "CREATE TABLE t (s VARCHAR, extra BIGINT, e FLOAT[], v FLOAT, id INTEGER);"
+                "INSERT INTO t VALUES ('y', 7, [1.5], 1.5, 2), ('x', 7, [0.5], 0.5, 1), ('z', 7, [2.5], 2.5, 3)")
+    assert chk.append_only_proof(str(orig), str(new))["t"] == {"before": 2, "after": 3, "added": 1}
+
+
+VIEW = "CREATE VIEW big AS SELECT id FROM t WHERE id > 0"
+
+
+def test_view_must_exist_with_same_definition(tmp_path):
+    orig, new = tmp_path / "o.duckdb", tmp_path / "n.duckdb"
+    _typed(orig, T_DDL + ";" + T_ROW, [VIEW])
+    _typed(new, T_DDL + ";" + T_ROW, [VIEW, "CREATE VIEW extra_view AS SELECT 1 AS one"])
+    assert chk.append_only_proof(str(orig), str(new))["t"]["added"] == 0  # same view + a new view is fine
+    _typed(tmp_path / "gone.duckdb", T_DDL + ";" + T_ROW)
+    with pytest.raises(RuntimeError, match="view main.big: missing"):
+        chk.append_only_proof(str(orig), str(tmp_path / "gone.duckdb"))
+    _typed(tmp_path / "chg.duckdb", T_DDL + ";" + T_ROW, ["CREATE VIEW big AS SELECT id FROM t WHERE id > 5"])
+    with pytest.raises(RuntimeError, match="view main.big: definition changed"):
+        chk.append_only_proof(str(orig), str(tmp_path / "chg.duckdb"))
+
+
+# ── B2: atomic checkpoints ──────────────────────────────────────────────────
+
+class Crash(Exception):
+    pass
+
+
+def _src(tmp_path, tag):
+    d = tmp_path / f"src-{tag}"
+    d.mkdir(exist_ok=True)
+    (d / "rag.duckdb").write_bytes(f"db-{tag}".encode() * 100)
+    (d / "before.json").write_text(json.dumps({"tag": tag}))
+    return str(d / "rag.duckdb"), {"before.json": str(d / "before.json")}
+
+
+def _write(tmp_path, ck, tag, on_step=None, pinned="P1"):
+    db, files = _src(tmp_path, tag)
+    return chk.write_checkpoint(str(ck), db, files, {"tag": tag, "completed": [tag]}, pinned, on_step)
+
+
+def test_checkpoint_round_trip_and_restore(tmp_path):
+    ck = tmp_path / "ck"
+    manifest = _write(tmp_path, ck, "a")
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert why == "ok" and got["meta"] == {"tag": "a", "completed": ["a"]}
+    assert got["db_sha256"] == manifest["db_sha256"] == chk.sha256_file(got["db"])
+    assert chk.read_checkpoint(str(ck))[1] == "ok"  # no revision requested: any is accepted
+    out = tmp_path / "out"
+    out.mkdir()
+    chk.restore_checkpoint(got, str(out / "rag.duckdb"), {"before.json": str(out / "b.json")})
+    assert (out / "rag.duckdb").read_bytes() == b"db-a" * 100 and json.loads((out / "b.json").read_text()) == {"tag": "a"}
+    with pytest.raises(RuntimeError, match="no nope.json"):
+        chk.restore_checkpoint(got, str(out / "x"), {"nope.json": str(out / "n")})
+
+
+def test_no_checkpoint_and_wrong_revision_are_refused(tmp_path):
+    assert chk.read_checkpoint(str(tmp_path / "none"))[0] is None
+    ck = tmp_path / "ck"
+    _write(tmp_path, ck, "a")
+    got, why = chk.read_checkpoint(str(ck), "OTHER")
+    assert got is None and "revision" in why
+
+
+@pytest.mark.parametrize("crash_after", ["db", "files", "manifest", "pointer_tmp"])
+def test_crash_before_the_pointer_switch_keeps_the_previous_checkpoint(tmp_path, crash_after):
+    ck = tmp_path / "ck"
+    _write(tmp_path, ck, "old")
+
+    def boom(name):
+        if name == crash_after:
+            raise Crash
+
+    with pytest.raises(Crash):
+        _write(tmp_path, ck, "new", on_step=boom)
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert why == "ok" and got["meta"]["tag"] == "old"
+    assert json.loads(open(got["files"]["before.json"]).read()) == {"tag": "old"}  # never new DB + old snapshot
+    assert got["db"].endswith("rag.duckdb") and open(got["db"], "rb").read() == b"db-old" * 100
+    _write(tmp_path, ck, "next")  # the next write recovers and prunes the orphaned partial version
+    assert chk.read_checkpoint(str(ck), "P1")[0]["meta"]["tag"] == "next"
+    assert len([d for d in ck.iterdir() if d.name.startswith("v-")]) <= 2
+
+
+def test_crash_before_the_first_pointer_means_no_checkpoint(tmp_path):
+    ck = tmp_path / "ck"
+
+    def boom(name):
+        if name == "manifest":
+            raise Crash
+
+    with pytest.raises(Crash):
+        _write(tmp_path, ck, "new", on_step=boom)
+    assert chk.read_checkpoint(str(ck))[0] is None
+
+
+def test_crash_after_the_pointer_switch_has_the_new_checkpoint(tmp_path):
+    ck = tmp_path / "ck"
+    _write(tmp_path, ck, "old")
+
+    def boom(name):
+        if name == "pointer":
+            raise Crash
+
+    with pytest.raises(Crash):
+        _write(tmp_path, ck, "new", on_step=boom)
+    assert chk.read_checkpoint(str(ck), "P1")[0]["meta"]["tag"] == "new"
+
+
+@pytest.mark.parametrize("damage", ["db", "before", "manifest_pinned", "manifest_json", "pointer_garbage",
+                                    "pointer_traversal", "pointer_missing_dir", "truncate_db", "drop_file"])
+def test_torn_or_tampered_checkpoint_is_refused(tmp_path, damage):
+    ck = tmp_path / "ck"
+    _write(tmp_path, ck, "a")
+    vdir = ck / (ck / "CURRENT").read_text()
+    if damage == "db":
+        (vdir / "rag.duckdb").write_bytes(b"other db")
+    elif damage == "before":  # new-DB-with-old-before.json style mix
+        (vdir / "before.json").write_text('{"tag": "stale"}')
+    elif damage == "manifest_pinned":
+        m = json.loads((vdir / "manifest.json").read_text())
+        m["pinned_sha"] = "P2"
+        (vdir / "manifest.json").write_text(json.dumps(m))
+    elif damage == "manifest_json":
+        (vdir / "manifest.json").write_text("{not json")
+    elif damage == "pointer_garbage":
+        (ck / "CURRENT").write_text("whatever")
+    elif damage == "pointer_traversal":
+        (ck / "CURRENT").write_text("../../etc")
+    elif damage == "pointer_missing_dir":
+        (ck / "CURRENT").write_text("v-20990101T000000Z-deadbeef")
+    elif damage == "truncate_db":
+        (vdir / "rag.duckdb").write_bytes((vdir / "rag.duckdb").read_bytes()[:-1])
+    elif damage == "drop_file":
+        (vdir / "before.json").unlink()
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert got is None and why != "ok", damage
+
+
+def test_checkpoint_file_names_are_validated(tmp_path):
+    db, files = _src(tmp_path, "a")
+    for bad in ("../x", "rag.duckdb", "manifest.json", "CURRENT", "a/b"):
+        with pytest.raises(ValueError):
+            chk.write_checkpoint(str(tmp_path / "ck"), db, {bad: files["before.json"]}, {}, "P1")
+
+
+def test_manifest_of_another_version_is_refused_even_with_identical_files(tmp_path):
+    ck = tmp_path / "ck"
+    _write(tmp_path, ck, "a")
+    first = ck / (ck / "CURRENT").read_text()
+    _write(tmp_path, ck, "a")  # identical content: only the version differs
+    second = ck / (ck / "CURRENT").read_text()
+    assert first != second
+    (second / "manifest.json").write_text((first / "manifest.json").read_text())
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert got is None and "does not belong" in why
+
+
+def test_pointer_cannot_escape_the_checkpoint_dir(tmp_path):
+    other, ck = tmp_path / "other", tmp_path / "ck"
+    _write(tmp_path, other, "a")
+    _write(tmp_path, ck, "b")
+    (ck / "CURRENT").write_text("../other/" + (other / "CURRENT").read_text())
+    got, why = chk.read_checkpoint(str(ck), "P1")
+    assert got is None and "valid version name" in why
+
+
+def test_restore_rechecks_the_restored_db_hash(tmp_path):
+    ck = tmp_path / "ck"
+    _write(tmp_path, ck, "a")
+    got, _ = chk.read_checkpoint(str(ck), "P1")
+    with pytest.raises(RuntimeError, match="does not match the checkpoint manifest"):
+        chk.restore_checkpoint({**got, "db_sha256": "0" * 64}, str(tmp_path / "db"), {})

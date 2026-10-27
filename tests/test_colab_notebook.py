@@ -34,8 +34,8 @@ def test_magics_are_tolerated():
 
 
 GOOD = (
-    "CONFIRM_EXECUTE = False\nCONFIRM_STAGE = False\nSTAGING_REPO = 'egoh33/rag-staging'\n"
-    "x = 'stage-upload append_only_proof dry_run()'"
+    "CONFIRM_EXECUTE = False\nCONFIRM_STAGE = False\nSTAGING_REPO = 'egoh33/rag-staging'\nREPO_COMMIT = ''\n"
+    "x = 'stage-upload append_only_proof dry_run() split_complete checkout_pinned'"
 )
 
 
@@ -56,6 +56,14 @@ def test_staging_repo_must_not_be_production(tmp_path):
     assert any("STAGING_REPO literal" in p for p in check_notebook(_write(tmp_path, GOOD.replace("STAGING_REPO", "OTHER"))))
 
 
+def test_repo_commit_must_be_pinned_literal(tmp_path):
+    assert any("REPO_COMMIT literal" in p for p in check_notebook(_write(tmp_path, GOOD.replace("REPO_COMMIT", "X"))))
+    assert check_notebook(_write(tmp_path, GOOD.replace("REPO_COMMIT = ''", f"REPO_COMMIT = '{'a' * 40}'"))) == []
+    for bad in ("main", "a" * 39, "A" * 40, "chore/colab-refresh"):
+        assert any("REPO_COMMIT must be" in p for p in
+                   check_notebook(_write(tmp_path, GOOD.replace("REPO_COMMIT = ''", f"REPO_COMMIT = '{bad}'"))))
+
+
 @pytest.mark.parametrize("call", ["api.create_commit(x)", "api.upload_file(x)", "CommitOperationAdd(x)",
                                   "api.restart_space(x)", "api.delete_file(x)"])
 def test_notebook_may_not_publish(tmp_path, call):
@@ -63,7 +71,7 @@ def test_notebook_may_not_publish(tmp_path, call):
 
 
 def test_required_steps_must_be_present(tmp_path):
-    for needle in ("stage-upload", "append_only_proof", "dry_run()"):
+    for needle in ("stage-upload", "append_only_proof", "dry_run()", "split_complete", "checkout_pinned"):
         assert any(needle in p for p in check_notebook(_write(tmp_path, GOOD.replace(needle, "zzz"))))
 
 
@@ -170,6 +178,7 @@ def test_config_defaults_are_safe_and_secrets_never_printed(monkeypatch, capsys)
     assert ns["CONFIRM_EXECUTE"] is False and ns["CONFIRM_STAGE"] is False and ns["ACCEPT_INCOMPLETE"] is False
     assert ns["STAGING_REPO"] == "egoh33/rag-staging" and ns["STAGING_REPO"].lower() != ns["DATASET_REPO"].lower()
     assert ns["EXTRA_TICKERS"] == ["ANTH"] and ns["FORMS"] == ["annual", "10-Q"]
+    assert ns["REPO_COMMIT"] == "" and "REPO_REF" not in ns  # placeholder: step 3 refuses until it is filled
     assert callable(ns["dry_run"]) and ns["form_args"]("10-Q") == ["--quarters", "3"] and ns["form_args"]("annual") == []
     import os
     assert os.environ["EDGAR_USER_AGENT"] == "ua SECRET-2 a@b.c"  # set for the embed subprocesses only
@@ -246,3 +255,131 @@ def test_stage_refuses_wal_remaining_and_missing_completeness(tmp_path):
     with pytest.raises(RuntimeError, match="step 7"):
         stage2()
     assert calls2 == []
+
+
+# ── N3: pinned checkout (real git, no network) ──────────────────────────────
+
+def _git(cwd, *args):
+    import subprocess
+    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
+                          env={"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e.x", "GIT_COMMITTER_NAME": "t",
+                                "GIT_COMMITTER_EMAIL": "t@e.x", "PATH": __import__("os").environ["PATH"],
+                                "HOME": str(cwd)}).stdout.strip()
+
+
+def _checkout_ns(tmp_path):
+    import os
+    import re
+    import subprocess
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    _git(origin, "init", "-q", "-b", "main")
+    shas = []
+    for i in range(2):
+        (origin / "f.txt").write_text(str(i))
+        _git(origin, "add", "f.txt")
+        _git(origin, "commit", "-q", "-m", f"c{i}")
+        shas.append(_git(origin, "rev-parse", "HEAD"))
+    work = tmp_path / "work"
+    _git(tmp_path, "clone", "-q", str(origin), str(work))
+
+    def run(cmd, cwd=None, env=None):
+        rc = subprocess.run(cmd, cwd=cwd, env=env).returncode
+        if rc != 0:
+            raise RuntimeError(f"Command failed (exit {rc})")
+
+    ns = {"os": os, "re": re, "subprocess": subprocess, "run": run, "WORK": str(work), "GITHUB_REPO": "x/y"}
+    return _extract_func(3, "checkout_pinned", ns), work, shas
+
+
+def test_checkout_pinned_checks_out_exactly_that_commit(tmp_path):
+    checkout, work, shas = _checkout_ns(tmp_path)
+    assert checkout(shas[0]) == shas[0] and _git(work, "rev-parse", "HEAD") == shas[0]
+    assert (work / "f.txt").read_text() == "0"  # an older commit than the branch head
+    assert checkout(shas[1]) == shas[1]
+
+
+@pytest.mark.parametrize("bad", ["", None, "main", "abc123", "A" * 40, "g" * 40, "a" * 41])
+def test_checkout_pinned_refuses_placeholder_or_non_sha(tmp_path, bad):
+    checkout, work, shas = _checkout_ns(tmp_path)
+    before = _git(work, "rev-parse", "HEAD")
+    with pytest.raises(RuntimeError, match="REPO_COMMIT"):
+        checkout(bad)
+    assert _git(work, "rev-parse", "HEAD") == before
+
+
+def test_checkout_pinned_fails_for_an_unknown_commit(tmp_path):
+    checkout, work, shas = _checkout_ns(tmp_path)
+    with pytest.raises(RuntimeError, match="Command failed"):
+        checkout("0" * 40)
+
+
+# ── B1: a group is only complete when nothing is still missing ──────────────
+
+def _step6(tmp_path, missing_by_group, rc=0):
+    import subprocess
+    import sys
+    import time
+    from scripts import colab_backfill_checks as chk
+    saved, runs, dry = [], [], []
+
+    class Done:
+        returncode = rc
+
+    fake_subprocess = type("S", (), {"run": staticmethod(lambda cmd, **k: runs.append(cmd) or Done()),
+                                     "TimeoutExpired": subprocess.TimeoutExpired})
+
+    def dry_run(group, forms_list):
+        dry.append((tuple(group), tuple(forms_list)))
+        return [m for m in missing_by_group if m[0] in group]
+
+    def save_checkpoint(meta):
+        saved.append(meta)
+        return meta
+
+    ns = {"CONFIRM_EXECUTE": True, "time": time, "chk": chk, "meta": {"completed": [], "run_id": "r"},
+          "TICKERS": ["AAA", "BBB", "CCC"], "FORMS": ["annual"], "GROUP_SIZE": 2, "SESSION_DEADLINE_SECONDS": 7200,
+          "EMBED_BATCH": 16, "subprocess": fake_subprocess, "sys": sys, "WORK": str(tmp_path),
+          "form_args": lambda forms: [], "dry_run": dry_run, "save_checkpoint": save_checkpoint}
+    exec(compile(_steps()[6], "step6", "exec"), ns)  # noqa: S102
+    return ns, saved, runs, dry
+
+
+def test_group_with_a_missing_accession_is_not_marked_complete(tmp_path, capsys):
+    ns, saved, runs, dry = _step6(tmp_path, [("BBB", "10-K", "0000000001-26-000001")])
+    # embed_additional exited 0 for every group, but BBB still lacks a filing
+    assert saved[0]["completed"] == ["annual:AAA"]
+    assert saved[1]["completed"] == ["annual:AAA", "annual:CCC"]
+    assert ns["INCOMPLETE"] == ["annual:BBB"]
+    out = capsys.readouterr().out
+    assert "INCOMPLETE annual: BBB" in out and "0000000001-26-000001" in out
+    assert "Embedding finished" not in out and "incomplete" in out
+    assert dry == [(("AAA", "BBB"), ("annual",)), (("CCC",), ("annual",))]  # re-checked after every group
+
+
+def test_fully_present_groups_are_marked_complete(tmp_path, capsys):
+    ns, saved, runs, dry = _step6(tmp_path, [])
+    assert saved[-1]["completed"] == ["annual:AAA", "annual:BBB", "annual:CCC"] and ns["INCOMPLETE"] == []
+    assert "Embedding finished" in capsys.readouterr().out
+
+
+def test_nonzero_exit_still_fails_before_any_checkpoint(tmp_path):
+    with pytest.raises(RuntimeError, match="embed_additional.py failed"):
+        _step6(tmp_path, [], rc=1)
+
+
+def test_disabled_step6_runs_nothing(tmp_path, capsys):
+    import subprocess
+    ns = {"CONFIRM_EXECUTE": False, "subprocess": subprocess}
+    exec(compile(_steps()[6], "step6", "exec"), ns)  # noqa: S102
+    assert "DISABLED" in capsys.readouterr().out
+
+
+def test_checkout_pinned_verifies_head_after_checkout(tmp_path):
+    import subprocess
+    checkout, work, shas = _checkout_ns(tmp_path)
+    ns = checkout.__globals__
+    ns["subprocess"] = type("S", (), {"run": staticmethod(subprocess.run),
+                                      "check_output": staticmethod(lambda *a, **k: "b" * 40 + "\n")})
+    with pytest.raises(RuntimeError, match="expected"):
+        checkout(shas[0])

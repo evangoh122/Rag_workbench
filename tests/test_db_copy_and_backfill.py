@@ -333,7 +333,8 @@ if [ "$1" = "-" ]; then cat >/dev/null; echo deadbeef; fi
 exit 0
 """
 
-BASE_ENV = {"DATASET_REPO": "u/r", "STAGING_REPO": "u/stage", "BACKFILL_TICKERS": "AAPL,MSFT"}
+BASE_ENV = {"DATASET_REPO": "u/r", "STAGING_REPO": "u/stage", "BACKFILL_TICKERS": "AAPL,MSFT",
+            "EDGAR_USER_AGENT": "Test User test@example.com"}
 
 
 def _run_runner(tmp_path, extra_env=None, args=(), timeout=60):
@@ -342,7 +343,7 @@ def _run_runner(tmp_path, extra_env=None, args=(), timeout=60):
     stub.chmod(0o755)
     log = tmp_path / "stub.log"
     log.write_text("")
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("BACKFILL_", "DATASET_"))}
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("BACKFILL_", "DATASET_", "EDGAR_"))}
     env.update(BASE_ENV, PYTHON=str(stub), STUB_LOG=str(log), STAGING_DIR=str(tmp_path / "stage"))
     env.update(extra_env or {})
     r = subprocess.run(["bash", str(ROOT / "scripts" / "run_hf_backfill.sh"), *args],
@@ -365,6 +366,14 @@ def test_runner_executes_only_with_explicit_gate(tmp_path, how):
     assert r.returncode == 0, r.stderr
     assert "embed_additional.py" in calls and "-m scripts.hf_backfill check-cuda" in calls
     assert "--tickers AAPL,MSFT" in calls
+
+
+def test_runner_execute_requires_edgar_user_agent_but_dry_run_does_not(tmp_path):
+    r, calls = _run_runner(tmp_path, {"EDGAR_USER_AGENT": "", "BACKFILL_CONFIRM": "yes"})
+    assert r.returncode != 0 and "EDGAR_USER_AGENT required" in r.stderr and calls == ""
+    (tmp_path / "dry").mkdir()
+    r, calls = _run_runner(tmp_path / "dry", {"EDGAR_USER_AGENT": ""})
+    assert r.returncode == 0 and "DRY RUN" in r.stdout
 
 
 def test_runner_confirm_must_be_exactly_yes(tmp_path):

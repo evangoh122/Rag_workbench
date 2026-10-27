@@ -5,7 +5,7 @@
 
 Checks: valid JSON; every code cell parses with ast (shell/cell magics are blanked
 first); outputs and execution counts are cleared; embedding and staging are disabled by
-default; the notebook can only write to a staging repo that is not production (no upload,
+default; the repo checkout is pinned to a full commit sha; the notebook can only write to a staging repo that is not production (no upload,
 commit or Space-restart call against the dataset); no hardcoded token; no cell prints or
 echoes a secret.
 """
@@ -80,7 +80,12 @@ def check_notebook(path: Path) -> list[str]:
         problems.append("STAGING_REPO literal not found")
     elif m.group(1).strip().lower() == PROD_REPO:
         problems.append("STAGING_REPO is the production dataset")
-    for needle in ("stage-upload", "append_only_proof", "dry_run()"):
+    c = re.search(r"^REPO_COMMIT\s*=\s*['\"]([^'\"]*)['\"]", joined, re.MULTILINE)
+    if not c:
+        problems.append("REPO_COMMIT literal not found (the checkout must be pinned to a commit)")
+    elif c.group(1) and not re.fullmatch(r"[0-9a-f]{40}", c.group(1)):
+        problems.append("REPO_COMMIT must be empty or a full 40-character lowercase sha")
+    for needle in ("stage-upload", "append_only_proof", "dry_run()", "split_complete", "checkout_pinned"):
         if needle not in joined:
             problems.append(f"{needle} not found")
     for name in FORBIDDEN_CALLS:

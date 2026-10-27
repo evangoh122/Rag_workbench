@@ -9,6 +9,7 @@
 #
 # Env:
 #   DATASET_REPO      source dataset (read only), e.g. <user>/Rag-workbench
+#   EDGAR_USER_AGENT  required when executing: SEC identity, e.g. 'Your Name you@example.com' (a job secret)
 #   HF_TOKEN          read token for DATASET_REPO plus write access to STAGING_REPO
 #   STAGING_REPO      required when executing: an existing PRIVATE dataset repo, never
 #                     DATASET_REPO. A job container is ephemeral, so the result
@@ -95,6 +96,7 @@ fi
 
 # Executing needs somewhere outside the ephemeral container to keep the result.
 : "${STAGING_REPO:?STAGING_REPO required to execute (private dataset repo that receives the result)}"
+: "${EDGAR_USER_AGENT:?EDGAR_USER_AGENT required to execute (SEC identity, pass it as a job secret)}"
 
 # ── hard deadline: re-exec the whole run under `timeout` ────────────────────
 # The outer run always re-execs. The inner run is recognised only by `--inner=DIR`
