@@ -736,3 +736,172 @@ def test_fd_support_is_required(monkeypatch):
     monkeypatch.delattr(os, "O_NOFOLLOW")
     with pytest.raises(RuntimeError, match="need Linux"):
         chk.read_checkpoint("/nonexistent")
+
+
+# ── DuckDB compaction (real DuckDB, many append+checkpoint cycles) ──────────
+
+def _fragmented(path, cycles=25, rows=200):
+    """Many append+CHECKPOINT cycles, then a delete: leaves free blocks in the file."""
+    con = duckdb.connect(str(path))
+    con.execute("CREATE TABLE edgar_embeddings (id INTEGER PRIMARY KEY, ticker VARCHAR, text VARCHAR, "
+                "embedding FLOAT[])")
+    con.execute("CREATE INDEX ix_ticker ON edgar_embeddings(ticker)")
+    con.execute("CREATE TABLE polygon_tickers (ticker VARCHAR PRIMARY KEY, name VARCHAR)")
+    con.execute("INSERT INTO polygon_tickers VALUES ('AAPL', 'Apple')")
+    con.execute("CREATE VIEW v_tickers AS SELECT DISTINCT ticker FROM edgar_embeddings")
+    con.close()
+    for i in range(cycles):
+        con = duckdb.connect(str(path))
+        con.execute("INSERT INTO edgar_embeddings SELECT ?*100000 + range, 'T' || (range % 7), repeat('x', 300), "
+                    "list_transform(range(32), x -> (random())::FLOAT) FROM range(?)", [i, rows])
+        con.execute("CHECKPOINT")
+        con.close()
+    con = duckdb.connect(str(path))
+    con.execute("DELETE FROM edgar_embeddings WHERE id % 3 = 0")
+    con.execute("CHECKPOINT")
+    con.close()
+
+
+@pytest.fixture
+def frag(tmp_path):
+    src = tmp_path / "staged.duckdb"
+    _fragmented(src)
+    return src
+
+
+def _snapshot(path):
+    con = duckdb.connect(str(path), read_only=True)
+    try:
+        return con.execute("SELECT id, ticker, embedding FROM edgar_embeddings ORDER BY id").fetchall()
+    finally:
+        con.close()
+
+
+def test_compaction_shrinks_file_and_content_is_identical(frag, tmp_path):
+    before_bytes, before_rows = frag.stat().st_size, _snapshot(frag)
+    res = chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "work"))
+    assert res["free_blocks_before"] > 0 and res["free_blocks_after"] < res["free_blocks_before"]
+    assert res["bytes_before"] == before_bytes and res["bytes_after"] == frag.stat().st_size < before_bytes
+    assert res["sha256_after"] == chk.sha256_file(str(frag))
+    assert _snapshot(frag) == before_rows
+    assert res["tables"]["edgar_embeddings"]["rows"] == len(before_rows)
+    assert not Path(str(frag) + ".wal").exists()
+    assert sorted(p.name for p in tmp_path.iterdir() if p.is_file()) == ["staged.duckdb"]  # no temp left behind
+    assert list((tmp_path / "work").iterdir()) == []  # export dir cleaned up
+    con = duckdb.connect(str(frag), read_only=True)
+    assert con.execute("SELECT count(*) FROM duckdb_indexes() WHERE index_name = 'ix_ticker'").fetchone()[0] == 1
+    assert con.execute("SELECT count(*) FROM v_tickers").fetchone()[0] == 7
+    con.close()
+
+
+def test_compaction_to_a_separate_dst_leaves_src_untouched(frag, tmp_path):
+    sha = chk.sha256_file(str(frag))
+    dst = tmp_path / "out" / "compact.duckdb"
+    chk.compact_duckdb(str(frag), str(dst), str(tmp_path / "work"))
+    assert chk.sha256_file(str(frag)) == sha and dst.exists()
+    assert _snapshot(dst) == _snapshot(frag)
+
+
+def test_injected_diff_raises_and_leaves_src_untouched(frag, tmp_path, monkeypatch):
+    real_import_proof = chk.compact_identity_proof
+    before_sha = chk.sha256_file(str(frag))
+    tamper_sql = [""]
+
+    def tampered(src, dst):  # the fresh file is altered after IMPORT, before the proof
+        con = duckdb.connect(dst)
+        con.execute(tamper_sql[0])
+        con.execute("CHECKPOINT")
+        con.close()
+        return real_import_proof(src, dst)
+
+    monkeypatch.setattr(chk, "compact_identity_proof", tampered)
+    for sql in ("DELETE FROM edgar_embeddings WHERE id = (SELECT min(id) FROM edgar_embeddings)",
+                "UPDATE edgar_embeddings SET embedding = [9.0::FLOAT] WHERE id = (SELECT min(id) FROM edgar_embeddings)",
+                "INSERT INTO edgar_embeddings VALUES (-1, 'ZZZ', 'extra', [1.0::FLOAT])"):
+        tamper_sql[0] = sql
+        with pytest.raises(RuntimeError, match="COMPACTION PROOF FAILED"):
+            chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "work"))
+        assert chk.sha256_file(str(frag)) == before_sha  # src untouched
+        assert sorted(p.name for p in tmp_path.iterdir() if p.is_file()) == ["staged.duckdb"]
+
+
+
+def test_proof_detects_each_kind_of_difference(frag, tmp_path):
+    def copy_with(sql, name):
+        out = tmp_path / name
+        chk.compact_duckdb(str(frag), str(out), str(tmp_path / "w"))
+        con = duckdb.connect(str(out))
+        con.execute(sql)
+        con.execute("CHECKPOINT")
+        con.close()
+        return out
+    ok = copy_with("SELECT 1", "ok.duckdb")
+    assert chk.compact_identity_proof(str(frag), str(ok))["edgar_embeddings"]["rows"] > 0
+    for name, sql, msg in [
+        ("drop.duckdb", "DELETE FROM edgar_embeddings WHERE id = (SELECT max(id) FROM edgar_embeddings)", "row count"),
+        ("vec.duckdb", "UPDATE edgar_embeddings SET embedding = list_transform(embedding, x -> x + 0.5::FLOAT) "
+                       "WHERE id = (SELECT max(id) FROM edgar_embeddings)", "changed in the compacted"),
+        ("idx.duckdb", "DROP INDEX ix_ticker", "indexes"),
+        ("col.duckdb", "ALTER TABLE polygon_tickers ADD COLUMN extra INTEGER", "columns"),
+        ("tbl.duckdb", "CREATE TABLE brand_new (x INTEGER)", "tables"),
+    ]:
+        with pytest.raises(RuntimeError, match=msg):
+            chk.compact_identity_proof(str(frag), str(copy_with(sql, name)))
+    with pytest.raises(RuntimeError, match="same file"):
+        chk.compact_identity_proof(str(frag), str(frag))
+
+
+def test_disk_precheck_refuses_before_touching_anything(frag, tmp_path, monkeypatch):
+    sha = chk.sha256_file(str(frag))
+    monkeypatch.setattr(chk, "_free_bytes", lambda path: frag.stat().st_size * 2 - 1)
+    with pytest.raises(RuntimeError, match="not enough disk space"):
+        chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "work"))
+    assert chk.sha256_file(str(frag)) == sha
+    assert not (tmp_path / "work").exists() or list((tmp_path / "work").iterdir()) == []
+    monkeypatch.setattr(chk, "_free_bytes", lambda path: frag.stat().st_size * 2)
+    chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "work"))  # exactly 2x is enough
+
+
+def test_protected_original_is_never_source_or_destination(frag, tmp_path):
+    sha = chk.sha256_file(str(frag))
+    other = tmp_path / "other.duckdb"
+    other.write_bytes(b"x")
+    with pytest.raises(RuntimeError, match="protected"):
+        chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "w"), protect=[str(frag)])
+    with pytest.raises(RuntimeError, match="protected"):
+        chk.compact_duckdb(str(frag), str(other), str(tmp_path / "w"), protect=[str(other)])
+    assert chk.sha256_file(str(frag)) == sha and other.read_bytes() == b"x"
+
+
+def test_wal_present_or_missing_source_is_refused(frag, tmp_path):
+    Path(str(frag) + ".wal").write_bytes(b"w")
+    with pytest.raises(RuntimeError, match="wal"):
+        chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "w"))
+    Path(str(frag) + ".wal").unlink()
+    with pytest.raises(RuntimeError, match="missing source"):
+        chk.compact_duckdb(str(tmp_path / "nope.duckdb"), str(frag), str(tmp_path / "w"))
+
+
+def test_wal_left_by_fresh_db_is_refused(frag, tmp_path, monkeypatch):
+    sha = chk.sha256_file(str(frag))
+    real_connect = duckdb.connect
+
+    class Dirty:  # proxy: on close, leave a .wal behind as a crashed writer would
+        def __init__(self, con, path):
+            self._con, self._path = con, path
+
+        def __getattr__(self, name):
+            return getattr(self._con, name)
+
+        def close(self):
+            self._con.close()
+            Path(self._path + ".wal").write_bytes(b"w")
+
+    def connect(path=":memory:", *a, **k):
+        con = real_connect(path, *a, **k)
+        return Dirty(con, str(path)) if ".compact-" in str(path) else con
+
+    monkeypatch.setattr(chk.duckdb, "connect", connect)
+    with pytest.raises(RuntimeError, match=r"\.wal"):
+        chk.compact_duckdb(str(frag), str(frag), str(tmp_path / "w"))
+    assert chk.sha256_file(str(frag)) == sha

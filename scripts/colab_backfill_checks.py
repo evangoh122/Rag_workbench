@@ -496,3 +496,155 @@ def restore_checkpoint(ckpt: dict, db_dest: str, file_dests: dict, on_step=None)
     finally:
         for fd in fds:
             os.close(fd)
+
+
+# ── DuckDB compaction ───────────────────────────────────────────────────────
+# The Colab run appends in many checkpointed groups; DuckDB keeps the blocks it freed, so the file ends up
+# ~2x its compact size. EXPORT DATABASE -> IMPORT DATABASE into a fresh file rewrites it densely. The result
+# replaces the target only after a content-identity proof against the source passes.
+
+def _db_size(path: str) -> dict:
+    con = duckdb.connect(path, read_only=True)
+    try:
+        cur = con.execute("PRAGMA database_size")
+        cols = [d[0] for d in cur.description]
+        row = dict(zip(cols, cur.fetchone()))
+    finally:
+        con.close()
+    return {"bytes": os.path.getsize(path), "block_size": int(row["block_size"]),
+            "total_blocks": int(row["total_blocks"]), "free_blocks": int(row["free_blocks"])}
+
+
+def _schema_fingerprint(con, catalog: str) -> dict:
+    """Everything about the schema that a copy must preserve (tables, columns+types, indexes, constraints, views)."""
+    tables = _base_tables(con, catalog)
+    cols = {t: [(c, _column_types(con, catalog, t)[c]) for c in _columns(con, catalog, t)] for t in tables}
+    indexes = sorted(con.execute(
+        "SELECT table_name, index_name, sql FROM duckdb_indexes() WHERE database_name = ?", [catalog]).fetchall())
+    constraints = sorted(con.execute(
+        "SELECT table_name, constraint_type, constraint_text FROM duckdb_constraints() WHERE database_name = ?",
+        [catalog]).fetchall())
+    return {"tables": tables, "columns": cols, "indexes": indexes, "constraints": constraints,
+            "views": sorted(_views(con, catalog).items())}
+
+
+def compact_identity_proof(src_db: str, dst_db: str) -> dict:
+    """Prove dst_db holds exactly the same content as src_db. Raise RuntimeError on ANY difference.
+
+    Same tables, columns (order and type), indexes, constraints and views; equal row counts; the row multisets
+    are equal in both directions (EXCEPT ALL over every column, embeddings included, so 0 rows differ either
+    way) and a per-table order-independent hash over whole rows agrees. Both files are opened read-only.
+    """
+    for path in (src_db, dst_db):
+        if not os.path.isfile(path):
+            raise RuntimeError(f"compaction proof: missing file {path}")
+    if os.path.realpath(src_db) == os.path.realpath(dst_db):
+        raise RuntimeError("compaction proof: source and compacted DB are the same file")
+    con = duckdb.connect()
+    problems: list[str] = []
+    report: dict = {}
+    try:
+        con.execute(f"ATTACH '{src_db.replace(chr(39), chr(39) * 2)}' AS src (READ_ONLY)")
+        con.execute(f"ATTACH '{dst_db.replace(chr(39), chr(39) * 2)}' AS dst (READ_ONLY)")
+        a, b = _schema_fingerprint(con, "src"), _schema_fingerprint(con, "dst")
+        for key in a:
+            if a[key] != b[key]:
+                problems.append(f"schema differs ({key})")
+        if not a["tables"]:
+            problems.append("source DB has no tables")
+        for t in sorted(set(a["tables"]) & set(b["tables"])):
+            if a["columns"][t] != b["columns"][t]:
+                continue  # already reported as a schema difference; the row comparison needs equal columns
+            q = _ident(t)
+            n_src = con.execute(f"SELECT count(*) FROM src.main.{q}").fetchone()[0]
+            n_dst = con.execute(f"SELECT count(*) FROM dst.main.{q}").fetchone()[0]
+            h_src = con.execute(f"SELECT coalesce(sum(hash(x)::HUGEINT), 0) FROM src.main.{q} x").fetchone()[0]
+            h_dst = con.execute(f"SELECT coalesce(sum(hash(x)::HUGEINT), 0) FROM dst.main.{q} x").fetchone()[0]
+            lost = con.execute(f"SELECT count(*) FROM (SELECT * FROM src.main.{q} "
+                               f"EXCEPT ALL SELECT * FROM dst.main.{q})").fetchone()[0]
+            extra = con.execute(f"SELECT count(*) FROM (SELECT * FROM dst.main.{q} "
+                                f"EXCEPT ALL SELECT * FROM src.main.{q})").fetchone()[0]
+            if n_src != n_dst:
+                problems.append(f"{t}: row count {n_src} -> {n_dst}")
+            if lost:
+                problems.append(f"{t}: {lost} source row(s) missing or changed in the compacted DB")
+            if extra:
+                problems.append(f"{t}: {extra} row(s) in the compacted DB not in the source")
+            if h_src != h_dst:
+                problems.append(f"{t}: row-multiset hash differs")
+            report[t] = {"rows": n_src, "hash": str(h_src)}
+    finally:
+        con.close()
+    if problems:
+        raise RuntimeError("COMPACTION PROOF FAILED: " + "; ".join(problems))
+    return report
+
+
+def _free_bytes(path: str) -> int:
+    return shutil.disk_usage(path).free
+
+
+def compact_duckdb(src: str, dst: str, workdir: str, protect=()) -> dict:
+    """Rewrite `src` densely (EXPORT DATABASE parquet -> IMPORT DATABASE into a fresh file) and put it at `dst`.
+
+    `dst` may equal `src` (in-place). The fresh file is built next to `dst`, CHECKPOINTed and closed (no .wal),
+    proven content-identical to `src` by compact_identity_proof, and only then moved atomically over `dst`;
+    on any failure `src` and `dst` are left untouched and the temporary files are removed. Paths in `protect`
+    (for example the pinned production cache file) are never read-write opened, replaced or removed: a
+    protected src/dst is refused. Needs ~2x the source size free (export + fresh file). Returns before/after
+    bytes and free blocks plus the per-table proof report.
+    """
+    if not os.path.isfile(src):
+        raise RuntimeError(f"compaction: missing source {src}")
+    real = {os.path.realpath(p) for p in protect}
+    for label, p in (("source", src), ("destination", dst)):
+        if os.path.realpath(p) in real:
+            raise RuntimeError(f"compaction: {label} {p} is protected (read-only original); refusing")
+    for p in (src, dst):
+        if os.path.exists(p + ".wal"):
+            raise RuntimeError(f"compaction: {p}.wal exists (DB not cleanly closed); refusing")
+    size = os.path.getsize(src)
+    os.makedirs(workdir, exist_ok=True)
+    dst_dir = os.path.dirname(os.path.abspath(dst))
+    os.makedirs(dst_dir, exist_ok=True)
+    need = 2 * size
+    if os.stat(workdir).st_dev == os.stat(dst_dir).st_dev:
+        free = _free_bytes(dst_dir)
+        if free < need:
+            raise RuntimeError(f"compaction: not enough disk space: need ~{need} bytes free, have {free}")
+    else:
+        for d in (workdir, dst_dir):
+            free = _free_bytes(d)
+            if free < size:
+                raise RuntimeError(f"compaction: not enough disk space in {d}: need ~{size} bytes free, have {free}")
+    before = _db_size(src)
+    export_dir = os.path.join(workdir, f"export-{secrets.token_hex(4)}")
+    tmp = os.path.join(dst_dir, f".{os.path.basename(dst)}.compact-{secrets.token_hex(4)}")
+    try:
+        con = duckdb.connect(src, read_only=True)
+        try:
+            con.execute(f"EXPORT DATABASE '{export_dir.replace(chr(39), chr(39) * 2)}' (FORMAT PARQUET)")
+        finally:
+            con.close()
+        con = duckdb.connect(tmp)
+        try:
+            con.execute(f"IMPORT DATABASE '{export_dir.replace(chr(39), chr(39) * 2)}'")
+            con.execute("CHECKPOINT")
+        finally:
+            con.close()
+        if os.path.exists(tmp + ".wal"):
+            raise RuntimeError("compaction: the fresh DB left a .wal after CHECKPOINT; refusing")
+        report = compact_identity_proof(src, tmp)  # raises on any diff, before anything is replaced
+        after = _db_size(tmp)
+        _fsync_file(tmp)
+        os.replace(tmp, dst)
+        _fsync_dir(dst_dir)
+    finally:
+        shutil.rmtree(export_dir, ignore_errors=True)
+        for leftover in (tmp, tmp + ".wal"):
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(leftover)
+    return {"bytes_before": before["bytes"], "bytes_after": after["bytes"],
+            "free_blocks_before": before["free_blocks"], "free_blocks_after": after["free_blocks"],
+            "total_blocks_before": before["total_blocks"], "total_blocks_after": after["total_blocks"],
+            "sha256_after": sha256_file(dst), "tables": report}

@@ -4,8 +4,8 @@
     uv run --with nbformat python scripts/check_colab_notebook.py   # also nbformat.validate
 
 Checks: valid JSON; every code cell parses with ast (shell/cell magics are blanked
-first); outputs and execution counts are cleared; embedding and staging are disabled by
-default; the repo checkout is pinned to a full commit sha; the notebook can only write to a staging repo that is not production (no upload,
+first); outputs and execution counts are cleared; embedding, compaction and staging are disabled
+by default; step 7b (compact) sits between step 7 and step 8 and makes no Hugging Face call; the repo checkout is pinned to a full commit sha; the notebook can only write to a staging repo that is not production (no upload,
 commit or Space-restart call against the dataset); no hardcoded token; no cell prints or
 echoes a secret.
 """
@@ -21,6 +21,9 @@ PROD_REPO = "egoh33/rag-workbench"
 # The notebook may only stage through `scripts.hf_backfill stage-upload`; publishing is out of scope.
 FORBIDDEN_CALLS = ("create_commit", "upload_file", "upload_folder", "CommitOperationAdd",
                    "CommitOperationDelete", "delete_file", "delete_repo", "restart_space")
+# Nothing in the compaction cell may talk to Hugging Face: it only rewrites the local working copy.
+HF_CALL_RE = re.compile(r"HfApi|hf_hub_download|snapshot_download|stage-upload|stage-check|\bpublish\b|\bapi\.")
+STEP_RE = re.compile(r"^# STEP (\d+b?)\b", re.MULTILINE)
 TOKEN_RE = re.compile(r"\b(hf_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})")
 
 
@@ -70,7 +73,21 @@ def check_notebook(path: Path) -> list[str]:
                 problems.append(f"cell {i}: print() references a secret variable")
 
     joined = "\n".join(_source(c) for c in code_cells)
-    for flag in ("CONFIRM_EXECUTE", "CONFIRM_STAGE"):
+    steps = {}
+    for i, cell in enumerate(nb.get("cells", [])):
+        m = STEP_RE.match(_source(cell)) if cell.get("cell_type") == "code" else None
+        if m:
+            steps[m.group(1)] = i
+    if steps:
+        if "7b" not in steps:
+            problems.append("STEP 7b (compact) cell not found")
+        elif not all(k in steps for k in ("7", "8")) or not steps["7"] < steps["7b"] < steps["8"]:
+            problems.append("STEP 7b must sit between STEP 7 and STEP 8 (compaction must precede the append-only proof)")
+        else:
+            hit = HF_CALL_RE.search(_source(nb["cells"][steps["7b"]]))
+            if hit:
+                problems.append(f"STEP 7b makes a Hugging Face call ({hit.group(0)!r}); it must be local only")
+    for flag in ("CONFIRM_EXECUTE", "CONFIRM_COMPACT", "CONFIRM_STAGE"):
         if not re.search(rf"^{flag}\s*=\s*False\b", joined, re.MULTILINE):
             problems.append(f"{flag} = False not found (must be off by default)")
         if re.search(rf"^{flag}\s*=\s*True\b", joined, re.MULTILINE):
@@ -85,7 +102,7 @@ def check_notebook(path: Path) -> list[str]:
         problems.append("REPO_COMMIT literal not found (the checkout must be pinned to a commit)")
     elif c.group(1) and not re.fullmatch(r"[0-9a-f]{40}", c.group(1)):
         problems.append("REPO_COMMIT must be empty or a full 40-character lowercase sha")
-    for needle in ("stage-upload", "append_only_proof", "dry_run()", "split_complete", "checkout_pinned"):
+    for needle in ("stage-upload", "append_only_proof", "dry_run()", "split_complete", "checkout_pinned", "compact_duckdb"):
         if needle not in joined:
             problems.append(f"{needle} not found")
     for name in FORBIDDEN_CALLS:

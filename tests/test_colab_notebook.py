@@ -34,8 +34,8 @@ def test_magics_are_tolerated():
 
 
 GOOD = (
-    "CONFIRM_EXECUTE = False\nCONFIRM_STAGE = False\nSTAGING_REPO = 'egoh33/rag-staging'\nREPO_COMMIT = ''\n"
-    "x = 'stage-upload append_only_proof dry_run() split_complete checkout_pinned'"
+    "CONFIRM_EXECUTE = False\nCONFIRM_COMPACT = False\nCONFIRM_STAGE = False\nSTAGING_REPO = 'egoh33/rag-staging'\nREPO_COMMIT = ''\n"
+    "x = 'stage-upload append_only_proof dry_run() split_complete checkout_pinned compact_duckdb'"
 )
 
 
@@ -43,7 +43,7 @@ def test_minimal_good_source_passes(tmp_path):
     assert check_notebook(_write(tmp_path, GOOD)) == []
 
 
-@pytest.mark.parametrize("flag", ["CONFIRM_EXECUTE", "CONFIRM_STAGE"])
+@pytest.mark.parametrize("flag", ["CONFIRM_EXECUTE", "CONFIRM_COMPACT", "CONFIRM_STAGE"])
 def test_confirm_flags_required_and_default_off(tmp_path, flag):
     assert any(flag in p and "not found" in p for p in check_notebook(_write(tmp_path, GOOD.replace(f"{flag} = False", "pass"))))
     on = GOOD.replace(f"{flag} = False", f"{flag} = True")
@@ -71,7 +71,7 @@ def test_notebook_may_not_publish(tmp_path, call):
 
 
 def test_required_steps_must_be_present(tmp_path):
-    for needle in ("stage-upload", "append_only_proof", "dry_run()", "split_complete", "checkout_pinned"):
+    for needle in ("stage-upload", "append_only_proof", "dry_run()", "split_complete", "checkout_pinned", "compact_duckdb"):
         assert any(needle in p for p in check_notebook(_write(tmp_path, GOOD.replace(needle, "zzz"))))
 
 
@@ -108,9 +108,9 @@ def _steps():
     for c in nb["cells"]:
         if c["cell_type"] == "code":
             src = "".join(c["source"])
-            m = re.match(r"# STEP (\d+)", src)
+            m = re.match(r"# STEP (\d+)(b?)", src)
             if m:
-                out[int(m.group(1))] = src
+                out[int(m.group(1)) if not m.group(2) else m.group(1) + m.group(2)] = src
     return out
 
 
@@ -142,7 +142,9 @@ def test_steps_run_in_order_without_undefined_names():
     import ast
     import builtins
     steps = _steps()
-    assert sorted(steps) == list(range(1, 10))
+    assert sorted(steps, key=str) == sorted([*range(1, 10), "7b"], key=str)
+    order = [k for k in steps]  # document order
+    assert order == [1, 2, 3, 4, 5, 6, 7, "7b", 8, 9]
     trees = {n: ast.parse(src) for n, src in steps.items()}
     everything = set(dir(builtins)).union(*(_bound_names(t) for t in trees.values()))
     defined = set(dir(builtins))
@@ -175,7 +177,8 @@ def test_config_defaults_are_safe_and_secrets_never_printed(monkeypatch, capsys)
     ns = _exec_config(monkeypatch, {"HF_TOKEN": "tok-SECRET-1", "EDGAR_USER_AGENT": "ua SECRET-2 a@b.c"})
     out = capsys.readouterr()
     assert "SECRET" not in out.out + out.err
-    assert ns["CONFIRM_EXECUTE"] is False and ns["CONFIRM_STAGE"] is False and ns["ACCEPT_INCOMPLETE"] is False
+    assert ns["CONFIRM_EXECUTE"] is False and ns["CONFIRM_COMPACT"] is False and ns["CONFIRM_STAGE"] is False
+    assert ns["ACCEPT_INCOMPLETE"] is False and ns["COMPACT_WORKDIR"].startswith("/content/")
     assert ns["STAGING_REPO"] == "egoh33/rag-staging" and ns["STAGING_REPO"].lower() != ns["DATASET_REPO"].lower()
     assert ns["EXTRA_TICKERS"] == ["ANTH"] and ns["FORMS"] == ["annual", "10-Q"]
     assert ns["REPO_COMMIT"] == "" and "REPO_REF" not in ns  # placeholder: step 3 refuses until it is filled
@@ -383,3 +386,134 @@ def test_checkout_pinned_verifies_head_after_checkout(tmp_path):
                                       "check_output": staticmethod(lambda *a, **k: "b" * 40 + "\n")})
     with pytest.raises(RuntimeError, match="expected"):
         checkout(shas[0])
+
+
+# ── STEP 7b: compaction ─────────────────────────────────────────────────────
+
+def _cell_order():
+    import re
+    nb = json.loads(DEFAULT_NB.read_text())
+    return [m.group(1) for c in nb["cells"] if c["cell_type"] == "code"
+            if (m := re.match(r"# STEP (\d+b?)\b", "".join(c["source"])))]
+
+
+def test_compact_step_sits_between_verify_and_append_only_proof():
+    order = _cell_order()
+    assert order.index("7") + 1 == order.index("7b") and order.index("7b") + 1 == order.index("8")
+    assert "| 7b |" in "".join(json.loads(DEFAULT_NB.read_text())["cells"][0]["source"])
+
+
+def test_compact_cell_is_local_only_and_gated():
+    import re
+    src = _steps()["7b"]
+    assert "if CONFIRM_COMPACT:" in src and "protect=[ORIG_DB]" in src
+    assert not re.search(r"HfApi|hf_hub_download|upload|stage-upload|stage-check|publish|create_commit|api\.", src)
+
+
+def test_checker_flags_misplaced_or_missing_compact_step(tmp_path):
+    nb = json.loads(DEFAULT_NB.read_text())
+    cells = nb["cells"]
+    i7b = next(i for i, c in enumerate(cells) if c.get("id") == "step7b")
+    i8 = next(i for i, c in enumerate(cells) if c.get("id") == "step8")
+    swapped = json.loads(json.dumps(nb))
+    swapped["cells"][i7b], swapped["cells"][i8] = swapped["cells"][i8], swapped["cells"][i7b]
+    p = tmp_path / "swapped.ipynb"
+    p.write_text(json.dumps(swapped))
+    assert any("must sit between STEP 7 and STEP 8" in x for x in check_notebook(p))
+    missing = json.loads(json.dumps(nb))
+    del missing["cells"][i7b]
+    p = tmp_path / "missing.ipynb"
+    p.write_text(json.dumps(missing))
+    assert any("STEP 7b (compact) cell not found" in x for x in check_notebook(p))
+    leaky = json.loads(json.dumps(nb))
+    leaky["cells"][i7b]["source"] += ["\n", "HfApi(token=HF_TOKEN)\n"]
+    p = tmp_path / "leaky.ipynb"
+    p.write_text(json.dumps(leaky))
+    assert any("STEP 7b makes a Hugging Face call" in x for x in check_notebook(p))
+    on = json.loads(DEFAULT_NB.read_text().replace("CONFIRM_COMPACT = False", "CONFIRM_COMPACT = True"))
+    p = tmp_path / "on.ipynb"
+    p.write_text(json.dumps(on))
+    assert any("CONFIRM_COMPACT is True" in x for x in check_notebook(p))
+
+
+def _compact_ns(tmp_path, **over):
+    """Run step 7b's compact() against a real, fragmented DuckDB file."""
+    import os
+    import sys
+    from scripts import colab_backfill_checks as chk
+    from tests.test_colab_backfill_checks import _fragmented
+    db = tmp_path / "rag.duckdb"
+    orig = tmp_path / "orig.duckdb"
+    _fragmented(db)
+    orig.write_bytes(b"pinned-original")
+    calls, saved = [], []
+    ns = {"os": os, "sys": sys, "chk": chk, "DB": str(db), "ORIG_DB": str(orig), "COMPACT_WORKDIR": str(tmp_path / "w"),
+          "WORK": str(tmp_path), "BEFORE_JSON": "/b.json", "GUARD_JSON": "/g.json", "REMAINING": [],
+          "PROOF_SHA": "stale", "meta": {"run_id": "r", "completed": []}, "CONFIRM_COMPACT": True,
+          "run": lambda cmd, **k: calls.append(cmd), "save_checkpoint": lambda m: saved.append(m) or m, **over}
+    return _extract_func("7b", "compact", ns), ns, calls, saved
+
+
+def test_compact_runs_guards_checkpoints_and_invalidates_the_proof(tmp_path, capsys):
+    compact, ns, calls, saved = _compact_ns(tmp_path)
+    size = (tmp_path / "rag.duckdb").stat().st_size
+    compact()
+    assert (tmp_path / "rag.duckdb").stat().st_size < size
+    assert "PROOF_SHA" not in ns  # a proof from before compaction no longer applies
+    assert [c[2] if c[1] == "-m" else c[1] for c in calls] == ["scripts.hf_backfill", "scripts/etl_guardrail.py"]
+    assert saved and saved[0]["compacted_sha256"] == ns["meta"]["compacted_sha256"]
+    assert (tmp_path / "orig.duckdb").read_bytes() == b"pinned-original"
+    out = capsys.readouterr().out
+    assert "free blocks" in out and "Content identity proven" in out
+
+
+def test_stage_refuses_after_compaction_that_followed_the_proof(tmp_path):
+    """Mutation proof: the guarantee that step 9 needs the proof on the CURRENT db."""
+    from scripts import colab_backfill_checks as chk
+    compact, ns, calls, saved = _compact_ns(tmp_path)
+    ns["PROOF_SHA"] = chk.sha256_file(ns["DB"])  # step 8 ran on the uncompacted file...
+    compact()
+    ns["PROOF_SHA"] = "stale-from-before"  # ...even if a stale sha survives, it cannot match
+    stage, sns, scalls = _stage_ns(tmp_path, DB=ns["DB"], PROOF_SHA=ns["PROOF_SHA"])
+    with pytest.raises(RuntimeError, match="changed after"):
+        stage()
+    assert scalls == []
+    stage, sns, scalls = _stage_ns(tmp_path)
+    del sns["PROOF_SHA"]
+    with pytest.raises(RuntimeError, match="append-only proof"):
+        stage()
+
+
+def test_compact_refuses_wal_unrun_step7_and_proof_failure(tmp_path, monkeypatch):
+    from scripts import colab_backfill_checks as chk
+    compact, ns, calls, saved = _compact_ns(tmp_path)
+    (tmp_path / "rag.duckdb.wal").write_bytes(b"w")
+    with pytest.raises(RuntimeError, match="wal"):
+        compact()
+    (tmp_path / "rag.duckdb.wal").unlink()
+    del ns["REMAINING"]
+    with pytest.raises(RuntimeError, match="step 7"):
+        compact()
+    ns["REMAINING"] = []
+    sha = chk.sha256_file(ns["DB"])
+
+    def bad_proof(src, dst):
+        raise RuntimeError("COMPACTION PROOF FAILED: injected")
+
+    monkeypatch.setattr(chk, "compact_identity_proof", bad_proof)
+    with pytest.raises(RuntimeError, match="PROOF FAILED"):
+        compact()
+    assert chk.sha256_file(ns["DB"]) == sha and ns["PROOF_SHA"] == "stale" and saved == [] and calls == []
+
+
+def test_compact_protects_the_pinned_original(tmp_path):
+    compact, ns, calls, saved = _compact_ns(tmp_path)
+    ns["ORIG_DB"] = ns["DB"]  # mutation: if DB were the pinned file, compaction must refuse
+    with pytest.raises(RuntimeError, match="protected"):
+        compact()
+
+
+def test_disabled_step_7b_changes_nothing(tmp_path, capsys):
+    ns = {"CONFIRM_COMPACT": False}
+    exec(compile(_steps()["7b"], "step7b", "exec"), ns)  # noqa: S102
+    assert "DISABLED" in capsys.readouterr().out
