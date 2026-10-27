@@ -12,13 +12,16 @@ and breaks `import api.config`.
 
 Only `publish` can touch the production dataset. It refuses without --confirm,
 aborts if the dataset head moved since the snapshot was taken, and re-runs the
-integrity + duplicate guards on the exact staged file right before uploading.
+integrity + duplicate guards on a private snapshot of the staged file and uploads that
+same verified snapshot.
 """
 import argparse
 import hashlib
 import json
 import os
+import shutil
 import sys
+import tempfile
 
 import duckdb
 
@@ -131,16 +134,25 @@ def guarded_publish(db_path: str, before_path: str, repo: str, confirm: bool, ap
     head = api.repo_info(repo, repo_type="dataset").sha
     if head != before["dataset_head"]:
         raise RuntimeError(f"dataset head moved since snapshot: {before['dataset_head']} -> {head}; aborting")
-    # Guard the exact file being uploaded, immediately before the upload.
-    verify_after(db_path, before_path)
-    api.upload_file(
-        path_or_fileobj=db_path,
-        path_in_repo=DB_FILENAME,
-        repo_id=repo,
-        repo_type="dataset",
-        commit_message="ETL(gpu-backfill): guarded publish",
-        parent_commit=head,
-    )
+    # Verify and upload the same bytes: snapshot the staged file into a private
+    # temp dir, verify the snapshot, and upload that snapshot only if its hash is
+    # unchanged. A swap of the staged path after the copy cannot reach the upload.
+    with tempfile.TemporaryDirectory(prefix="hf_publish_") as tmp:
+        os.chmod(tmp, 0o700)
+        snap = os.path.join(tmp, DB_FILENAME)
+        shutil.copyfile(db_path, snap)
+        digest = sha256_file(snap)
+        verify_after(snap, before_path)
+        if sha256_file(snap) != digest:
+            raise RuntimeError("snapshot changed after verification; refusing to upload")
+        api.upload_file(
+            path_or_fileobj=snap,
+            path_in_repo=DB_FILENAME,
+            repo_id=repo,
+            repo_type="dataset",
+            commit_message="ETL(gpu-backfill): guarded publish",
+            parent_commit=head,
+        )
     return head
 
 

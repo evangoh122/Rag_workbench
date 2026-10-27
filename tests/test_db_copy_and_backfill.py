@@ -411,7 +411,35 @@ def test_runner_enforces_deadline_with_timeout(tmp_path):
          "PATH": f"{bindir}:{os.environ['PATH']}"},
     )
     assert r.returncode == 0, r.stderr
-    assert calls.splitlines()[0].startswith("TIMEOUT -k 30 1234 env BACKFILL_INNER=1 bash")
+    assert calls.splitlines()[0].startswith("TIMEOUT -k 30 1234 bash")
+
+
+@pytest.mark.parametrize("marker", ["1", "0", "yes", "anything"])
+def test_runner_ignores_forged_inner_env(tmp_path, marker):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    fake = bindir / "timeout"
+    fake.write_text('#!/usr/bin/env bash\necho "TIMEOUT $*" >> "$STUB_LOG"\nshift 3\nexec "$@"\n')
+    fake.chmod(0o755)
+    r, calls = _run_runner(
+        tmp_path,
+        {"BACKFILL_CONFIRM": "yes", "BACKFILL_INNER": marker, "BACKFILL_TIMEOUT_SECONDS": "777",
+         "PATH": f"{bindir}:{os.environ['PATH']}"},
+    )
+    assert r.returncode == 0, r.stderr
+    assert calls.splitlines()[0].startswith("TIMEOUT -k 30 777 bash")
+    assert "embed_additional.py" in calls
+
+
+def test_runner_rejects_forged_inner_arg(tmp_path):
+    forged = tmp_path / "forged"
+    forged.mkdir()
+    forged.chmod(0o755)
+    (forged / "token").write_text("x")
+    for arg in (f"--inner={forged}", "--inner=/nonexistent"):
+        r, calls = _run_runner(tmp_path, {"BACKFILL_CONFIRM": "yes"}, args=[arg])
+        assert r.returncode != 0 and "::error::" in r.stderr
+        assert calls == ""
 
 
 def test_runner_does_not_expand_python_unquoted():
@@ -438,6 +466,48 @@ def test_publish_reruns_guards_on_staged_file_before_upload(tmp_path):
     _make_db(db.with_name("d.duckdb"), [("A", "x", 0), ("A", "x", 0)])
     with pytest.raises(RuntimeError, match="duplicated"):
         hf_backfill.guarded_publish(str(db.with_name("d.duckdb")), str(before), "u/r", True, api)
+    api.upload_file.assert_not_called()
+
+
+def _publish_setup(tmp_path):
+    db = tmp_path / "rag.duckdb"
+    _make_db(db, [("A", "x", 0), ("A", "x", 1)])
+    good = db.read_bytes()
+    before = tmp_path / "b.json"
+    hf_backfill.take_snapshot(str(db), str(before), "aaa")
+    api = MagicMock()
+    api.repo_info.return_value.sha = "aaa"
+    uploaded = []
+    api.upload_file.side_effect = lambda **kw: uploaded.append(Path(kw["path_or_fileobj"]).read_bytes())
+    return db, before, api, good, uploaded
+
+
+def test_publish_never_uploads_staged_path_swapped_after_verify(tmp_path, monkeypatch):
+    db, before, api, good, uploaded = _publish_setup(tmp_path)
+    real = hf_backfill.verify_after
+
+    def verify_then_swap(path, b):
+        out = real(path, b)
+        db.write_bytes(b"UNVERIFIED REPLACEMENT")
+        return out
+
+    monkeypatch.setattr(hf_backfill, "verify_after", verify_then_swap)
+    hf_backfill.guarded_publish(str(db), str(before), "u/r", True, api)
+    assert uploaded and all(u == good for u in uploaded)
+
+
+def test_publish_refuses_if_verified_snapshot_changes_before_upload(tmp_path, monkeypatch):
+    db, before, api, good, uploaded = _publish_setup(tmp_path)
+    real = hf_backfill.verify_after
+
+    def verify_then_swap(path, b):
+        out = real(path, b)
+        Path(path).write_bytes(b"UNVERIFIED REPLACEMENT")
+        return out
+
+    monkeypatch.setattr(hf_backfill, "verify_after", verify_then_swap)
+    with pytest.raises(RuntimeError, match="changed"):
+        hf_backfill.guarded_publish(str(db), str(before), "u/r", True, api)
     api.upload_file.assert_not_called()
 
 

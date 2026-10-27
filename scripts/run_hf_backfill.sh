@@ -22,6 +22,10 @@
 #   PYTHON            interpreter command (default `uv run --locked --no-dev python`)
 set -euo pipefail
 
+# Never trust a recursion marker from the job environment (older versions used
+# BACKFILL_INNER); the re-exec below is marked only by a one-time token dir.
+unset BACKFILL_INNER
+
 die() { echo "::error::$*" >&2; exit 2; }
 
 is_int() { [[ "$1" =~ ^[0-9]+$ ]]; }
@@ -30,10 +34,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 EXECUTE=0
+INNER_DIR=""
 [ "${BACKFILL_CONFIRM:-}" = "yes" ] && EXECUTE=1
 for arg in "$@"; do
   case "$arg" in
     --execute) EXECUTE=1 ;;
+    --inner=?*) INNER_DIR="${arg#--inner=}" ;;
     *) die "unknown argument: $arg" ;;
   esac
 done
@@ -73,9 +79,21 @@ if [ "$EXECUTE" -ne 1 ]; then
 fi
 
 # ── hard deadline: re-exec the whole run under `timeout` ────────────────────
-if [ -z "${BACKFILL_INNER:-}" ]; then
-  exec timeout -k 30 "$DEADLINE" env BACKFILL_INNER=1 bash "${BASH_SOURCE[0]}" --execute
+# The outer run always re-execs. The inner run is recognised only by `--inner=DIR`
+# where DIR is a private (0700, ours) directory the outer shell just created and
+# which holds the token; it is consumed (deleted) on entry, so it cannot be
+# replayed and an environment variable cannot fake it. The inner run repeats all
+# validation above.
+if [ -z "$INNER_DIR" ]; then
+  TOKEN_DIR="$(mktemp -d)"
+  chmod 700 "$TOKEN_DIR"
+  head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$TOKEN_DIR/token"
+  exec timeout -k 30 "$DEADLINE" bash "${BASH_SOURCE[0]}" --execute "--inner=$TOKEN_DIR"
 fi
+[ -d "$INNER_DIR" ] && [ -O "$INNER_DIR" ] && [ ! -L "$INNER_DIR" ] \
+  && [ "$(stat -c %a "$INNER_DIR")" = "700" ] && [ -s "$INNER_DIR/token" ] \
+  || die "invalid or reused --inner token; refusing to run without the outer deadline"
+rm -rf "$INNER_DIR"
 
 # Array, not an unquoted string: no word-splitting surprises.
 read -r -a PY <<< "${PYTHON:-uv run --locked --no-dev python}"

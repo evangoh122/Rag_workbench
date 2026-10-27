@@ -450,7 +450,7 @@ HF_TOKEN=... uv run python -m scripts.hf_backfill publish \
   "$STAGING_DIR/rag.duckdb" "$STAGING_DIR/before.json" --repo <user>/Rag-workbench --confirm
 ```
 
-It exits non-zero without `--confirm`, and aborts if the dataset head differs from the `dataset_head` recorded in `before.json` (the upload is also pinned with `parent_commit`). Immediately before uploading it re-runs the DB integrity, shrink and duplicate checks on the exact staged file and refuses on any failure. Restarting the Space is a separate manual step.
+It exits non-zero without `--confirm`, and aborts if the dataset head differs from the `dataset_head` recorded in `before.json` (the upload is also pinned with `parent_commit`). Immediately before uploading it copies the staged file to a private temp snapshot, runs the DB integrity, shrink and duplicate checks on that snapshot, re-hashes it, and uploads that same snapshot, so a staged path swapped after verification is never uploaded; it refuses on any failure. Restarting the Space is a separate manual step.
 
 **Scope of the GPU runner:** it is a manually launched, staging-only job. Neither this PR nor #30 routes the scheduled `refresh-filings.yml` embedding onto the GPU, so scheduled refresh runs still use the CPU runner and its 300-minute timeout is unchanged; this runner does not make them finish. `Dockerfile.hf-gpu` runs as a non-root `app` user (writable `HOME`, HF cache, uv cache and `data/`); the image has not been built in CI or by this PR.
 
