@@ -539,29 +539,6 @@ The project is not a legal compliance certification. It is a working architectur
 
 ---
 
-## How this is built — multi-agent workflow
-
-This project is built by a team of specialist AI agents, each on its own branch, with mandatory cross-review before anything reaches `main`. The roles and ownership are defined in [`AGENTS.md`](AGENTS.md); each agent's mandate lives in `.<agent>/ROLE.md`.
-
-| Agent | Branch | Focus | Owns |
-|---|---|---|---|
-| 🏛 **Claude** | `claude` | Software architecture, maintainability, API organization, configuration validation, core RAG pipeline | `api/routes/`, `api/config.py`, `api/services/langgraph_engine.py`, `api/services/graph_rag_engine.py` |
-| 🔒 **Gemini** | `gemini` | Security hardening, rate limiting, injection resistance, EDGAR/ticker ingestion, parallel retrieval | `api/middleware/`, `scripts/embed_*.py`, shared retrieval paths |
-| ⚡ **MiMo** | `mimo` | Latency, memory efficiency, caching, DuckDB query/index tuning, startup bottlenecks | retrieval/caching paths in `api/services/`, `data/`, `run.py` |
-
-### Merge workflow
-
-1. **Branch per specialist.** Commits go to the named branch only — never directly to `main`.
-2. **Peer review is required.** Before a branch merges, another specialist reviews it. No self-review.
-3. **Round-robin reviewers:** `claude` → reviewed by **MiMo**; `mimo` → reviewed by **Gemini**; `gemini` → reviewed by **Claude**. Reviews are recorded as `.<agent>/REVIEW-*.md`.
-4. **Verdict:** reviewer returns `APPROVED` or `CHANGES NEEDED`; the author fixes on-branch and requests re-review.
-5. **Integration:** only approved branches merge to `main`. Conflicts are resolved by domain — architecture (Claude), security/perf (Gemini), optimization (MiMo).
-6. **Worktree isolation:** agents dispatched with `isolation: "worktree"` must branch from `main` (not a stale specialist branch) — verified with `git log --oneline <branch> | head -3` before review.
-
-> The `Owner`/`Path` table in `AGENTS.md` still references an `api/retrievers/` package and "MySQL"; the current implementation keeps retrieval in `api/services/` (`hybrid_retriever.py`, `reranker.py`, `rag_engine.py`) and the datastore is DuckDB. Treat `api/services/` as the home for retrieval ownership.
-
----
-
 ## Project structure
 
 ```

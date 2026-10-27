@@ -1,7 +1,15 @@
 .env
 data/
 .worktrees/
-.claude/worktrees/
+.claude/
+.codex/
+.deepseek/
+.gemini/
+.mimo/
+.planning/
+.vscode/
+.agents/
+skills-lock.json
 __pycache__/
 *.pyc
 *.pyo
@@ -35,9 +43,7 @@ no-mistakes/
 no-mistakes.zip
 
 .venv_duck10/
-.agents/
-.claude/skills/
-.claude/VERDICT-*.md
+scripts/*.GENERATED.py
 
 # personal notes (local only)
 docs/link Tracking Taxonomy.md
