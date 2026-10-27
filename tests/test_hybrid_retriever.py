@@ -216,6 +216,8 @@ class TestResolveTickerFromQuery:
         ("lam research capital expenditure",          "LRCX"),
         ("kla corporation earnings",                  "KLAC"),
         ("micron technology vs advanced micro devices", "AMD"),  # "advanced micro devices" (22) > "micron technology" (17)
+        ("What does Anthropic PBC say about revenue?", "ANTH"),
+        ("anthropic risk factors", "ANTH"),
     ])
     def test_correct_resolution(self, query, expected):
         assert resolve_ticker_from_query(query) == expected

@@ -38,6 +38,7 @@ _TICKER_TO_NAMES: Dict[str, List[str]] = {
     "MCHP": ["microchip"],
     "ADI":  ["analog devices"],
     "SPCX": ["spacex", "space exploration"],
+    "ANTH": ["anthropic", "anthropic pbc"],
     "RKLB": ["rocket lab", "rocket labs", "rocketlab", "rocket lab usa", "rklb"],
     "ON":   ["on semi", "on semiconductor", "onsemi", "on"],
     "STM":  ["stmicroelectronics", "stmicro", "stm"],
@@ -81,7 +82,12 @@ _PEER_GROUPS: Dict[str, List[str]] = {
     "LRCX": ["AMAT", "KLAC"],
     "KLAC": ["AMAT", "LRCX"],
     "SPCX": [],
+    "ANTH": [],
 }
+
+# Covered tickers that are also ordinary English words. In strict mode they only
+# count as companies when written in upper case ("ON" is always upper-case-only).
+_ENGLISH_WORD_TICKERS = frozenset({"ON", "FORM", "ONTO", "TER"})
 
 _MAX_PEERS = 4  # subject + up to 4 peers keeps the table readable
 
@@ -135,11 +141,16 @@ def _name_to_ticker(text: str) -> Optional[str]:
     return None
 
 
-def _tickers_named_in_query(query: str) -> List[str]:
+def _tickers_named_in_query(query: str, strict_symbols: bool = False) -> List[str]:
     """Return covered tickers explicitly named in the query, in first-seen order.
 
     Matches both company names ("Intel") and ticker symbols length >= 3
     ("INTC") on a word boundary, mirroring the single-ticker resolver.
+
+    ``strict_symbols`` makes the symbols in ``_ENGLISH_WORD_TICKERS`` (FORM,
+    ONTO, TER) case-sensitive so the English words "form", "onto" or "ter" are
+    not read as companies. Other symbols/aliases (amd, tsm, stm...) stay
+    case-insensitive. Default is unchanged.
     """
     q = (query or "")
     found: List[str] = []
@@ -168,7 +179,8 @@ def _tickers_named_in_query(query: str) -> List[str]:
     # Explicit symbols (>=3 chars, word boundary)
     for ticker in covered:
         if len(ticker) >= 3:
-            m = re.search(r"\b" + re.escape(ticker) + r"\b", q, re.IGNORECASE)
+            case_sensitive = strict_symbols and ticker in _ENGLISH_WORD_TICKERS
+            m = re.search(r"\b" + re.escape(ticker) + r"\b", q, 0 if case_sensitive else re.IGNORECASE)
             if m:
                 name_hits.append((m.start(), ticker))
 
@@ -187,7 +199,7 @@ def detect_comparison(query: str, subject_ticker: str) -> Optional[Dict[str, Any
     if not query:
         return None
     q = query.lower()
-    named = _tickers_named_in_query(query)
+    named = _tickers_named_in_query(query, strict_symbols=True)
     has_peer_signal = any(s in q for s in _PEER_SIGNALS)
 
     # Explicit: 2+ covered companies named → compare exactly those.

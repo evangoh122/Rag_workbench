@@ -9,7 +9,8 @@ import polars as pl
 from api.services.langgraph_engine import (
     retrieval_node, extraction_node, math_node, verification_node,
     eval_node, output_node, abstention_node, run_auditable_rag,
-    _humanize_concept,
+    _humanize_concept, _named_uncovered_company, _resolve_query_ticker,
+    classifier_node,
 )
 
 @pytest.fixture
@@ -26,6 +27,214 @@ def base_state():
         "final_answer": "",
         "status": {},
     }
+
+
+def test_anthropic_resolves_and_is_not_out_of_universe():
+    assert _resolve_query_ticker("What revenue did Anthropic report?", "NVDA") == "ANTH"
+    assert _named_uncovered_company("What revenue did Anthropic report?") is None
+
+
+@patch("api.services.langgraph_engine._ticker_has_xbrl", return_value=False)
+def test_anthropic_numeric_query_uses_text_grounded_path(mock_has_xbrl):
+    result = classifier_node({"query": "What was Anthropic revenue?", "ticker": "ANTH", "status": {}})
+
+    mock_has_xbrl.assert_called_once_with("ANTH")
+    assert result["query_type"] == "qualitative"
+    assert result["numeric_text_grounded"] is True
+
+
+@pytest.mark.parametrize("uncovered", ["OpenAI", "Stripe"])
+def test_uncovered_company_still_abstains_when_anthropic_is_also_named(uncovered):
+    result = run_auditable_rag(
+        f"How does {uncovered} compare with Anthropic?",
+        "ANTH",
+    )
+
+    assert result["verification_status"] == "ABSTAIN"
+    assert result["resolved_ticker"] == ""
+    assert uncovered.lower() in result["verification_reasoning"].lower()
+
+
+@pytest.mark.parametrize("query", [
+    "NVIDIA sales to Microsoft and Anthropic",
+    "Microsoft and Anthropic as NVIDIA customers",
+    "Does NVIDIA sell GPUs to Anthropic and OpenAI?",
+])
+def test_real_ticker_with_anthropic_and_uncovered_customers_does_not_abstain(query):
+    class _Reached(Exception):
+        pass
+
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached), \
+         patch("api.services.langgraph_engine._abstain_response") as mock_abstain:
+        with pytest.raises(_Reached):
+            run_auditable_rag(query, "MU")
+
+    mock_abstain.assert_not_called()
+
+
+@pytest.mark.parametrize("query", [
+    "Compare Anthropic vs OpenAI",
+    "OpenAI vs Anthropic",
+    "Anthropic and Stripe",
+])
+def test_anthropic_alone_with_uncovered_company_abstains(query):
+    result = run_auditable_rag(query, "MU")
+
+    assert result["verification_status"] == "ABSTAIN"
+    assert result["resolved_ticker"] == ""
+
+
+def _alias_cases():
+    from api.services.peer_comparison import _ENGLISH_WORD_TICKERS, _TICKER_TO_NAMES
+    cases = []
+    for ticker, names in _TICKER_TO_NAMES.items():
+        if ticker == "ANTH":
+            continue
+        for alias in sorted(set(names) | {ticker}):
+            if ticker in _ENGLISH_WORD_TICKERS and alias.upper() == ticker or alias == "on":
+                # English-word symbols are only companies when written upper-case
+                cases.append(alias.upper())
+            elif alias.upper() == ticker:
+                # ticker-equal aliases are not English words: any casing counts
+                cases.extend([alias.lower(), alias.title(), alias.upper()])
+            else:
+                cases.append(alias.title())
+    return cases
+
+
+@pytest.mark.parametrize("alias", _alias_cases())
+def test_every_covered_alias_with_anthropic_and_uncovered_does_not_abstain(alias):
+    class _Reached(Exception):
+        pass
+
+    query = f"What were {alias}'s sales to Microsoft and Anthropic?"
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached), \
+         patch("api.services.langgraph_engine._abstain_response") as mock_abstain:
+        with pytest.raises(_Reached):
+            run_auditable_rag(query, "MU")
+
+    mock_abstain.assert_not_called()
+
+
+@pytest.mark.parametrize("query", [
+    "Did tsm supply Anthropic and OpenAI?",
+    "Did stm sell to Anthropic or Google?",
+    "Does plab supply Anthropic or OpenAI?",
+    "What were Amd's sales to Microsoft and Anthropic?",
+])
+def test_lowercase_ticker_equal_aliases_with_anthropic_do_not_abstain(query):
+    class _Reached(Exception):
+        pass
+
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached), \
+         patch("api.services.langgraph_engine._abstain_response") as mock_abstain:
+        with pytest.raises(_Reached):
+            run_auditable_rag(query, "MU")
+
+    mock_abstain.assert_not_called()
+
+
+def test_prose_upper_case_on_and_tsm_still_recognised():
+    from api.services.peer_comparison import _tickers_named_in_query
+    assert _tickers_named_in_query("Compare ON and TSM", strict_symbols=True) == ["ON", "TSM"]
+    assert _tickers_named_in_query("revenue on tsm", strict_symbols=True) == ["TSM"]
+
+
+def test_default_path_is_case_insensitive_and_pinned():
+    from api.services.peer_comparison import _tickers_named_in_query
+    assert _tickers_named_in_query("compare intc and txn") == ["INTC", "TXN"]
+    assert _tickers_named_in_query("in the form of onto") == ["FORM", "ONTO"]
+
+
+def test_detect_comparison_uses_default_strict_symbols():
+    from api.services import peer_comparison as pc
+    with patch.object(pc, "_tickers_named_in_query", wraps=pc._tickers_named_in_query) as spy:
+        pc.detect_comparison("compare intc and txn", "MU")
+    spy.assert_called_once_with("compare intc and txn", strict_symbols=True)
+
+
+@pytest.mark.parametrize("query", [
+    "Compare Anthropic vs OpenAI in the form of a table",
+    "Map Anthropic onto OpenAI",
+    "What does Anthropic's Form S-1 say about OpenAI?",
+    "Anthropic PBC vs OpenAI",
+    "ANTH vs OpenAI",
+    "Anthropic vs OpenAI in the form of a table",
+    "Anthropic vs OpenAI onto ter",
+    "Anthropic vs OpenAI on revenue",
+])
+def test_english_words_matching_tickers_do_not_count_as_covered(query):
+    result = run_auditable_rag(query, "MU")
+
+    assert result["verification_status"] == "ABSTAIN"
+
+
+def test_spacex_anthropic_microsoft_does_not_abstain():
+    # Intended behaviour: SPCX is another covered company, so the ANTH-only
+    # abstain exception does not apply (same as a real ticker naming a customer).
+    class _Reached(Exception):
+        pass
+
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached), \
+         patch("api.services.langgraph_engine._abstain_response") as mock_abstain:
+        with pytest.raises(_Reached):
+            run_auditable_rag("SpaceX, Anthropic and Microsoft", "MU")
+
+    mock_abstain.assert_not_called()
+
+
+@pytest.mark.parametrize("query,ticker", [
+    ("What share of Qualcomm revenue comes from Apple?", "QCOM"),
+    ("How much does NVIDIA sell to Microsoft?", "NVDA"),
+    ("Broadcom custom accelerator revenue from Google", "AVGO"),
+])
+def test_real_ticker_naming_uncovered_customer_does_not_abstain(query, ticker):
+    class _Reached(Exception):
+        pass
+
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached), \
+         patch("api.services.langgraph_engine._abstain_response") as mock_abstain:
+        with pytest.raises(_Reached):
+            run_auditable_rag(query, "MU")
+
+    mock_abstain.assert_not_called()
+
+
+@pytest.mark.parametrize("query", ["Micron revenue", "SpaceX revenue", "Tesla revenue"])
+def test_plain_company_questions_unchanged(query):
+    # Micron/SpaceX are covered (reach the graph); Tesla is uncovered (abstains).
+    class _Reached(Exception):
+        pass
+
+    with patch("api.services.peer_comparison.detect_comparison", return_value=None), \
+         patch("api.services.langgraph_engine.get_app", side_effect=_Reached):
+        if "Tesla" in query:
+            assert run_auditable_rag(query, "MU")["verification_status"] == "ABSTAIN"
+        else:
+            with pytest.raises(_Reached):
+                run_auditable_rag(query, "MU")
+
+
+@patch("api.services.peer_comparison.compute_metric")
+def test_nvidia_investment_in_anthropic_uses_multi_company_comparison(mock_metric):
+    # Known tradeoff: merely naming two covered companies selects explicit
+    # comparison mode, matching the existing SPCX alias behaviour.
+    mock_metric.return_value = {"value": 1.0, "period": "2026"}
+
+    result = run_auditable_rag(
+        "How does NVIDIA's investment in Anthropic affect its revenue?",
+        "NVDA",
+    )
+
+    assert result["resolved_ticker"] == "NVDA"
+    assert "| NVDA *(subject)* |" in result["final_answer"]
+    assert "| ANTH |" in result["final_answer"]
+    assert mock_metric.call_count == 2
 
 class TestLangGraphNodes:
     @patch("api.services.langgraph_engine.EDGARHybridRetriever")

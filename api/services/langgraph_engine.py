@@ -1207,9 +1207,9 @@ _xbrl_ticker_cache: dict[str, bool] = {}
 def _ticker_has_xbrl(ticker: str) -> bool:
     """True if this ticker has any structured XBRL facts in the DB.
 
-    Tickers ingested only from an S-1/424B4 IPO prospectus (e.g. SPCX) carry
-    rich filing text but no XBRL facts, so deterministic numeric verification
-    can't run. Callers use this to allow text-grounded (clearly unverified)
+    Companies ingested only from an S-1/424B4 IPO prospectus (e.g. SPCX and
+    ANTH) carry rich filing text but no XBRL facts, so deterministic numeric
+    verification can't run. Callers use this to allow text-grounded (clearly unverified)
     numeric answers for such tickers instead of abstaining outright. Cached
     per-ticker for the process lifetime. On any error, assumes XBRL is present
     so we fall back to the safe deterministic-verify path.
@@ -1374,9 +1374,9 @@ def classifier_node(state: GraphState) -> Dict[str, Any]:
     intent = _detect_intent(query)
     text_grounded = False
     # A numeric question about a ticker with no XBRL facts (e.g. an S-1
-    # prospectus filer like SPCX) can't be deterministically verified. Rather
-    # than abstain at the verification gate, route it through the LLM/text path
-    # and flag the answer as quoted-from-text / not XBRL-verified.
+    # prospectus filer like SPCX or ANTH) can't be deterministically verified.
+    # Rather than abstain at the verification gate, route it through the LLM/text
+    # path and flag the answer as quoted-from-text / not XBRL-verified.
     if qtype == "numeric" and not _ticker_has_xbrl(state.get("ticker", "")):
         logger.info(
             "--- CLASSIFIER: numeric query for {} but no XBRL facts — "
@@ -1861,7 +1861,7 @@ _OUT_OF_UNIVERSE = {
     "facebook", "netflix", "oracle", "salesforce", "adobe", "walmart", "costco",
     "jpmorgan", "goldman sachs", "berkshire", "coca cola", "pepsi", "disney",
     "boeing", "ford", "general motors", "exxon", "chevron", "pfizer", "moderna",
-    "palantir", "uber", "airbnb", "spotify", "openai", "anthropic", "stripe",
+    "palantir", "uber", "airbnb", "spotify", "openai", "stripe",
     "blue origin", "rivian", "lucid", "snowflake",
 }
 
@@ -1875,11 +1875,29 @@ def _named_uncovered_company(query: str) -> Optional[str]:
     return None
 
 
+def _other_covered_named(query: str) -> str:
+    """Covered ticker named in the query besides Anthropic/ANTH, else ""."""
+    stripped = re.sub(r"\b(anthropic(\s+pbc)?|anth)\b", " ", query or "", flags=re.IGNORECASE)
+    try:
+        from api.services.hybrid_retriever import resolve_ticker_from_query
+        by_name = resolve_ticker_from_query(stripped, "")
+        if by_name and by_name != "ANTH":
+            return by_name
+    except Exception:
+        pass
+    # Same alias set comparison routing uses; symbols must be written as symbols
+    # so words like "form"/"onto" are not read as covered companies.
+    from api.services.peer_comparison import _tickers_named_in_query
+    others = [t for t in _tickers_named_in_query(stripped, strict_symbols=True) if t != "ANTH"]
+    return others[0] if others else ""
+
+
 def _abstain_response(company: str) -> Dict[str, Any]:
     """A grounded 'I don't have data on that' answer (shaped like graph output)."""
     msg = (
         f"I don't have SEC filing data for **{company.title()}**, so I can't answer "
-        f"that. I currently cover **SpaceX (SPCX)** and major semiconductor companies "
+        f"that. I currently cover **Anthropic (ANTH)**, **SpaceX (SPCX)**, and "
+        f"major semiconductor companies "
         f"(e.g. NVDA, AMD, MU, AVGO, QCOM, TXN, AMAT, LRCX, KLAC). "
         f"Ask about one of those and I'll pull it from their filings."
     )
@@ -2180,11 +2198,14 @@ def run_auditable_rag(query: str, ticker: str,
     # If the query names a company we DON'T cover, abstain rather than answering
     # with the default ticker's data ("SpaceX revenue" must not return Micron's).
     by_name = _resolve_query_ticker(query, "")  # covered ticker, or "" if none recognised
+    uncovered = _named_uncovered_company(query)
+    # Normally only abstain when NO covered company is named. Narrow exception:
+    # ANTH is a pre-ticker issuer, so "OpenAI vs Anthropic" must not answer from
+    # ANTH alone. Real tickers (QCOM, NVDA...) naming a big customer still answer.
+    if uncovered and (not by_name or (by_name == "ANTH" and not _other_covered_named(query))):
+        logger.info(f"Abstaining — query names uncovered company {uncovered!r}")
+        return _abstain_response(uncovered)
     if not by_name:
-        uncovered = _named_uncovered_company(query)
-        if uncovered:
-            logger.info(f"Abstaining — query names uncovered company {uncovered!r}")
-            return _abstain_response(uncovered)
         by_name = ticker  # no company named -> honour the UI's selected ticker
     if by_name != ticker:
         logger.info(f"Ticker override: query resolved to {by_name!r} (caller passed {ticker!r})")
