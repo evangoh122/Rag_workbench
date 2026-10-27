@@ -22,7 +22,9 @@ node_modules
 .env*
 *.duckdb
 *.duckdb.*
-data/
+data/review_queue.duckdb
+data/ibkr.duckdb
+data/edgar_downloads
 *.pem
 *.key
 *.p12

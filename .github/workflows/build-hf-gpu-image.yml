@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: build-hf-gpu-image-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-and-push:
@@ -48,6 +48,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/evangoh122/rag-workbench-hf-gpu:${{ github.sha }}
-            ghcr.io/evangoh122/rag-workbench-hf-gpu:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ github.ref == 'refs/heads/main' && 'ghcr.io/evangoh122/rag-workbench-hf-gpu:latest' || '' }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=hf-gpu-image
+          cache-to: type=gha,scope=hf-gpu-image,mode=min
