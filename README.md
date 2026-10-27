@@ -553,7 +553,7 @@ This project is built by a team of specialist AI agents, each on its own branch,
 
 1. **Branch per specialist.** Commits go to the named branch only — never directly to `main`.
 2. **Peer review is required.** Before a branch merges, another specialist reviews it. No self-review.
-3. **Round-robin reviewers:** `claude` → reviewed by **MiMo**; `mimo` → reviewed by **Gemini**; `gemini` → reviewed by **Claude**. Reviews are recorded as `.<agent>/REVIEW-*.md`.
+3. **Round-robin reviewers:** `claude` → reviewed by **MiMo**; `mimo` → reviewed by **Gemini**; `gemini` → reviewed by **Claude**. Review verdicts are working files kept outside the repo (`.<agent>/REVIEW-*.md` / `VERDICT-*.md` are gitignored); the outcome is recorded on the PR.
 4. **Verdict:** reviewer returns `APPROVED` or `CHANGES NEEDED`; the author fixes on-branch and requests re-review.
 5. **Integration:** only approved branches merge to `main`. Conflicts are resolved by domain — architecture (Claude), security/perf (Gemini), optimization (MiMo).
 6. **Worktree isolation:** agents dispatched with `isolation: "worktree"` must branch from `main` (not a stale specialist branch) — verified with `git log --oneline <branch> | head -3` before review.
@@ -588,6 +588,18 @@ This project is built by a team of specialist AI agents, each on its own branch,
 The portfolio + RAG Workbench UI lives in the separate `evangoh-frontend`
 repo, which serves it directly in production. This repo is
 backend/API-only (no frontend build stage, no nginx, no supervisord).
+
+### Repo layout / cleanup
+
+The repo tracks product code (`api/`, `scripts/`, `evals/`, `tests/`), CI
+(`.github/workflows/`), the two Dockerfiles, `pyproject.toml` + `uv.lock`, and
+the docs under `docs/`. Agent working files are local only: per-agent review
+and verdict notes (`.<agent>/REVIEW-*.md`, `VERDICT-*.md`, `.deepseek/coordination/`),
+`.codex/`, `.planning/` (except `SECURITY_AUDIT.md`), session logs and
+handoffs, the old `ISSUES.md` tracker, `skills-lock.json`, and the landing-page
+`mockups/` from the retired in-repo frontend. They were removed in the
+`chore/repo-cleanup` PR and are gitignored so they don't come back; git history
+still has them. Each agent's `.<agent>/ROLE.md` stays in the repo.
 
 ---
 

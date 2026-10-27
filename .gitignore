@@ -17,7 +17,8 @@ OUTSTANDING_WORK.md
 graphify-out/cache/
 .claude/settings.local.json
 *.duckdb.wal
-ISSUES.md*.log
+/ISSUES.md
+*.log
 
 # scratch / debug (local only)
 scratch_*
@@ -41,3 +42,22 @@ no-mistakes.zip
 
 # personal notes (local only)
 docs/link Tracking Taxonomy.md
+
+# agent review artifacts / session notes (local only; removed in chore/repo-cleanup)
+/.codex/
+/.claude/REVIEW-*.md
+/.deepseek/REVIEW-*.md
+/.deepseek/VERDICT-*.md
+/.deepseek/coordination/
+/.deepseek/tasks.md
+/.gemini/REVIEW-*.md
+/.gemini/VERDICT-*.md
+/.mimo/REVIEW-*.md
+/.mimo/VERDICT-*.md
+/.planning/*
+!/.planning/SECURITY_AUDIT.md
+/*_SESSION_LOG.md
+/findings.md
+/skills-lock.json
+/mockups/
+docs/SESSION-HANDOFF-*.md
