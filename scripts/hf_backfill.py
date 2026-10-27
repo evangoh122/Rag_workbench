@@ -241,12 +241,13 @@ def stage_upload(db_path: str, before_path: str, staging_repo: str, prod_repo: s
 def fetch_staged(staging_repo: str, prod_repo: str, run_id: str, dest_dir: str, api=None) -> tuple[str, str]:
     """Download runs/<run_id>/ files; refuse if absent or the DB hash differs from after.json."""
     _check_run_id(run_id)
-    if _norm_repo(staging_repo) == _norm_repo(prod_repo):
-        raise RuntimeError(f"staging repo {staging_repo} is the production dataset; refusing")
     if api is None:
         from huggingface_hub import HfApi
 
         api = HfApi(token=os.environ["HF_TOKEN"])
+    # The publish path must enforce the same canonical-id separation as staging:
+    # a renamed alias of production would otherwise reach hf_hub_download.
+    check_staging_repo(staging_repo, prod_repo, api)
     paths = []
     for name in (DB_FILENAME, BEFORE_FILENAME, AFTER_FILENAME):
         try:

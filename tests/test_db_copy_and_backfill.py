@@ -607,6 +607,15 @@ def test_stage_refuses_existing_run_prefix(tmp_path):
     api.create_commit.assert_not_called()
 
 
+def test_stage_allows_run_id_that_is_a_prefix_of_another_run(tmp_path):
+    db, before = _staged_files(tmp_path)
+    api = _staging_api()
+    api.list_repo_files.return_value = ["runs/run10/rag.duckdb"]
+    prefix = hf_backfill.stage_upload(str(db), str(before), "u/stage", "u/prod", "run1", api)
+    assert prefix == "runs/run1"
+    api.create_commit.assert_called_once()
+
+
 def test_stage_refuses_production_repo_as_staging(tmp_path):
     db, before = _staged_files(tmp_path)
     api = _staging_api()
@@ -725,10 +734,27 @@ def _fake_download(files):
     return dl
 
 
+def _publish_api(files, canonical=None):
+    """Mock only the Hub surface fetch_staged/publish use; ids default to the input repo."""
+    canonical = canonical or {}
+    api = MagicMock()
+
+    def info(repo_id, repo_type=None):
+        info_mock = MagicMock()
+        info_mock.private = True
+        info_mock.id = canonical.get(repo_id, repo_id)
+        info_mock.sha = "aaa"
+        return info_mock
+
+    api.repo_info.side_effect = info
+    api.hf_hub_download.side_effect = _fake_download(files)
+    return api
+
+
 def test_publish_from_staging_refuses_missing_files(tmp_path):
     db, before = _staged_files(tmp_path)
     (tmp_path / "d").mkdir()
-    api = MagicMock()
+    api = _publish_api({})
     api.hf_hub_download.side_effect = _fake_download({"runs/r/before.json": str(before)})
     with pytest.raises(RuntimeError, match="missing"):
         hf_backfill.fetch_staged("u/stage", "u/prod", "r", str(tmp_path / "d"), api)
@@ -740,6 +766,21 @@ def test_publish_from_staging_refuses_missing_files(tmp_path):
     )
     with pytest.raises(RuntimeError, match="missing"):
         hf_backfill.fetch_staged("u/stage", "u/prod", "r", str(tmp_path / "d"), api)
+
+
+def test_publish_refuses_staging_alias_of_production_before_download(tmp_path, monkeypatch, capsys):
+    import huggingface_hub
+
+    canonical = {"u/stage-alias": "u/prod", "u/prod": "u/prod"}
+    api = _publish_api({}, canonical)
+    monkeypatch.setenv("HF_TOKEN", "x")
+    monkeypatch.setattr(huggingface_hub, "HfApi", lambda token=None: api)
+    rc = hf_backfill.main(
+        ["publish", "--staging-repo", "u/stage-alias", "--run-id", "r", "--repo", "u/prod", "--confirm"]
+    )
+    assert rc == 1
+    assert "production" in capsys.readouterr().out
+    api.hf_hub_download.assert_not_called()
 
 
 def test_publish_from_staging_compares_post_backfill_hash_not_before_hash(tmp_path, monkeypatch):
@@ -757,9 +798,7 @@ def test_publish_from_staging_compares_post_backfill_hash_not_before_hash(tmp_pa
 
     import huggingface_hub
 
-    api = MagicMock()
-    api.hf_hub_download.side_effect = _fake_download(files)
-    api.repo_info.return_value.sha = "aaa"
+    api = _publish_api(files)
     monkeypatch.setenv("HF_TOKEN", "x")
     monkeypatch.setattr(huggingface_hub, "HfApi", lambda token=None: api)
     assert hf_backfill.main(
@@ -773,9 +812,7 @@ def test_publish_from_staging_downloads_then_runs_guards_before_upload(tmp_path,
     import huggingface_hub
 
     files, _ = _stage_and_collect(tmp_path, db, before)
-    api = MagicMock()
-    api.hf_hub_download.side_effect = _fake_download(files)
-    api.repo_info.return_value.sha = "aaa"
+    api = _publish_api(files)
     monkeypatch.setenv("HF_TOKEN", "x")
     monkeypatch.setattr(huggingface_hub, "HfApi", lambda token=None: api)
     rc = hf_backfill.main(["publish", "--staging-repo", "u/stage", "--run-id", "r", "--repo", "u/prod", "--confirm"])
