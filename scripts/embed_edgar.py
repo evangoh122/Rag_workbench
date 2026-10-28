@@ -24,6 +24,8 @@ from loguru import logger
 from sec_edgar_downloader import Downloader
 
 from api.services.embeddings import get_embeddings as _get_model
+from api.services.html_tables import serialize_tables_in_soup
+from api.services.ixbrl_parser import parse_ixbrl
 from api.services.structure_chunker import StructureChunker
 
 from api.config import Config, TICKER_TO_CIK
@@ -572,10 +574,29 @@ def _clean_text(text: str) -> str:
     return text.strip()
 
 
+def _strip_noise_keep_ix_values(soup) -> None:
+    """Drop script/style/``ix:header`` noise but UNWRAP ``ix:nonFraction`` and
+    ``ix:nonNumeric`` so their rendered values stay in the extracted text.
+
+    Decomposing the fact elements (the old behaviour) deleted every inline
+    XBRL value from filings that use Inline XBRL.
+    """
+    for tag in soup.find_all(True):
+        local = tag.name.split(":", 1)[-1].lower()
+        if tag.name in ("script", "style"):
+            tag.decompose()
+        elif local in ("header", "exclude") and ":" in tag.name:
+            tag.decompose()
+        elif local in ("nonfraction", "nonnumeric"):
+            tag.unwrap()
+
+
 def parse_html_file(file_path: str) -> tuple[str, str]:
     """
-    Parse document once: supports PDF, XML, and HTML. Strip script/style/iXBRL tags,
-    extract visible text, clean whitespace. Returns (clean_full_text, raw_content).
+    Parse document once: supports PDF, XML, and HTML. Strip script/style and
+    hidden XBRL metadata, keep visible iXBRL values, serialize tables
+    structure-aware, extract visible text, clean whitespace.
+    Returns (clean_full_text, raw_content).
     """
     try:
         path_lower = file_path.lower()
@@ -598,9 +619,11 @@ def parse_html_file(file_path: str) -> tuple[str, str]:
         parser = "xml" if is_xml else "lxml"
         soup = BeautifulSoup(content, parser)
 
-        # Remove script/style/XBRL inline elements that pollute get_text()
-        for tag in soup(["script", "style", "ix:nonnumeric", "ix:nonfraction", "ix:header"]):
-            tag.decompose()
+        # Keep visible iXBRL values (unwrap the fact elements), drop hidden
+        # XBRL header metadata and script/style, then serialize tables
+        # structure-aware so row/column relationships survive text extraction.
+        _strip_noise_keep_ix_values(soup)
+        serialize_tables_in_soup(soup)
 
         clean = _clean_text(soup.get_text(separator="\n", strip=True))
         return clean, content
@@ -625,8 +648,7 @@ def _html_to_layout_text(content: str) -> str:
     apart (``left`` beyond the previous fragment's ``left + width``).
     """
     soup = BeautifulSoup(content, "lxml")
-    for tag in soup(["script", "style", "ix:nonnumeric", "ix:nonfraction", "ix:header"]):
-        tag.decompose()
+    _strip_noise_keep_ix_values(soup)
 
     for line in soup.find_all("div"):
         prev_end = None
@@ -673,6 +695,108 @@ def parse_prospectus_file(file_path: str) -> tuple[str, str]:
         text = re.sub(r" ?\n[ \n]*", "\n", text)
     text = re.sub(r"(?im)^table of contents$\n?", "", text)
     return text.strip(), content
+
+
+def _ensure_ixbrl_facts_schema(conn) -> None:
+    """Ensure edgar_ixbrl_facts exists (idempotent).
+
+    Stores every Inline XBRL fact with exhibit-level provenance (accession,
+    concept, context, unit) plus the structure-aware row/column labels of the
+    table cell the fact is rendered in — so filing-fee tables and tagged
+    financial tables survive as rows, not a flat fact soup.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS edgar_ixbrl_facts (
+            ticker       VARCHAR NOT NULL,
+            cik          VARCHAR NOT NULL DEFAULT '',
+            accession    VARCHAR NOT NULL,
+            form_type    VARCHAR NOT NULL DEFAULT '',
+            element      VARCHAR NOT NULL,
+            taxonomy     VARCHAR NOT NULL DEFAULT '',
+            concept      VARCHAR NOT NULL,
+            name         VARCHAR NOT NULL,
+            context_ref  VARCHAR NOT NULL DEFAULT '',
+            unit_ref     VARCHAR NOT NULL DEFAULT '',
+            period_start VARCHAR,
+            period_end   VARCHAR,
+            value        DOUBLE,
+            text_value   VARCHAR,
+            row_labels   VARCHAR,
+            col_labels   VARCHAR,
+            ingested_at  VARCHAR
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ixf_ticker ON edgar_ixbrl_facts (ticker)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ixf_concept ON edgar_ixbrl_facts (concept)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ixf_accession ON edgar_ixbrl_facts (accession)")
+
+
+def _ixbrl_exhibit_files(file_path: str) -> List[str]:
+    """iXBRL exhibits saved next to the primary document (e.g. filing fee
+    exhibits). Harmless empty when the downloader saved only the primary doc."""
+    parent = Path(file_path).parent
+    if not parent.exists():
+        return []
+    exhibits = []
+    for pattern in ("*exfilingfees*.htm", "*exfilingfees*.html"):
+        exhibits.extend(sorted(str(p) for p in parent.glob(pattern)))
+    return [e for e in exhibits if Path(e).resolve() != Path(file_path).resolve()]
+
+
+def _store_ixbrl_facts(
+    conn,
+    ticker: str,
+    cik: str,
+    accession: str,
+    form_type: str,
+    raw_html: str,
+    extra_docs: List[str] | None = None,
+) -> int:
+    """Parse Inline XBRL facts out of the filing (and its iXBRL exhibits) and
+    upsert them into edgar_ixbrl_facts. Returns the number of facts stored."""
+    if not raw_html:
+        return 0
+
+    ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    docs = [(raw_html, "")]
+    for exhibit_path in extra_docs or []:
+        try:
+            with open(exhibit_path, "r", encoding="utf-8") as f:
+                docs.append((f.read(), Path(exhibit_path).name))
+        except Exception as exc:
+            logger.debug(f"Cannot read iXBRL exhibit {exhibit_path}: {exc}")
+
+    _ensure_ixbrl_facts_schema(conn)
+    conn.execute(
+        "DELETE FROM edgar_ixbrl_facts WHERE ticker = ? "
+        "AND replace(accession, '-', '') = ?",
+        [ticker, accession.replace("-", "")],
+    )
+
+    stored = 0
+    for content, _origin in docs:
+        parsed = parse_ixbrl(content)
+        for fact in parsed.facts:
+            ctx = parsed.contexts.get(fact.context_ref)
+            conn.execute("""
+                INSERT INTO edgar_ixbrl_facts
+                    (ticker, cik, accession, form_type, element, taxonomy,
+                     concept, name, context_ref, unit_ref,
+                     period_start, period_end, value, text_value,
+                     row_labels, col_labels, ingested_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, [
+                ticker, cik, accession, form_type, fact.element, fact.taxonomy,
+                fact.concept, fact.name, fact.context_ref, fact.unit_ref,
+                (ctx.start or None) if ctx else None,
+                ((ctx.end or ctx.instant) or None) if ctx else None,
+                fact.value, fact.text_value,
+                " | ".join(fact.row_labels) or None,
+                " | ".join(fact.col_labels) or None,
+                ts,
+            ])
+            stored += 1
+    return stored
 
 
 def _ensure_schema(conn) -> None:
@@ -797,6 +921,24 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
                 accession = _canonical_accession(accession_dir_name)
 
                 cik = _TICKER_CIK.get(ticker.upper(), "")
+
+                # Inline XBRL facts (structure-aware, exhibit provenance) —
+                # replaces the old behaviour of discarding iXBRL entirely.
+                try:
+                    n_facts = _store_ixbrl_facts(
+                        conn,
+                        ticker=ticker.upper(),
+                        cik=cik,
+                        accession=accession,
+                        form_type=form_type,
+                        raw_html=raw_html,
+                        extra_docs=_ixbrl_exhibit_files(file_path),
+                    )
+                    if n_facts:
+                        logger.info(f"{ticker}: stored {n_facts} Inline XBRL facts for {accession}")
+                    conn.commit()
+                except Exception as fact_exc:
+                    logger.warning(f"{ticker}: Inline XBRL fact extraction failed: {fact_exc}")
 
                 # Section-aware chunking to preserve provenance. parse_html_file
                 # already returns the cleaned full text, so split it directly. IPO
