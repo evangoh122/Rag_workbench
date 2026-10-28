@@ -285,7 +285,9 @@ def test_ordinary_embedding_failure_is_not_reported_as_structured(tmp_path):
     db_path = tmp_path / "embedding-fail.duckdb"
     model = MagicMock()
     model.embed_documents.side_effect = RuntimeError("injected embedding failure")
-    messages, handler = _capture_logs(level="ERROR")
+    # WARNING threshold also captures ERROR; ERROR-only would silently drop a
+    # structured-ingestion WARNING, making the negative assertion vacuous.
+    messages, handler = _capture_logs(level="WARNING")
     try:
         stored = _run_etl(tmp_path, db_path, primary, model=model)
     finally:
@@ -367,8 +369,10 @@ def test_text_grounded_decoration_is_canonicalized_before_layers():
             "status": {},
         }
         node_result = langgraph_engine.qualitative_output_node(state)
-        # The raw decoration still names the internal corpus key before output.
-        assert re.search(r"\bANTH\b", node_result["final_answer"])
+        # The node canonicalizes before lineage/build; the caller's post-invoke
+        # canonicalization is therefore idempotent.
+        assert re.search(r"\bANTH\b", node_result["final_answer"]) is None
+        assert "ANT's filing narrative" in node_result["final_answer"]
 
         node_result["resolved_ticker"] = "ANTH"
         node_result["lineage"] = {"source_docs": ["ANTH:acc:0"]}

@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 
 from api.db.database import db_manager
 from api.config import Config
-from api.services.ticker_canon import canonicalize_user_text
+from api.services.ticker_canon import canonicalize_user_text, normalize_selected_ticker
 
 class GraphRAGState(TypedDict):
     query: str
@@ -48,7 +48,9 @@ def extract_entities(state: GraphRAGState) -> dict:
 
 def query_graph(state: GraphRAGState) -> dict:
     """Queries the DuckDB database for graph triples matching the entities."""
-    ticker = state["ticker"]
+    # A display selection ("ANT", "ant") must read the stored corpus rows
+    # ("ANTH"); graph triples keep their stored ticker provenance.
+    ticker = normalize_selected_ticker(state["ticker"])
     entities = state.get("search_entities", [])
     extracted_triples = []
     
@@ -145,7 +147,7 @@ def run_graph_rag(query: str, ticker: str) -> dict:
     
     initial_state = {
         "query": query,
-        "ticker": ticker,
+        "ticker": normalize_selected_ticker(ticker),
         "search_entities": [],
         "extracted_triples": [],
         "final_answer": ""

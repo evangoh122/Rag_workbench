@@ -22,7 +22,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
 
-from api.services.ticker_canon import QUERY_TICKER_ALIASES
+from api.services.ticker_canon import (
+    AMBIGUOUS_ENGLISH_TICKERS,
+    QUERY_TICKER_ALIASES,
+    canonicalize_user_fields,
+)
 
 # Covered companies → the names/aliases that appear in queries and filings.
 _TICKER_TO_NAMES: Dict[str, List[str]] = {
@@ -89,7 +93,7 @@ _PEER_GROUPS: Dict[str, List[str]] = {
 
 # Covered tickers that are also ordinary English words. In strict mode they only
 # count as companies when written in upper case ("ON" is always upper-case-only).
-_ENGLISH_WORD_TICKERS = frozenset({"ON", "FORM", "ONTO", "TER"})
+_ENGLISH_WORD_TICKERS = AMBIGUOUS_ENGLISH_TICKERS
 
 _MAX_PEERS = 4  # subject + up to 4 peers keeps the table readable
 
@@ -580,7 +584,7 @@ def _shaped_response(
     done["output"] = "success"
     if retrieved_docs:
         done["retrieval"] = "success"
-    return {
+    return canonicalize_user_fields({
         "final_answer": answer,
         "xbrl_facts": [], "relevant_xbrl": [],
         "retrieved_docs": retrieved_docs or [],
@@ -592,7 +596,7 @@ def _shaped_response(
         "how_to_interpret": how_to_interpret,
         "follow_ups": follow_ups or [],
         "status": done,
-    }
+    })
 
 
 def run_peer_comparison(query: str, decision: Dict[str, Any]) -> Dict[str, Any]:

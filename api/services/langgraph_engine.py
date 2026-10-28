@@ -36,7 +36,14 @@ from api.services.financial_calc import (
     yoy_growth, cagr,
 )
 from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display, _DISPLAY_NAMES
-from api.services.ticker_canon import QUERY_TICKER_ALIASES, canonicalize_user_text, display_ticker
+from api.services.ticker_canon import (
+    AMBIGUOUS_ENGLISH_TICKERS,
+    QUERY_TICKER_ALIASES,
+    canonicalize_user_fields,
+    canonicalize_user_text,
+    display_ticker,
+    normalize_selected_ticker,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1666,7 +1673,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
 
             deco = _text_grounded_decorations(state, answer)
             return {
-                "final_answer": answer + deco["note"],
+                "final_answer": canonicalize_user_text(answer + deco["note"]),
                 "verification_status": "SKIPPED",
                 "verification_reasoning": deco["reasoning"] or "Qualitative query with tool-assisted calculation.",
                 "math_steps": math_steps,
@@ -1691,7 +1698,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
 
         deco = _text_grounded_decorations(state, answer)
         return {
-            "final_answer": answer + deco["note"],
+            "final_answer": canonicalize_user_text(answer + deco["note"]),
             "verification_status": "SKIPPED",
             "verification_reasoning": deco["reasoning"] or "Qualitative query — numeric verification not applicable.",
             "math_steps": ["Qualitative query — no computation needed."],
@@ -1842,13 +1849,17 @@ def _resolve_query_ticker(query: str, fallback: str) -> str:
         pass
     # 2. Explicit stored ticker symbol in the query ("NVDA", "ANTH"). Length >= 3
     #    with a word boundary avoids prose false-matches on short/ambiguous
-    #    symbols.
+    #    symbols. Stored symbols that are also English words (FORM, ONTO, TER)
+    #    must appear as upper-case tickers, so "in its form S-1" cannot win over
+    #    the explicit display alias resolved in step 3.
     try:
         from api.config import TICKER_TO_CIK
         for sym in TICKER_TO_CIK:
-            if len(sym) >= 3 and re.search(r"\b" + re.escape(sym) + r"\b", query, re.IGNORECASE):
-                logger.info(f"Resolved ticker {sym!r} from explicit symbol in query")
-                return sym
+            if len(sym) >= 3:
+                flags = 0 if sym in AMBIGUOUS_ENGLISH_TICKERS else re.IGNORECASE
+                if re.search(r"\b" + re.escape(sym) + r"\b", query, flags):
+                    logger.info(f"Resolved ticker {sym!r} from explicit symbol in query")
+                    return sym
     except Exception:
         pass
     # 3. Explicit user-facing display symbol ("ANT") -> stored corpus key
@@ -2220,7 +2231,8 @@ def run_auditable_rag(query: str, ticker: str,
         return _abstain_response(uncovered)
     if not by_name:
         # No company named -> honour the UI selection using its corpus key.
-        by_name = QUERY_TICKER_ALIASES.get(ticker, ticker)
+        # Normalize first: the API accepts "ant"/" ANT " as well as stored ANTH.
+        by_name = normalize_selected_ticker(ticker)
     if by_name != ticker:
         logger.info(f"Ticker override: query resolved to {by_name!r} (caller passed {ticker!r})")
     ticker = by_name
@@ -2236,8 +2248,7 @@ def run_auditable_rag(query: str, ticker: str,
             logger.info(f"--- PEER COMPARISON: {decision} ---")
             result = run_peer_comparison(query, decision)
             result["resolved_ticker"] = decision["subject"]
-            result["final_answer"] = canonicalize_user_text(result.get("final_answer") or "")
-            return result
+            return canonicalize_user_fields(result)
     except Exception as e:
         logger.warning(f"Peer comparison path failed, falling back to single-company: {e}")
 
