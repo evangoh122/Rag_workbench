@@ -1840,16 +1840,26 @@ def _resolve_query_ticker(query: str, fallback: str) -> str:
             return by_name
     except Exception:
         pass
-    # 2. Explicit ticker symbol in the query ("NVDA", "AVGO"). Length >= 3 with a
-    #    word boundary avoids prose false-matches on short/ambiguous symbols.
+    # 2. Explicit stored ticker symbol in the query ("NVDA", "ANTH"). Length >= 3
+    #    with a word boundary avoids prose false-matches on short/ambiguous
+    #    symbols.
     try:
         from api.config import TICKER_TO_CIK
-        symbols = {sym: sym for sym in TICKER_TO_CIK}
-        symbols.update(QUERY_TICKER_ALIASES)
-        for sym, raw in symbols.items():
+        for sym in TICKER_TO_CIK:
             if len(sym) >= 3 and re.search(r"\b" + re.escape(sym) + r"\b", query, re.IGNORECASE):
-                logger.info(f"Resolved ticker {raw!r} from explicit symbol in query")
-                return raw
+                logger.info(f"Resolved ticker {sym!r} from explicit symbol in query")
+                return sym
+    except Exception:
+        pass
+    # 3. Explicit user-facing display symbol ("ANT") -> stored corpus key
+    #    ("ANTH"). Display symbols are upper-case tickers, so this match is
+    #    case-sensitive: ordinary lowercase prose ("an ant colony") is not a
+    #    ticker, while substrings (ANTA, ANTHROPIC) never satisfy the boundary.
+    try:
+        for display, stored in QUERY_TICKER_ALIASES.items():
+            if len(display) >= 3 and re.search(r"\b" + re.escape(display) + r"\b", query):
+                logger.info(f"Resolved display ticker {display!r} to stored {stored!r}")
+                return stored
     except Exception:
         pass
     return fallback

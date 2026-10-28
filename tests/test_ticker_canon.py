@@ -12,7 +12,6 @@ import pytest
 
 from api.services.ticker_canon import (
     CANONICAL_TICKERS,
-    QUERY_TICKER_ALIASES,
     canonicalize_user_text,
     display_ticker,
 )
@@ -100,14 +99,12 @@ def test_dag_answer_is_canonical_before_educational_layers_and_keeps_provenance(
 
 @pytest.mark.parametrize("query,selected", [
     ("What is ANT revenue?", "MU"),
-    ("What is ant revenue?", "MU"),
     ("What about its revenue?", "ANT"),
     ("What is ANTH revenue?", "MU"),
 ])
 def test_chat_routes_display_symbol_to_stored_key(query, selected):
     from api.services.langgraph_engine import run_auditable_rag
 
-    assert QUERY_TICKER_ALIASES["ANT"] == "ANTH"
     app = MagicMock()
     app.invoke.return_value = {"final_answer": "Revenue was $100."}
     with patch("api.services.langgraph_engine.get_app", return_value=app), \
@@ -118,12 +115,22 @@ def test_chat_routes_display_symbol_to_stored_key(query, selected):
     assert result["resolved_ticker"] == "ANTH"
 
 
+@pytest.mark.parametrize("query", [
+    "an ant colony is eusocial",
+    "What is ant revenue?",
+])
+def test_lowercase_prose_is_not_a_display_alias(query):
+    from api.services.langgraph_engine import _resolve_query_ticker
+
+    assert _resolve_query_ticker(query, "MU") == "MU"
+
+
 @pytest.mark.parametrize("query,expected", [
     ("ANT vs NVDA revenue", ["ANTH", "NVDA"]),
-    ("NVDA vs ant revenue", ["NVDA", "ANTH"]),
     ("ANT and ANTH vs NVDA", ["ANTH", "NVDA"]),
     ("ANTA and AN vs NVDA", ["NVDA"]),
     ("ANTHROPICSTYLE vs NVDA", ["NVDA"]),
+    ("NVDA vs ant revenue", ["NVDA"]),
 ])
 def test_comparison_routes_display_symbol_without_substring_matches(query, expected):
     from api.services.peer_comparison import _tickers_named_in_query, detect_comparison

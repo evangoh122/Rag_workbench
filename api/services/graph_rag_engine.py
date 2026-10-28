@@ -7,6 +7,7 @@ from langchain_openai import ChatOpenAI
 
 from api.db.database import db_manager
 from api.config import Config
+from api.services.ticker_canon import canonicalize_user_text
 
 class GraphRAGState(TypedDict):
     query: str
@@ -125,7 +126,7 @@ def generate_answer(state: GraphRAGState) -> dict:
     """
     
     response = llm.invoke(prompt)
-    return {"final_answer": response.content}
+    return {"final_answer": canonicalize_user_text(response.content)}
 
 def run_graph_rag(query: str, ticker: str) -> dict:
     """Compiles and invokes the GraphRAG workflow, returning the final state."""
