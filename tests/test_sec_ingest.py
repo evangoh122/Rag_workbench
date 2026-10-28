@@ -947,3 +947,356 @@ def test_r3_acquisition_path_preserves_dimensions_without_collapsing(tmp_path):
         ("", "MATCH"),
         ("us-gaap:ProductOrServiceAxis=us-gaap:WidgetsMember", "UNAVAILABLE"),
     ]
+
+
+# --- r4: table identity, compound units, inclusive durations ---------------
+
+_R4_CUSTOMER_SEGMENT = (
+    '<xbrli:segment><xbrldi:explicitMember dimension="custom:CustomerAxis">'
+    "custom:CustomerA</xbrldi:explicitMember></xbrli:segment>"
+)
+
+
+def _r4_unit_divide(unit_id: str = "usdshare",
+                    numerator: str = "iso4217:USD",
+                    denominator: str = "xbrli:shares") -> str:
+    return (
+        f'<xbrli:unit id="{unit_id}"><xbrli:divide>'
+        f"<xbrli:unitNumerator><xbrli:measure>{numerator}</xbrli:measure>"
+        "</xbrli:unitNumerator>"
+        f"<xbrli:unitDenominator><xbrli:measure>{denominator}</xbrli:measure>"
+        "</xbrli:unitDenominator></xbrli:divide></xbrli:unit>"
+    )
+
+
+def _r4_inline_cell(value: str, *, context: str = "c1", unit: str = "usd",
+                    name: str = "us-gaap:Revenues",
+                    fact_id: str | None = None) -> str:
+    id_attr = f' id="{fact_id}"' if fact_id else ""
+    return (
+        f'<td><ix:nonFraction{id_attr} name="{name}" contextRef="{context}" '
+        f'unitRef="{unit}">{value}</ix:nonFraction></td>'
+    )
+
+
+def _r4_table(*, caption: str = "", header: str = "Year 2026",
+              rows) -> str:
+    caption_html = f"<caption>{caption}</caption>" if caption else ""
+    rows_html = "".join(
+        f"<tr><td>{label}</td>{cells}</tr>" for label, cells in rows
+    )
+    return (
+        f"<table>{caption_html}<tr><th>Item</th><th>{header}</th></tr>"
+        f"{rows_html}</table>"
+    )
+
+
+def _r4_document(*, header_parts, table_html: str,
+                 facts_html: str = "") -> str:
+    return (
+        "<html><body>"
+        + _header(*header_parts)
+        + table_html
+        + facts_html
+        + _filler()
+        + "</body></html>"
+    )
+
+
+def _r4_etl(tmp_path, html: str, *, name: str = "r4.duckdb"):
+    primary = _write_filing(tmp_path, html)
+    db_path = tmp_path / name
+    _run_etl(tmp_path, db_path, primary)
+    return db_path
+
+
+def test_r4_dimensioned_table_cell_never_matches_aggregate_xbrl(tmp_path):
+    header_parts = [
+        _duration("2026-01-01", "2026-12-31", context_id="aggregate"),
+        _duration("2026-01-01", "2026-12-31", context_id="segment",
+                  dimensions=_R4_CUSTOMER_SEGMENT),
+        _unit(),
+    ]
+    table = _r4_table(
+        caption="Amounts in USD",
+        rows=[("Revenue", _r4_inline_cell("100", context="segment"))],
+    )
+    facts = (
+        '<p><ix:nonFraction name="us-gaap:Revenues" contextRef="aggregate" '
+        'unitRef="usd">100</ix:nonFraction></p>'
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=header_parts, table_html=table,
+                     facts_html=facts),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        rows = conn.execute(
+            "SELECT dimensions, status, table_value, xbrl_value "
+            "FROM sec_reconciliation ORDER BY dimensions"
+        ).fetchall()
+        table_dims = conn.execute(
+            "SELECT dimensions FROM sec_financial_facts WHERE source = 'table'"
+        ).fetchall()
+
+    by_dims = {row[0]: row for row in rows}
+    assert table_dims == [("custom:CustomerAxis=custom:CustomerA",)]
+    assert by_dims[""][1] == "UNAVAILABLE"
+    assert by_dims[""][2] is None
+    assert by_dims["custom:CustomerAxis=custom:CustomerA"][1] == "MATCH"
+
+
+def test_r4_per_share_table_never_matches_total_currency_xbrl(tmp_path):
+    header_parts = [
+        _duration("2026-01-01", "2026-12-31", context_id="c1"),
+        _unit(),
+    ]
+    table = _r4_table(
+        caption="Amounts in USD per share",
+        rows=[("Revenue", "<td>100</td>")],
+    )
+    facts = (
+        '<p><ix:nonFraction name="us-gaap:Revenues" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction></p>'
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=header_parts, table_html=table,
+                     facts_html=facts),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        rows = conn.execute(
+            "SELECT unit, status, table_value, xbrl_value "
+            "FROM sec_reconciliation ORDER BY unit"
+        ).fetchall()
+        units = conn.execute(
+            "SELECT source, unit FROM sec_financial_facts ORDER BY source"
+        ).fetchall()
+
+    assert "MATCH" not in {row[1] for row in rows}
+    assert {row[1] for row in rows} == {"UNAVAILABLE"}
+    assert ("table", "USD/SHARES") in units
+    assert ("xbrl", "USD") in units
+
+
+def test_r4_quarter_ending_june_30_matches_true_april_start(tmp_path):
+    header_parts = [
+        _duration("2026-04-01", "2026-06-30", context_id="c1"),
+        _unit(),
+    ]
+    table = _r4_table(
+        caption="Amounts in USD",
+        header="Three months ended June 30, 2026",
+        rows=[("Revenue", "<td>100</td>")],
+    )
+    facts = (
+        '<p><ix:nonFraction name="us-gaap:Revenues" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction></p>'
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=header_parts, table_html=table,
+                     facts_html=facts),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        rows = conn.execute(
+            "SELECT status, duration, table_value, xbrl_value "
+            "FROM sec_reconciliation"
+        ).fetchall()
+
+    assert rows == [("MATCH", "2026-04-01..2026-06-30", "100", "100")]
+
+
+def test_r4_same_sourced_dimension_matches_same_dimension(tmp_path):
+    header_parts = [
+        _duration("2026-01-01", "2026-12-31", context_id="segment",
+                  dimensions=_R4_CUSTOMER_SEGMENT),
+        _unit(),
+    ]
+    table = _r4_table(
+        caption="Amounts in USD",
+        rows=[("Revenue", _r4_inline_cell("100", context="segment"))],
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=header_parts, table_html=table),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        rows = conn.execute(
+            "SELECT dimensions, status, table_value, xbrl_value "
+            "FROM sec_reconciliation"
+        ).fetchall()
+
+    assert rows == [(
+        "custom:CustomerAxis=custom:CustomerA", "MATCH", "100", "100",
+    )]
+
+
+def test_r4_same_compound_unit_matches_same_compound_unit(tmp_path):
+    header_parts = [
+        _duration("2026-01-01", "2026-12-31", context_id="c1"),
+        _r4_unit_divide(),
+    ]
+    table = _r4_table(
+        caption="Amounts in USD per share",
+        rows=[("Revenue", "<td>100</td>")],
+    )
+    facts = (
+        '<p><ix:nonFraction name="us-gaap:Revenues" contextRef="c1" '
+        'unitRef="usdshare">100</ix:nonFraction></p>'
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=header_parts, table_html=table,
+                     facts_html=facts),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        rows = conn.execute(
+            "SELECT unit, status, table_value, xbrl_value "
+            "FROM sec_reconciliation"
+        ).fetchall()
+
+    assert rows == [("USD/SHARES", "MATCH", "100", "100")]
+
+
+def test_r4_inline_cell_with_missing_context_stays_unavailable(tmp_path):
+    header_parts = [
+        _duration("2026-01-01", "2026-12-31", context_id="c1"),
+        _unit(),
+    ]
+    table = _r4_table(
+        caption="Amounts in USD",
+        rows=[("Revenue", _r4_inline_cell("100", context="missing"))],
+    )
+    facts = (
+        '<p><ix:nonFraction name="us-gaap:Revenues" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction></p>'
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=header_parts, table_html=table,
+                     facts_html=facts),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        statuses = conn.execute(
+            "SELECT status FROM sec_reconciliation"
+        ).fetchall()
+        table_identity = conn.execute(
+            "SELECT issuer, unit, duration FROM sec_financial_facts "
+            "WHERE source = 'table'"
+        ).fetchall()
+
+    assert {row[0] for row in statuses} == {"UNAVAILABLE"}
+    assert table_identity == [("", "", "")]
+
+
+def test_r4_conflicting_inline_cell_bindings_stay_unavailable(tmp_path):
+    header_parts = [
+        _duration("2026-01-01", "2026-12-31", context_id="aggregate"),
+        _duration("2026-01-01", "2026-12-31", context_id="s1",
+                  dimensions=_R4_CUSTOMER_SEGMENT),
+        _duration("2026-01-01", "2026-12-31", context_id="s2",
+                  dimensions=(
+                      '<xbrli:segment><xbrldi:explicitMember '
+                      'dimension="custom:CustomerAxis">'
+                      "custom:CustomerB</xbrldi:explicitMember>"
+                      "</xbrli:segment>"
+                  )),
+        _unit(),
+    ]
+    conflicting_cell = (
+        "<td>"
+        '<ix:nonFraction name="us-gaap:Revenues" contextRef="s1" '
+        'unitRef="usd">100</ix:nonFraction>'
+        '<ix:nonFraction name="us-gaap:Revenues" contextRef="s2" '
+        'unitRef="usd">100</ix:nonFraction>'
+        "</td>"
+    )
+    table = _r4_table(
+        caption="Amounts in USD",
+        rows=[("Revenue", conflicting_cell)],
+    )
+    facts = (
+        '<p><ix:nonFraction name="us-gaap:Revenues" contextRef="aggregate" '
+        'unitRef="usd">100</ix:nonFraction></p>'
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=header_parts, table_html=table,
+                     facts_html=facts),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        statuses = conn.execute(
+            "SELECT status FROM sec_reconciliation"
+        ).fetchall()
+
+    assert "MATCH" not in {row[0] for row in statuses}
+    assert {row[0] for row in statuses} == {"UNAVAILABLE"}
+
+
+def test_r4_per_share_without_currency_never_becomes_total_usd(tmp_path):
+    header_parts = [
+        _duration("2026-01-01", "2026-12-31", context_id="c1"),
+        _unit(),
+    ]
+    table = _r4_table(
+        caption="Amounts per share",
+        rows=[("Revenue", "<td>100</td>")],
+    )
+    facts = (
+        '<p><ix:nonFraction name="us-gaap:Revenues" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction></p>'
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=header_parts, table_html=table,
+                     facts_html=facts),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        statuses = conn.execute(
+            "SELECT status FROM sec_reconciliation"
+        ).fetchall()
+        table_unit = conn.execute(
+            "SELECT unit FROM sec_financial_facts WHERE source = 'table'"
+        ).fetchall()
+
+    assert "MATCH" not in {row[0] for row in statuses}
+    assert table_unit != [("USD",)]
+
+
+@pytest.mark.parametrize(
+    "header,expected",
+    [
+        ("Three months ended June 30, 2026", "2026-04-01..2026-06-30"),
+        ("Six months ended June 30, 2026", "2026-01-01..2026-06-30"),
+        ("Quarter ended June 30, 2026", "2026-04-01..2026-06-30"),
+        ("Half-year ended June 30, 2026", "2026-01-01..2026-06-30"),
+        ("Three months ended September 30, 2026", "2026-07-01..2026-09-30"),
+        ("Six months ended December 31, 2026", "2026-07-01..2026-12-31"),
+        ("Quarter ended March 31, 2026", "2026-01-01..2026-03-31"),
+        ("Year ended December 31, 2026", "2026-01-01..2026-12-31"),
+        ("Three months ended February 29, 2024", "2023-12-01..2024-02-29"),
+        ("Six months ended February 29, 2024", "2023-09-01..2024-02-29"),
+        ("Three months ended February 28, 2023", "2022-12-01..2023-02-28"),
+        ("Six months ended February 28, 2023", "2022-09-01..2023-02-28"),
+    ],
+)
+def test_r4_period_boundaries_are_inclusive_and_calendar_correct(header, expected):
+    sec_ingest = _sec_ingest()
+    assert sec_ingest._period_from_header(header) == expected
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "Three months ended 2026",
+        "Six months ended 2026",
+        "Quarter ended 2026",
+        "Half-year ended 2026",
+        "Three months ended June 2026",
+        "As of 2026",
+    ],
+)
+def test_r4_ambiguous_duration_headers_stay_unresolved(header):
+    sec_ingest = _sec_ingest()
+    assert sec_ingest._period_from_header(header) == ""

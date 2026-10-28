@@ -441,3 +441,40 @@ def test_r3_reconcile_delta_is_exact_for_35_digit_values():
     assert decimal_text(rows[0].delta) == "1"
     assert decimal_text(rows[0].table_value) == low
     assert decimal_text(rows[0].xbrl_value) == high
+
+
+# --- r4: table cells retain inline context/unit bindings -------------------
+
+
+def test_r4_parse_statement_tables_retains_inline_cell_binding():
+    html = (
+        "<table><tr><th>Item</th><th>Year 2026</th></tr>"
+        "<tr><td>Revenue</td><td>"
+        '<ix:nonFraction id="f1" name="us-gaap:Revenues" '
+        'contextRef="seg" unitRef="usdshare">100</ix:nonFraction>'
+        "</td></tr></table>"
+    )
+    cell = parse_statement_tables(html)[0].rows[0].cells[0]
+
+    assert getattr(cell, "inline", False) is True
+    assert getattr(cell, "context_ref", None) == "seg"
+    assert getattr(cell, "unit_ref", None) == "usdshare"
+    assert getattr(cell, "fact_id", None) == "f1"
+    assert getattr(cell, "identity_ambiguous", None) is False
+
+
+def test_r4_parse_statement_tables_marks_conflicting_bindings_ambiguous():
+    html = (
+        "<table><tr><th>Item</th><th>Year 2026</th></tr>"
+        "<tr><td>Revenue</td><td>"
+        '<ix:nonFraction name="us-gaap:Revenues" contextRef="a" '
+        'unitRef="usd">100</ix:nonFraction>'
+        '<ix:nonFraction name="us-gaap:Revenues" contextRef="b" '
+        'unitRef="usd">100</ix:nonFraction>'
+        "</td></tr></table>"
+    )
+    cell = parse_statement_tables(html)[0].rows[0].cells[0]
+
+    assert getattr(cell, "inline", False) is True
+    assert getattr(cell, "identity_ambiguous", None) is True
+    assert getattr(cell, "context_ref", None) is None

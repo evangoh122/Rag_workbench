@@ -303,11 +303,21 @@ _SCALE_EXPONENTS = {"units": 0, "thousands": 3, "millions": 6, "billions": 9}
 
 @dataclass(frozen=True)
 class TableCell:
-    """One value cell bound to its flattened column header."""
+    """One value cell bound to its flattened column header.
+
+    When the cell contains an inline numeric fact, the fact's context/unit
+    references and id are retained so ingestion can bind the cell to its
+    explicitly sourced identity instead of assuming an aggregate.
+    """
 
     column: str
     raw: str
     value: Optional[Decimal]  # parentheses -> negative; None when non-numeric
+    inline: bool = False
+    context_ref: Optional[str] = None
+    unit_ref: Optional[str] = None
+    fact_id: Optional[str] = None
+    identity_ambiguous: bool = False
 
 
 @dataclass(frozen=True)
@@ -448,6 +458,36 @@ def _table_rows(table: Any) -> list:
     return rows
 
 
+def _inline_cell_binding(cell: Any) -> Tuple[bool, Optional[str], Optional[str],
+                                             Optional[str], bool]:
+    """(has_inline_fact, context_ref, unit_ref, fact_id, identity_ambiguous).
+
+    A cell may carry more than one inline numeric fact. Identical context/unit
+    references are one binding; differing references are ambiguous, so the cell
+    is never silently bound to one of them.
+    """
+    identities: list = []
+    fact_ids: list = []
+    for el in cell.iter():
+        if not _is_ix_named(el, "nonfraction"):
+            continue
+        context_ref = _attr(el, "contextRef", "contextref")
+        unit_ref = _attr(el, "unitRef", "unitref")
+        identity = (context_ref, unit_ref)
+        if identity not in identities:
+            identities.append(identity)
+        fact_id = _attr(el, "id")
+        if fact_id and fact_id not in fact_ids:
+            fact_ids.append(fact_id)
+    if not identities:
+        return False, None, None, None, False
+    if len(identities) > 1:
+        return True, None, None, None, True
+    context_ref, unit_ref = identities[0]
+    fact_id = fact_ids[0] if len(fact_ids) == 1 else None
+    return True, context_ref, unit_ref, fact_id, False
+
+
 def parse_statement_tables(html: str) -> list:
     """Parse statement tables into structure-aware rows (Provenance.STRUCTURED_TABLE).
 
@@ -496,8 +536,16 @@ def parse_statement_tables(html: str) -> list:
             for c in range(1, width):
                 cell = grid.get((r, c))
                 raw = _cell_text(cell) if cell is not None else ""
-                cells_out.append(TableCell(column=columns[c], raw=raw,
-                                           value=_parse_display_number(raw) if raw else None))
+                inline, context_ref, unit_ref, fact_id, ambiguous = (
+                    _inline_cell_binding(cell) if cell is not None
+                    else (False, None, None, None, False)
+                )
+                cells_out.append(TableCell(
+                    column=columns[c], raw=raw,
+                    value=_parse_display_number(raw) if raw else None,
+                    inline=inline, context_ref=context_ref, unit_ref=unit_ref,
+                    fact_id=fact_id, identity_ambiguous=ambiguous,
+                ))
             rows_out.append(ParsedRow(
                 label=_cell_text(label_cell) if label_cell is not None else "",
                 cells=tuple(cells_out),
@@ -556,6 +604,7 @@ class StatementFact:
     context_ref: Optional[str] = None
     unit_ref: Optional[str] = None
     hidden: bool = False
+    identity_ambiguous: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "dimensions", _normalize_dimensions(self.dimensions))
@@ -663,10 +712,17 @@ def reconcile(table_facts: Sequence[StatementFact],
         ticker = (t.ticker if t is not None else x.ticker) or ""
         table_values = _distinct_values(t_facts)
         xbrl_values = _distinct_values(x_facts)
+        identity_ambiguous = any(
+            getattr(f, "identity_ambiguous", False) for f in list(t_facts) + list(x_facts)
+        )
         identity_established = bool(
             key.issuer and key.concept and key.unit and key.duration
         )
-        if len(table_values) > 1 or len(xbrl_values) > 1:
+        if identity_ambiguous:
+            # An unresolved source identity is never a comparison candidate.
+            status = ReconcileStatus.UNAVAILABLE
+            table_value = xbrl_value = delta = None
+        elif len(table_values) > 1 or len(xbrl_values) > 1:
             status = ReconcileStatus.AMBIGUOUS
             table_value = xbrl_value = delta = None
         elif not table_values or not xbrl_values:

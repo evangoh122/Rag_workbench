@@ -132,6 +132,16 @@ _QUARTER_ENDED_YEAR_RE = re.compile(
     r"\b(?:fiscal\s+)?quarter\s+ended\s+(?:19|20)\d{2}\b",
     re.IGNORECASE,
 )
+_HALF_YEAR_ENDED_DATE_RE = re.compile(
+    r"\bhalf[-\s]*year\s+ended\s+"
+    r"(" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r")\.?\s+"
+    r"(\d{1,2}),?\s+((?:19|20)\d{2})\b",
+    re.IGNORECASE,
+)
+_HALF_YEAR_ENDED_YEAR_RE = re.compile(
+    r"\bhalf[-\s]*year\s+ended\s+(?:19|20)\d{2}\b",
+    re.IGNORECASE,
+)
 _YEAR_ENDED_DATE_RE = re.compile(
     r"\b(?:fiscal\s+)?year\s+ended\s+"
     r"(" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r")\.?\s+"
@@ -308,8 +318,19 @@ def _iso_date(day: date) -> str:
 
 
 def _start_before_months(end: date, months: int) -> date:
-    """First day of an N-month period that ends on ``end`` (genuine duration)."""
-    total = end.year * 12 + (end.month - 1) - int(months)
+    """First day of an N-month period that ends on ``end`` (genuine duration).
+
+    A source-established month-end period is a run of whole calendar months:
+    three months ended 2026-06-30 begins 2026-04-01, never 2026-03-31. For a
+    non-month-end date the inclusive start is the same day N months earlier
+    plus one day (e.g. three months ended 2026-05-15 begins 2026-02-16).
+    """
+    months = int(months)
+    if end.day == calendar.monthrange(end.year, end.month)[1]:
+        total = end.year * 12 + (end.month - 1) - months + 1
+        year, month_index = divmod(total, 12)
+        return date(year, month_index + 1, 1)
+    total = end.year * 12 + (end.month - 1) - months
     year, month_index = divmod(total, 12)
     month = month_index + 1
     day = min(end.day, calendar.monthrange(year, month)[1])
@@ -353,6 +374,15 @@ def _period_from_header(header: str) -> str:
         )
         return f"{_iso_date(_start_before_months(end, count))}..{_iso_date(end)}"
 
+    half_year_ended = _HALF_YEAR_ENDED_DATE_RE.search(text)
+    if half_year_ended:
+        end = date(
+            int(half_year_ended.group(3)),
+            _MONTHS[half_year_ended.group(1).lower()],
+            int(half_year_ended.group(2)),
+        )
+        return f"{_iso_date(_start_before_months(end, 6))}..{_iso_date(end)}"
+
     quarter_ended = _QUARTER_ENDED_DATE_RE.search(text)
     if quarter_ended:
         end = date(
@@ -371,8 +401,12 @@ def _period_from_header(header: str) -> str:
         )
         return f"{_iso_date(_start_before_months(end, 12))}..{_iso_date(end)}"
 
-    if _MONTHS_ENDED_YEAR_RE.search(text) or _QUARTER_ENDED_YEAR_RE.search(text):
-        return ""  # incomplete quarter header: end date not established
+    if (
+        _MONTHS_ENDED_YEAR_RE.search(text)
+        or _QUARTER_ENDED_YEAR_RE.search(text)
+        or _HALF_YEAR_ENDED_YEAR_RE.search(text)
+    ):
+        return ""  # incomplete quarter/half-year header: end date not established
 
     year_ended_only = _YEAR_ENDED_YEAR_RE.search(text)
     if year_ended_only:
@@ -401,6 +435,9 @@ _CURRENCY_CODE_RE = re.compile(
     r"\b(" + "|".join(sorted(_CURRENCY_CODES)) + r")\b", re.IGNORECASE
 )
 _CURRENCY_SYMBOLS = {"€": "EUR", "£": "GBP", "¥": "JPY", "₩": "KRW", "₹": "INR"}
+_PER_SHARE_RE = re.compile(
+    r"\bper[\s\-]*(?:common\s+)?share\b|/\s*share\b", re.IGNORECASE
+)
 
 
 def _currency_candidates(texts: Sequence[str]) -> set:
@@ -415,18 +452,53 @@ def _currency_candidates(texts: Sequence[str]) -> set:
     return found
 
 
-def _table_unit(table: Any, document_unit: str) -> str:
-    """Currency from the table's own metadata, else the document's sole unit.
+def _per_share_marker(text: str) -> bool:
+    return bool(_PER_SHARE_RE.search(text or ""))
 
-    An explicit caption/header currency always wins. Conflicting explicit
-    currencies stay ambiguous (``""``) instead of picking one. Only when the
-    table says nothing do we inherit the primary document's single declared
-    XBRL unit — never a hard-coded USD default.
+
+def _canonical_unit(unit: str) -> str:
+    """Canonical comparable unit text (``share`` aliases to ``SHARES``)."""
+    parts = [part.strip() for part in (unit or "").split("/") if part.strip()]
+    return "/".join(
+        "SHARES" if part.upper() in ("SHARE", "SHARES") else part.upper()
+        for part in parts
+    )
+
+
+def _table_unit(table: Any, document_unit: str) -> str:
+    """Full economic unit from the table's own metadata, else the document's.
+
+    ``Amounts in USD per share`` is the compound unit ``USD/SHARES``, never
+    total ``USD``. Conflicting explicit currencies, or a per-share marker with
+    no established currency, stay unresolved (``""``). Only when the table says
+    nothing (including no per-share marker) do we inherit the primary
+    document's single declared XBRL unit — never a hard-coded USD default.
     """
-    candidates = _currency_candidates([table.caption or "", *table.columns])
+    texts = [table.caption or "", *table.columns]
+    candidates = _currency_candidates(texts)
+    per_share = any(_per_share_marker(text) for text in texts)
+    if len(candidates) > 1:
+        return ""
     if candidates:
-        return next(iter(candidates)) if len(candidates) == 1 else ""
-    return (document_unit or "").strip().upper()
+        base = next(iter(candidates))
+    elif per_share:
+        return ""  # per-share without a source currency is partial, not total
+    else:
+        base = (document_unit or "").strip().upper()
+    if not base:
+        return ""
+    if per_share and "/" not in base:
+        return f"{base}/SHARES"
+    return base
+
+
+def _row_unit(unit: str, label: str, column: str) -> str:
+    """Apply a per-row/per-column per-share marker to a plain table unit."""
+    if not unit or "/" in unit:
+        return unit
+    if _per_share_marker(label) or _per_share_marker(column):
+        return f"{unit}/SHARES"
+    return unit
 
 
 def _issuer_key(value: Any) -> str:
@@ -493,14 +565,65 @@ def _xbrl_facts(html: str, *, ticker: str, accession: str,
     return facts
 
 
+def _resolve_cell_identity(
+    cell: Any,
+    *,
+    label: str,
+    table_issuer: str,
+    table_unit: str,
+    contexts: dict,
+    units: dict,
+) -> tuple:
+    """Resolve one table cell's explicitly sourced identity.
+
+    Returns ``(issuer, dimensions, duration, unit, resolved, context_ref,
+    unit_ref, fact_id)``. A cell with no inline binding keeps the table-level
+    identity. A cell bound to an inline fact uses that fact's context issuer,
+    period and dimensions and its unit reference. Missing or conflicting
+    identity is unresolved (blank key) rather than being guessed as an
+    aggregate.
+    """
+    header_duration = _period_from_header(cell.column)
+    unit = _row_unit(table_unit, label, cell.column)
+    if not cell.inline:
+        return table_issuer, (), header_duration, unit, True, None, None, None
+    if cell.identity_ambiguous or not cell.context_ref:
+        return "", (), "", "", False, None, None, None
+    context = contexts.get(cell.context_ref)
+    if context is None:
+        return "", (), "", "", False, None, None, None
+    period, dimensions, issuer = context
+    if not period or not issuer:
+        return "", (), "", "", False, None, None, None
+    if cell.unit_ref:
+        inline_unit = units.get(cell.unit_ref, "")
+        if not inline_unit:
+            return "", (), "", "", False, None, None, None
+        if unit and _canonical_unit(unit) != _canonical_unit(inline_unit):
+            return "", (), "", "", False, None, None, None
+        unit = inline_unit
+    return (
+        issuer, dimensions, period, unit, True,
+        cell.context_ref, cell.unit_ref, cell.fact_id,
+    )
+
+
 def _table_facts(primary_html: str, *, ticker: str, accession: str,
                  origin_doc: str, xbrl_concepts: Sequence[str],
                  table_issuer: str, document_unit: str) -> list:
     """Statement-table facts normalized with source-derived identity only."""
+    import lxml.html
+
+    if (primary_html or "").strip():
+        doc = lxml.html.document_fromstring(primary_html)
+        contexts = _parse_contexts(doc)
+        units = _parse_units(doc)
+    else:
+        contexts, units = {}, {}
     facts: list = []
     for table in parse_statement_tables(primary_html):
         scale = table.scale if table.scale is not None else 0
-        unit = _table_unit(table, document_unit)
+        table_unit = _table_unit(table, document_unit)
         for row in table.rows:
             label = (row.label or "").strip()
             if not label or _is_fee_label(label):
@@ -509,21 +632,32 @@ def _table_facts(primary_html: str, *, ticker: str, accession: str,
             for cell in row.cells:
                 if cell.value is None:
                     continue
-                duration = _period_from_header(cell.column)
+                (issuer, dimensions, duration, unit, resolved,
+                 context_ref, unit_ref, fact_id) = _resolve_cell_identity(
+                    cell, label=label, table_issuer=table_issuer,
+                    table_unit=table_unit, contexts=contexts, units=units,
+                )
                 value = sr._scale_exact(cell.value, int(scale)) if scale else cell.value
+                scoped_fact_id = (
+                    f"{origin_doc}#{fact_id}" if fact_id else None
+                )
                 facts.append(StatementFact(
-                    issuer=table_issuer,
+                    issuer=issuer,
                     concept=concept,
                     unit=unit,
                     duration=duration,
                     value=value,
                     accession=accession,
-                    dimensions=(),
+                    dimensions=dimensions,
                     ticker=ticker,
                     origin_doc=origin_doc,
                     scale=table.scale,
                     raw_text=cell.raw,
                     document_id=origin_doc,
+                    fact_id=scoped_fact_id,
+                    context_ref=context_ref,
+                    unit_ref=unit_ref,
+                    identity_ambiguous=not resolved,
                 ))
     return facts
 
