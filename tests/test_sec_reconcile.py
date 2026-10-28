@@ -478,3 +478,41 @@ def test_r4_parse_statement_tables_marks_conflicting_bindings_ambiguous():
     assert getattr(cell, "inline", False) is True
     assert getattr(cell, "identity_ambiguous", None) is True
     assert getattr(cell, "context_ref", None) is None
+
+
+# --- r5: cells retain their own inline fact concept ------------------------
+
+
+def test_r5_parse_statement_tables_retains_inline_cell_concept():
+    html = (
+        "<table><tr><th>Item</th><th>Year 2026</th></tr>"
+        "<tr><td>Revenue</td><td>"
+        '<ix:nonFraction id="contract-revenue" '
+        'name="us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax" '
+        'contextRef="c1" unitRef="usd">100</ix:nonFraction>'
+        "</td></tr></table>"
+    )
+    cell = parse_statement_tables(html)[0].rows[0].cells[0]
+
+    assert getattr(cell, "concept", None) == (
+        "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax"
+    )
+    assert getattr(cell, "context_ref", None) == "c1"
+    assert getattr(cell, "unit_ref", None) == "usd"
+    assert getattr(cell, "fact_id", None) == "contract-revenue"
+
+
+def test_r5_parse_statement_tables_distinct_concepts_are_ambiguous():
+    html = (
+        "<table><tr><th>Item</th><th>Year 2026</th></tr>"
+        "<tr><td>Revenue</td><td>"
+        '<ix:nonFraction name="us-gaap:Revenues" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction>'
+        '<ix:nonFraction name="us-gaap:OperatingIncomeLoss" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction>'
+        "</td></tr></table>"
+    )
+    cell = parse_statement_tables(html)[0].rows[0].cells[0]
+
+    assert getattr(cell, "identity_ambiguous", None) is True
+    assert getattr(cell, "concept", None) is None

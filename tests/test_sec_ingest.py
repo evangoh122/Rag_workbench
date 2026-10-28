@@ -1300,3 +1300,198 @@ def test_r4_period_boundaries_are_inclusive_and_calendar_correct(header, expecte
 def test_r4_ambiguous_duration_headers_stay_unresolved(header):
     sec_ingest = _sec_ingest()
     assert sec_ingest._period_from_header(header) == ""
+
+
+# --- r5: inline source concept is authoritative over label inference --------
+
+_R5_SPECIFIC_REVENUE = (
+    "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax"
+)
+
+
+def _r5_header():
+    return [
+        _duration("2026-01-01", "2026-12-31", context_id="c1"),
+        _unit(),
+    ]
+
+
+def _r5_table(cell_html: str, *, label: str = "Revenue") -> str:
+    return _r4_table(caption="Amounts in USD", rows=[(label, cell_html)])
+
+
+def _r5_revenues_fact() -> str:
+    return (
+        '<p><ix:nonFraction name="us-gaap:Revenues" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction></p>'
+    )
+
+
+def test_r5_inline_contract_revenue_concept_never_relabeled_by_row(tmp_path):
+    cell = _r4_inline_cell(
+        "100", name=_R5_SPECIFIC_REVENUE, fact_id="contract-revenue",
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=_r5_header(), table_html=_r5_table(cell),
+                     facts_html=_r5_revenues_fact()),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        recon = conn.execute(
+            "SELECT concept, status, table_value, xbrl_value "
+            "FROM sec_reconciliation ORDER BY concept"
+        ).fetchall()
+        table_identity = conn.execute(
+            "SELECT concept, issuer, unit, duration, context_ref, fact_id, "
+            "origin_doc FROM sec_financial_facts WHERE source = 'table'"
+        ).fetchall()
+
+    by_concept = {row[0]: row for row in recon}
+    assert table_identity == [(
+        _R5_SPECIFIC_REVENUE, ANTH_CIK, "USD", "2026-01-01..2026-12-31",
+        "c1", "primary-document.html#contract-revenue",
+        "primary-document.html",
+    )]
+    assert by_concept[_R5_SPECIFIC_REVENUE][1] == "MATCH"
+    assert by_concept[_R5_SPECIFIC_REVENUE][2:] == ("100", "100")
+    assert by_concept["us-gaap:Revenues"][1] == "UNAVAILABLE"
+    assert not any(
+        row[0] == "us-gaap:Revenues" and row[1] == "MATCH" for row in recon
+    )
+
+
+def test_r5_operating_income_concept_under_revenue_label_not_relabeled(tmp_path):
+    cell = _r4_inline_cell(
+        "100", name="us-gaap:OperatingIncomeLoss", fact_id="operating",
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=_r5_header(), table_html=_r5_table(cell),
+                     facts_html=_r5_revenues_fact()),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        recon = conn.execute(
+            "SELECT concept, status, table_value, xbrl_value "
+            "FROM sec_reconciliation ORDER BY concept"
+        ).fetchall()
+        table_identity = conn.execute(
+            "SELECT concept, context_ref, fact_id FROM sec_financial_facts "
+            "WHERE source = 'table'"
+        ).fetchall()
+
+    by_concept = {row[0]: row for row in recon}
+    assert table_identity == [(
+        "us-gaap:OperatingIncomeLoss", "c1",
+        "primary-document.html#operating",
+    )]
+    assert by_concept["us-gaap:OperatingIncomeLoss"][1] == "MATCH"
+    assert by_concept["us-gaap:Revenues"][1] == "UNAVAILABLE"
+    assert not any(
+        row[0] == "us-gaap:Revenues" and row[1] == "MATCH" for row in recon
+    )
+
+
+def test_r5_explicit_inline_concept_matches_same_xbrl_concept(tmp_path):
+    cell = _r4_inline_cell(
+        "100", name=_R5_SPECIFIC_REVENUE, fact_id="contract-revenue",
+    )
+    facts = (
+        f'<p><ix:nonFraction name="{_R5_SPECIFIC_REVENUE}" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction></p>'
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=_r5_header(), table_html=_r5_table(cell),
+                     facts_html=facts),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        recon = conn.execute(
+            "SELECT concept, status, table_value, xbrl_value "
+            "FROM sec_reconciliation"
+        ).fetchall()
+        table_identity = conn.execute(
+            "SELECT concept, issuer, unit, duration, context_ref, unit_ref, "
+            "fact_id, origin_doc FROM sec_financial_facts "
+            "WHERE source = 'table'"
+        ).fetchall()
+
+    assert recon == [(_R5_SPECIFIC_REVENUE, "MATCH", "100", "100")]
+    assert table_identity == [(
+        _R5_SPECIFIC_REVENUE, ANTH_CIK, "USD", "2026-01-01..2026-12-31",
+        "c1", "usd", "primary-document.html#contract-revenue",
+        "primary-document.html",
+    )]
+
+
+def test_r5_multiple_inline_concepts_never_collapse_into_a_match(tmp_path):
+    cell = (
+        "<td>"
+        '<ix:nonFraction name="us-gaap:Revenues" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction>'
+        '<ix:nonFraction name="us-gaap:OperatingIncomeLoss" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction>'
+        "</td>"
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=_r5_header(), table_html=_r5_table(cell)),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        recon = conn.execute(
+            "SELECT concept, status FROM sec_reconciliation"
+        ).fetchall()
+        table_identity = conn.execute(
+            "SELECT concept, issuer, unit, duration FROM sec_financial_facts "
+            "WHERE source = 'table'"
+        ).fetchall()
+
+    assert "MATCH" not in {row[1] for row in recon}
+    assert table_identity == [("", "", "", "")]
+
+
+def test_r5_missing_inline_concept_uses_label_only_as_fallback(tmp_path):
+    cell = (
+        "<td>"
+        '<ix:nonFraction contextRef="c1" unitRef="usd">100</ix:nonFraction>'
+        "</td>"
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=_r5_header(), table_html=_r5_table(cell),
+                     facts_html=_r5_revenues_fact()),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        recon = conn.execute(
+            "SELECT concept, status FROM sec_reconciliation"
+        ).fetchall()
+        table_concept = conn.execute(
+            "SELECT concept FROM sec_financial_facts WHERE source = 'table'"
+        ).fetchall()
+
+    assert ("us-gaap:Revenues", "MATCH") in recon
+    assert table_concept == [("us-gaap:Revenues",)]
+
+
+def test_r5_partially_missing_inline_concepts_stay_ambiguous(tmp_path):
+    cell = (
+        "<td>"
+        '<ix:nonFraction name="us-gaap:Revenues" contextRef="c1" '
+        'unitRef="usd">100</ix:nonFraction>'
+        '<ix:nonFraction contextRef="c1" unitRef="usd">100</ix:nonFraction>'
+        "</td>"
+    )
+    db_path = _r4_etl(
+        tmp_path,
+        _r4_document(header_parts=_r5_header(), table_html=_r5_table(cell)),
+    )
+    with duckdb.connect(str(db_path)) as conn:
+        recon = conn.execute(
+            "SELECT concept, status FROM sec_reconciliation"
+        ).fetchall()
+        table_identity = conn.execute(
+            "SELECT concept, issuer, unit, duration FROM sec_financial_facts "
+            "WHERE source = 'table'"
+        ).fetchall()
+
+    assert "MATCH" not in {row[1] for row in recon}
+    assert table_identity == [("", "", "", "")]

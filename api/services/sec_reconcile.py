@@ -305,15 +305,17 @@ _SCALE_EXPONENTS = {"units": 0, "thousands": 3, "millions": 6, "billions": 9}
 class TableCell:
     """One value cell bound to its flattened column header.
 
-    When the cell contains an inline numeric fact, the fact's context/unit
-    references and id are retained so ingestion can bind the cell to its
-    explicitly sourced identity instead of assuming an aggregate.
+    When the cell contains an inline numeric fact, the fact's concept
+    (taxonomy QName), context/unit references and id are retained so ingestion
+    can bind the cell to its explicitly sourced identity instead of assuming an
+    aggregate or inferring a concept from the row label.
     """
 
     column: str
     raw: str
     value: Optional[Decimal]  # parentheses -> negative; None when non-numeric
     inline: bool = False
+    concept: Optional[str] = None
     context_ref: Optional[str] = None
     unit_ref: Optional[str] = None
     fact_id: Optional[str] = None
@@ -459,33 +461,37 @@ def _table_rows(table: Any) -> list:
 
 
 def _inline_cell_binding(cell: Any) -> Tuple[bool, Optional[str], Optional[str],
-                                             Optional[str], bool]:
-    """(has_inline_fact, context_ref, unit_ref, fact_id, identity_ambiguous).
+                                             Optional[str], Optional[str], bool]:
+    """(has_inline_fact, concept, context_ref, unit_ref, fact_id, ambiguous).
 
-    A cell may carry more than one inline numeric fact. Identical context/unit
-    references are one binding; differing references are ambiguous, so the cell
-    is never silently bound to one of them.
+    A cell may carry more than one inline numeric fact. The concept, context
+    and unit references are read from each fact together, never combined across
+    facts: one identical binding is authoritative, while differing concepts or
+    binding identities are ambiguous so the cell is never silently bound to one
+    of them. A single fact without a ``name`` has no authoritative concept but
+    keeps its binding so label inference can apply only as a fallback.
     """
-    identities: list = []
+    bindings: list = []
     fact_ids: list = []
     for el in cell.iter():
         if not _is_ix_named(el, "nonfraction"):
             continue
+        concept = (_attr(el, "name") or "").strip()
         context_ref = _attr(el, "contextRef", "contextref")
         unit_ref = _attr(el, "unitRef", "unitref")
-        identity = (context_ref, unit_ref)
-        if identity not in identities:
-            identities.append(identity)
+        binding = (concept, context_ref, unit_ref)
+        if binding not in bindings:
+            bindings.append(binding)
         fact_id = _attr(el, "id")
         if fact_id and fact_id not in fact_ids:
             fact_ids.append(fact_id)
-    if not identities:
-        return False, None, None, None, False
-    if len(identities) > 1:
-        return True, None, None, None, True
-    context_ref, unit_ref = identities[0]
+    if not bindings:
+        return False, None, None, None, None, False
+    if len(bindings) > 1:
+        return True, None, None, None, None, True
+    concept, context_ref, unit_ref = bindings[0]
     fact_id = fact_ids[0] if len(fact_ids) == 1 else None
-    return True, context_ref, unit_ref, fact_id, False
+    return True, concept or None, context_ref, unit_ref, fact_id, False
 
 
 def parse_statement_tables(html: str) -> list:
@@ -536,14 +542,15 @@ def parse_statement_tables(html: str) -> list:
             for c in range(1, width):
                 cell = grid.get((r, c))
                 raw = _cell_text(cell) if cell is not None else ""
-                inline, context_ref, unit_ref, fact_id, ambiguous = (
+                inline, concept, context_ref, unit_ref, fact_id, ambiguous = (
                     _inline_cell_binding(cell) if cell is not None
-                    else (False, None, None, None, False)
+                    else (False, None, None, None, None, False)
                 )
                 cells_out.append(TableCell(
                     column=columns[c], raw=raw,
                     value=_parse_display_number(raw) if raw else None,
-                    inline=inline, context_ref=context_ref, unit_ref=unit_ref,
+                    inline=inline, concept=concept,
+                    context_ref=context_ref, unit_ref=unit_ref,
                     fact_id=fact_id, identity_ambiguous=ambiguous,
                 ))
             rows_out.append(ParsedRow(

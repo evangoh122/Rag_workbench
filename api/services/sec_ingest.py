@@ -577,34 +577,37 @@ def _resolve_cell_identity(
     """Resolve one table cell's explicitly sourced identity.
 
     Returns ``(issuer, dimensions, duration, unit, resolved, context_ref,
-    unit_ref, fact_id)``. A cell with no inline binding keeps the table-level
-    identity. A cell bound to an inline fact uses that fact's context issuer,
-    period and dimensions and its unit reference. Missing or conflicting
-    identity is unresolved (blank key) rather than being guessed as an
-    aggregate.
+    unit_ref, fact_id, concept)``. A cell with no inline binding keeps the
+    table-level identity and resolves its concept from the row label. A cell
+    bound to an inline fact uses that fact's own concept, context issuer,
+    period, dimensions and unit reference together, so no identity field can
+    be combined with a different fact. Missing or conflicting identity is
+    unresolved (blank key) rather than being guessed as an aggregate; an
+    explicitly sourced concept is never replaced by label inference.
     """
     header_duration = _period_from_header(cell.column)
     unit = _row_unit(table_unit, label, cell.column)
     if not cell.inline:
-        return table_issuer, (), header_duration, unit, True, None, None, None
+        return table_issuer, (), header_duration, unit, True, None, None, None, ""
+    source_concept = cell.concept or ""
     if cell.identity_ambiguous or not cell.context_ref:
-        return "", (), "", "", False, None, None, None
+        return "", (), "", "", False, None, None, None, source_concept
     context = contexts.get(cell.context_ref)
     if context is None:
-        return "", (), "", "", False, None, None, None
+        return "", (), "", "", False, None, None, None, source_concept
     period, dimensions, issuer = context
     if not period or not issuer:
-        return "", (), "", "", False, None, None, None
+        return "", (), "", "", False, None, None, None, source_concept
     if cell.unit_ref:
         inline_unit = units.get(cell.unit_ref, "")
         if not inline_unit:
-            return "", (), "", "", False, None, None, None
+            return "", (), "", "", False, None, None, None, source_concept
         if unit and _canonical_unit(unit) != _canonical_unit(inline_unit):
-            return "", (), "", "", False, None, None, None
+            return "", (), "", "", False, None, None, None, source_concept
         unit = inline_unit
     return (
         issuer, dimensions, period, unit, True,
-        cell.context_ref, cell.unit_ref, cell.fact_id,
+        cell.context_ref, cell.unit_ref, cell.fact_id, source_concept,
     )
 
 
@@ -628,15 +631,22 @@ def _table_facts(primary_html: str, *, ticker: str, accession: str,
             label = (row.label or "").strip()
             if not label or _is_fee_label(label):
                 continue
-            concept = _concept_for_label(label, xbrl_concepts)
+            inferred_concept = _concept_for_label(label, xbrl_concepts)
             for cell in row.cells:
                 if cell.value is None:
                     continue
                 (issuer, dimensions, duration, unit, resolved,
-                 context_ref, unit_ref, fact_id) = _resolve_cell_identity(
+                 context_ref, unit_ref, fact_id,
+                 source_concept) = _resolve_cell_identity(
                     cell, label=label, table_issuer=table_issuer,
                     table_unit=table_unit, contexts=contexts, units=units,
                 )
+                if source_concept:
+                    concept = source_concept
+                elif resolved:
+                    concept = inferred_concept
+                else:
+                    concept = ""
                 value = sr._scale_exact(cell.value, int(scale)) if scale else cell.value
                 scoped_fact_id = (
                     f"{origin_doc}#{fact_id}" if fact_id else None
