@@ -17,11 +17,9 @@ _TOKEN_RE = re.compile(
 )
 
 
-# Canonical user-facing symbol -> every stored DB symbol that must answer for it.
-# Only mapped canonical symbols widen; every other input stays itself so ANTA,
-# AN, ANTHROPIC-style inputs can never match unrelated rows.
-QUERY_TICKER_ALIASES: dict[str, set[str]] = {
-    display: {display, raw} for raw, display in CANONICAL_TICKERS.items()
+# Canonical user-facing symbol -> internal corpus key for query routing.
+QUERY_TICKER_ALIASES: dict[str, str] = {
+    display: raw for raw, display in CANONICAL_TICKERS.items()
 }
 
 
@@ -40,7 +38,7 @@ def query_tickers(symbol: str) -> set[str]:
     normalized = (symbol or "").strip().upper()
     if not normalized:
         return set()
-    return set(QUERY_TICKER_ALIASES.get(normalized, {normalized}))
+    return {normalized, QUERY_TICKER_ALIASES.get(normalized, normalized)}
 
 
 def canonicalize_user_text(text: str) -> str:

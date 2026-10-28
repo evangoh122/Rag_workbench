@@ -977,19 +977,24 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
                 cik = _TICKER_CIK.get(ticker.upper(), "")
 
                 # Structured fact extraction + reconciliation into the real
-                # ingestion path. Atomic per (ticker, accession); a failure here
-                # is caught by this ticker's try/except and leaves no partial
-                # structured rows for its own filing.
-                ingest_filing_structured(
-                    conn,
-                    ticker=ticker,
-                    cik=cik,
-                    accession=accession,
-                    form_type=form_type,
-                    primary_html=acquired_primary or raw_html,
-                    exhibits=exhibits,
-                    primary_origin_doc=primary_origin_doc,
-                )
+                # ingestion path. Atomic per (ticker, accession); structured
+                # failures leave the filing's RAG embedding flow available.
+                try:
+                    ingest_filing_structured(
+                        conn,
+                        ticker=ticker,
+                        cik=cik,
+                        accession=accession,
+                        form_type=form_type,
+                        primary_html=acquired_primary or raw_html,
+                        exhibits=exhibits,
+                        primary_origin_doc=primary_origin_doc,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Structured ingestion failed for {} accession {}: {}",
+                        ticker, accession, e,
+                    )
 
                 # Section-aware chunking to preserve provenance. parse_html_file
                 # already returns the cleaned full text, so split it directly. IPO

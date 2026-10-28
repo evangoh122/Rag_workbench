@@ -354,9 +354,12 @@ def _period_from_header(header: str) -> str:
         if not month_day:
             return ""  # a bare year does not establish an instant day/month
         month = _MONTHS[month_day.group(1).lower()]
-        return _iso_date(date(
-            int(month_day.group(3)), month, int(month_day.group(2)),
-        ))
+        try:
+            return _iso_date(date(
+                int(month_day.group(3)), month, int(month_day.group(2)),
+            ))
+        except ValueError:
+            return ""
 
     months_ended = _MONTHS_ENDED_DATE_RE.search(text)
     if months_ended:
@@ -367,39 +370,51 @@ def _period_from_header(header: str) -> str:
                 count = int(count_raw)
             except ValueError:
                 return ""
-        end = date(
-            int(months_ended.group(4)),
-            _MONTHS[months_ended.group(2).lower()],
-            int(months_ended.group(3)),
-        )
-        return f"{_iso_date(_start_before_months(end, count))}..{_iso_date(end)}"
+        try:
+            end = date(
+                int(months_ended.group(4)),
+                _MONTHS[months_ended.group(2).lower()],
+                int(months_ended.group(3)),
+            )
+            return f"{_iso_date(_start_before_months(end, count))}..{_iso_date(end)}"
+        except ValueError:
+            return ""
 
     half_year_ended = _HALF_YEAR_ENDED_DATE_RE.search(text)
     if half_year_ended:
-        end = date(
-            int(half_year_ended.group(3)),
-            _MONTHS[half_year_ended.group(1).lower()],
-            int(half_year_ended.group(2)),
-        )
-        return f"{_iso_date(_start_before_months(end, 6))}..{_iso_date(end)}"
+        try:
+            end = date(
+                int(half_year_ended.group(3)),
+                _MONTHS[half_year_ended.group(1).lower()],
+                int(half_year_ended.group(2)),
+            )
+            return f"{_iso_date(_start_before_months(end, 6))}..{_iso_date(end)}"
+        except ValueError:
+            return ""
 
     quarter_ended = _QUARTER_ENDED_DATE_RE.search(text)
     if quarter_ended:
-        end = date(
-            int(quarter_ended.group(3)),
-            _MONTHS[quarter_ended.group(1).lower()],
-            int(quarter_ended.group(2)),
-        )
-        return f"{_iso_date(_start_before_months(end, 3))}..{_iso_date(end)}"
+        try:
+            end = date(
+                int(quarter_ended.group(3)),
+                _MONTHS[quarter_ended.group(1).lower()],
+                int(quarter_ended.group(2)),
+            )
+            return f"{_iso_date(_start_before_months(end, 3))}..{_iso_date(end)}"
+        except ValueError:
+            return ""
 
     year_ended = _YEAR_ENDED_DATE_RE.search(text)
     if year_ended:
-        end = date(
-            int(year_ended.group(3)),
-            _MONTHS[year_ended.group(1).lower()],
-            int(year_ended.group(2)),
-        )
-        return f"{_iso_date(_start_before_months(end, 12))}..{_iso_date(end)}"
+        try:
+            end = date(
+                int(year_ended.group(3)),
+                _MONTHS[year_ended.group(1).lower()],
+                int(year_ended.group(2)),
+            )
+            return f"{_iso_date(_start_before_months(end, 12))}..{_iso_date(end)}"
+        except ValueError:
+            return ""
 
     if (
         _MONTHS_ENDED_YEAR_RE.search(text)

@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
 
+from api.services.ticker_canon import QUERY_TICKER_ALIASES
+
 # Covered companies → the names/aliases that appear in queries and filings.
 _TICKER_TO_NAMES: Dict[str, List[str]] = {
     "NVDA": ["nvidia"],
@@ -177,10 +179,12 @@ def _tickers_named_in_query(query: str, strict_symbols: bool = False) -> List[st
                 name_hits.append((m.start(), ticker))
                 break
     # Explicit symbols (>=3 chars, word boundary)
-    for ticker in covered:
-        if len(ticker) >= 3:
+    symbols = {ticker: ticker for ticker in covered}
+    symbols.update({alias: raw for alias, raw in QUERY_TICKER_ALIASES.items() if raw in covered})
+    for symbol, ticker in symbols.items():
+        if len(symbol) >= 3:
             case_sensitive = strict_symbols and ticker in _ENGLISH_WORD_TICKERS
-            m = re.search(r"\b" + re.escape(ticker) + r"\b", q, 0 if case_sensitive else re.IGNORECASE)
+            m = re.search(r"\b" + re.escape(symbol) + r"\b", q, 0 if case_sensitive else re.IGNORECASE)
             if m:
                 name_hits.append((m.start(), ticker))
 
@@ -207,7 +211,7 @@ def detect_comparison(query: str, subject_ticker: str) -> Optional[Dict[str, Any
         return {"mode": "explicit", "subject": named[0], "explicit": named}
 
     # Peer: a single subject + an explicit "competitors / industry" ask.
-    subject = named[0] if named else (subject_ticker or "")
+    subject = named[0] if named else QUERY_TICKER_ALIASES.get(subject_ticker, subject_ticker or "")
     if has_peer_signal and subject:
         return {"mode": "peer", "subject": subject, "explicit": [subject]}
 

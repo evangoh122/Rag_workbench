@@ -158,6 +158,37 @@ def test_inline_values_survive_parsers_and_real_etl(tmp_path):
     assert any(r[2] == "12345" for r in rows)
 
 
+@pytest.mark.parametrize("failure_stage", ["extraction", "persistence"])
+def test_structured_failure_still_commits_section_embeddings(tmp_path, failure_stage):
+    sec_ingest = _sec_ingest()
+    primary = _write_filing(tmp_path, _inline_revenue_html())
+    db_path = tmp_path / "structured-failure.duckdb"
+    target, method = (
+        (sec_ingest, "_table_facts") if failure_stage == "extraction"
+        else (sec_reconcile, "delete_and_insert_reconciliation")
+    )
+    error = ValueError("invalid structured data")
+    with patch.object(target, method, side_effect=error), \
+         patch.object(embed_edgar, "logger") as log:
+        count = _run_etl(tmp_path, db_path, primary)
+
+    assert count > 0
+    with duckdb.connect(str(db_path)) as conn:
+        rows = conn.execute(
+            "SELECT ticker, accession, text, embedding, section_id FROM edgar_embeddings"
+        ).fetchall()
+        if failure_stage == "persistence":
+            assert conn.execute("SELECT count(*) FROM sec_financial_facts").fetchone() == (0,)
+    assert len(rows) == count
+    assert all(row[0] == "ANTH" and row[1] == ACCESSION for row in rows)
+    assert all(row[3] == pytest.approx([0.1, 0.2, 0.3, 0.4]) and row[4] for row in rows)
+    assert any("Revenue" in row[2] for row in rows)
+    log.warning.assert_any_call(
+        "Structured ingestion failed for {} accession {}: {}",
+        "ANTH", ACCESSION, error,
+    )
+
+
 # --- 2. fee-only XBRL end-to-end: UNAVAILABLE + no financial fee -----------
 
 
@@ -1279,6 +1310,10 @@ def test_r4_per_share_without_currency_never_becomes_total_usd(tmp_path):
         ("Six months ended February 29, 2024", "2023-09-01..2024-02-29"),
         ("Three months ended February 28, 2023", "2022-12-01..2023-02-28"),
         ("Six months ended February 28, 2023", "2022-09-01..2023-02-28"),
+        ("As of February 29, 2024", "2024-02-29"),
+        ("Half-year ended February 29, 2024", "2023-09-01..2024-02-29"),
+        ("Quarter ended February 29, 2024", "2023-12-01..2024-02-29"),
+        ("Year ended February 29, 2024", "2023-03-01..2024-02-29"),
     ],
 )
 def test_r4_period_boundaries_are_inclusive_and_calendar_correct(header, expected):
@@ -1300,6 +1335,14 @@ def test_r4_period_boundaries_are_inclusive_and_calendar_correct(header, expecte
 def test_r4_ambiguous_duration_headers_stay_unresolved(header):
     sec_ingest = _sec_ingest()
     assert sec_ingest._period_from_header(header) == ""
+
+
+@pytest.mark.parametrize("prefix", [
+    "As of", "Three months ended", "Half-year ended", "Quarter ended", "Year ended",
+])
+@pytest.mark.parametrize("invalid_date", ["February 30, 2026", "February 29, 2023", "April 31, 2026"])
+def test_impossible_header_dates_stay_unresolved(prefix, invalid_date):
+    assert _sec_ingest()._period_from_header(f"{prefix} {invalid_date}") == ""
 
 
 # --- r5: inline source concept is authoritative over label inference --------

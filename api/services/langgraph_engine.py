@@ -36,7 +36,7 @@ from api.services.financial_calc import (
     yoy_growth, cagr,
 )
 from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display, _DISPLAY_NAMES
-from api.services.ticker_canon import canonicalize_user_text, display_ticker
+from api.services.ticker_canon import QUERY_TICKER_ALIASES, canonicalize_user_text, display_ticker
 
 
 # ---------------------------------------------------------------------------
@@ -1844,10 +1844,12 @@ def _resolve_query_ticker(query: str, fallback: str) -> str:
     #    word boundary avoids prose false-matches on short/ambiguous symbols.
     try:
         from api.config import TICKER_TO_CIK
-        for sym in TICKER_TO_CIK:
+        symbols = {sym: sym for sym in TICKER_TO_CIK}
+        symbols.update(QUERY_TICKER_ALIASES)
+        for sym, raw in symbols.items():
             if len(sym) >= 3 and re.search(r"\b" + re.escape(sym) + r"\b", query, re.IGNORECASE):
-                logger.info(f"Resolved ticker {sym!r} from explicit symbol in query")
-                return sym
+                logger.info(f"Resolved ticker {raw!r} from explicit symbol in query")
+                return raw
     except Exception:
         pass
     return fallback
@@ -2207,7 +2209,8 @@ def run_auditable_rag(query: str, ticker: str,
         logger.info(f"Abstaining — query names uncovered company {uncovered!r}")
         return _abstain_response(uncovered)
     if not by_name:
-        by_name = ticker  # no company named -> honour the UI's selected ticker
+        # No company named -> honour the UI selection using its corpus key.
+        by_name = QUERY_TICKER_ALIASES.get(ticker, ticker)
     if by_name != ticker:
         logger.info(f"Ticker override: query resolved to {by_name!r} (caller passed {ticker!r})")
     ticker = by_name
@@ -2262,6 +2265,7 @@ def run_auditable_rag(query: str, ticker: str,
     }
 
     result = app.invoke(inputs)
+    result["final_answer"] = canonicalize_user_text(result.get("final_answer") or "")
 
     # Surface the ticker the query actually resolved to so the caller (and the
     # UI) can persist the active company across turns. Without this a follow-up
