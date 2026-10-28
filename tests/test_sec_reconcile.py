@@ -345,3 +345,62 @@ def test_continuation_cross_document_id_is_refused():
     assert out == "one "
     assert "FORBIDDEN" not in out
     assert resolve_continuations(nodes, "b", "doc1") == ""  # start id refused too
+
+
+# --- 11. exact numerics / nonfinite safety (finding 4) ---------------------
+
+def test_normalize_numeric_35_digit_value_is_exact_at_scale_zero():
+    raw = "12345678901234567890123456789012345"
+    f = normalize_numeric(raw, scale=0)
+    assert f.supported is True
+    assert f.value == Decimal(raw)
+    assert str(f.value) == raw  # no scientific notation, no rounding
+    assert f.raw == raw
+
+    scaled = normalize_numeric(raw, scale=3)
+    assert scaled.value == Decimal(raw + "000")  # exact, not default-context rounded
+    from api.services.sec_reconcile import decimal_text
+    assert decimal_text(scaled.value) == raw + "000"
+
+
+@pytest.mark.parametrize("raw", ["Infinity", "-Infinity", "NaN", "sNaN"])
+def test_normalize_numeric_rejects_nonfinite_values(raw):
+    f = normalize_numeric(raw)
+    assert f.supported is False
+    assert f.value is None
+    assert f.raw == raw
+
+
+# --- 12. conflicting duplicates -> AMBIGUOUS (finding 3) ------------------
+
+def test_conflicting_duplicates_are_ambiguous_order_independent():
+    table = [_fact("us-gaap:Revenues", "100")]
+    xbrl = [_fact("us-gaap:Revenues", "100"), _fact("us-gaap:Revenues", "200")]
+
+    forward = reconcile(table, xbrl)
+    backward = reconcile(table, list(reversed(xbrl)))
+    assert [r.status for r in forward] == [ReconcileStatus.AMBIGUOUS]
+    assert [r.status for r in backward] == [ReconcileStatus.AMBIGUOUS]
+    assert forward[0].table_candidates == backward[0].table_candidates == (Decimal(100),)
+    assert forward[0].xbrl_candidates == backward[0].xbrl_candidates == (
+        Decimal(100), Decimal(200),
+    )
+    # Never silently choose a candidate, never a false MATCH.
+    assert forward[0].table_value is None and forward[0].xbrl_value is None
+    assert forward[0].delta is None
+
+
+def test_identical_duplicates_collapse_to_one_fact():
+    table = [_fact("us-gaap:Revenues", "100"), _fact("us-gaap:Revenues", "100")]
+    xbrl = [_fact("us-gaap:Revenues", "100")]
+    rows = reconcile(table, xbrl)
+    assert len(rows) == 1
+    assert rows[0].status is ReconcileStatus.MATCH
+    assert rows[0].delta == Decimal(0)
+
+
+def test_conflicting_duplicates_on_table_side_also_ambiguous():
+    table = [_fact("us-gaap:Revenues", "100"), _fact("us-gaap:Revenues", "200")]
+    xbrl = [_fact("us-gaap:Revenues", "100")]
+    rows = reconcile(table, xbrl)
+    assert [r.status for r in rows] == [ReconcileStatus.AMBIGUOUS]

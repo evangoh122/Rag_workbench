@@ -10,7 +10,8 @@ Contract (fixture-tested in tests/test_sec_reconcile.py):
   reports ``header_ambiguity`` instead of guessing silently (finding 4)
 - ``StatementFact`` / ``FactKey`` — full key + provenance + scoped ids (finding 5)
 - ``is_fee_fact`` / ``split_fee_vs_financial`` — fee-taxonomy facts never financials
-- ``reconcile`` — equivalent keys only -> MATCH / MISMATCH / UNAVAILABLE
+- ``reconcile`` — equivalent keys only -> MATCH / MISMATCH / UNAVAILABLE /
+  AMBIGUOUS (conflicting duplicates are never silently first-wins)
 - ``store_reconciliation`` — atomic delete+insert per (ticker, accession) with
   rollback on error (finding 6)
 - ``resolve_continuations`` — cycle guard, missing-link tolerance and
@@ -29,7 +30,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, localcontext
 from enum import Enum
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
@@ -77,7 +78,24 @@ def _parse_display_number(text: str, fmt: Optional[str] = None) -> Optional[Deci
         value = Decimal(s)
     except InvalidOperation:
         return None
+    if not value.is_finite():
+        return None
     return -value if negative else value
+
+
+def _scale_exact(value: Decimal, scale: int) -> Decimal:
+    """Multiply by an exact power of ten independent of the ambient context.
+
+    The precision is derived from the operand's significant digits, the scale
+    magnitude and guard digits so even a 35-digit value scaled by zero is
+    returned byte-exact instead of being rounded by the default context.
+    """
+    digits = len(value.as_tuple().digits)
+    precision = max(28, digits + abs(int(scale)) + 4)
+    factor = Decimal((0, (1,), int(scale)))
+    with localcontext() as ctx:
+        ctx.prec = precision
+        return value * factor
 
 
 def normalize_numeric(
@@ -107,7 +125,7 @@ def normalize_numeric(
         supported = value is not None
     if value is not None:
         if scale is not None:
-            value = value * (Decimal(10) ** int(scale))
+            value = _scale_exact(value, int(scale))
         if sign == "-":
             value = -value
     return NumericFact(raw=raw_text, value=value, supported=supported,
@@ -155,6 +173,24 @@ def extract_fact_text(element: Any) -> str:
     return re.sub(r"\s+", " ", "".join(parts)).strip()
 
 
+def _spaced_fact_text(element: Any) -> str:
+    """Fact text that preserves ONE boundary space at each chunk edge.
+
+    Continuation chains are concatenated literally, so ``"Acme "`` +
+    ``"Corporation"`` must keep its separating space while a mid-word split
+    (``"Corpo"`` + ``"ration"``) must not gain one.
+    """
+    parts: list = []
+    _collect_fact_text(element, parts)
+    raw = "".join(parts)
+    normalized = re.sub(r"\s+", " ", raw)
+    if raw[:1].isspace():
+        normalized = " " + normalized.lstrip(" ")
+    if raw[-1:].isspace():
+        normalized = normalized.rstrip(" ") + " "
+    return normalized
+
+
 @dataclass(frozen=True)
 class IxFact:
     """One iXBRL fact element with the attributes downstream steps consume."""
@@ -171,6 +207,7 @@ class IxFact:
     decimals: Optional[str] = None
     continued_at: Optional[str] = None
     hidden: bool = False
+    numeric: bool = False
 
 
 def _attr(el: Any, *names: str) -> Optional[str]:
@@ -181,19 +218,50 @@ def _attr(el: Any, *names: str) -> Optional[str]:
     return None
 
 
+def _continuation_index(doc: Any, document_id: str) -> dict:
+    """Index ``ix:continuation`` nodes from the SAME parsed document by id."""
+    index: dict = {}
+    for el in doc.iter():
+        if not _is_ix_named(el, "continuation"):
+            continue
+        cid = _attr(el, "id")
+        if not cid:
+            continue
+        index[cid] = ContinuationNode(
+            text=_spaced_fact_text(el),
+            continued_at=_attr(el, "continuedAt", "continuedat"),
+            document_id=document_id,
+        )
+    return index
+
+
 def extract_ix_facts(html: str, document_id: str = "") -> list:
-    """Extract ``ix:nonFraction``/``ix:nonNumeric`` facts (hidden ones kept, valid)."""
+    """Extract ``ix:nonFraction``/``ix:nonNumeric`` facts (hidden ones kept, valid).
+
+    ``continuedAt`` chains are resolved against ``ix:continuation`` nodes in the
+    same parsed document, so ``IxFact.text`` is the full rendered fact text.
+    """
     if not (html or "").strip():
         return []
     doc = lxml.html.document_fromstring(html)
+    continuations = _continuation_index(doc, document_id)
     facts: list = []
     for el in doc.iter():
-        if not (_is_ix_named(el, "nonfraction") or _is_ix_named(el, "nonnumeric")):
+        is_numeric = _is_ix_named(el, "nonfraction")
+        if not (is_numeric or _is_ix_named(el, "nonnumeric")):
             continue
         scale_raw = _attr(el, "scale")
+        continued_at = _attr(el, "continuedAt", "continuedat")
+        text = extract_fact_text(el)
+        if continued_at:
+            text = re.sub(
+                r"\s+", " ",
+                _spaced_fact_text(el)
+                + resolve_continuations(continuations, continued_at, document_id),
+            ).strip()
         facts.append(IxFact(
             concept=_attr(el, "name") or "",
-            text=extract_fact_text(el),
+            text=text,
             fact_id=_attr(el, "id"),
             document_id=document_id,
             context_ref=_attr(el, "contextRef", "contextref"),
@@ -202,8 +270,9 @@ def extract_ix_facts(html: str, document_id: str = "") -> list:
             scale=int(scale_raw) if scale_raw not in (None, "") else None,
             sign=_attr(el, "sign"),
             decimals=_attr(el, "decimals"),
-            continued_at=_attr(el, "continuedAt", "continuedat"),
+            continued_at=continued_at,
             hidden=any(_is_ix_named(a, "hidden") for a in el.iterancestors()),
+            numeric=is_numeric,
         ))
     return facts
 
@@ -464,6 +533,11 @@ class StatementFact:
     decimals: Optional[str] = None
     fact_id: Optional[str] = None
     document_id: Optional[str] = None
+    fmt: Optional[str] = None
+    raw_text: Optional[str] = None
+    context_ref: Optional[str] = None
+    unit_ref: Optional[str] = None
+    hidden: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "dimensions", _normalize_dimensions(self.dimensions))
@@ -508,6 +582,7 @@ class ReconcileStatus(str, Enum):
     MATCH = "MATCH"
     MISMATCH = "MISMATCH"
     UNAVAILABLE = "UNAVAILABLE"
+    AMBIGUOUS = "AMBIGUOUS"
 
 
 @dataclass(frozen=True)
@@ -520,6 +595,26 @@ class ReconciliationRow:
     table_value: Optional[Decimal] = None
     xbrl_value: Optional[Decimal] = None
     delta: Optional[Decimal] = None
+    table_candidates: Tuple[Decimal, ...] = ()
+    xbrl_candidates: Tuple[Decimal, ...] = ()
+
+
+def _group_by_key(facts: Sequence[StatementFact]) -> dict:
+    groups: dict = {}
+    for f in facts:
+        groups.setdefault(f.key, []).append(f)
+    return groups
+
+
+def _distinct_values(facts: Sequence[StatementFact]) -> Tuple[Decimal, ...]:
+    """Distinct values in a stable order, so the outcome is order-independent."""
+    seen: set = set()
+    values: list = []
+    for f in facts:
+        if f.value not in seen:
+            seen.add(f.value)
+            values.append(f.value)
+    return tuple(sorted(values))
 
 
 def reconcile(table_facts: Sequence[StatementFact],
@@ -530,31 +625,45 @@ def reconcile(table_facts: Sequence[StatementFact],
     missing on either side reports UNAVAILABLE; fee facts are split away first
     and never reconcile as financials — a filing whose XBRL carries only fee
     facts reports UNAVAILABLE explicitly, never a match.
+
+    Conflicting duplicates: when one key carries more than one DISTINCT value on
+    either side, the outcome is AMBIGUOUS — never a silent first-wins MATCH.
+    Duplicates with identical values collapse to one value. The distinct
+    candidates are carried on the row; no candidate is chosen as the value.
     """
     _, table_fin = split_fee_vs_financial(table_facts)
     _, xbrl_fin = split_fee_vs_financial(xbrl_facts)
-    table_by_key: dict = {}
-    for f in table_fin:
-        table_by_key.setdefault(f.key, f)
-    xbrl_by_key: dict = {}
-    for f in xbrl_fin:
-        xbrl_by_key.setdefault(f.key, f)
+    table_groups = _group_by_key(table_fin)
+    xbrl_groups = _group_by_key(xbrl_fin)
 
     rows: list = []
-    for key in list(table_by_key) + [k for k in xbrl_by_key if k not in table_by_key]:
-        t, x = table_by_key.get(key), xbrl_by_key.get(key)
+    for key in list(table_groups) + [k for k in xbrl_groups if k not in table_groups]:
+        t_facts = table_groups.get(key, [])
+        x_facts = xbrl_groups.get(key, [])
+        t = t_facts[0] if t_facts else None
+        x = x_facts[0] if x_facts else None
         ticker = (t.ticker if t is not None else x.ticker) or ""
-        table_value = None if t is None else t.value
-        xbrl_value = None if x is None else x.value
-        if t is None or x is None:
+        table_values = _distinct_values(t_facts)
+        xbrl_values = _distinct_values(x_facts)
+        if len(table_values) > 1 or len(xbrl_values) > 1:
+            status = ReconcileStatus.AMBIGUOUS
+            table_value = xbrl_value = delta = None
+        elif not table_values or not xbrl_values:
             status, delta = ReconcileStatus.UNAVAILABLE, None
-        elif t.value == x.value:
+            table_value = table_values[0] if table_values else None
+            xbrl_value = xbrl_values[0] if xbrl_values else None
+        elif table_values[0] == xbrl_values[0]:
             status, delta = ReconcileStatus.MATCH, Decimal(0)
+            table_value = xbrl_value = table_values[0]
         else:
-            status, delta = ReconcileStatus.MISMATCH, x.value - t.value
-        rows.append(ReconciliationRow(key=key, status=status, ticker=ticker,
-                                      table_value=table_value, xbrl_value=xbrl_value,
-                                      delta=delta))
+            status = ReconcileStatus.MISMATCH
+            table_value, xbrl_value = table_values[0], xbrl_values[0]
+            delta = xbrl_value - table_value
+        rows.append(ReconciliationRow(
+            key=key, status=status, ticker=ticker,
+            table_value=table_value, xbrl_value=xbrl_value, delta=delta,
+            table_candidates=table_values, xbrl_candidates=xbrl_values,
+        ))
     return rows
 
 # --- persistence (finding 6) -----------------------------------------------
@@ -565,27 +674,56 @@ RECONCILIATION_DDL = (
     "ticker VARCHAR NOT NULL, accession VARCHAR NOT NULL, issuer VARCHAR NOT NULL, "
     "concept VARCHAR NOT NULL, unit VARCHAR NOT NULL, duration VARCHAR NOT NULL, "
     "dimensions VARCHAR NOT NULL, status VARCHAR NOT NULL, "
-    "table_value VARCHAR, xbrl_value VARCHAR, delta VARCHAR)"
+    "table_value VARCHAR, xbrl_value VARCHAR, delta VARCHAR, "
+    "table_candidates VARCHAR, xbrl_candidates VARCHAR)"
 )
 _INSERT_SQL = (
     "INSERT INTO sec_reconciliation "
     "(ticker, accession, issuer, concept, unit, duration, dimensions, "
-    " status, table_value, xbrl_value, delta) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    " status, table_value, xbrl_value, delta, table_candidates, xbrl_candidates) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
+
+
+def decimal_text(value: Decimal) -> str:
+    """Plain fixed-point text for an exact Decimal (never scientific notation)."""
+    return format(value, "f")
+
+
+def _candidates_text(values: Sequence[Decimal]) -> Optional[str]:
+    return ";".join(decimal_text(v) for v in values) if values else None
 
 
 def _row_payload(row: ReconciliationRow) -> tuple:
     dims = ";".join(f"{k}={v}" for k, v in row.key.dimensions)
     return (row.ticker, row.key.accession, row.key.issuer, row.key.concept,
             row.key.unit, row.key.duration, dims, row.status.value,
-            None if row.table_value is None else str(row.table_value),
-            None if row.xbrl_value is None else str(row.xbrl_value),
-            None if row.delta is None else str(row.delta))
+            None if row.table_value is None else decimal_text(row.table_value),
+            None if row.xbrl_value is None else decimal_text(row.xbrl_value),
+            None if row.delta is None else decimal_text(row.delta),
+            _candidates_text(row.table_candidates),
+            _candidates_text(row.xbrl_candidates))
 
 
 def _insert_rows(conn: Any, payloads: Sequence[tuple]) -> None:
     conn.executemany(_INSERT_SQL, list(payloads))
+
+
+def delete_and_insert_reconciliation(conn: Any, rows: Sequence[ReconciliationRow]) -> int:
+    """Delete-before-insert reconciliation rows inside the caller's transaction.
+
+    Used by ``store_reconciliation`` and by structured ingestion, which needs
+    fact rows and reconciliation rows in ONE atomic transaction.
+    """
+    rows = list(rows)
+    if not rows:
+        return 0
+    payloads = [_row_payload(r) for r in rows]
+    for ticker, accession in sorted({(r.ticker, r.key.accession) for r in rows}):
+        conn.execute("DELETE FROM sec_reconciliation WHERE ticker = ? AND accession = ?",
+                     [ticker, accession])
+    _insert_rows(conn, payloads)
+    return len(payloads)
 
 
 def store_reconciliation(conn: Any, rows: Sequence[ReconciliationRow]) -> int:
@@ -599,18 +737,14 @@ def store_reconciliation(conn: Any, rows: Sequence[ReconciliationRow]) -> int:
     if not rows:
         return 0
     conn.execute(RECONCILIATION_DDL)
-    payloads = [_row_payload(r) for r in rows]
     conn.execute("BEGIN TRANSACTION")
     try:
-        for ticker, accession in sorted({(r.ticker, r.key.accession) for r in rows}):
-            conn.execute("DELETE FROM sec_reconciliation WHERE ticker = ? AND accession = ?",
-                         [ticker, accession])
-        _insert_rows(conn, payloads)
+        stored = delete_and_insert_reconciliation(conn, rows)
     except Exception:
         conn.execute("ROLLBACK")
         raise
     conn.execute("COMMIT")
-    return len(payloads)
+    return stored
 
 # --- continuation chains (finding 7) ---------------------------------------
 

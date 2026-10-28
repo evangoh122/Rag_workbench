@@ -24,6 +24,7 @@ from loguru import logger
 from sec_edgar_downloader import Downloader
 
 from api.services.embeddings import get_embeddings as _get_model
+from api.services.sec_ingest import ingest_filing_structured
 from api.services.structure_chunker import StructureChunker
 
 from api.config import Config, TICKER_TO_CIK
@@ -598,9 +599,13 @@ def parse_html_file(file_path: str) -> tuple[str, str]:
         parser = "xml" if is_xml else "lxml"
         soup = BeautifulSoup(content, parser)
 
-        # Remove script/style/XBRL inline elements that pollute get_text()
-        for tag in soup(["script", "style", "ix:nonnumeric", "ix:nonfraction", "ix:header"]):
+        # Drop script/style and the iXBRL header, but UNWRAP inline fact tags so
+        # their rendered values stay in the extracted text (decomposing them
+        # silently deleted every inline numeric value from the corpus).
+        for tag in soup(["script", "style", "ix:header"]):
             tag.decompose()
+        for tag in soup(["ix:nonnumeric", "ix:nonfraction"]):
+            tag.unwrap()
 
         clean = _clean_text(soup.get_text(separator="\n", strip=True))
         return clean, content
@@ -625,8 +630,10 @@ def _html_to_layout_text(content: str) -> str:
     apart (``left`` beyond the previous fragment's ``left + width``).
     """
     soup = BeautifulSoup(content, "lxml")
-    for tag in soup(["script", "style", "ix:nonnumeric", "ix:nonfraction", "ix:header"]):
+    for tag in soup(["script", "style", "ix:header"]):
         tag.decompose()
+    for tag in soup(["ix:nonnumeric", "ix:nonfraction"]):
+        tag.unwrap()
 
     for line in soup.find_all("div"):
         prev_end = None
@@ -673,6 +680,43 @@ def parse_prospectus_file(file_path: str) -> tuple[str, str]:
         text = re.sub(r" ?\n[ \n]*", "\n", text)
     text = re.sub(r"(?im)^table of contents$\n?", "", text)
     return text.strip(), content
+
+
+# iXBRL exhibit filenames that carry facts beside the primary document:
+# filing-fee exhibits (``exfilingfees``) and exhibit 107-style names.
+_IXBRL_EXHIBIT_RE = re.compile(
+    r"(?:exfilingfees|ex[-_]?107|exhibit[-_]?107)", re.IGNORECASE
+)
+_HTML_EXHIBIT_SUFFIXES = (".htm", ".html", ".xhtml")
+
+
+def _find_ixbrl_exhibits(primary_path: str) -> List[tuple[str, str]]:
+    """Read iXBRL exhibit documents stored beside the primary filing document.
+
+    Returns ``[(html_content, filename)]``; filenames are the origin_doc
+    provenance used by structured ingestion. Missing/unreadable files are
+    skipped so a bad exhibit never aborts the whole ticker.
+    """
+    try:
+        primary = Path(primary_path)
+        directory = primary.parent
+        rows: List[tuple[str, str]] = []
+        for candidate in sorted(directory.iterdir()):
+            if not candidate.is_file() or candidate == primary:
+                continue
+            name = candidate.name
+            if not name.lower().endswith(_HTML_EXHIBIT_SUFFIXES):
+                continue
+            if not _IXBRL_EXHIBIT_RE.search(name):
+                continue
+            try:
+                rows.append((candidate.read_text(encoding="utf-8", errors="replace"), name))
+            except OSError as exc:
+                logger.debug(f"Skipping unreadable exhibit {name}: {exc}")
+        return rows
+    except OSError as exc:
+        logger.debug(f"Could not scan exhibits beside {primary_path}: {exc}")
+        return []
 
 
 def _ensure_schema(conn) -> None:
@@ -797,6 +841,21 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
                 accession = _canonical_accession(accession_dir_name)
 
                 cik = _TICKER_CIK.get(ticker.upper(), "")
+
+                # Structured fact extraction + reconciliation into the real
+                # ingestion path. Atomic per (ticker, accession); a failure here
+                # is caught by this ticker's try/except and leaves no partial
+                # structured rows for its own filing.
+                ingest_filing_structured(
+                    conn,
+                    ticker=ticker,
+                    cik=cik,
+                    accession=accession,
+                    form_type=form_type,
+                    primary_html=raw_html,
+                    exhibits=_find_ixbrl_exhibits(file_path),
+                    primary_origin_doc=Path(file_path).name,
+                )
 
                 # Section-aware chunking to preserve provenance. parse_html_file
                 # already returns the cleaned full text, so split it directly. IPO
