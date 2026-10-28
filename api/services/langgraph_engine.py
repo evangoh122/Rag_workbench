@@ -36,6 +36,7 @@ from api.services.financial_calc import (
     yoy_growth, cagr,
 )
 from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display, _DISPLAY_NAMES
+from api.services.ticker_canon import canonicalize_user_text, display_ticker
 
 
 # ---------------------------------------------------------------------------
@@ -946,7 +947,7 @@ def output_node(state: GraphState) -> Dict[str, Any]:
         logger.warning(f"output_node chart build failed (non-fatal): {e}")
 
     return {
-        "final_answer": answer,
+        "final_answer": canonicalize_user_text(answer),
         "status": {**state.get('status', {}), "output": "success"},
         "relevant_xbrl": relevant_display,
         "xbrl_badge": badge,
@@ -1423,7 +1424,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
             ticker = meta.get("ticker", state.get("ticker", ""))
             header = f"[Source {i+1}: {src}"
             if ticker:
-                header += f" | {ticker}"
+                header += f" | {display_ticker(ticker)}"
             header += "]"
             context_parts.append(f"{header}\n{text}")
         context = "\n\n---\n\n".join(context_parts)
@@ -1896,7 +1897,7 @@ def _abstain_response(company: str) -> Dict[str, Any]:
     """A grounded 'I don't have data on that' answer (shaped like graph output)."""
     msg = (
         f"I don't have SEC filing data for **{company.title()}**, so I can't answer "
-        f"that. I currently cover **Anthropic (ANTH)**, **SpaceX (SPCX)**, and "
+        f"that. I currently cover **Anthropic (ANT)**, **SpaceX (SPCX)**, and "
         f"major semiconductor companies "
         f"(e.g. NVDA, AMD, MU, AVGO, QCOM, TXN, AMAT, LRCX, KLAC). "
         f"Ask about one of those and I'll pull it from their filings."
@@ -2222,6 +2223,7 @@ def run_auditable_rag(query: str, ticker: str,
             logger.info(f"--- PEER COMPARISON: {decision} ---")
             result = run_peer_comparison(query, decision)
             result["resolved_ticker"] = decision["subject"]
+            result["final_answer"] = canonicalize_user_text(result.get("final_answer") or "")
             return result
     except Exception as e:
         logger.warning(f"Peer comparison path failed, falling back to single-company: {e}")
