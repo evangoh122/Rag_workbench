@@ -404,3 +404,40 @@ def test_conflicting_duplicates_on_table_side_also_ambiguous():
     xbrl = [_fact("us-gaap:Revenues", "100")]
     rows = reconcile(table, xbrl)
     assert [r.status for r in rows] == [ReconcileStatus.AMBIGUOUS]
+
+
+# --- r3: exact negative/parenthesis normalization (Sol B3) -----------------
+
+
+def test_r3_negative_and_parenthesized_35_digit_values_are_exact():
+    from api.services.sec_reconcile import decimal_text
+
+    raw = "12345678901234567890123456789012345"
+    expected = "-" + raw
+
+    for text, sign in ((raw, "-"), ("(" + raw + ")", None)):
+        fact = normalize_numeric(text, scale=0, sign=sign)
+        assert fact.supported is True
+        assert fact.value == Decimal(expected)
+        assert decimal_text(fact.value) == expected
+        assert str(fact.value) == expected
+
+    for text, sign in ((raw, "-"), ("(" + raw + ")", None)):
+        scaled = normalize_numeric(text, scale=3, sign=sign)
+        assert scaled.value == Decimal(expected + "000")
+        assert decimal_text(scaled.value) == expected + "000"
+
+
+def test_r3_reconcile_delta_is_exact_for_35_digit_values():
+    from api.services.sec_reconcile import decimal_text
+
+    low = "12345678901234567890123456789012345"
+    high = "12345678901234567890123456789012346"
+    rows = reconcile(
+        [_fact("us-gaap:Revenues", low)],
+        [_fact("us-gaap:Revenues", high)],
+    )
+    assert [row.status for row in rows] == [ReconcileStatus.MISMATCH]
+    assert decimal_text(rows[0].delta) == "1"
+    assert decimal_text(rows[0].table_value) == low
+    assert decimal_text(rows[0].xbrl_value) == high

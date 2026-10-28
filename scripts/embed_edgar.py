@@ -414,8 +414,16 @@ def _fetch_filing_with_edgartools(ticker: str, form_types: List[str] = None) -> 
             html_path = safe_dir / "primary-document.html"
             if not html_path.exists():
                 try:
-                    full_text = filing.text()
-                    html_path.write_text(full_text, encoding="utf-8")
+                    # Prefer the real structured HTML (inline XBRL context,
+                    # tables, ix: tags). filing.text() is flattened text and
+                    # must not masquerade as primary-document.html when HTML
+                    # is available, or structured ingestion loses every tag.
+                    structured_html = filing.html()
+                    if isinstance(structured_html, str) and structured_html.strip():
+                        html_path.write_text(structured_html, encoding="utf-8")
+                    else:
+                        full_text = filing.text()
+                        html_path.write_text(full_text, encoding="utf-8")
                 except Exception as e:
                     logger.warning(f"Could not get full text for {ticker} {form_type}: {e}")
                     continue
@@ -687,36 +695,154 @@ def parse_prospectus_file(file_path: str) -> tuple[str, str]:
 _IXBRL_EXHIBIT_RE = re.compile(
     r"(?:exfilingfees|ex[-_]?107|exhibit[-_]?107)", re.IGNORECASE
 )
+_EXHIBIT_DOCUMENT_TYPE_RE = re.compile(
+    r"(?:EX(?:HIBIT)?[\s\-_]*107|FILING[\s\-_]*FEE)", re.IGNORECASE
+)
 _HTML_EXHIBIT_SUFFIXES = (".htm", ".html", ".xhtml")
+_SUBMISSION_FILENAME = "full-submission.txt"
+_DOCUMENT_BLOCK_RE = re.compile(r"<DOCUMENT>(.*?)</DOCUMENT>", re.IGNORECASE | re.DOTALL)
+_DOCUMENT_TYPE_RE = re.compile(r"<TYPE>\s*([^\r\n<]+)", re.IGNORECASE)
+_DOCUMENT_FILENAME_RE = re.compile(r"<FILENAME>\s*([^\r\n<]+)", re.IGNORECASE)
+_DOCUMENT_TEXT_RE = re.compile(r"<TEXT>(.*?)</TEXT>", re.IGNORECASE | re.DOTALL)
+_STRUCTURED_HTML_RE = re.compile(
+    r"<(?:html|body|table|ix:nonfraction)\b", re.IGNORECASE
+)
+
+
+def _read_text_file(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        logger.debug(f"Could not read {path}: {exc}")
+        return ""
+
+
+def _submission_documents(submission_text: str) -> List[dict]:
+    """Parse ``full-submission.txt`` DOCUMENT blocks into type/filename/text.
+
+    The downloader writes the whole SEC submission (primary + exhibits) as this
+    one artifact, so attached exhibit HTML must be split from here rather than
+    assumed to exist as a sibling file.
+    """
+    documents: List[dict] = []
+    for block in _DOCUMENT_BLOCK_RE.findall(submission_text or ""):
+        text_match = _DOCUMENT_TEXT_RE.search(block)
+        if text_match is None:
+            continue
+        type_match = _DOCUMENT_TYPE_RE.search(block)
+        filename_match = _DOCUMENT_FILENAME_RE.search(block)
+        documents.append({
+            "type": type_match.group(1).strip() if type_match else "",
+            "filename": filename_match.group(1).strip() if filename_match else "",
+            "text": text_match.group(1).strip("\r\n"),
+        })
+    return documents
+
+
+def _is_exhibit_document(document: dict) -> bool:
+    name = document.get("filename") or ""
+    doc_type = document.get("type") or ""
+    return bool(
+        _IXBRL_EXHIBIT_RE.search(name)
+        or _EXHIBIT_DOCUMENT_TYPE_RE.search(doc_type)
+        or _IXBRL_EXHIBIT_RE.search(doc_type)
+    )
+
+
+def _looks_structured_html(content: str) -> bool:
+    return bool(_STRUCTURED_HTML_RE.search(content or ""))
+
+
+def _is_primary_document(document: dict) -> bool:
+    """True for the filing's primary structured document in a submission."""
+    if _is_exhibit_document(document):
+        return False
+    doc_type = (document.get("type") or "").strip().upper()
+    if doc_type.startswith("EX") or doc_type in {
+        "GRAPHIC", "IMAGE", "COVER", "CORRESP", "XML", "XBRL INSTANCE DOCUMENT",
+    }:
+        return False
+    return _looks_structured_html(document.get("text", ""))
 
 
 def _find_ixbrl_exhibits(primary_path: str) -> List[tuple[str, str]]:
-    """Read iXBRL exhibit documents stored beside the primary filing document.
+    """Acquire iXBRL exhibit documents from the real downloader artifacts.
 
-    Returns ``[(html_content, filename)]``; filenames are the origin_doc
-    provenance used by structured ingestion. Missing/unreadable files are
-    skipped so a bad exhibit never aborts the whole ticker.
+    Attached documents are split from ``full-submission.txt`` first (the only
+    artifact the installed downloader actually writes besides the primary
+    document). Standalone sibling exhibit HTML is still accepted for callers
+    that materialize files themselves, with duplicate filenames de-duplicated.
+    Returns ``[(html_content, filename)]``; filename is the origin_doc.
     """
     try:
         primary = Path(primary_path)
         directory = primary.parent
         rows: List[tuple[str, str]] = []
+        seen: set = set()
+
+        submission = directory / _SUBMISSION_FILENAME
+        if submission.is_file():
+            for document in _submission_documents(_read_text_file(submission)):
+                if not _is_exhibit_document(document) or not document["text"]:
+                    continue
+                name = document["filename"] or f"submission-document-{len(rows)}"
+                if name in seen:
+                    continue
+                seen.add(name)
+                rows.append((document["text"], name))
+
         for candidate in sorted(directory.iterdir()):
             if not candidate.is_file() or candidate == primary:
                 continue
             name = candidate.name
+            if name == _SUBMISSION_FILENAME:
+                continue
             if not name.lower().endswith(_HTML_EXHIBIT_SUFFIXES):
                 continue
-            if not _IXBRL_EXHIBIT_RE.search(name):
+            if not _IXBRL_EXHIBIT_RE.search(name) or name in seen:
                 continue
-            try:
-                rows.append((candidate.read_text(encoding="utf-8", errors="replace"), name))
-            except OSError as exc:
-                logger.debug(f"Skipping unreadable exhibit {name}: {exc}")
+            seen.add(name)
+            rows.append((
+                candidate.read_text(encoding="utf-8", errors="replace"), name,
+            ))
         return rows
     except OSError as exc:
         logger.debug(f"Could not scan exhibits beside {primary_path}: {exc}")
         return []
+
+
+def _acquire_filing_documents(primary_path: str) -> tuple[str, str, List[tuple[str, str]]]:
+    """Return ``(primary_html, primary_origin_doc, exhibits)`` for one filing.
+
+    Prefers the downloaded primary document. If it is missing or was flattened
+    to plain text, the structured primary DOCUMENT block in
+    ``full-submission.txt`` is materialized in its place so downstream parsers
+    and structured ingestion see real tags/context/tables.
+    """
+    primary = Path(primary_path)
+    primary_name = primary.name
+    primary_html = _read_text_file(primary)
+
+    if not _looks_structured_html(primary_html):
+        submission = primary.parent / _SUBMISSION_FILENAME
+        if submission.is_file():
+            documents = _submission_documents(_read_text_file(submission))
+            candidates = [document for document in documents
+                          if _is_primary_document(document)]
+            chosen = next(
+                (document for document in candidates
+                 if (document.get("filename") or "") == primary.name),
+                candidates[0] if candidates else None,
+            )
+            if chosen is not None:
+                primary_html = chosen["text"]
+                primary_name = chosen["filename"] or primary_name
+                try:
+                    primary.write_text(primary_html, encoding="utf-8")
+                except OSError as exc:
+                    logger.debug(f"Could not materialize structured primary: {exc}")
+
+    return primary_html, primary_name, _find_ixbrl_exhibits(str(primary))
 
 
 def _ensure_schema(conn) -> None:
@@ -827,6 +953,14 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
                     logger.warning(f"No filings downloaded for {ticker}.")
                     continue
 
+                # Acquire the primary structured document and attached exhibit
+                # documents from the real downloader artifacts before parsing,
+                # so a flattened primary is replaced and full-submission.txt
+                # exhibits are available to structured ingestion.
+                acquired_primary, primary_origin_doc, exhibits = (
+                    _acquire_filing_documents(file_path)
+                )
+
                 if form_type.upper() in _PROSPECTUS_FORMS:
                     text, raw_html = parse_prospectus_file(file_path)
                 else:
@@ -852,9 +986,9 @@ def run_embed_edgar_etl(tickers: List[str] = None, batch_size: int = 4) -> int:
                     cik=cik,
                     accession=accession,
                     form_type=form_type,
-                    primary_html=raw_html,
-                    exhibits=_find_ixbrl_exhibits(file_path),
-                    primary_origin_doc=Path(file_path).name,
+                    primary_html=acquired_primary or raw_html,
+                    exhibits=exhibits,
+                    primary_origin_doc=primary_origin_doc,
                 )
 
                 # Section-aware chunking to preserve provenance. parse_html_file

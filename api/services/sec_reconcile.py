@@ -80,7 +80,9 @@ def _parse_display_number(text: str, fmt: Optional[str] = None) -> Optional[Deci
         return None
     if not value.is_finite():
         return None
-    return -value if negative else value
+    # copy_negate is exact; unary minus would round the result under the
+    # ambient decimal context (a 35-digit parenthesized value lost digits).
+    return value.copy_negate() if negative else value
 
 
 def _scale_exact(value: Decimal, scale: int) -> Decimal:
@@ -96,6 +98,20 @@ def _scale_exact(value: Decimal, scale: int) -> Decimal:
     with localcontext() as ctx:
         ctx.prec = precision
         return value * factor
+
+
+def _exact_subtract(left: Decimal, right: Decimal) -> Decimal:
+    """Subtract two Decimals without ambient-context rounding."""
+    left_t = left.as_tuple()
+    right_t = right.as_tuple()
+    precision = max(
+        28,
+        len(left_t.digits) + abs(int(left_t.exponent)) + 4,
+        len(right_t.digits) + abs(int(right_t.exponent)) + 4,
+    )
+    with localcontext() as ctx:
+        ctx.prec = precision
+        return left - right
 
 
 def normalize_numeric(
@@ -127,7 +143,7 @@ def normalize_numeric(
         if scale is not None:
             value = _scale_exact(value, int(scale))
         if sign == "-":
-            value = -value
+            value = value.copy_negate()
     return NumericFact(raw=raw_text, value=value, supported=supported,
                        scale=scale, sign=sign, fmt=fmt, decimals=decimals)
 
@@ -317,6 +333,7 @@ class ParsedTable:
     scale: Optional[int] = None
     header_ambiguity: bool = False
     provenance: Provenance = Provenance.STRUCTURED_TABLE
+    caption: Optional[str] = None
 
 
 def _cell_text(cell: Any) -> str:
@@ -487,7 +504,8 @@ def parse_statement_tables(html: str) -> list:
             ))
         out.append(ParsedTable(columns=columns, rows=tuple(rows_out),
                                scale_note=scale_note, scale=scale,
-                               header_ambiguity=ambiguity))
+                               header_ambiguity=ambiguity,
+                               caption=_cell_text(caption) if caption is not None else None))
     return out
 
 # --- fact records (finding 5) ----------------------------------------------
@@ -645,6 +663,9 @@ def reconcile(table_facts: Sequence[StatementFact],
         ticker = (t.ticker if t is not None else x.ticker) or ""
         table_values = _distinct_values(t_facts)
         xbrl_values = _distinct_values(x_facts)
+        identity_established = bool(
+            key.issuer and key.concept and key.unit and key.duration
+        )
         if len(table_values) > 1 or len(xbrl_values) > 1:
             status = ReconcileStatus.AMBIGUOUS
             table_value = xbrl_value = delta = None
@@ -652,13 +673,19 @@ def reconcile(table_facts: Sequence[StatementFact],
             status, delta = ReconcileStatus.UNAVAILABLE, None
             table_value = table_values[0] if table_values else None
             xbrl_value = xbrl_values[0] if xbrl_values else None
+        elif not identity_established:
+            # Two unknowns are not known to be equivalent: missing issuer /
+            # concept / unit / period must never become a MATCH.
+            status, delta = ReconcileStatus.UNAVAILABLE, None
+            table_value = table_values[0]
+            xbrl_value = xbrl_values[0]
         elif table_values[0] == xbrl_values[0]:
             status, delta = ReconcileStatus.MATCH, Decimal(0)
             table_value = xbrl_value = table_values[0]
         else:
             status = ReconcileStatus.MISMATCH
             table_value, xbrl_value = table_values[0], xbrl_values[0]
-            delta = xbrl_value - table_value
+            delta = _exact_subtract(xbrl_value, table_value)
         rows.append(ReconciliationRow(
             key=key, status=status, ticker=ticker,
             table_value=table_value, xbrl_value=xbrl_value, delta=delta,

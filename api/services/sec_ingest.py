@@ -14,7 +14,9 @@ financial rows instead of a false match.
 """
 from __future__ import annotations
 
+import calendar
 import re
+from datetime import date, timedelta
 from typing import Any, Optional, Sequence
 
 from api.services import sec_reconcile as sr
@@ -102,14 +104,49 @@ _LABEL_ALIASES = {
 
 _FEE_LABEL_RE = re.compile(r"(?:filing\s*fee|fee\s*table|fee\s*rate|fee\s*offset)", re.IGNORECASE)
 _INSTANT_HEADER_RE = re.compile(r"\b(?:as\s+of|instant|balance\s+sheet)\b", re.IGNORECASE)
-_YEAR_RE = re.compile(r"(?:19|20)\d{2}")
-
 _MONTHS = {
     "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
     "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
     "aug": 8, "august": 8, "sep": 9, "september": 9, "oct": 10, "october": 10,
     "nov": 11, "november": 11, "dec": 12, "december": 12,
 }
+_MONTH_COUNT_WORDS = {"three": 3, "six": 6, "nine": 9, "twelve": 12}
+_MONTHS_ENDED_DATE_RE = re.compile(
+    r"\b(three|six|nine|twelve|\d{1,2})\s+months?\s+ended\s+"
+    r"(" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r")\.?\s+"
+    r"(\d{1,2}),?\s+((?:19|20)\d{2})\b",
+    re.IGNORECASE,
+)
+_MONTHS_ENDED_YEAR_RE = re.compile(
+    r"\b(?:three|six|nine|twelve|\d{1,2})\s+months?\s+ended\s+"
+    r"(?:19|20)\d{2}\b",
+    re.IGNORECASE,
+)
+_QUARTER_ENDED_DATE_RE = re.compile(
+    r"\b(?:fiscal\s+)?quarter\s+ended\s+"
+    r"(" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r")\.?\s+"
+    r"(\d{1,2}),?\s+((?:19|20)\d{2})\b",
+    re.IGNORECASE,
+)
+_QUARTER_ENDED_YEAR_RE = re.compile(
+    r"\b(?:fiscal\s+)?quarter\s+ended\s+(?:19|20)\d{2}\b",
+    re.IGNORECASE,
+)
+_YEAR_ENDED_DATE_RE = re.compile(
+    r"\b(?:fiscal\s+)?year\s+ended\s+"
+    r"(" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r")\.?\s+"
+    r"(\d{1,2}),?\s+((?:19|20)\d{2})\b",
+    re.IGNORECASE,
+)
+_YEAR_ENDED_YEAR_RE = re.compile(
+    r"\b(?:fiscal\s+)?year\s+ended\s+((?:19|20)\d{2})\b",
+    re.IGNORECASE,
+)
+_PERIOD_YEAR_RE = re.compile(
+    r"\b(?:fiscal\s+)?year\s+((?:19|20)\d{2})\b",
+    re.IGNORECASE,
+)
+
 _MONTH_DAY_YEAR_RE = re.compile(
     r"\b(" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r")\.?\s+"
     r"(\d{1,2}),?\s+((?:19|20)\d{2})\b",
@@ -140,8 +177,29 @@ def _first_local_text(el: Any, name: str) -> Optional[str]:
     return None
 
 
+def _typed_member_value(member: Any) -> str:
+    """Stable text identity for a typed dimension member.
+
+    The typed value is whatever the source text says (``Customer A``); no
+    taxonomy default is invented. Multiple direct children keep their order
+    with ``|`` so two different structures can never collapse to the same key.
+    """
+    children = [
+        child for child in member
+        if isinstance(getattr(child, "tag", None), str)
+    ]
+    values = [_text_of(child) for child in children]
+    values = [value for value in values if value]
+    return "|".join(values) if values else _text_of(member)
+
+
 def _parse_contexts(doc: Any) -> dict:
-    """id -> (resolved period, dimensions) parsed from ``xbrli:context``."""
+    """id -> (period, dimensions, issuer) parsed from ``xbrli:context``.
+
+    The issuer is the context's own entity identifier, never the caller's CIK.
+    Explicit AND typed dimensions are preserved with their source values; a
+    context with neither yields an empty dimension tuple, not a fabricated one.
+    """
     contexts: dict = {}
     for el in doc.iter():
         if _localname(getattr(el, "tag", None)) != "context":
@@ -160,12 +218,18 @@ def _parse_contexts(doc: Any) -> dict:
             period = ""
         dimensions: dict = {}
         for member in el.iter():
-            if _localname(getattr(member, "tag", None)) != "explicitmember":
+            name = _localname(getattr(member, "tag", None))
+            if name not in ("explicitmember", "typedmember"):
                 continue
             dimension = member.get("dimension")
-            if dimension:
-                dimensions[dimension] = _text_of(member)
-        contexts[cid] = (period, tuple(sorted(dimensions.items())))
+            if not dimension:
+                continue
+            dimensions[dimension] = (
+                _text_of(member) if name == "explicitmember"
+                else _typed_member_value(member)
+            )
+        issuer = _first_local_text(el, "identifier") or ""
+        contexts[cid] = (period, tuple(sorted(dimensions.items())), issuer)
     return contexts
 
 
@@ -199,59 +263,186 @@ def _norm_label(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())
 
 
-def _concept_for_label(label: str, concepts: Sequence[str]) -> str:
-    """Best deterministic table-label -> XBRL concept mapping.
+def _unique_concept(candidates: Sequence[str]) -> Optional[str]:
+    """Return the sole distinct concept, or ``None`` when ambiguous."""
+    distinct: list = []
+    for concept in candidates:
+        if concept not in distinct:
+            distinct.append(concept)
+    return distinct[0] if len(distinct) == 1 else None
 
-    An exact concept match wins; otherwise a small alias table and a trailing
-    plural-S comparison resolve common statement labels. Unmapped labels stay
-    as their own key, which reconciles as UNAVAILABLE rather than guessing.
+
+def _concept_for_label(label: str, concepts: Sequence[str]) -> str:
+    """Conservative deterministic table-label -> XBRL concept mapping.
+
+    An exact concept match wins. Alias and trailing-plural matches are only
+    accepted when exactly ONE distinct concept matches; if two taxonomy
+    concepts both look plausible, the label stays unresolved and reconciles as
+    UNAVAILABLE instead of being silently bound to one of them.
     """
     stripped = (label or "").strip()
     if not stripped:
         return stripped
     lowered = stripped.lower()
-    for concept in concepts:
-        if concept.lower() == lowered:
-            return concept
+    exact = [concept for concept in concepts if concept.lower() == lowered]
+    if exact:
+        return _unique_concept(exact) or stripped
     alias = _LABEL_ALIASES.get(_norm_label(stripped), _norm_label(stripped))
-    for concept in concepts:
-        local = _norm_label(concept.split(":")[-1])
-        if local == alias:
-            return concept
-    for concept in concepts:
-        local = _norm_label(concept.split(":")[-1])
-        if local.rstrip("s") == alias.rstrip("s"):
-            return concept
+    alias_hits = [
+        concept for concept in concepts
+        if _norm_label(concept.split(":")[-1]) == alias
+    ]
+    if alias_hits:
+        return _unique_concept(alias_hits) or stripped
+    plural_hits = [
+        concept for concept in concepts
+        if _norm_label(concept.split(":")[-1]).rstrip("s") == alias.rstrip("s")
+    ]
+    if plural_hits:
+        return _unique_concept(plural_hits) or stripped
     return stripped
 
 
+def _iso_date(day: date) -> str:
+    return f"{day.year:04d}-{day.month:02d}-{day.day:02d}"
+
+
+def _start_before_months(end: date, months: int) -> date:
+    """First day of an N-month period that ends on ``end`` (genuine duration)."""
+    total = end.year * 12 + (end.month - 1) - int(months)
+    year, month_index = divmod(total, 12)
+    month = month_index + 1
+    day = min(end.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day) + timedelta(days=1)
+
+
 def _period_from_header(header: str) -> str:
-    """Resolve a table column header to an instant date or ``start..end`` period."""
+    """Resolve a table column header to a source-established period.
+
+    Instants require an explicit instant cue (``As of``/``balance sheet``).
+    ``Year ended <date>`` and ``N months ended <date>`` establish a genuine
+    duration. A partial header such as ``Three months ended 2026`` does NOT
+    establish the missing day/month, so it stays unresolved (``""``) instead
+    of being promoted to a calendar year.
+    """
     text = header or ""
+    instant = _INSTANT_HEADER_RE.search(text)
     month_day = _MONTH_DAY_YEAR_RE.search(text)
-    if month_day:
+
+    if instant:
+        if not month_day:
+            return ""  # a bare year does not establish an instant day/month
         month = _MONTHS[month_day.group(1).lower()]
-        day = int(month_day.group(2))
-        year = int(month_day.group(3))
-        iso = f"{year:04d}-{month:02d}-{day:02d}"
-        return iso if _INSTANT_HEADER_RE.search(text) else f"{iso}..{iso}"
-    years = _YEAR_RE.findall(text)
-    if not years:
-        return ""
-    year = years[-1]
-    if _INSTANT_HEADER_RE.search(text):
-        return f"{year}-12-31"
-    return f"{year}-01-01..{year}-12-31"
+        return _iso_date(date(
+            int(month_day.group(3)), month, int(month_day.group(2)),
+        ))
+
+    months_ended = _MONTHS_ENDED_DATE_RE.search(text)
+    if months_ended:
+        count_raw = months_ended.group(1).lower()
+        count = _MONTH_COUNT_WORDS.get(count_raw, None)
+        if count is None:
+            try:
+                count = int(count_raw)
+            except ValueError:
+                return ""
+        end = date(
+            int(months_ended.group(4)),
+            _MONTHS[months_ended.group(2).lower()],
+            int(months_ended.group(3)),
+        )
+        return f"{_iso_date(_start_before_months(end, count))}..{_iso_date(end)}"
+
+    quarter_ended = _QUARTER_ENDED_DATE_RE.search(text)
+    if quarter_ended:
+        end = date(
+            int(quarter_ended.group(3)),
+            _MONTHS[quarter_ended.group(1).lower()],
+            int(quarter_ended.group(2)),
+        )
+        return f"{_iso_date(_start_before_months(end, 3))}..{_iso_date(end)}"
+
+    year_ended = _YEAR_ENDED_DATE_RE.search(text)
+    if year_ended:
+        end = date(
+            int(year_ended.group(3)),
+            _MONTHS[year_ended.group(1).lower()],
+            int(year_ended.group(2)),
+        )
+        return f"{_iso_date(_start_before_months(end, 12))}..{_iso_date(end)}"
+
+    if _MONTHS_ENDED_YEAR_RE.search(text) or _QUARTER_ENDED_YEAR_RE.search(text):
+        return ""  # incomplete quarter header: end date not established
+
+    year_ended_only = _YEAR_ENDED_YEAR_RE.search(text)
+    if year_ended_only:
+        year = int(year_ended_only.group(1))
+        return f"{year:04d}-01-01..{year:04d}-12-31"
+
+    period_year = _PERIOD_YEAR_RE.search(text)
+    if period_year:
+        year = int(period_year.group(1))
+        return f"{year:04d}-01-01..{year:04d}-12-31"
+
+    # A bare "December 31, 2026" or "2026" does not say instant vs duration.
+    return ""
 
 
 def _is_fee_label(label: str) -> bool:
     return is_fee_fact(label) or bool(_FEE_LABEL_RE.search(label or ""))
 
 
+_CURRENCY_CODES = {
+    "USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "RMB", "HKD",
+    "INR", "KRW", "TWD", "BRL", "MXN", "SEK", "NOK", "DKK", "SGD", "NZD",
+    "ZAR",
+}
+_CURRENCY_CODE_RE = re.compile(
+    r"\b(" + "|".join(sorted(_CURRENCY_CODES)) + r")\b", re.IGNORECASE
+)
+_CURRENCY_SYMBOLS = {"€": "EUR", "£": "GBP", "¥": "JPY", "₩": "KRW", "₹": "INR"}
+
+
+def _currency_candidates(texts: Sequence[str]) -> set:
+    found: set = set()
+    for text in texts:
+        found.update(
+            match.group(1).upper() for match in _CURRENCY_CODE_RE.finditer(text or "")
+        )
+        for symbol, code in _CURRENCY_SYMBOLS.items():
+            if symbol in (text or ""):
+                found.add(code)
+    return found
+
+
+def _table_unit(table: Any, document_unit: str) -> str:
+    """Currency from the table's own metadata, else the document's sole unit.
+
+    An explicit caption/header currency always wins. Conflicting explicit
+    currencies stay ambiguous (``""``) instead of picking one. Only when the
+    table says nothing do we inherit the primary document's single declared
+    XBRL unit — never a hard-coded USD default.
+    """
+    candidates = _currency_candidates([table.caption or "", *table.columns])
+    if candidates:
+        return next(iter(candidates)) if len(candidates) == 1 else ""
+    return (document_unit or "").strip().upper()
+
+
+def _issuer_key(value: Any) -> str:
+    text = str(value or "").strip()
+    digits = re.sub(r"\D", "", text)
+    return str(int(digits)) if digits else text.lower()
+
+
+def _issuers_agree(left: Any, right: Any) -> bool:
+    return bool(left) and bool(right) and _issuer_key(left) == _issuer_key(right)
+
+
 # --- fact extraction --------------------------------------------------------
 
 
-def _xbrl_facts(html: str, *, ticker: str, cik: str, accession: str,
+def _xbrl_facts(html: str, *, ticker: str, accession: str,
                 origin_doc: str) -> list:
     """Numeric iXBRL facts with full provenance from one document."""
     if not (html or "").strip():
@@ -271,13 +462,15 @@ def _xbrl_facts(html: str, *, ticker: str, cik: str, accession: str,
         )
         if not numeric.supported or numeric.value is None:
             continue
-        period, dimensions = contexts.get(fact.context_ref or "", ("", ()))
+        period, dimensions, issuer = contexts.get(
+            fact.context_ref or "", ("", (), "")
+        )
         scoped_id = (
             f"{origin_doc}#{fact.fact_id}" if fact.fact_id
             else f"{origin_doc}#fact{index}"
         )
         facts.append(StatementFact(
-            issuer=cik,
+            issuer=issuer,
             concept=fact.concept,
             unit=units.get(fact.unit_ref or "", ""),
             duration=period,
@@ -300,12 +493,14 @@ def _xbrl_facts(html: str, *, ticker: str, cik: str, accession: str,
     return facts
 
 
-def _table_facts(primary_html: str, *, ticker: str, cik: str, accession: str,
-                 origin_doc: str, xbrl_concepts: Sequence[str]) -> list:
-    """Statement-table facts normalized with scale notes and parentheses."""
+def _table_facts(primary_html: str, *, ticker: str, accession: str,
+                 origin_doc: str, xbrl_concepts: Sequence[str],
+                 table_issuer: str, document_unit: str) -> list:
+    """Statement-table facts normalized with source-derived identity only."""
     facts: list = []
     for table in parse_statement_tables(primary_html):
         scale = table.scale if table.scale is not None else 0
+        unit = _table_unit(table, document_unit)
         for row in table.rows:
             label = (row.label or "").strip()
             if not label or _is_fee_label(label):
@@ -317,9 +512,9 @@ def _table_facts(primary_html: str, *, ticker: str, cik: str, accession: str,
                 duration = _period_from_header(cell.column)
                 value = sr._scale_exact(cell.value, int(scale)) if scale else cell.value
                 facts.append(StatementFact(
-                    issuer=cik,
+                    issuer=table_issuer,
                     concept=concept,
-                    unit="USD",
+                    unit=unit,
                     duration=duration,
                     value=value,
                     accession=accession,
@@ -429,15 +624,35 @@ def ingest_filing_structured(
     all_facts: list = []
     for html, name in origin_docs:
         all_facts.extend(_xbrl_facts(
-            html, ticker=ticker, cik=cik, accession=accession, origin_doc=name,
+            html, ticker=ticker, accession=accession, origin_doc=name,
         ))
 
     fee_facts, financial_facts = split_fee_vs_financial(all_facts)
+
+    # Table identity is bound to the primary document ONLY when the document's
+    # context issuer(s) unanimously establish it AND the caller's CIK agrees.
+    # A caller/context conflict leaves the table issuer unestablished ("") so
+    # no table row can be declared equivalent to that filing's XBRL facts.
+    financial_issuers = {f.issuer.strip() for f in financial_facts if f.issuer.strip()}
+    document_issuer = (
+        next(iter(financial_issuers)) if len(financial_issuers) == 1 else ""
+    )
+    table_issuer = (
+        document_issuer
+        if document_issuer and (not cik or _issuers_agree(document_issuer, cik))
+        else ""
+    )
+    financial_units = {f.unit.strip() for f in financial_facts if f.unit.strip()}
+    document_unit = (
+        next(iter(financial_units)) if len(financial_units) == 1 else ""
+    )
+
     xbrl_concepts = [f.concept for f in financial_facts]
     table_facts = _table_facts(
         primary_html or "",
-        ticker=ticker, cik=cik, accession=accession,
+        ticker=ticker, accession=accession,
         origin_doc=primary_doc, xbrl_concepts=xbrl_concepts,
+        table_issuer=table_issuer, document_unit=document_unit,
     )
     recon_rows = reconcile(table_facts, financial_facts)
 
