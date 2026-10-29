@@ -233,7 +233,7 @@ def test_nvidia_investment_in_anthropic_uses_multi_company_comparison(mock_metri
 
     assert result["resolved_ticker"] == "NVDA"
     assert "| NVDA *(subject)* |" in result["final_answer"]
-    assert "| ANTH |" in result["final_answer"]
+    assert "| ANT |" in result["final_answer"]
     assert mock_metric.call_count == 2
 
 class TestLangGraphNodes:
