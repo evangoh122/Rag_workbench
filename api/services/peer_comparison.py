@@ -26,6 +26,7 @@ from api.services.ticker_canon import (
     AMBIGUOUS_ENGLISH_TICKERS,
     QUERY_TICKER_ALIASES,
     canonicalize_user_fields,
+    canonicalize_user_text,
 )
 
 # Covered companies → the names/aliases that appear in queries and filings.
@@ -590,7 +591,7 @@ def _shaped_response(
         "retrieved_docs": retrieved_docs or [],
         "polygon_data": [], "math_result": None, "math_steps": [],
         "verification_status": "SKIPPED",
-        "verification_reasoning": reasoning,
+        "verification_reasoning": canonicalize_user_text(reasoning),
         "chart": chart,
         "what_it_means": what_it_means,
         "how_to_interpret": how_to_interpret,
