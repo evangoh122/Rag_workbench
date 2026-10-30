@@ -5,6 +5,7 @@ from openai import OpenAI
 from langsmith import traceable
 from api.config import Config
 from api.db.database import db_manager
+from api.services.chat_sandbox import run_chat_query
 
 SCHEMA = """
 You have access to a DuckDB financial database with these tables:
@@ -64,6 +65,12 @@ def strip_sql_comments(sql: str) -> str:
     sql = re.sub(r"--[^\n\r]*", " ", sql)
     return sql.strip()
 
+# FROM/JOIN followed by a single-quoted string, or by a double-quoted token with
+# path/glob characters; plain "quoted_identifier" references stay valid.
+_QUOTED_PATH_RE = re.compile(
+    r"""\b(?:from|join)\s*(?:\(\s*)?(?:'|"[^"]*[/\\.:*?\[\]])""", re.IGNORECASE
+)
+
 def validate_read_only_sql(sql: str) -> Optional[str]:
     raw = sql.strip()
     compact = strip_sql_comments(sql)
@@ -91,12 +98,23 @@ def validate_read_only_sql(sql: str) -> Optional[str]:
         "sqlite_scan", "sqlite_attach", "postgres_scan",
         "postgres_attach", "mysql_scan", "mysql_attach",
         "information_schema",
+        # File/catalog readers reachable without a leading keyword (defense in
+        # depth; the sandbox connection is the real boundary).
+        "sniff_csv", "read_json_auto", "read_ndjson", "read_ndjson_auto",
+        "read_ndjson_objects", "read_json_objects", "parquet_scan",
+        "parquet_metadata", "parquet_schema", "query", "query_table",
+        "sqlite_master", "sqlite_schema", "sqlite_temp_master",
+        "pragma_table_info", "pragma_database_list", "current_setting",
+        "getenv", "read_xlsx", "read_csv_auto",
     }
     tokens = set(re.findall(r"\b[a-z_][a-z0-9_]*\b", raw.lower()))
     tokens.update(re.findall(r"\b[a-z_][a-z0-9_]*\b", compact.lower()))
     found = sorted(tokens & blocked)
     if found:
         return f"Rejected SQL containing blocked keyword/function: {', '.join(found)}."
+
+    if _QUOTED_PATH_RE.search(raw):
+        return "Rejected SQL reading from a quoted path."
 
     if re.search(r"\bduckdb_\w+\s*\(", raw.lower()):
         return "Rejected SQL referencing internal DuckDB functions."
@@ -169,19 +187,14 @@ def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> D
         return {"type": "error", "sql": sql, "answer": validation_error}
 
     try:
-        conn = db_manager.get_connection()
-        conn.execute("SET threads TO 2")
-        conn.execute("SET memory_limit TO '256MB'")
-        df = conn.execute(
-            f"SELECT * FROM ({sql}) AS chat_result LIMIT ?", [100]
-        ).df()
-        conn.execute("RESET memory_limit")
-        conn.execute("RESET threads")
+        # Isolated, locked-down in-memory instance; never the shared connection.
+        rows = run_chat_query(db_manager.get_connection(), sql)
+        df = pd.DataFrame(rows)
         answer = summarise_results(question, df)
         return {
             "type": "table",
             "sql": sql,
-            "data": df.to_dict(orient="records"),
+            "data": rows,
             "answer": answer
         }
     except Exception:

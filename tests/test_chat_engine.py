@@ -47,14 +47,6 @@ class TestChatEngineCore:
         mock_get_client.return_value = mock_client
         mock_client.chat.completions.create.return_value.choices[0].message.content = sql
 
-    @staticmethod
-    def _chat_result_sql(mock_conn):
-        return next(
-            call.args[0]
-            for call in mock_conn.execute.call_args_list
-            if call.args and "AS chat_result" in call.args[0]
-        )
-
     @patch("api.services.chat_engine.db_manager.get_connection")
     @patch("api.services.chat_engine.get_sql_client")
     @patch("api.services.chat_engine.Config.get_provider_config")
@@ -64,16 +56,13 @@ class TestChatEngineCore:
     ):
         mock_cfg.return_value = {"model": "test-model"}
         self._mock_sql_response(mock_get_client, "SELECT 1;   ")
-        mock_get_conn.return_value.execute.return_value.df.return_value = pd.DataFrame(
-            {"value": [1]}
-        )
+        mock_get_conn.return_value = duckdb.connect(":memory:")
 
         result = chat_sql("Return one")
 
         assert result["type"] == "table"
         assert result["sql"] == "SELECT 1"
-        executed_sql = self._chat_result_sql(mock_get_conn.return_value)
-        assert "SELECT * FROM (SELECT 1) AS chat_result" in executed_sql
+        assert result["data"] == [{"1": 1}]
 
     @patch("api.services.chat_engine.db_manager.get_connection")
     @patch("api.services.chat_engine.get_sql_client")
@@ -84,9 +73,7 @@ class TestChatEngineCore:
     ):
         mock_cfg.return_value = {"model": "test-model"}
         self._mock_sql_response(mock_get_client, "```sql\nSELECT 1;\n```  ")
-        mock_get_conn.return_value.execute.return_value.df.return_value = pd.DataFrame(
-            {"value": [1]}
-        )
+        mock_get_conn.return_value = duckdb.connect(":memory:")
 
         result = chat_sql("Return one")
 
@@ -151,22 +138,22 @@ class TestChatEngineCore:
     def test_chat_sql_table_response(self, mock_summarise, mock_cfg, mock_get_client, mock_get_conn):
         mock_cfg.return_value = {"model": "test-model"}
         mock_summarise.return_value = "Summary answer"
-        
-        # Mock LLM response generating SQL
+
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
-        mock_client.chat.completions.create.return_value.choices[0].message.content = "SELECT * FROM stocks"
-        
-        # Mock DB execution
-        mock_conn = MagicMock()
-        mock_get_conn.return_value = mock_conn
-        mock_df = pd.DataFrame({"ticker": ["AAPL"], "price": [150.0]})
-        mock_conn.execute.return_value.df.return_value = mock_df
-        
+        mock_client.chat.completions.create.return_value.choices[0].message.content = (
+            "SELECT * FROM xbrl_facts"
+        )
+
+        real = duckdb.connect(":memory:")
+        real.execute("CREATE TABLE xbrl_facts(ticker VARCHAR, last DOUBLE)")
+        real.execute("INSERT INTO xbrl_facts VALUES ('AAPL', 150.0)")
+        mock_get_conn.return_value = real
+
         result = chat_sql("Show me AAPL price")
-        
+
         assert result["type"] == "table"
-        assert result["sql"] == "SELECT * FROM stocks"
+        assert result["sql"] == "SELECT * FROM xbrl_facts"
         assert result["answer"] == "Summary answer"
         assert result["data"][0]["ticker"] == "AAPL"
 
