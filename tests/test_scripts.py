@@ -338,3 +338,42 @@ def test_extract_sections_longest_match():
     assert len(item_7_sections) == 1
     assert "actual section body" in item_7_sections[0]
     assert "35" not in item_7_sections[0]
+
+
+@pytest.mark.parametrize("failure", ["lookup", "metadata"])
+def test_embed_additional_dry_run_fails_when_edgar_lookup_fails(failure, monkeypatch):
+    """A transient EDGAR error must not look like "nothing to fetch" (exit 0 with no would-fetch line)."""
+    import duckdb
+
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test User test@example.com")
+    sys.modules["bs4"].XMLParsedAsHTMLWarning = UserWarning
+    import scripts.embed_additional as module
+
+    conn = duckdb.connect(":memory:")
+    conn.execute("CREATE TABLE edgar_embeddings (ticker VARCHAR, form_type VARCHAR, accession VARCHAR)")
+    conn.execute("INSERT INTO edgar_embeddings VALUES ('NVDA', '10-K', 'a')")
+    company = MagicMock()
+    if failure == "lookup":
+        company.get_filings.side_effect = RuntimeError("SEC 429")
+    else:
+        bad = MagicMock(form="10-K")
+        type(bad).accession_number = property(lambda _s: (_ for _ in ()).throw(RuntimeError("no meta")))
+        company.get_filings.return_value = MagicMock(empty=False)
+    messages = []
+    sink = module.logger.add(messages.append, level="ERROR")
+    try:
+        with (
+            patch.object(sys, "argv", ["embed_additional", "--dry-run", "--tickers", "NVDA"]),
+            patch.object(module, "ensure_edgar_identity"),
+            patch.object(module, "get_embeddings", return_value=MagicMock()),
+            patch.object(module, "StructureChunker"),
+            patch.object(module.duckdb, "connect", return_value=conn),
+            patch.object(module, "Company", return_value=company),
+            patch.object(module, "_normalize_filings", return_value=[bad] if failure == "metadata" else []),
+        ):
+            with pytest.raises(SystemExit) as exc:
+                module.main()
+    finally:
+        module.logger.remove(sink)
+    assert exc.value.code == 2
+    assert any("DRY-RUN lookup FAILED: NVDA 10-K" in str(m) for m in messages)

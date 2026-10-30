@@ -35,7 +35,8 @@ def test_magics_are_tolerated():
 
 GOOD = (
     "CONFIRM_EXECUTE = False\nCONFIRM_STAGE = False\nSTAGING_REPO = 'egoh33/rag-staging'\nREPO_COMMIT = ''\n"
-    "x = 'stage-upload append_only_proof dry_run() split_complete checkout_pinned'"
+    "checkout_pinned(REPO_COMMIT)\ndry_run()\nsplit_complete(g, m)\nchk.append_only_proof(a, b)\n"
+    "run(['python', '-m', 'scripts.hf_backfill', 'stage-upload', DB])\n"
 )
 
 
@@ -70,9 +71,69 @@ def test_notebook_may_not_publish(tmp_path, call):
     assert any("forbidden call" in p for p in check_notebook(_write(tmp_path, GOOD + "\n" + call)))
 
 
-def test_required_steps_must_be_present(tmp_path):
-    for needle in ("stage-upload", "append_only_proof", "dry_run()", "split_complete", "checkout_pinned"):
-        assert any(needle in p for p in check_notebook(_write(tmp_path, GOOD.replace(needle, "zzz"))))
+@pytest.mark.parametrize("cmd", [
+    "run([sys.executable, '-m', 'scripts.hf_backfill', 'publish', '--confirm'])",
+    "subprocess.run('python -m scripts.hf_backfill publish --confirm', shell=True)",
+    "cmd = ['python', '-m', 'scripts.hf_backfill', 'publish']\nrun(cmd)",
+    "!python -m scripts.hf_backfill publish --confirm",
+])
+def test_direct_publish_command_is_rejected(tmp_path, cmd):
+    assert any("forbidden call scripts.hf_backfill publish" in p for p in check_notebook(_write(tmp_path, GOOD + "\n" + cmd)))
+
+
+def test_publish_instructions_in_print_are_allowed(tmp_path):
+    src = GOOD + "\nprint('run: uv run python -m scripts.hf_backfill publish --run-id x --confirm')\n"
+    assert check_notebook(_write(tmp_path, src)) == []
+
+
+@pytest.mark.parametrize("expr", ["os.environ['HF_TOKEN']", "userdata.get('HF_TOKEN')", "os.environ.get('GH_TOKEN')",
+                                  "os.getenv('EDGAR_USER_AGENT')", "f'tok={os.environ[\"HF_TOKEN\"]}'"])
+def test_print_of_secret_read_by_key_is_caught(tmp_path, expr):
+    assert any("print() references a secret" in p for p in check_notebook(_write(tmp_path, GOOD + f"\nprint({expr})\n")))
+
+
+def test_print_of_secret_name_string_is_not_a_read(tmp_path):
+    assert check_notebook(_write(tmp_path, GOOD + "\nprint('Secrets present: HF_TOKEN=yes')\n")) == []
+
+
+@pytest.mark.parametrize("flag", ["CONFIRM_EXECUTE", "CONFIRM_STAGE"])
+@pytest.mark.parametrize("later", ["{f} = bool(1)", "{f} = True", "{f} += 1", "{f}, other = True, 1",
+                                   "{f}: bool = True"])
+def test_later_assignment_overrides_the_default_off_flag(tmp_path, flag, later):
+    """CodeRabbit #4: `False` then a non-literal-False reassignment must fail (last assignment wins)."""
+    assert any(flag in p for p in check_notebook(_write(tmp_path, GOOD + "\n" + later.format(f=flag))))
+
+
+def test_flag_order_follows_cells_not_text_position(tmp_path):
+    def cell(src):
+        return {"cell_type": "code", "id": src[:3], "metadata": {}, "execution_count": None, "outputs": [], "source": src}
+    nb = {"nbformat": 4, "nbformat_minor": 5, "metadata": {},
+          "cells": [cell(GOOD), cell("CONFIRM_STAGE = bool(1)")]}
+    p = tmp_path / "two.ipynb"
+    p.write_text(json.dumps(nb))
+    assert any("CONFIRM_STAGE" in x for x in check_notebook(p))
+    nb["cells"] = [cell("CONFIRM_STAGE = bool(1)"), cell(GOOD)]  # later cell resets it to False: safe
+    p.write_text(json.dumps(nb))
+    assert check_notebook(p) == []
+
+
+@pytest.mark.parametrize("needle", ["checkout_pinned", "dry_run", "split_complete", "append_only_proof", "stage-upload"])
+def test_required_steps_must_be_present(tmp_path, needle):
+    assert any(needle in p for p in check_notebook(_write(tmp_path, GOOD.replace(needle, "zzz"))))
+
+
+@pytest.mark.parametrize("needle", ["checkout_pinned", "dry_run", "split_complete", "append_only_proof", "stage-upload"])
+def test_required_step_as_marker_text_does_not_count(tmp_path, needle):
+    """CodeRabbit #5: the old substring check passed when the call was replaced by marker text."""
+    src = GOOD + f"\nmarker = '{needle} dry_run() append_only_proof'\n"
+    src = src.replace(f"{needle}(", "zzz(", 1) if needle != "stage-upload" else src.replace("'stage-upload'", "'zzz'")
+    assert any(needle in p and "not found" in p for p in check_notebook(_write(tmp_path, src)))
+
+
+def test_proof_must_precede_stage_upload(tmp_path):
+    lines = GOOD.splitlines()
+    swapped = "\n".join([ln for ln in lines if "append_only_proof" not in ln] + ["chk.append_only_proof(a, b)"])
+    assert any("must run before stage-upload" in p for p in check_notebook(_write(tmp_path, swapped)))
 
 
 def test_token_and_secret_leaks_are_caught(tmp_path):
@@ -383,3 +444,154 @@ def test_checkout_pinned_verifies_head_after_checkout(tmp_path):
                                       "check_output": staticmethod(lambda *a, **k: "b" * 40 + "\n")})
     with pytest.raises(RuntimeError, match="expected"):
         checkout(shas[0])
+
+
+# ── CodeRabbit #1: a stale WAL must never be replayed into a restored / fresh DB ─────────────────
+
+def _step4(tmp_path, old):
+    """Run the real step-4 cell with its imports replaced by recording test doubles."""
+    import ast
+    import pathlib
+    import secrets
+    import sys
+    import time
+    db = tmp_path / "rag.duckdb"
+    wal = pathlib.Path(str(db) + ".wal")
+    db.write_bytes(b"db")
+    wal.write_text("stale wal from a killed embed run")
+    seen = {}
+
+    class Chk:
+        @staticmethod
+        def read_checkpoint(_d):
+            return (old, "ok") if old else (None, "no checkpoint")
+
+        @staticmethod
+        def restore_checkpoint(*_a):
+            seen["restore"] = wal.exists()
+            pathlib.Path(tmp_path / "before.json").write_text(json.dumps({"sha256": "x"}))
+
+        @staticmethod
+        def write_checkpoint(*_a):
+            pass
+
+        @staticmethod
+        def validate_caps(*_a):
+            pass
+
+    class Con:
+        def execute(self, *_a):
+            return self
+
+        def fetchall(self):
+            return [("AAA",)]
+
+        def fetchone(self):
+            return (None,)
+
+        def close(self):
+            pass
+
+    class Api:
+        def __init__(self, **_k):
+            pass
+
+        def repo_info(self, *_a, **_k):
+            return type("I", (), {"sha": "s" * 40})()
+
+    def copy_writable(*_a):
+        seen["fresh"] = wal.exists()
+
+    tree = ast.parse(_steps()[4])
+    tree.body = [n for n in tree.body if not isinstance(n, (ast.Import, ast.ImportFrom))]
+    ns = {"os": __import__("os"), "pathlib": pathlib, "json": json, "sys": sys, "time": time, "secrets": secrets,
+          "duckdb": type("D", (), {"connect": staticmethod(lambda *a, **k: Con())}), "HfApi": Api,
+          "hf_hub_download": lambda *a, **k: "orig", "chk": Chk, "sha256_file": lambda _p: "x",
+          "copy_writable": copy_writable, "run": lambda *a, **k: None, "WORK": str(tmp_path), "DB": str(db),
+          "USE_DRIVE": False, "CKPT_DIR": str(tmp_path / "ck"), "BEFORE_JSON": str(tmp_path / "before.json"),
+          "GUARD_JSON": str(tmp_path / "g.json"), "HF_TOKEN": "t", "DATASET_REPO": "d", "PINNED_REVISION": None,
+          "EXTRA_TICKERS": [], "QUARTERS": 3, "GROUP_SIZE": 8, "SESSION_DEADLINE_SECONDS": 7200}
+    exec(compile(tree, "step4", "exec"), ns)  # noqa: S102
+    return seen, wal
+
+
+def test_stale_wal_is_removed_before_checkpoint_restore(tmp_path):
+    seen, wal = _step4(tmp_path, {"pinned_sha": "s" * 40, "meta": {"run_id": "r", "completed": []}})
+    assert seen == {"restore": False} and not wal.exists()
+
+
+def test_stale_wal_is_removed_before_fresh_copy(tmp_path):
+    seen, wal = _step4(tmp_path, None)
+    assert seen == {"fresh": False} and not wal.exists()
+
+
+# ── CodeRabbit #2: a failed EDGAR lookup is "unknown", never "nothing missing" ───────────────────
+
+def _dry_run_ns(tmp_path, rc, log_text):
+    import pathlib
+    import re
+    import subprocess
+    import sys
+
+    class Proc:
+        returncode = rc
+        stderr = "boom"
+
+    def fake_run(cmd, **_k):
+        pathlib.Path(cmd[cmd.index("--log") + 1]).write_text(log_text)
+        return Proc()
+
+    ns = {"re": re, "pathlib": pathlib, "sys": sys, "WORK": str(tmp_path), "FORMS": ["annual"], "TICKERS": ["AAA"],
+          "QUARTERS": 3, "form_args": lambda _f: [], "subprocess": type("S", (), {"run": staticmethod(fake_run)})}
+    import ast
+    tree = ast.parse(_steps()[2].replace("/content/", str(tmp_path) + "/"))  # keep the logs inside tmp_path
+    keep = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "dry_run"]
+    keep += [n for n in tree.body if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") in ("WOULD_FETCH", "LOOKUP_FAILED")]
+    exec(compile(ast.Module(keep, []), "dry", "exec"), ns)  # noqa: S102
+    assert subprocess  # silence unused import
+    return ns["dry_run"]
+
+
+def test_dry_run_still_parses_would_fetch_lines(tmp_path):
+    run = _dry_run_ns(tmp_path, 0, "[AAA] DRY-RUN would fetch: 10-K 0000000001-26-000001\n")
+    assert run() == [("AAA", "10-K", "0000000001-26-000001")]
+
+
+def test_dry_run_with_clean_empty_log_means_nothing_missing(tmp_path):
+    assert _dry_run_ns(tmp_path, 0, "[AAA] skip (already present): 10-K a\n")() == []
+
+
+def test_dry_run_raises_on_a_lookup_failure_even_if_exit_is_zero(tmp_path):
+    run = _dry_run_ns(tmp_path, 0, "DRY-RUN lookup FAILED: AAA 10-K\n")
+    with pytest.raises(RuntimeError, match="EDGAR lookup failed"):
+        run()
+
+
+def test_dry_run_raises_on_nonzero_exit(tmp_path):
+    with pytest.raises(RuntimeError, match="dry run failed"):
+        _dry_run_ns(tmp_path, 2, "DRY-RUN lookup FAILED: AAA 10-K\n")()
+
+
+def test_lookup_failure_never_reaches_the_checkpoint(tmp_path):
+    """Step 6 re-checks with dry_run(); when that raises, nothing is marked done or saved."""
+    saved = []
+
+    def failing_dry_run(group, forms_list):
+        raise RuntimeError("EDGAR lookup failed")
+
+    import subprocess
+    import sys
+    import time
+    from scripts import colab_backfill_checks as chk
+
+    class Done:
+        returncode = 0
+    ns = {"CONFIRM_EXECUTE": True, "time": time, "chk": chk, "meta": {"completed": [], "run_id": "r"},
+          "TICKERS": ["AAA"], "FORMS": ["annual"], "GROUP_SIZE": 2, "SESSION_DEADLINE_SECONDS": 7200,
+          "EMBED_BATCH": 16, "subprocess": type("S", (), {"run": staticmethod(lambda *a, **k: Done()),
+                                                        "TimeoutExpired": subprocess.TimeoutExpired}),
+          "sys": sys, "WORK": str(tmp_path), "form_args": lambda f: [], "dry_run": failing_dry_run,
+          "save_checkpoint": lambda m: saved.append(m) or m}
+    with pytest.raises(RuntimeError, match="EDGAR lookup failed"):
+        exec(compile(_steps()[6], "step6", "exec"), ns)  # noqa: S102
+    assert saved == [] and ns["meta"]["completed"] == []

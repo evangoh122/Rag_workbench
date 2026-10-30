@@ -217,6 +217,7 @@ def main():
             return
 
         summary: dict[str, dict] = {}  # ticker -> {"added", "skipped", "total_chunks"}
+        lookup_failures: list[tuple[str, str]] = []  # (ticker, form) whose EDGAR lookup raised
 
         for ticker in tickers:
             summary.setdefault(ticker, {"added": 0, "skipped": 0, "total_chunks": 0})
@@ -256,6 +257,7 @@ def main():
                     window = _normalize_filings(filings.latest(max(n_latest + 6, 8)))
                 except Exception as exc:
                     logger.error(f"[{ticker}] Failed to get {form_code} filings: {exc}")
+                    lookup_failures.append((ticker, form_code))
                     continue
 
                 filing_list = [
@@ -271,6 +273,7 @@ def main():
                         form_type = fl.form
                     except Exception as exc:
                         logger.error(f"[{ticker}/{form_code}] Cannot read filing metadata: {exc}")
+                        lookup_failures.append((ticker, form_code))
                         continue
 
                     # Dedup check
@@ -430,6 +433,12 @@ def main():
     logger.info(
         f"TOTAL: added={tot_added}, skipped={tot_skipped}, chunks_stored={tot_chunks}"
     )
+    # A dry run is a completeness probe: a failed lookup means "unknown", never "nothing to fetch".
+    # Fail it loudly so callers (the Colab notebook) cannot record the ticker as complete.
+    if args.dry_run and lookup_failures:
+        for ticker, form_code in sorted(set(lookup_failures)):
+            logger.error(f"DRY-RUN lookup FAILED: {ticker} {form_code}")
+        sys.exit(2)
 
 
 if __name__ == "__main__":
