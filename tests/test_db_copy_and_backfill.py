@@ -330,6 +330,10 @@ def test_duplicate_guard_still_flags_true_duplicate(tmp_path):
 STUB = """#!/usr/bin/env bash
 echo "$*" >> "$STUB_LOG"
 if [ "$1" = "-" ]; then cat >/dev/null; echo deadbeef; fi
+if [ "${1:-}" = "scripts/embed_additional.py" ] && [[ " $* " == *" --dry-run "* ]]; then
+  echo "${STUB_DRY_LOG:-[AAPL] skip (already present): 10-K 0000000001-26-000001}" > "${@: -1}"
+  exit "${STUB_DRY_RC:-0}"
+fi
 exit 0
 """
 
@@ -337,9 +341,9 @@ BASE_ENV = {"DATASET_REPO": "u/r", "STAGING_REPO": "u/stage", "BACKFILL_TICKERS"
             "EDGAR_USER_AGENT": "Test User test@example.com"}
 
 
-def _run_runner(tmp_path, extra_env=None, args=(), timeout=60):
+def _run_runner(tmp_path, extra_env=None, args=(), timeout=60, stub_text=STUB):
     stub = tmp_path / "stubpy"
-    stub.write_text(STUB)
+    stub.write_text(stub_text)
     stub.chmod(0o755)
     log = tmp_path / "stub.log"
     log.write_text("")
@@ -679,6 +683,37 @@ def test_runner_uploads_only_when_executing_and_checks_staging_first(tmp_path):
     assert "--repo u/stage" in up[0] and "--prod-repo u/r" in up[0] and "--run-id run7" in up[0]
     assert "rag.duckdb" in up[0] and "before.json" in up[0]
     assert up[0] == calls.splitlines()[-1]  # last step: after verify and guardrail
+
+
+def test_runner_completeness_gate_refuses_to_stage_when_filings_remain(tmp_path):
+    """A confirmed run can exit 0 with filings still missing; the runner must re-probe and refuse to stage."""
+    r, calls = _run_runner(
+        tmp_path,
+        {"BACKFILL_CONFIRM": "yes",
+         "STUB_DRY_LOG": "[AAPL] DRY-RUN would fetch: 10-K 0000000001-26-000001"},
+    )
+    assert r.returncode != 0, r.stdout
+    assert "completeness gate failed" in r.stderr
+    assert "DRY-RUN would fetch" in r.stderr
+    assert "--dry-run" in calls  # the gate re-probed rather than trusting the embed exit code
+    assert "stage-upload" not in calls
+
+
+def test_runner_completeness_gate_fails_closed_on_a_lookup_failure(tmp_path):
+    """dry_run exits 2 on an EDGAR lookup failure; the gate must stage nothing."""
+    r, calls = _run_runner(
+        tmp_path,
+        {"BACKFILL_CONFIRM": "yes", "STUB_DRY_LOG": "DRY-RUN lookup FAILED: AAPL annual", "STUB_DRY_RC": "2"},
+    )
+    assert r.returncode != 0, r.stdout
+    assert "completeness gate failed" in r.stderr
+    assert "stage-upload" not in calls
+
+
+def test_runner_completeness_gate_allows_a_complete_run(tmp_path):
+    r, calls = _run_runner(tmp_path, {"BACKFILL_CONFIRM": "yes"})
+    assert r.returncode == 0, r.stderr
+    assert calls.index("--dry-run") < calls.index("stage-upload")
 
 
 def test_runner_rejects_bad_run_id(tmp_path):

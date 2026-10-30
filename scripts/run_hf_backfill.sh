@@ -162,6 +162,23 @@ if [ "$FORMS" = "10-Q" ]; then EXTRA=(--quarters "$QUARTERS"); fi
 "${PY[@]}" -m scripts.hf_backfill verify "$WORK_DB" "$BEFORE"
 "${PY[@]}" scripts/etl_guardrail.py verify "$WORK_DB" "$STAGING_DIR/guardrail_before.json"
 
+# Completeness gate: embed_additional.py exits 0 for a confirmed run even when an
+# EDGAR lookup or metadata read failed and a filing was skipped, so `verify` alone
+# cannot prove the run is complete. Re-probe with a dry run and refuse to stage
+# while any filing is still missing or a lookup failed. The dry run exits nonzero
+# (2) on a lookup failure, so that path fails closed too.
+COMPLETENESS_LOG="$STAGING_DIR/completeness.log"
+rm -f "$COMPLETENESS_LOG"
+if ! "${PY[@]}" scripts/embed_additional.py --forms "$FORMS" "${EXTRA[@]}" --tickers "$TICKERS" \
+     --dry-run --log "$COMPLETENESS_LOG"; then
+  die "completeness gate failed: EDGAR lookup did not complete (see $COMPLETENESS_LOG); refusing to stage"
+fi
+[ -f "$COMPLETENESS_LOG" ] \
+  || die "completeness gate failed: the dry run wrote no log ($COMPLETENESS_LOG); refusing to stage"
+if grep -E 'DRY-RUN would fetch:|DRY-RUN lookup FAILED:' "$COMPLETENESS_LOG" >&2; then
+  die "completeness gate failed: filings are still missing or a lookup failed; refusing to stage"
+fi
+
 # The random suffix keeps concurrent runs with the same dataset head apart; an
 # explicit BACKFILL_RUN_ID is validated up front and must be unique in staging.
 RUN_ID="${BACKFILL_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-${HEAD_SHA:0:12}-$(od -An -tx1 -N4 /dev/urandom | tr -d ' \n')}"

@@ -15,6 +15,13 @@ def test_nbformat_validates():
     nbformat.validate(nbformat.read(str(DEFAULT_NB), as_version=4))
 
 
+def test_staging_instruction_acknowledges_that_rerunning_step2_resets_state():
+    nb = json.loads(DEFAULT_NB.read_text())
+    md = "\n".join("".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "markdown")
+    assert "keeps your state" not in md
+    assert "re-run steps 7 and 8" in md
+
+
 def _write(tmp_path, source, **extra):
     cell = {"cell_type": "code", "id": "a", "metadata": {}, "execution_count": None,
             "outputs": [], "source": source, **extra}
@@ -826,6 +833,20 @@ def test_failed_dry_run_leaves_remaining_unset_and_staging_refuses(tmp_path):
     with pytest.raises(RuntimeError, match="step 7"):
         ns["stage"]()
     assert [c for c in calls if "stage-upload" in c] == []
+
+
+def test_failed_guard_leaves_remaining_unset_and_staging_refuses(tmp_path):
+    """Step 7 stores REMAINING only after both guard commands pass, so a guard failure leaves it None."""
+    def run(cmd, **_k):
+        raise RuntimeError("guard failed")
+
+    stage, ns, _ = _stage_ns(tmp_path, run=run, dry_run=lambda *_a, **_k: [], GUARD_JSON="/g.json")
+    ns["REMAINING"] = None
+    with pytest.raises(RuntimeError, match="guard failed"):
+        exec(compile(_steps()[7], "step7", "exec"), ns)  # noqa: S102
+    assert ns["REMAINING"] is None  # the complete dry run must not survive a failed guard
+    with pytest.raises(RuntimeError, match="step 7"):
+        ns["stage"]()
 
 
 # ── round 4: no direct staging/publish invocation, no fabricated proof hash, no stale proof ─────
