@@ -1015,3 +1015,79 @@ def test_sha256_file_may_not_be_rebound(tmp_path, name):
     hasher may only be bound once, by its single legitimate import; def/assign/import-as/for/walrus/
     argument bindings are all rejected."""
     _expect(tmp_path, GOOD + HASHER_REBINDS[name], "sha256_file must be bound exactly once")
+
+
+# ── round 6 (validator): module-attribute/item poisoning, star imports, -c argv shape ───────────
+#
+# The validator's new bypass class on 6617ebb: the checker allowed Attribute/Subscript STORES, so
+# `sys.modules['scripts.hf_backfill'].sha256_file = _fake` placed before the single permitted
+# `from scripts.hf_backfill import sha256_file` made the import bind the fake and
+# `PROOF_SHA = sha256_file(DB)` fabricate the proof hash for free; `chk.append_only_proof = _f` and
+# `subprocess.run = _f` swapped the proof / the runner outright. Star imports and trailing argv
+# elements after a `-c` payload also passed.
+
+STORE_POISONS = {
+    "chk_proof": "\ndef _f(*a):\n    return {}\nchk.append_only_proof = _f\n",
+    "chk_mark_done": "\nchk.mark_done = print\n",
+    "subprocess_run": "\nsubprocess.run = print\n",
+    "run_helper_attr": "\ndummy = None\ndummy.run = print\n",
+    "sys_modules_entry": "\nsys.modules['os'] = print\n",
+    "subscript_store": "\nmeta = {}\nmeta['run_id'] = 'x'\n",
+    "os_environ_nonconstant_key": "\nkey = 'PATH'\nos.environ[key] = 'x'\n",
+    "attribute_augassign": "\nsys.path += ['x']\n",
+    "subscript_augassign": "\nd = {}\nd['k'] += 1\n",
+    "subscript_delete": "\ndel os.environ['PATH']\n",
+}
+
+
+@pytest.mark.parametrize("name", sorted(STORE_POISONS))
+def test_attribute_and_subscript_stores_are_rejected(tmp_path, name):
+    """Round-6 validator bypass: only plain Name targets may be rebound. An Attribute or Subscript
+    store/augassign/delete can swap the hasher, the proof, the runner or a module object AFTER the
+    checker approved the binding; the notebook's own `os.environ['CONST'] = value` setup (calls like
+    `x.append(...)` are calls, not stores) is the one legitimate shape that keeps working."""
+    _expect(tmp_path, GOOD + STORE_POISONS[name],
+            "assignment/delete is not allowed")
+
+
+def test_sys_modules_hasher_poisoning_before_the_import_is_rejected(tmp_path):
+    """The validator's exact bypass: poison the module attribute BEFORE the single permitted
+    from-import, so the import binds the fake and GOOD's own `PROOF_SHA = sha256_file(DB)`
+    fabricates the proof hash. Both the attribute store and `.modules` must fail."""
+    src = GOOD.replace(
+        "from scripts.hf_backfill import sha256_file\n",
+        "def _fake(*a):\n    return 'ab' * 32\n"
+        "sys.modules['scripts.hf_backfill'].sha256_file = _fake\n"
+        "from scripts.hf_backfill import sha256_file\n")
+    assert src != GOOD
+    _expect(tmp_path, src, "attribute assignment/delete is not allowed")
+    assert any(".modules" in p for p in _problems(tmp_path, src))
+
+
+def test_legitimate_os_environ_setup_still_passes(tmp_path):
+    """The real notebook's step-2 shape (`os.environ['CONST'] = value`) and list-append calls are
+    stores' legitimate neighbours and must keep passing."""
+    src = GOOD + "\nos.environ['EDGAR_USER_AGENT'] = _secret('EDGAR_USER_AGENT')\nitems = []\nitems.append('x')\n"
+    assert check_notebook(_write(tmp_path, src)) == []
+
+
+@pytest.mark.parametrize("star", ["from scripts.hf_backfill import *\n", "from scripts import *\n",
+                                  "from huggingface_hub import *\n"])
+def test_star_imports_are_rejected(tmp_path, star):
+    """`from X import *` binds names the allowlist never saw (including shadowing helpers or the
+    hasher) without any of them being checked; rejected fail-closed."""
+    _expect(tmp_path, GOOD + star, "a star import binds names the allowlist never saw")
+
+
+def test_c_command_argv_must_be_exactly_the_payload(tmp_path):
+    """Hardening: a `-c` command may only be [sys.executable, '-c', <the approved payload>] —
+    trailing argv elements (which the fresh interpreter would hand to the payload) are rejected,
+    as is a missing payload element."""
+    payload = ("import torch, duckdb, edgar, sentence_transformers;"
+               'assert torch.cuda.is_available(), "CUDA torch was lost";'
+               'assert "+cpu" not in torch.__version__, "CPU torch got installed";'
+               'print("deps OK | torch", torch.__version__, "| duckdb", duckdb.__version__)')
+    trailing = GOOD + f"\nrun([sys.executable, '-c', '{payload}', '--extra'])\n"
+    _expect(tmp_path, trailing, "a -c command must be exactly")
+    missing = GOOD + "\nrun([sys.executable, '-c'])\n"
+    _expect(tmp_path, missing, "a -c command must be exactly")
