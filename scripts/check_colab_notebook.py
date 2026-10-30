@@ -14,13 +14,15 @@ trick fails closed instead of needing another blacklist entry. The rules:
   getattr/setattr/globals/locals; only allowlisted callables and imports;
 * the helpers `run`, `checkout_pinned`, `dry_run`, `stage`, `form_args`, `save_checkpoint` are defined
   exactly once as top-level defs; `chk`, `subprocess`, `sys`, `os` are bound only by their one expected
-  import; the helpers have no early `return`;
+  import; `sha256_file` (the hasher behind PROOF_SHA) is bound only by `from scripts.hf_backfill import
+  sha256_file`, so redefining or shadowing the hasher cannot fabricate a proof; the helpers have no
+  early `return`;
 * every command goes through `run([...])` / `subprocess.run([...])` with a literal argv list whose first
   elements match an allowlisted prefix (so `scripts.hf_backfill publish`, built or not, is rejected);
   `stage-upload` may ONLY be invoked by the one unconditional stage-upload statement inside `stage()`
   (a direct call anywhere else would skip stage()'s proof/completeness gates), and a `python -c` payload
-  must be a plain string literal free of staging/publish escape markers (it is code the checker cannot
-  parse, so any mention of publish/stage-upload/hf_backfill/subprocess/... fails closed);
+  must be the exact, verbatim step-3 dependency-check string (it is code the checker cannot parse, so
+  an exact allowlist of one vetted payload fails closed where a marker blacklist was splittable);
 * the append-only proof (`chk.append_only_proof`) is an unconditional top-level statement comparing two
   DIFFERENT databases named as plain names (a self-proof proves nothing), the stage-upload `run([...])`
   is an unconditional top-level statement of `stage()`, `stage()` is called once, only as the body of
@@ -90,13 +92,16 @@ ARGV_PREFIXES = [
 ]
 STAGE_UPLOAD = (PY, "-m", "scripts.hf_backfill", "stage-upload")
 PY_C = (PY, "-c")
-# A `python -c` payload is arbitrary code the allowlist cannot see. It must be a plain string literal,
-# and that literal is then scanned: any staging/publish escape marker fails closed (the one legitimate
-# use, step 3's fresh-interpreter dependency check, mentions none of these).
-CODE_ESCAPE_RE = re.compile(
-    r"publish|stage[-_]upload|guarded_publish|hf_backfill|create_commit|upload_file|upload_folder|"
-    r"delete_repo|delete_file|restart_space|HfApi|subprocess|__import__|\beval\b|\bexec\b|"
-    r"os\.system|popen|shell\s*=", re.IGNORECASE)
+# A `python -c` payload is arbitrary code the allowlist cannot see, so payloads are an EXACT
+# allowlist (fail closed): the only approved payload is step 3's fresh-interpreter dependency
+# check, verbatim. Every other -c payload — however harmless it looks — is rejected; a marker
+# blacklist was rejected in review because split strings ("pu" + "blish") slipped past it.
+ALLOWED_PY_C_PAYLOADS = (
+    "import torch, duckdb, edgar, sentence_transformers;"
+    'assert torch.cuda.is_available(), "CUDA torch was lost";'
+    'assert "+cpu" not in torch.__version__, "CPU torch got installed";'
+    'print("deps OK | torch", torch.__version__, "| duckdb", duckdb.__version__)',
+)
 _NOT_LITERAL = object()
 
 
@@ -314,6 +319,12 @@ def _check_code(trees, problems):
     if len(chk_b) != 1 or not (isinstance(chk_b[0][1], ast.ImportFrom) and chk_b[0][1].module == "scripts"
                                and [(a.name, a.asname) for a in chk_b[0][1].names] == [("colab_backfill_checks", "chk")]):
         problems.append("chk must be bound exactly once, by `from scripts import colab_backfill_checks as chk`")
+    sha_b = binds.get("sha256_file", [])
+    if len(sha_b) != 1 or not (isinstance(sha_b[0][1], ast.ImportFrom)
+                               and sha_b[0][1].module == "scripts.hf_backfill"
+                               and [(a.name, a.asname) for a in sha_b[0][1].names] == [("sha256_file", None)]):
+        problems.append("sha256_file must be bound exactly once, by `from scripts.hf_backfill import "
+                        "sha256_file`; any other binding could fabricate the proof hash")
     for mod in ("subprocess", "sys", "os"):
         if any(kind != "import" for kind, _, _ in binds.get(mod, [])):
             problems.append(f"{mod} must only be bound by `import {mod}`")
@@ -363,9 +374,9 @@ def _check_code(trees, problems):
             if not (isinstance(payload, ast.Constant) and isinstance(payload.value, str)):
                 problems.append(f"cell {i}: a -c payload must be a plain string literal (line {c.lineno}); "
                                 "it is arbitrary code the allowlist cannot see")
-            elif CODE_ESCAPE_RE.search(payload.value):
-                problems.append(f"cell {i}: -c payload may not reference staging or publish (line {c.lineno}): "
-                                f"{payload.value[:60]!r}")
+            elif payload.value not in ALLOWED_PY_C_PAYLOADS:
+                problems.append(f"cell {i}: -c payload is not an approved dependency check (line {c.lineno}): "
+                                "only step 3's exact fresh-interpreter check is allowed, verbatim")
             continue
         if prefix is None:
             argv = [_render(e) for e in c.args[0].elts] if c.args and isinstance(c.args[0], (ast.List, ast.Tuple)) else None

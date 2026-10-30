@@ -39,6 +39,7 @@ import subprocess
 import sys
 
 from scripts import colab_backfill_checks as chk
+from scripts.hf_backfill import sha256_file
 
 CONFIRM_EXECUTE = False
 CONFIRM_STAGE = False
@@ -869,9 +870,9 @@ def test_direct_staging_or_publish_invocation_is_rejected(tmp_path, name):
 
 
 def test_c_payload_dependency_check_is_still_allowed(tmp_path):
-    """The one legitimate -c use (step 3's fresh-interpreter dependency check) still passes."""
-    src = GOOD + ("\nrun([sys.executable, '-c', 'import torch, duckdb; assert torch.cuda.is_available(); "
-                  "print(\"deps OK | torch\", torch.__version__)'])\n")
+    """The one legitimate -c use (step 3's fresh-interpreter dependency check) still passes — and it
+    must be that exact string, verbatim, because the payload allowlist is exact (see round 5)."""
+    src = GOOD + f"\nrun([sys.executable, '-c', '{STEP3_DEP_CHECK}'])\n"
     assert check_notebook(_write(tmp_path, src)) == []
 
 
@@ -955,3 +956,62 @@ def test_failed_append_only_proof_leaves_proof_sha_unset(tmp_path):
     with pytest.raises(RuntimeError, match="proof failed"):
         exec(compile(_steps()[8], "step8", "exec"), ns)  # noqa: S102
     assert ns["PROOF_SHA"] is None and seen == []
+
+
+# ── round 5 (final gate): -c payloads are an EXACT allowlist; the hasher may not be rebound ─────
+#
+# Both probes below PASSED the round-4 checker on 49245a9:
+# * the -c marker blacklist was defeated by split strings inside the payload
+#   (importlib.import_module("scripts.hf_"+"back"+"fill"), then h.main(["pu"+"blish", ..., "--confirm"]));
+# * PROOF_SHA's shape was checked ("sha256_file(<proven DB>)") but the hasher's binding was not, so
+#   redefining sha256_file made any fabricated hash self-consistent.
+
+STEP3_DEP_CHECK = (
+    "import torch, duckdb, edgar, sentence_transformers;"
+    'assert torch.cuda.is_available(), "CUDA torch was lost";'
+    'assert "+cpu" not in torch.__version__, "CPU torch got installed";'
+    'print("deps OK | torch", torch.__version__, "| duckdb", duckdb.__version__)'
+)
+
+
+def test_c_payload_split_string_publish_bypass_is_rejected(tmp_path):
+    """The final gate's exact example: split strings hid publish/hf_backfill from the marker
+    blacklist; the payload allowlist is exact, so anything but step 3's check fails closed."""
+    payload = ('import importlib; h = importlib.import_module("scripts.hf_" + "back" + "fill"); '
+               'h.main(["pu" + "blish", DB, "/b.json", "--repo", "egoh33/Rag-workbench", "--confirm"])')
+    src = GOOD + f"\nrun([sys.executable, '-c', '{payload}'])\n"
+    _expect(tmp_path, src, "-c payload is not an approved dependency check")
+
+
+@pytest.mark.parametrize("payload", ['print("hello")', "import torch; print(torch.__version__)"])
+def test_any_c_payload_off_the_allowlist_is_rejected(tmp_path, payload):
+    """Fail closed: even a harmless-looking payload that is not step 3's exact check is rejected."""
+    src = GOOD + f"\nrun([sys.executable, '-c', '{payload}'])\n"
+    _expect(tmp_path, src, "-c payload is not an approved dependency check")
+
+
+def test_c_payload_allowlist_is_exact(tmp_path):
+    """A single-character drift from step 3's dependency check is already rejected."""
+    near = STEP3_DEP_CHECK.replace('duckdb.__version__)', 'duckdb.__version__, "x")')
+    src = GOOD + f"\nrun([sys.executable, '-c', '{near}'])\n"
+    _expect(tmp_path, src, "-c payload is not an approved dependency check")
+
+
+HASHER_REBINDS = {
+    "def_fake_hasher": '\ndef sha256_file(path): return "ab" * 32\n',
+    "gate_example": '\ndef sha256_file(path): return "ab" * 32\nPROOF_SHA = sha256_file(DB)\n',
+    "plain_assign": "\nsha256_file = print\n",
+    "import_as_alias": "\nfrom scripts.prepare_db_copy import copy_writable as sha256_file\n",
+    "for_target": "\nfor sha256_file in []:\n    pass\n",
+    "walrus_target": "\nx = (sha256_file := print)\n",
+    "arg_shadow": "\ndef probe(sha256_file):\n    return sha256_file(DB)\n",
+}
+
+
+@pytest.mark.parametrize("name", sorted(HASHER_REBINDS))
+def test_sha256_file_may_not_be_rebound(tmp_path, name):
+    """The final gate's contract-3 bypass: `def sha256_file(path): return "ab"*32` then
+    `PROOF_SHA = sha256_file(DB)` passed round 4, because only PROOF_SHA's shape was checked. The
+    hasher may only be bound once, by its single legitimate import; def/assign/import-as/for/walrus/
+    argument bindings are all rejected."""
+    _expect(tmp_path, GOOD + HASHER_REBINDS[name], "sha256_file must be bound exactly once")
