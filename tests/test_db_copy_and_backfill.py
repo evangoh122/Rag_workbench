@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -10,6 +11,7 @@ from unittest.mock import MagicMock
 
 import duckdb
 import pytest
+import yaml
 
 from scripts import hf_backfill, prepare_db_copy
 
@@ -89,6 +91,96 @@ def test_workflows_use_helper_and_failfast_before_embedding():
         assert "copy_writable(path" in text
         assert text.index("prepare_db_copy.py check") < text.index("Snapshot corpus BEFORE")
         assert text.index("prepare_db_copy.py check") < text.index("- name: Embed")
+
+
+def test_hf_gpu_image_workflow_publishes_expected_ghcr_tags():
+    path = ROOT / ".github" / "workflows" / "build-hf-gpu-image.yml"
+    workflow = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+    trigger = workflow["on"]
+    assert set(trigger) == {"workflow_dispatch", "push"}
+    assert trigger["push"]["branches"] == ["main"]
+    assert set(trigger["push"]["paths"]) == {
+        ".github/workflows/build-hf-gpu-image.yml",
+        ".dockerignore",
+        "Dockerfile.hf-gpu",
+        "scripts/hf_backfill.py",
+        "scripts/run_hf_backfill.sh",
+        "scripts/embed_additional.py",
+        "pyproject.toml",
+        "uv.lock",
+    }
+    assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["concurrency"] == {
+        "group": "build-hf-gpu-image-${{ github.ref }}",
+        "cancel-in-progress": "false",
+        "queue": "max",
+    }
+
+    job = workflow["jobs"]["build-and-push"]
+    assert job["timeout-minutes"] == "90"
+    assert job["permissions"] == {"contents": "read", "packages": "write"}
+    action_refs = [step["uses"] for step in job["steps"] if "uses" in step]
+    assert all(re.fullmatch(r"[^@]+@[0-9a-f]{40}", ref) for ref in action_refs)
+
+    login = next(
+        step for step in job["steps"] if step.get("name") == "Log in to GitHub Container Registry"
+    )
+    assert login["uses"].startswith("docker/login-action@")
+    assert login["with"] == {
+        "registry": "ghcr.io",
+        "username": "${{ github.actor }}",
+        "password": "${{ secrets.GITHUB_TOKEN }}",
+    }
+
+    build = next(step for step in job["steps"] if step.get("name") == "Build and push")
+    tags = build["with"]["tags"].splitlines()
+    image = "ghcr.io/evangoh122/rag-workbench-hf-gpu"
+    latest = f"${{{{ github.ref == 'refs/heads/main' && '{image}:latest' || '' }}}}"
+    assert tags == [
+        f"{image}:${{{{ github.sha }}}}",
+        latest,
+    ]
+    assert build["with"]["context"] == "."
+    assert build["with"]["file"] == "Dockerfile.hf-gpu"
+    assert build["with"]["push"] == "true"
+    assert build["with"]["labels"] == (
+        "org.opencontainers.image.source=https://github.com/${{ github.repository }}"
+    )
+    assert build["with"]["cache-from"] == "type=gha,scope=hf-gpu-image"
+    assert build["with"]["cache-to"] == "type=gha,scope=hf-gpu-image,mode=min"
+
+
+def test_dockerfile_copy_sources_exist_and_are_not_ignored(tmp_path):
+    """Keep explicit Dockerfile COPY inputs available in the shared build context."""
+    (tmp_path / ".gitignore").write_text((ROOT / ".dockerignore").read_text())
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+
+    for dockerfile in ("Dockerfile", "Dockerfile.hf-gpu"):
+        for line in (ROOT / dockerfile).read_text().splitlines():
+            if not line.startswith("COPY ") or "--from=" in line:
+                continue
+            parts = [part for part in shlex.split(line)[1:] if not part.startswith("--")]
+            for source in parts[:-1]:
+                source_path = ROOT / source
+                assert source_path.exists(), f"{dockerfile} COPY source does not exist: {source}"
+                if source == ".":
+                    continue
+                tracked = subprocess.run(
+                    ["git", "ls-files", source],
+                    cwd=ROOT,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.splitlines()
+                assert tracked, f"{dockerfile} COPY source has no tracked files: {source}"
+                ignored = subprocess.run(
+                    ["git", "check-ignore", "--no-index", "--stdin"],
+                    cwd=tmp_path,
+                    input="\n".join(tracked),
+                    capture_output=True,
+                    text=True,
+                ).stdout.splitlines()
+                assert not ignored, f"{dockerfile} COPY source ignored by .dockerignore: {ignored}"
 
 
 # ── HF backfill helpers ──────────────────────────────────────────────────────

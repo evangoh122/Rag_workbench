@@ -434,10 +434,13 @@ The HF Space has **no persistent volume**, so runtime state survives restarts th
 
 **The runner is a dry run by default**: it validates its inputs, prints the plan (tickers, forms, quarters, estimated filings) and exits 0 without downloading or embedding anything. It only executes with `BACKFILL_CONFIRM=yes` (or `--execute`). Caps are validated and any invalid value fails loudly (exit 2): `BACKFILL_TICKERS` (required, at most `BACKFILL_MAX_TICKERS`, default 10, allowed 1..50), `BACKFILL_QUARTERS` (integer 1..8, default 3, used for `10-Q`), `BACKFILL_FORMS` (`annual` or `10-Q`), and a hard deadline `BACKFILL_TIMEOUT_SECONDS` (60..21600, default 18000) enforced inside the script with `timeout`, independent of the `hf jobs --timeout` flag. `STAGING_REPO` is required to execute (not for a dry run): it must be an existing **private** dataset repo and must differ from `DATASET_REPO` both as a string and by canonical Hub repo id, so a renamed alias of production is refused too (before downloading anything and again before uploading). The run id is `BACKFILL_RUN_ID` or `<UTC time>-<dataset head>-<random>`; an explicit id is validated before any download or embedding, and staging refuses a run prefix that already exists instead of overwriting it. The final log line prints the repo and path. Python helpers run as modules from the repo root (`python -m scripts.hf_backfill ...`), because running the file directly cannot import `api`.
 
-Build the image and run the job (nothing here has been executed by CI or the PR):
+The `build-hf-gpu-image.yml` workflow builds and pushes the image after relevant
+changes land on `main`. After merging, manually run it via `workflow_dispatch`
+on `main` to ensure the image is published. Use the immutable commit-SHA tag for
+a backfill; `latest` is also published:
 
 ```bash
-docker build -f Dockerfile.hf-gpu -t <registry>/rag-workbench-hf-gpu:<tag> . && docker push <registry>/rag-workbench-hf-gpu:<tag>
+IMAGE=ghcr.io/evangoh122/rag-workbench-hf-gpu:<git-sha>
 
 # Drop BACKFILL_CONFIRM=yes for a dry run that only prints the plan.
 hf jobs run --flavor l4x1 --timeout 6h \
@@ -445,9 +448,13 @@ hf jobs run --flavor l4x1 --timeout 6h \
   -e DATASET_REPO=<user>/Rag-workbench -e BACKFILL_TICKERS=AAPL,MSFT -e BACKFILL_FORMS=annual \
   -e BACKFILL_CONFIRM=yes \
   -e STAGING_REPO=<user>/Rag-workbench-staging \
-  <registry>/rag-workbench-hf-gpu:<tag> \
+  "$IMAGE" \
   bash scripts/run_hf_backfill.sh
 ```
+
+The repository owner must make the `rag-workbench-hf-gpu` GHCR package public in
+GitHub package settings before HF Jobs can pull it anonymously. If the package
+stays private, HF Jobs must instead be configured with registry credentials.
 
 Create the staging repo first (private, so the checks pass): `hf repos create <user>/Rag-workbench-staging --repo-type dataset --private`. Token scopes (names only): the job's `HF_TOKEN` needs read access to the production dataset and write access to the staging dataset; the publish step's token needs read access to the staging dataset and write access to the production dataset. Use separate fine-grained tokens where possible.
 
@@ -472,7 +479,7 @@ With `--staging-repo` it downloads `runs/<run id>/rag.duckdb`, `before.json` and
 
 It exits non-zero without `--confirm`, and aborts if the dataset head differs from the `dataset_head` recorded in `before.json` (the upload is also pinned with `parent_commit`). Immediately before uploading it copies the staged file to a private temp snapshot, runs the DB integrity, shrink and duplicate checks on that snapshot, re-hashes it, and uploads that same snapshot, so a staged path swapped after verification is never uploaded; it refuses on any failure. Restarting the Space is a separate manual step.
 
-**Scope of the GPU runner:** it is a manually launched, staging-only job. Neither this PR nor #30 routes the scheduled `refresh-filings.yml` embedding onto the GPU, so scheduled refresh runs still use the CPU runner and its 300-minute timeout is unchanged; this runner does not make them finish. `Dockerfile.hf-gpu` runs as a non-root `app` user (writable `HOME`, HF cache, uv cache and `data/`); the image has not been built in CI or by this PR.
+**Scope of the GPU runner:** it is a manually launched, staging-only job. The image build is automated, but launching the HF Job is not. Neither this workflow nor #30 routes the scheduled `refresh-filings.yml` embedding onto the GPU, so scheduled refresh runs still use the CPU runner and its 300-minute timeout is unchanged; this runner does not make them finish. `Dockerfile.hf-gpu` runs as a non-root `app` user (writable `HOME`, HF cache, uv cache and `data/`).
 
 ### Operational notes
 

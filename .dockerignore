@@ -18,12 +18,17 @@ dist
 node_modules
 *.log
 
-# Data & Config
-.env
-.env.local
+# Data, Config & Credentials
+.env*
+*.duckdb
+*.duckdb.*
 data/review_queue.duckdb
 data/ibkr.duckdb
 data/edgar_downloads
+*.pem
+*.key
+*.p12
+*.pfx
 
 # OS Metadata
 .DS_Store

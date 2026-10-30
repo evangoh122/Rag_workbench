@@ -1,0 +1,58 @@
+name: Build HF GPU backfill image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/build-hf-gpu-image.yml
+      - .dockerignore
+      - Dockerfile.hf-gpu
+      - scripts/hf_backfill.py
+      - scripts/run_hf_backfill.sh
+      - scripts/embed_additional.py
+      - pyproject.toml
+      - uv.lock
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-hf-gpu-image-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
+        with:
+          context: .
+          file: Dockerfile.hf-gpu
+          push: true
+          tags: |
+            ghcr.io/evangoh122/rag-workbench-hf-gpu:${{ github.sha }}
+            ${{ github.ref == 'refs/heads/main' && 'ghcr.io/evangoh122/rag-workbench-hf-gpu:latest' || '' }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=hf-gpu-image
+          cache-to: type=gha,scope=hf-gpu-image,mode=min
