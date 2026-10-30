@@ -81,7 +81,7 @@ def query_graph(state: GraphRAGState) -> dict:
         WHERE ticker = ? AND ({conditions_sql})
         ORDER BY confidence DESC NULLS LAST
         LIMIT 500
-    """
+    """  # nosec B608: conditions_sql is only static ILIKE ? fragments; values are bound
 
     try:
         cursor = db_manager.execute(sql, params)

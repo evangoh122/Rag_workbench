@@ -6,6 +6,10 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
 
 WORKDIR /app
 
+# Debian package versions are not pinned because the snapshot mirrors rotate;
+# the base image tag plus uv.lock pinning of the Python tree is the
+# reproducibility control here (DL3008 waived inline below).
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2 \
     libxslt1.1 \
@@ -31,6 +35,8 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
+# Same DL3008 waiver as the builder stage above.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2 \
     libxslt1.1 \
@@ -38,8 +44,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Add non-root user (UID 1000 for HF Spaces)
-RUN useradd -m -u 1000 user
-RUN chown -R user:user /app
+RUN useradd -m -u 1000 user \
+    && chown -R user:user /app
 
 # Copy the uv-managed virtualenv from the builder
 COPY --from=python-builder /opt/venv /opt/venv

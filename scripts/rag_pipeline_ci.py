@@ -23,6 +23,8 @@ from urllib import error, request
 SPACE_URL = os.environ["SPACE_URL"]
 ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
 ENDPOINT = f"{SPACE_URL}/api/chat/auditable-rag"
+if not ENDPOINT.startswith(("http://", "https://")):
+    raise SystemExit(f"SPACE_URL must be an http(s) URL, got: {SPACE_URL!r}")
 
 # Curated coverage: tickers in the dataset whose latest-period revenue verifies
 # deterministically against filed XBRL (confirmed live before committing).
@@ -55,7 +57,7 @@ def _call_endpoint(ticker: str, query: str) -> dict:
     for attempt in range(MAX_RETRIES):
         try:
             req = request.Request(ENDPOINT, data=payload, headers=headers, method="POST")
-            with request.urlopen(req, timeout=120) as resp:
+            with request.urlopen(req, timeout=120) as resp:  # nosec B310: ENDPOINT scheme is checked at startup
                 return json.loads(resp.read())
         except error.HTTPError as e:
             if e.code in RETRY_CODES and attempt < MAX_RETRIES - 1:

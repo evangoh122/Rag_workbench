@@ -1,0 +1,31 @@
+# Dependabot — weekly update PRs for the three ecosystems this repo is built
+# on (uv lockfile, GitHub Actions, Docker base images). Each opened PR runs the
+# full CI/security suite from this repository before anything is merged.
+version: 2
+updates:
+  # uv: pyproject.toml + uv.lock. Dependabot's `uv` ecosystem understands the
+  # uv lockfile and the tool.uv configuration (required-version etc.).
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+
+  # GitHub Actions: keeps the commit-SHA pins in .github/workflows moving
+  # (the SHA + version-comment convention is preserved by Dependabot).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+
+  # Docker: the python:3.11-slim base images and the ghcr.io/astral-sh/uv
+  # builder stage in the Dockerfile.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5

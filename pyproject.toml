@@ -47,6 +47,9 @@ dev = [
     "pytest>=8.0.0",
     # The async middleware/route tests use @pytest.mark.asyncio.
     "pytest-asyncio>=0.23.0",
+    # Coverage gate in CI (`pytest --cov ... --cov-fail-under`); kept in the dev
+    # group so `uv run pytest --cov` works locally too.
+    "pytest-cov>=5.0.0",
     "httpx>=0.27.0",
     "ruff>=0.3.0",
 ]
@@ -81,4 +84,24 @@ markers = [
     "spark: requires a Spark runtime",
     "lakebase: requires a Databricks Lakebase instance",
     "databricks: requires a Databricks workspace",
+]
+
+[tool.bandit]
+# CI runs `bandit -ll` (medium and high severity) over `api scripts main.py
+# run.py` and must come back clean except for this documented skip list.
+# Everything else is either fixed in code or annotated per site with a
+# `# nosec B608:` comment explaining why the string-built SQL is safe
+# (static fragments / `?` placeholder lists / bound parameters only).
+# See README "CI & security" for the full findings table.
+exclude_dirs = ["tests", ".venv", "data"]
+skips = [
+    # B104: binding 0.0.0.0 is the point for a containerised uvicorn server
+    # (run.py:9, api/main.py:122). The port is published deliberately; there is
+    # no privileged data served from this bind address by design.
+    "B104",
+    # B615: hf_hub_download() restores our own dataset's rolling snapshot
+    # (api/services/runtime_snapshot.py, scripts/fetch_db_from_dataset.py).
+    # Pinning a revision would break "restore the latest snapshot" semantics;
+    # the dataset repo is private/controlled and uploaded by this same codebase.
+    "B615",
 ]

@@ -132,7 +132,8 @@ def make_chunk_id(ticker: str, accession: str, chunk_index: Optional[int]) -> st
 def triple_id(ticker: str, subject: str, predicate: str, obj: str, chunk_id: str) -> str:
     """Deterministic id so re-runs dedupe by content rather than appending."""
     key = "\x1f".join([ticker, subject.lower(), predicate.lower(), obj.lower(), chunk_id])
-    return hashlib.sha1(key.encode("utf-8")).hexdigest()
+    # Deterministic dedupe id only, never security-relevant (bandit B324).
+    return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def _normalise_predicate(pred: str) -> str:

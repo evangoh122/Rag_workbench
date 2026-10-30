@@ -147,7 +147,7 @@ def _annual_series(ticker: str, concepts: List[str]) -> Dict[str, float]:
         f"WHERE ticker = ? AND concept IN ({placeholders}) "
         f"  AND value IS NOT NULL AND period_start IS NOT NULL AND period_end IS NOT NULL "
         f"  AND date_diff('day', CAST(period_start AS DATE), CAST(period_end AS DATE)) >= 300 "
-        f"ORDER BY period_end"
+        f"ORDER BY period_end"  # nosec B608: placeholders is only '?' marks; all values are bound
     )
     by_year: Dict[str, float] = {}
     try:
@@ -177,7 +177,7 @@ def _quarterly_series(ticker: str, concepts: List[str]) -> Dict[str, float]:
         f"SELECT period_start, period_end, value FROM xbrl_facts "
         f"WHERE ticker = ? AND concept IN ({placeholders}) "
         f"  AND value IS NOT NULL AND period_start IS NOT NULL AND period_end IS NOT NULL "
-        f"ORDER BY period_end"
+        f"ORDER BY period_end"  # nosec B608: placeholders is only '?' marks; all values are bound
     )
     by_quarter: Dict[str, float] = {}
     try:

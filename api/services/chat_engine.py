@@ -173,7 +173,7 @@ def chat_sql(question: str, history: Optional[List[Dict[str, str]]] = None) -> D
         conn.execute("SET threads TO 2")
         conn.execute("SET memory_limit TO '256MB'")
         df = conn.execute(
-            f"SELECT * FROM ({sql}) AS chat_result LIMIT ?", [100]
+            f"SELECT * FROM ({sql}) AS chat_result LIMIT ?", [100]  # nosec B608: sql is LLM output already validated read-only before wrapping
         ).df()
         conn.execute("RESET memory_limit")
         conn.execute("RESET threads")

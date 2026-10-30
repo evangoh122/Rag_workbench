@@ -1,0 +1,18 @@
+# Pre-commit hooks for RAG Workbench.
+#
+# Install once with:  pre-commit install
+# Run manually with:  pre-commit run --all-files
+#
+# The gitleaks hook scans staged changes for secrets before each commit and
+# uses the repo's .gitleaks.toml (gitleaks auto-discovers it at the repo root),
+# so the same documented allowlist applies locally and in CI
+# (.github/workflows/security.yml runs the full-history scan).
+#
+# The hook rev is pinned to the same gitleaks release the CI image is validated
+# against (8.28.0). Bump it together with the version noted in README
+# "CI & security" so local and CI behaviour stay aligned.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks

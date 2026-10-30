@@ -32,7 +32,7 @@ def get_latest_10k_facts(ticker: str, concepts: Optional[tuple] = None) -> pl.Da
                 WHERE ticker = ?
                   AND ({clauses})
                 ORDER BY period_end DESC, filed DESC, accession DESC
-            """
+            """  # nosec B608: clauses is only static LIKE ? fragments; values are bound
             params = [ticker] + [f"%{c}%" for c in concepts]
             rows = conn.execute(sql, params).fetchall()
         else:

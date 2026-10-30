@@ -1,0 +1,60 @@
+name: Workflow & Docker lint
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/dependabot.yml"
+      - "Dockerfile"
+      - "zizmor.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - ".github/dependabot.yml"
+      - "Dockerfile"
+      - "zizmor.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint-zizmor:
+    name: actionlint + zizmor (workflow files)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # actionlint is a single static Go binary: the release is pinned by tag
+      # AND verified against a hardcoded sha256, so no third-party action is
+      # involved and the artifact cannot be swapped silently.
+      - name: actionlint (pinned v1.7.7, checksum-verified)
+        run: |
+          curl -sSLo /tmp/actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
+          echo "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757  /tmp/actionlint.tar.gz" | sha256sum -c -
+          tar xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+          /tmp/actionlint -color
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          version: "0.12.23"
+      # zizmor runs from PyPI through uvx with an exact version pin. Its
+      # documented baseline (pre-existing findings in the two workflows that
+      # another PR owns) lives in zizmor.yml — see README "CI & security".
+      - name: zizmor (pinned 1.31.1)
+        run: uvx zizmor==1.31.1 .github/workflows/
+
+  hadolint:
+    name: hadolint (Dockerfile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # Blocks on warning-level findings and above (DL3008 is waived inline in
+      # the Dockerfile with the reason next to each waiver).
+      - uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Dockerfile
+          failure-threshold: warning

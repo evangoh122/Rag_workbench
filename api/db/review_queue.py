@@ -198,7 +198,7 @@ def list_decisions(
         {where_clause}
         ORDER  BY created_at DESC
         LIMIT  ? OFFSET ?
-        """,
+        """,  # nosec B608: where_clause is only static 'field = ?' fragments; values are bound
         params,
     )
     columns = [desc[0] for desc in cursor.description]

@@ -165,7 +165,7 @@ def snapshot_review_db(*, reason: str = "periodic", force: bool = False) -> bool
             # 1) consistent Parquet export of each table from the live DB
             for t in tables:
                 pq = Path(td) / f"{t}.parquet"
-                cur.execute(f'COPY (SELECT * FROM "{t}") TO \'{pq.as_posix()}\' (FORMAT PARQUET)')
+                cur.execute(f'COPY (SELECT * FROM "{t}") TO \'{pq.as_posix()}\' (FORMAT PARQUET)')  # nosec B608: t is a table name from SHOW TABLES in our own review DB; pq is a tempdir path
             # 2) rebuild a clean DuckDB container in the runtime's native format
             container = Path(td) / CONTAINER
             builder = duckdb.connect(str(container))
@@ -173,7 +173,7 @@ def snapshot_review_db(*, reason: str = "periodic", force: bool = False) -> bool
                 for t in tables:
                     pq = Path(td) / f"{t}.parquet"
                     builder.execute(
-                        f'CREATE TABLE "{t}" AS SELECT * FROM read_parquet(\'{pq.as_posix()}\')'
+                        f'CREATE TABLE "{t}" AS SELECT * FROM read_parquet(\'{pq.as_posix()}\')'  # nosec B608: t is a table name from SHOW TABLES in our own review DB; pq is a tempdir path
                     )
             finally:
                 builder.close()

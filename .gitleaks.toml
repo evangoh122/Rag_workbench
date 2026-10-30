@@ -1,0 +1,41 @@
+# Gitleaks configuration for RAG Workbench (full-history secret scanning in
+# .github/workflows/security.yml and the pre-commit hook in
+# .pre-commit-config.yaml). Starts from gitleaks' default rule set; the
+# allowlist below lists ONLY justified false positives found by a full-history
+# scan (gitleaks 8.28.0, `gitleaks detect --log-opts=--all`, re-verified
+# 2026-10-26 on PR #27). The raw scan finds 4 matches across 2 distinct fixed
+# literals — both allowlisted here by exact value — and a TruffleHog
+# verified-secrets scan of the full history finds 0. No real secret has ever
+# been committed.
+#
+# Keep this list minimal. A new finding must be investigated before it is ever
+# allowlisted here, and a real secret must be rotated + reported, not ignored.
+title = "RAG Workbench gitleaks allowlist"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Pre-existing, reviewed false positives (full-history scans 2026-10-26)"
+paths = [
+  # Committed virtualenv debris that once lived in history (removed before HEAD;
+  # deploy.yml references .venv_duck10 wheels in its history-cleanup note). The
+  # finding is setuptools' vendored msvccompiler.py (commit 9b44f3b6) matching
+  # the generic-api-key rule — a Win32 registry API name, not a credential.
+  '''\.venv_duck10/''',
+]
+regexes = [
+  # Allowlist regexes match the finding's value. Both literals below are fixed
+  # API/UI symbols that can never be credentials, so matching them by exact
+  # value cannot mask a real secret:
+  #
+  # 1. rw_disclaimer_ack_v1 — the localStorage acknowledgement-flag constant in
+  #    frontend/src/components/Disclaimer.tsx:4 (commit f2fe15b0; the frontend
+  #    has since moved to evangoh-frontend), plus the same literal quoted in
+  #    this repo's README findings table (commit b55ae19).
+  '''rw_disclaimer_ack_v1''',
+  # 2. win32api.RegEnumKey — a setuptools/Win32 registry API symbol: the
+  #    msvccompiler.py finding above (commit 9b44f3b6) and the same match quoted
+  #    in this repo's README findings table (README.md:522, commit b55ae19).
+  '''win32api\.RegEnumKey''',
+]

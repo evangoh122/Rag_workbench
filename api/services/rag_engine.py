@@ -51,7 +51,7 @@ class PolygonRetriever:
                 SELECT ticker, name, description
                 FROM polygon_tickers
                 WHERE ticker IN ({ph})
-            """, tickers).fetchall()
+            """, tickers).fetchall()  # nosec B608: ph is only '?' marks; ticker values are bound
             
             meta_map = {r[0]: {"name": r[1], "desc": r[2]} for r in meta_rows}
 
@@ -61,7 +61,7 @@ class PolygonRetriever:
                 FROM polygon_bars
                 WHERE ticker IN ({ph}) AND timespan = 'day'
                 QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY ts DESC) = 1
-            """, tickers).fetchall()
+            """, tickers).fetchall()  # nosec B608: ph is only '?' marks; ticker values are bound
             
             price_map = {r[0]: {"date": str(r[1]), "close": r[2], "volume": r[3]} for r in price_rows}
 
@@ -106,7 +106,7 @@ class DuckDBVectorRetriever(BaseRetriever):
                     WHERE embedding IS NOT NULL
                     ORDER BY dist ASC
                     LIMIT ?
-                """, [qvec, self.top_k]).fetchall()
+                """, [qvec, self.top_k]).fetchall()  # nosec B608: EMBEDDING_DIM is a trusted int config value
 
                 return [
                     Document(
@@ -138,7 +138,7 @@ class DuckDBVectorRetriever(BaseRetriever):
                     FROM polygon_tickers
                     WHERE description IS NOT NULL AND ({conditions})
                     LIMIT ?
-                """
+                """  # nosec B608: conditions is only static ILIKE ? fragments; values are bound
                 params.append(self.top_k)
                 rows = conn.execute(sql, params).fetchall()
             else:
@@ -202,7 +202,7 @@ class EDGARFactsRetriever(BaseRetriever):
                   AND value IS NOT NULL
                 ORDER BY ticker, period_end DESC
                 LIMIT ?
-            """, found + [self.facts_per_ticker * len(found)]).fetchall()
+            """, found + [self.facts_per_ticker * len(found)]).fetchall()  # nosec B608: ph is only '?' marks; values are bound
 
             if not rows:
                 return []
@@ -252,7 +252,7 @@ class EDGAREmbeddingsRetriever(BaseRetriever):
                     WHERE ticker = ?
                     ORDER BY dist ASC
                     LIMIT ?
-                """, [qvec, self.ticker, self.top_k]).fetchall()
+                """, [qvec, self.ticker, self.top_k]).fetchall()  # nosec B608: EMBEDDING_DIM is a trusted int config value
             else:
                 rows = conn.execute(f"""
                     SELECT ticker, text, accession,
@@ -260,7 +260,7 @@ class EDGAREmbeddingsRetriever(BaseRetriever):
                     FROM edgar_embeddings
                     ORDER BY dist ASC
                     LIMIT ?
-                """, [qvec, self.top_k]).fetchall()
+                """, [qvec, self.top_k]).fetchall()  # nosec B608: EMBEDDING_DIM is a trusted int config value
 
             return [
                 Document(
@@ -295,7 +295,7 @@ class PriceContextRetriever(BaseRetriever):
                     FROM polygon_bars
                     WHERE ticker IN ({ph}) AND timespan = 'day'
                     QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY ts DESC) = 1
-                """
+                """  # nosec B608: ph is only '?' marks; ticker values are bound
                 rows = conn.execute(sql, found).fetchall()
             else:
                 rows = []

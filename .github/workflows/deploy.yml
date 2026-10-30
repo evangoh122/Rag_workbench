@@ -111,6 +111,9 @@ jobs:
         with:
           fetch-depth: 0
           lfs: true
+          # The push below goes to the HF remote with its own token; the
+          # checkout credential is not needed after the checkout step.
+          persist-credentials: false
 
       - name: Push to HF Space
         env:
@@ -118,7 +121,7 @@ jobs:
           HF_USERNAME:   ${{ secrets.HF_USERNAME }}
           HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
-          git remote add hf https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
+          git remote add hf "https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${HF_SPACE_NAME}"
           # Flatten to a single orphan commit before pushing. The Space only needs
           # the current working tree, but git history contains >10 MiB build
           # artifacts (no-mistakes.exe/.zip, .venv_duck10 wheels) that HF's
@@ -177,11 +180,12 @@ jobs:
           HF_USERNAME:   ${{ secrets.HF_USERNAME }}
           HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
           ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+          FORCE_SEED:    ${{ github.event.inputs.force-seed }}
         run: |
           SLUG=$(echo "$HF_SPACE_NAME" | tr '[:upper:]' '[:lower:]')
           SPACE_URL="https://${HF_USERNAME}-${SLUG}.hf.space"
           FORCE_PARAM=""
-          if [ "${{ github.event.inputs.force-seed }}" = "true" ]; then
+          if [ "$FORCE_SEED" = "true" ]; then
             FORCE_PARAM="?force=true"
             echo "FORCE re-seed requested — will re-fetch all 31 tickers"
           fi
@@ -315,6 +319,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: "0.12.23"
