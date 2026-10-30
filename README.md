@@ -541,7 +541,7 @@ The project is not a legal compliance certification. It is a working architectur
 
 ## How this is built — multi-agent workflow
 
-This project is built by a team of specialist AI agents, each on its own branch, with mandatory cross-review before anything reaches `main`. The roles and ownership are defined in [`AGENTS.md`](AGENTS.md); each agent's mandate lives in `.<agent>/ROLE.md`.
+This project is built by a team of specialist AI agents, each on its own branch, with mandatory cross-review before anything reaches `main`. The roles and ownership are defined in [`AGENTS.md`](AGENTS.md); role files are tracked for Claude, DeepSeek, Gemini and MiMo in their respective `.<agent>/ROLE.md` files.
 
 | Agent | Branch | Focus | Owns |
 |---|---|---|---|
@@ -593,13 +593,13 @@ backend/API-only (no frontend build stage, no nginx, no supervisord).
 
 The repo tracks product code (`api/`, `scripts/`, `evals/`, `tests/`), CI
 (`.github/workflows/`), the two Dockerfiles, `pyproject.toml` + `uv.lock`, and
-the docs under `docs/`. Agent working files are local only: per-agent review
-and verdict notes (`.<agent>/REVIEW-*.md`, `VERDICT-*.md`, `.deepseek/coordination/`),
-`.codex/`, `.planning/` (except `SECURITY_AUDIT.md`), session logs and
-handoffs, the old `ISSUES.md` tracker, `skills-lock.json`, and the landing-page
-`mockups/` from the retired in-repo frontend. They were removed in the
-`chore/repo-cleanup` PR and are gitignored so they don't come back; git history
-still has them. Each agent's `.<agent>/ROLE.md` stays in the repo.
+the docs under `docs/`. The cleanup removed and gitignored selected agent review
+and verdict notes, `.deepseek/coordination/`, `.codex/`, planning files other
+than `.planning/SECURITY_AUDIT.md`, session logs and handoffs, the old
+`ISSUES.md` tracker, and `skills-lock.json`. Some tracked verdicts remain, as
+do the Claude, DeepSeek, Gemini and MiMo role files. Git history retains the
+removed files. The UI/UX framework document and landing-page `mockups/` remain
+tracked pending an owner decision.
 
 ---
 
