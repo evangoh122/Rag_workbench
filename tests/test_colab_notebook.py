@@ -33,11 +33,60 @@ def test_magics_are_tolerated():
     assert _blank_magics("!pip install x\n%cd foo\nx = 1") == "pass\npass\nx = 1"
 
 
-GOOD = (
-    "CONFIRM_EXECUTE = False\nCONFIRM_STAGE = False\nSTAGING_REPO = 'egoh33/rag-staging'\nREPO_COMMIT = ''\n"
-    "checkout_pinned(REPO_COMMIT)\ndry_run()\nsplit_complete(g, m)\nchk.append_only_proof(a, b)\n"
-    "run(['python', '-m', 'scripts.hf_backfill', 'stage-upload', DB])\n"
-)
+GOOD = """\
+import os
+import subprocess
+import sys
+
+from scripts import colab_backfill_checks as chk
+
+CONFIRM_EXECUTE = False
+CONFIRM_STAGE = False
+STAGING_REPO = 'egoh33/rag-staging'
+REPO_COMMIT = ''
+PROOF_SHA = None
+REMAINING = None
+DB = '/content/rag.duckdb'
+
+
+def run(cmd, cwd=None, env=None):
+    rc = subprocess.run(cmd, cwd=cwd, env=env).returncode
+    if rc != 0:
+        raise RuntimeError('Command failed')
+
+
+def form_args(forms):
+    return []
+
+
+def save_checkpoint(meta):
+    return meta
+
+
+def checkout_pinned(commit):
+    run(['git', 'checkout', '-q', '--detach', commit])
+    return commit
+
+
+def dry_run(tickers=None, forms_list=None):
+    return []
+
+
+def stage():
+    run([sys.executable, '-m', 'scripts.hf_backfill', 'stage-check', '--repo', STAGING_REPO])
+    run([sys.executable, '-m', 'scripts.hf_backfill', 'stage-upload', DB, '--repo', STAGING_REPO])
+    print('staged')
+
+
+REPO_HEAD = checkout_pinned(REPO_COMMIT)
+PLANNED = dry_run()
+done, short = chk.split_complete(['AAA'], [])
+APPEND_ONLY_REPORT = chk.append_only_proof(DB, DB)
+if CONFIRM_STAGE:
+    stage()
+else:
+    print('Staging is DISABLED')
+"""
 
 
 def test_minimal_good_source_passes(tmp_path):
@@ -108,32 +157,13 @@ def test_flag_order_follows_cells_not_text_position(tmp_path):
     def cell(src):
         return {"cell_type": "code", "id": src[:3], "metadata": {}, "execution_count": None, "outputs": [], "source": src}
     nb = {"nbformat": 4, "nbformat_minor": 5, "metadata": {},
-          "cells": [cell(GOOD), cell("CONFIRM_STAGE = bool(1)")]}
+          "cells": [cell(GOOD), cell("CONFIRM_STAGE = str(1)")]}
     p = tmp_path / "two.ipynb"
     p.write_text(json.dumps(nb))
     assert any("CONFIRM_STAGE" in x for x in check_notebook(p))
-    nb["cells"] = [cell("CONFIRM_STAGE = bool(1)"), cell(GOOD)]  # later cell resets it to False: safe
+    nb["cells"] = [cell("CONFIRM_STAGE = str(1)"), cell(GOOD)]  # later cell resets it to False: safe
     p.write_text(json.dumps(nb))
     assert check_notebook(p) == []
-
-
-@pytest.mark.parametrize("needle", ["checkout_pinned", "dry_run", "split_complete", "append_only_proof", "stage-upload"])
-def test_required_steps_must_be_present(tmp_path, needle):
-    assert any(needle in p for p in check_notebook(_write(tmp_path, GOOD.replace(needle, "zzz"))))
-
-
-@pytest.mark.parametrize("needle", ["checkout_pinned", "dry_run", "split_complete", "append_only_proof", "stage-upload"])
-def test_required_step_as_marker_text_does_not_count(tmp_path, needle):
-    """CodeRabbit #5: the old substring check passed when the call was replaced by marker text."""
-    src = GOOD + f"\nmarker = '{needle} dry_run() append_only_proof'\n"
-    src = src.replace(f"{needle}(", "zzz(", 1) if needle != "stage-upload" else src.replace("'stage-upload'", "'zzz'")
-    assert any(needle in p and "not found" in p for p in check_notebook(_write(tmp_path, src)))
-
-
-def test_proof_must_precede_stage_upload(tmp_path):
-    lines = GOOD.splitlines()
-    swapped = "\n".join([ln for ln in lines if "append_only_proof" not in ln] + ["chk.append_only_proof(a, b)"])
-    assert any("must run before stage-upload" in p for p in check_notebook(_write(tmp_path, swapped)))
 
 
 def test_token_and_secret_leaks_are_caught(tmp_path):
@@ -290,7 +320,7 @@ def test_stage_happy_path_checks_then_uploads_to_staging_only(tmp_path):
 
 def test_stage_refuses_without_proof_or_after_db_change(tmp_path):
     stage, ns, calls = _stage_ns(tmp_path)
-    del ns["PROOF_SHA"]
+    ns["PROOF_SHA"] = None
     with pytest.raises(RuntimeError, match="append-only proof"):
         stage()
     stage, ns, calls = _stage_ns(tmp_path)
@@ -312,7 +342,7 @@ def test_stage_refuses_wal_remaining_and_missing_completeness(tmp_path):
     ns["ACCEPT_INCOMPLETE"] = True
     stage()  # the explicit override is honoured
     stage2, ns2, calls2 = _stage_ns(tmp_path)
-    del ns2["REMAINING"]
+    ns2["REMAINING"] = None
     with pytest.raises(RuntimeError, match="step 7"):
         stage2()
     assert calls2 == []
@@ -597,73 +627,176 @@ def test_lookup_failure_never_reaches_the_checkpoint(tmp_path):
     assert saved == [] and ns["meta"]["completed"] == []
 
 
-# ── round 2: the checker must see the REAL, executed calls ───────────────────────────────────────
+# ── round 3: allowlist design. Every probe below PASSED the round-2 blacklist checker. ──────────────
 
-UPLOAD = "run(['python', '-m', 'scripts.hf_backfill', 'stage-upload', DB])"
+PROOF = "APPEND_ONLY_REPORT = chk.append_only_proof(DB, DB)\n"
+UPLOAD_LINE = "    run([sys.executable, '-m', 'scripts.hf_backfill', 'stage-upload', DB, '--repo', STAGING_REPO])\n"
 
 
-@pytest.mark.parametrize("replacement", [
-    "print('stage-upload')",                                        # string in an arbitrary call
-    "x = ['python', '-m', 'scripts.hf_backfill', 'stage-upload']",  # argv built but never run
-    "def never_called():\n    " + UPLOAD,                           # in an uncalled def
-    "if False:\n    " + UPLOAD,                                     # dead branch
-    "if 0:\n    " + UPLOAD,
-    "while False:\n    " + UPLOAD,
-    "print(" + UPLOAD + ")",                                        # only inside print() arguments
-    "raise SystemExit\n" + UPLOAD,                                  # unreachable
-    "log('stage-upload', DB)",
+def _problems(tmp_path, src):
+    return check_notebook(_write(tmp_path, src))
+
+
+def _expect(tmp_path, src, *needles):
+    problems = _problems(tmp_path, src)
+    assert problems, "the checker accepted a bypass"
+    for n in needles:
+        assert any(n in p for p in problems), (n, problems)
+
+
+PROOF_BYPASSES = {
+    "flag_false_if": "if CONFIRM_EXECUTE:\n    " + PROOF,
+    "for_empty": "for x in []:\n    " + PROOF,
+    "after_return_in_called_helper": "def helper():\n    return 1\n    " + PROOF + "helper()\n",
+    "swallowed_try": "try:\n    " + PROOF + "except Exception:\n    pass\n",
+    "dead_if": "if False:\n    " + PROOF,
+    "inside_uncalled_def": "def never():\n    " + PROOF,
+    "and_short_circuit": "x = False and chk.append_only_proof(DB, DB)\n",
+    "print_arg": "print(chk.append_only_proof(DB, DB))\n",
+    "marker_text": "note = 'append_only_proof'\n",
+    "after_toplevel_raise": "raise SystemExit\n" + PROOF,
+}
+
+
+@pytest.mark.parametrize("name", sorted(PROOF_BYPASSES))
+def test_append_only_proof_must_be_an_unconditional_top_level_statement(tmp_path, name):
+    src = GOOD.replace(PROOF, PROOF_BYPASSES[name])
+    assert src != GOOD
+    _expect(tmp_path, src)
+    assert any("append_only_proof" in p or "top-level" in p or "not allowed" in p for p in _problems(tmp_path, src))
+
+
+def test_proof_after_stage_call_is_rejected(tmp_path):
+    src = GOOD.replace(PROOF, "") + "\n" + PROOF
+    _expect(tmp_path, src, "must run before stage-upload")
+
+
+def test_missing_proof_is_rejected(tmp_path):
+    _expect(tmp_path, GOOD.replace(PROOF, ""), "append_only_proof not found")
+
+
+STAGE_BYPASSES = {
+    "print_marker": UPLOAD_LINE.replace("run([", "print([").replace("])\n", "])\n"),
+    "marker_text": "    note = 'stage-upload'\n",
+    "conditional": "    if DB:\n    " + UPLOAD_LINE,
+    "in_for": "    for x in []:\n    " + UPLOAD_LINE,
+    "variable_subcommand": "    sub = 'stage-upload'\n    run([sys.executable, '-m', 'scripts.hf_backfill', sub])\n",
+}
+
+
+@pytest.mark.parametrize("name", sorted(STAGE_BYPASSES))
+def test_stage_upload_must_be_an_unconditional_run_call_in_stage(tmp_path, name):
+    src = GOOD.replace(UPLOAD_LINE, STAGE_BYPASSES[name])
+    assert src != GOOD
+    problems = _problems(tmp_path, src)
+    assert any("stage-upload not found" in p or "not allowed" in p or "not allowlisted" in p for p in problems), problems
+
+
+def test_stage_with_an_early_return_is_rejected(tmp_path):
+    src = GOOD.replace("def stage():\n", "def stage():\n    if DB:\n        return\n")
+    _expect(tmp_path, src, "stage: return only as the last statement")
+
+
+@pytest.mark.parametrize("call", ["stage()\n", "if CONFIRM_STAGE or True:\n    stage()\n", "if x:\n    stage()\n"])
+def test_stage_may_only_be_called_under_the_confirm_flag(tmp_path, call):
+    src = GOOD.replace("if CONFIRM_STAGE:\n    stage()\nelse:\n    print('Staging is DISABLED')\n", call)
+    assert src != GOOD
+    assert _problems(tmp_path, src)
+
+
+def test_stage_called_twice_is_rejected(tmp_path):
+    _expect(tmp_path, GOOD + "stage()\n", "stage() must be called exactly once")
+
+
+# The probes the round-2 review reported as passing:
+
+def test_probe_local_run_redefinition_with_the_expected_stage_argv(tmp_path):
+    fake_added = GOOD.replace("def form_args(forms):", "def run(*a):\n    pass\n\n\ndef form_args(forms):")
+    _expect(tmp_path, fake_added, "run must be defined exactly once")
+    only_fake = GOOD.replace("    rc = subprocess.run(cmd, cwd=cwd, env=env).returncode\n    if rc != 0:\n"
+                             "        raise RuntimeError('Command failed')\n", "    pass\n")
+    _expect(tmp_path, only_fake, "run must call subprocess.run")
+    rebound = GOOD + "run = print\n"
+    _expect(tmp_path, rebound, "run must be defined exactly once")
+
+
+def test_probe_constructed_argv(tmp_path):
+    src = GOOD + "run([sys.executable, '-m', 'scripts.hf_backfill', 'pub' + 'lish'])\n"
+    _expect(tmp_path, src, "not allowlisted")
+
+
+def test_probe_fstring_with_publish_from_a_variable(tmp_path):
+    src = GOOD + "sub = 'publish'\nrun([sys.executable, '-m', 'scripts.hf_backfill', f'{sub}'])\n"
+    _expect(tmp_path, src, "not allowlisted")
+    shell = GOOD + "sub = 'publish'\nos.system(f'python -m scripts.hf_backfill {sub}')\n"
+    _expect(tmp_path, shell, "os.system is not allowed")
+
+
+def test_probe_exec_with_separately_quoted_argv(tmp_path):
+    src = GOOD + "exec(\"run([sys.executable, '-m', 'scripts.hf_backfill', 'pub' 'lish'])\")\n"
+    _expect(tmp_path, src, "use of exec is not allowed")
+
+
+@pytest.mark.parametrize("snippet,needle", [
+    ("eval('1')", "eval"), ("compile('1', 'x', 'eval')", "compile"), ("__import__('os')", "__import__"),
+    ("getattr(os, 'system')", "getattr"), ("setattr(os, 'x', 1)", "setattr"), ("globals()['x'] = 1", "globals"),
+    ("locals()", "locals"), ("importlib.import_module('os')", "importlib"), ("open('/etc/passwd')", "open"),
 ])
-def test_stage_upload_must_be_the_real_executed_invocation(tmp_path, replacement):
-    src = GOOD.replace(UPLOAD, replacement)
-    assert any("call to stage-upload not found" in p for p in check_notebook(_write(tmp_path, src)))
+def test_dynamic_code_and_introspection_are_rejected(tmp_path, snippet, needle):
+    _expect(tmp_path, GOOD + snippet + "\n", needle)
 
 
-def test_stage_upload_inside_a_called_function_counts_and_is_ordered_at_the_call(tmp_path):
-    src = GOOD.replace(UPLOAD, "def stage():\n    " + UPLOAD + "\nstage()")
-    assert check_notebook(_write(tmp_path, src)) == []
-    # the proof only runs AFTER the function that uploads is called: ordering uses the call site
-    late = src.replace("chk.append_only_proof(a, b)\n", "") + "\nchk.append_only_proof(a, b)\n"
-    assert any("must run before stage-upload" in p for p in check_notebook(_write(tmp_path, late)))
-    # defining the uploader after the proof but calling it before does not satisfy the order either
-    defined_late = (GOOD.replace(UPLOAD, "stage()").replace("chk.append_only_proof(a, b)\n", "")
-                    + "\nchk.append_only_proof(a, b)\ndef stage():\n    " + UPLOAD + "\n")
-    assert any(("stage-upload" in p) for p in check_notebook(_write(tmp_path, defined_late)))
-
-
-@pytest.mark.parametrize("call", ["checkout_pinned", "dry_run", "split_complete", "append_only_proof"])
-@pytest.mark.parametrize("hide", ["def never_called():\n    {c}", "if False:\n    {c}", "print({c})"])
-def test_other_required_calls_must_also_be_executed(tmp_path, call, hide):
-    line = next(ln for ln in GOOD.splitlines() if call in ln)
-    src = GOOD.replace(line, hide.format(c=line))
-    assert any(f"call to {call} not found" in p for p in check_notebook(_write(tmp_path, src)))
-
-
-def test_append_only_proof_marker_text_alone_fails(tmp_path):
-    """Earlier M5 gap: replace the real proof call with marker text; the old substring check passed."""
-    src = GOOD.replace("chk.append_only_proof(a, b)", "note = 'append_only_proof'")
-    assert any("call to append_only_proof not found" in p for p in check_notebook(_write(tmp_path, src)))
-
-
-def test_stage_upload_marker_text_alone_fails(tmp_path):
-    src = GOOD.replace(UPLOAD, "note = 'stage-upload'")
-    assert any("call to stage-upload not found" in p for p in check_notebook(_write(tmp_path, src)))
-
-
-@pytest.mark.parametrize("cmd", [
-    "print(subprocess.run([sys.executable, '-m', 'scripts.hf_backfill', 'publish', '--confirm']))",
-    "print(run(['python', '-m', 'scripts.hf_backfill', 'publish']))",
-    "print('ok', run(['python', '-m', 'scripts.hf_backfill', 'publish']))",
-    "print(f'x {run([\"python\", \"-m\", \"scripts.hf_backfill\", \"publish\"])}')",
-    "print(subprocess.run('python -m scripts.hf_backfill publish', shell=True))",
+@pytest.mark.parametrize("snippet", [
+    "try:\n    pass\nexcept Exception:\n    pass\n", "try:\n    pass\nfinally:\n    pass\n",
+    "with open_it() as f:\n    pass\n", "while True:\n    break\n", "class C:\n    pass\n", "f = lambda: 1\n",
+    "sys.exit(0)\n", "os._exit(0)\n", "import ctypes\n", "from os import system\n", "import subprocess as sp\n",
+    "raise SystemExit\n",
 ])
-def test_publish_hidden_inside_a_print_argument_is_still_rejected(tmp_path, cmd):
-    problems = check_notebook(_write(tmp_path, GOOD + "\n" + cmd))
-    assert any("forbidden call scripts.hf_backfill publish" in p for p in problems)
+def test_statement_and_callable_allowlist_rejects(tmp_path, snippet):
+    assert _problems(tmp_path, GOOD + snippet)
 
 
-def test_informational_f_string_print_of_the_publish_command_is_allowed(tmp_path):
-    src = GOOD + "\nprint(f'  uv run python -m scripts.hf_backfill publish --run-id {meta[\"run_id\"]} --confirm')\n"
-    assert check_notebook(_write(tmp_path, src)) == []
+@pytest.mark.parametrize("rebind", ["chk = None\n", "sys = None\n", "subprocess = None\n", "os = None\n",
+                                    "for dry_run in []:\n    pass\n", "checkout_pinned = print\n",
+                                    "stage = print\n", "import chk\n", "def f(run):\n    return run\n"])
+def test_helper_and_module_names_cannot_be_rebound(tmp_path, rebind):
+    assert _problems(tmp_path, GOOD + rebind)
+
+
+@pytest.mark.parametrize("helper", ["run", "checkout_pinned", "dry_run", "stage", "form_args", "save_checkpoint"])
+def test_every_helper_must_be_defined_once(tmp_path, helper):
+    import re as _re
+    # remove the def entirely
+    missing = _re.sub(rf"def {helper}\(.*?(?=\n\n\n)", "pass", GOOD, count=1, flags=_re.S)
+    assert missing != GOOD
+    assert any(f"{helper} must be defined exactly once" in p for p in _problems(tmp_path, missing))
+
+
+def test_helpers_may_not_return_early(tmp_path):
+    src = GOOD.replace("def dry_run(tickers=None, forms_list=None):\n    return []",
+                       "def dry_run(tickers=None, forms_list=None):\n    if tickers:\n        return []\n    return []")
+    _expect(tmp_path, src, "dry_run: return only as the last statement")
+
+
+@pytest.mark.parametrize("argv", [
+    "['rm', '-rf', 'x']", "[sys.executable, '-m', 'scripts.hf_backfill', 'publish']",
+    "[sys.executable, '-m', 'scripts.hf_backfill']", "'python -m scripts.hf_backfill stage-upload'", "cmd",
+])
+def test_every_command_needs_a_literal_allowlisted_argv(tmp_path, argv):
+    assert _problems(tmp_path, GOOD + f"run({argv})\n")
+
+
+def test_informational_publish_hint_must_be_plain_constants(tmp_path):
+    ok = GOOD + "print('uv run python -m scripts.hf_backfill publish --run-id <run id> --confirm')\n"
+    assert check_notebook(_write(tmp_path, ok)) == []
+    for bad in ("print(f'uv run python -m scripts.hf_backfill publish --run-id {DB}')",
+                "print('x', DB, 'hf_backfill publish')",
+                "print(run([sys.executable, '-m', 'scripts.hf_backfill', 'publish']))"):
+        assert _problems(tmp_path, GOOD + bad + "\n")
+
+
+def test_shell_magics_are_rejected(tmp_path):
+    _expect(tmp_path, GOOD + "!pip install requests\n", "magics are not allowed")
 
 
 # ── round 2: a failed completeness check must not leave a stale REMAINING behind ────────────────
@@ -679,13 +812,13 @@ def test_failed_dry_run_leaves_remaining_unset_and_staging_refuses(tmp_path):
         return []
 
     stage, ns, calls = _stage_ns(tmp_path, dry_run=dry_run, GUARD_JSON="/g.json")
-    ns.pop("REMAINING")
+    ns["REMAINING"] = None
     exec(compile(_steps()[7], "step7", "exec"), ns)  # noqa: S102
     assert ns["REMAINING"] == []
     state["fail"] = True
     with pytest.raises(RuntimeError, match="EDGAR lookup failed"):
         exec(compile(_steps()[7], "step7", "exec"), ns)  # noqa: S102
-    assert "REMAINING" not in ns
+    assert ns["REMAINING"] is None  # unset: the earlier empty list must not survive
     with pytest.raises(RuntimeError, match="step 7"):
         ns["stage"]()
     assert [c for c in calls if "stage-upload" in c] == []

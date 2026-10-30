@@ -3,14 +3,25 @@
     uv run python scripts/check_colab_notebook.py [notebook.ipynb]
     uv run --with nbformat python scripts/check_colab_notebook.py   # also nbformat.validate
 
-Checks: valid JSON; every code cell parses with ast (shell/cell magics are blanked
-first); outputs and execution counts are cleared; embedding and staging are disabled by
-default (the LAST assignment of each flag, in cell order, must be a literal False); the repo
-checkout is pinned to a full commit sha; the notebook can only write to a staging repo that is not
-production (no upload, commit or Space-restart call against the dataset, and no executable
-`scripts.hf_backfill publish` command); the required steps are real calls, in order (the append-only
-proof before stage-upload), not marker text; no hardcoded token; no cell prints or echoes a secret
-(including `os.environ["HF_TOKEN"]` / `userdata.get("HF_TOKEN")` read by key).
+This is best-effort defense-in-depth for reviewers, NOT a proof of safety: it cannot see what an
+imported module or a Colab runtime does. It is an ALLOWLIST: code cells may only use a small fixed set
+of statement and expression shapes, callable names, imports and subprocess argv prefixes, so a new
+trick fails closed instead of needing another blacklist entry. The rules:
+
+* valid JSON, every code cell parses, outputs and execution counts cleared, no hardcoded token, no
+  shell/cell magics, no print of a secret (including `os.environ["HF_TOKEN"]`, `userdata.get("HF_TOKEN")`);
+* no try/except/finally, with, while, class, lambda, global, exec/eval/compile/__import__/importlib/
+  getattr/setattr/globals/locals; only allowlisted callables and imports;
+* the helpers `run`, `checkout_pinned`, `dry_run`, `stage`, `form_args`, `save_checkpoint` are defined
+  exactly once as top-level defs; `chk`, `subprocess`, `sys`, `os` are bound only by their one expected
+  import; the helpers have no early `return`;
+* every command goes through `run([...])` / `subprocess.run([...])` with a literal argv list whose first
+  elements match an allowlisted prefix (so `scripts.hf_backfill publish`, built or not, is rejected);
+* the append-only proof (`chk.append_only_proof`) is an unconditional top-level statement, the
+  stage-upload `run([...])` is an unconditional top-level statement of `stage()`, `stage()` is called
+  once, only as the body of `if CONFIRM_STAGE:`, and strictly after the proof;
+* the LAST assignment of CONFIRM_EXECUTE / CONFIRM_STAGE, in cell order, is a literal False; the repo
+  checkout is pinned; STAGING_REPO is not the production dataset.
 """
 import ast
 import json
@@ -21,17 +32,56 @@ from pathlib import Path
 DEFAULT_NB = Path(__file__).resolve().parent.parent / "notebooks" / "colab_backfill.ipynb"
 SECRET_NAMES = ("HF_TOKEN", "GH_TOKEN", "EDGAR_USER_AGENT", "auth")
 PROD_REPO = "egoh33/rag-workbench"
+FLAGS = ("CONFIRM_EXECUTE", "CONFIRM_STAGE")
+TOKEN_RE = re.compile(r"\b(hf_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})")
 # The notebook may only stage through `scripts.hf_backfill stage-upload`; publishing is out of scope.
-# A name containing a space is a shell command, matched only in executable code (a print() that
-# tells the user how to publish from a checkout is allowed).
 FORBIDDEN_CALLS = ("create_commit", "upload_file", "upload_folder", "CommitOperationAdd",
                    "CommitOperationDelete", "delete_file", "delete_repo", "restart_space",
                    "scripts.hf_backfill publish")
 PUBLISH_CMD_RE = re.compile(r"hf_backfill(?:\.py)?\s+publish\b")
-FLAGS = ("CONFIRM_EXECUTE", "CONFIRM_STAGE")
-# Steps that must be real calls: (call name, label). stage-upload is matched as a command argument.
-REQUIRED_CALLS = ("checkout_pinned", "dry_run", "split_complete", "append_only_proof")
-TOKEN_RE = re.compile(r"\b(hf_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})")
+
+# ── the allowlist ───────────────────────────────────────────────────────────────────────────────
+ALLOWED_STMTS = (ast.Import, ast.ImportFrom, ast.FunctionDef, ast.Assign, ast.Expr, ast.If, ast.For,
+                 ast.Raise, ast.Return, ast.Break, ast.Pass)
+ALLOWED_EXPRS = (ast.Name, ast.Constant, ast.Call, ast.Attribute, ast.FormattedValue, ast.JoinedStr,
+                 ast.Subscript, ast.List, ast.Tuple, ast.Compare, ast.BoolOp, ast.UnaryOp, ast.BinOp,
+                 ast.Dict, ast.IfExp, ast.Slice, ast.Starred, ast.GeneratorExp, ast.ListComp, ast.SetComp)
+BANNED_NAMES = {"exec", "eval", "compile", "__import__", "importlib", "getattr", "setattr", "delattr",
+                "globals", "locals", "vars", "open", "input", "breakpoint", "__builtins__"}
+BANNED_ATTRS = {"__import__", "import_module", "__globals__", "__dict__", "__builtins__", "__class__",
+                "__subclasses__", "__code__"}
+# `import x` / `from x import y` that the notebook uses; `as` only for the one chk import.
+IMPORTS = {"torch", "json", "os", "pathlib", "re", "subprocess", "sys", "time", "secrets", "duckdb"}
+FROM_IMPORTS = {"google.colab", "huggingface_hub", "scripts", "scripts.hf_backfill", "scripts.prepare_db_copy"}
+# Helpers the notebook defines itself: exactly one top-level def each.
+HELPERS = ("run", "checkout_pinned", "dry_run", "stage", "form_args", "save_checkpoint")
+CALL_NAMES = {"print", "len", "sorted", "set", "list", "dict", "str", "int", "round", "any", "map",
+              "enumerate", "RuntimeError", "_secret", "HfApi", "hf_hub_download", "copy_writable",
+              "sha256_file", *HELPERS}
+MODULES = {"os", "subprocess", "chk", "sys", "json", "re", "time", "secrets", "pathlib", "duckdb", "torch",
+           "drive", "userdata", "api"}
+CALL_DOTTED = {"chk.append_only_proof", "chk.mark_done", "chk.pending_groups", "chk.read_checkpoint",
+               "chk.restore_checkpoint", "chk.split_complete", "chk.validate_caps", "chk.write_checkpoint",
+               "api.repo_info", "drive.mount", "duckdb.connect", "json.loads", "os.makedirs", "os.path.exists",
+               "os.path.getsize", "os.path.isdir", "pathlib.Path", "re.compile", "re.fullmatch",
+               "secrets.token_hex", "subprocess.run", "subprocess.check_output", "sys.path.insert",
+               "time.gmtime", "time.monotonic", "time.strftime", "torch.cuda.get_device_name",
+               "torch.cuda.is_available", "userdata.get"}
+METHODS = {"append", "extend", "split", "splitlines", "strip", "join", "items", "get", "groups", "match",
+           "findall", "finditer", "read_text", "write_text", "unlink", "execute", "fetchall", "fetchone", "close"}
+# Command argv prefixes: `<py>` is `sys.executable`; every prefix element must be a plain string literal.
+PY = "<py>"
+ARGV_PREFIXES = [
+    ("git", "clone"), ("git", "fetch"), ("git", "checkout"), ("git", "rev-parse"), ("git", "cat-file"),
+    (PY, "-m", "pip", "install"), (PY, "-m", "uv", "export"), (PY, "-m", "uv", "pip", "install"), (PY, "-c"),
+    (PY, "-m", "scripts.hf_backfill", "snapshot"), (PY, "-m", "scripts.hf_backfill", "effective-db"),
+    (PY, "-m", "scripts.hf_backfill", "verify"), (PY, "-m", "scripts.hf_backfill", "stage-check"),
+    (PY, "-m", "scripts.hf_backfill", "stage-upload"),
+    (PY, "scripts/etl_guardrail.py", "snapshot"), (PY, "scripts/etl_guardrail.py", "verify"),
+    (PY, "scripts/prepare_db_copy.py", "check"), (PY, "scripts/embed_additional.py"),
+]
+STAGE_UPLOAD = (PY, "-m", "scripts.hf_backfill", "stage-upload")
+_NOT_LITERAL = object()
 
 
 def _source(cell: dict) -> str:
@@ -50,6 +100,17 @@ def _blank_magics(code: str) -> str:
     return "\n".join(lines)
 
 
+def _dotted(node: ast.AST):
+    """'a.b.c' for a pure Name/Attribute chain, else None."""
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        return ".".join([node.id, *reversed(parts)])
+    return None
+
+
 def _reads_secret(node: ast.AST) -> bool:
     """True when a node names a secret directly or reads one by a constant key."""
     if isinstance(node, ast.Name):
@@ -60,14 +121,30 @@ def _reads_secret(node: ast.AST) -> bool:
     elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
           and node.func.attr in ("get", "getenv") and node.args):  # userdata.get("HF_TOKEN")
         key = node.args[0]
-    elif (isinstance(node, ast.Call) and getattr(node.func, "id", "") == "getenv" and node.args):
-        key = node.args[0]
     return isinstance(key, ast.Constant) and key.value in SECRET_NAMES
 
 
-def _callee(node: ast.Call) -> str:
-    f = node.func
-    return f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else ""
+def _render(el: ast.AST):
+    """A literal argv element as a string, `<py>` for sys.executable, None for anything else."""
+    if isinstance(el, ast.Constant) and isinstance(el.value, str):
+        return el.value
+    return PY if _dotted(el) == "sys.executable" else None
+
+
+def _argv_prefix(call: ast.Call):
+    """The allowlisted prefix an argv list starts with, or None."""
+    if not call.args or not isinstance(call.args[0], (ast.List, ast.Tuple)):
+        return None
+    got = tuple(_render(e) for e in call.args[0].elts)
+    for prefix in ARGV_PREFIXES:
+        if got[: len(prefix)] == prefix:
+            return prefix
+    return None
+
+
+def _is_runner(call: ast.Call) -> bool:
+    return (isinstance(call.func, ast.Name) and call.func.id == "run") or \
+        _dotted(call.func) in ("subprocess.run", "subprocess.check_output")
 
 
 def _flag_assignments(tree: ast.AST, flag: str):
@@ -91,20 +168,15 @@ def _flag_assignments(tree: ast.AST, flag: str):
     return out
 
 
-_NOT_LITERAL = object()
-
-
 def _is_info_print(node: ast.AST) -> bool:
-    """A print() whose arguments are plain strings (constants or call-free f-strings): purely informational."""
-    if not (isinstance(node, ast.Call) and _callee(node) == "print"):
-        return False
-    parts = list(node.args) + [k.value for k in node.keywords]
-    return not any(isinstance(x, ast.Call) for p in parts for x in ast.walk(p))
+    """print() of plain string constants only (no f-string, name or call): the one place the word
+    `publish` may appear, as a hint to the user."""
+    return (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print"
+            and not node.keywords
+            and all(isinstance(a, ast.Constant) and isinstance(a.value, str) for a in node.args))
 
 
-def _publishes(tree: ast.AST) -> bool:
-    """True when code holds a `hf_backfill publish` command. Only an informational print() is exempt;
-    print(subprocess.run([... 'publish'])) is still executable and is inspected."""
+def _mentions_publish(tree: ast.AST) -> bool:
     skip: set[int] = set()
     for n in ast.walk(tree):
         if _is_info_print(n):
@@ -118,96 +190,180 @@ def _publishes(tree: ast.AST) -> bool:
             text = n.value
         else:
             continue
-        if PUBLISH_CMD_RE.search(text):
+        if PUBLISH_CMD_RE.search(text) or any(
+                isinstance(e, ast.Constant) and e.value == "publish" for e in getattr(n, "elts", [])):
             return True
     return False
 
 
-_RUNNERS = ("run", "check_call", "check_output", "call", "Popen")
+def _bindings(trees):
+    """name -> [(kind, node, is_top_level_def)] for every place a name is bound."""
+    out: dict[str, list] = {}
 
-
-def _static_truth(test: ast.AST):
-    """True/False for a literal condition, None when it is only known at run time."""
-    try:
-        return bool(ast.literal_eval(test))
-    except (ValueError, TypeError, SyntaxError):
-        pass
-    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
-        inner = _static_truth(test.operand)
-        return None if inner is None else not inner
-    return None
-
-
-def _stmt_calls(stmt: ast.stmt):
-    """Calls evaluated by one simple statement (not inside a lambda or a print())."""
-    out = []
-
-    def visit(n):
-        if isinstance(n, ast.Lambda) or (isinstance(n, ast.Call) and _callee(n) == "print"):
-            return
-        if isinstance(n, ast.Call):
-            out.append(n)
-        for c in ast.iter_child_nodes(n):
-            visit(c)
-    visit(stmt)
+    def add(name, kind, node, top=False):
+        out.setdefault(name, []).append((kind, node, top))
+    for _, tree in trees:
+        top_defs = {id(n) for n in tree.body if isinstance(n, ast.FunctionDef)}
+        assign_targets = {id(t) for n in ast.walk(tree) if isinstance(n, ast.Assign) for t in n.targets}
+        for n in ast.walk(tree):
+            if isinstance(n, ast.FunctionDef):
+                add(n.name, "def", n, id(n) in top_defs)
+                for a in [*n.args.args, *n.args.kwonlyargs, n.args.vararg, n.args.kwarg]:
+                    if a is not None:
+                        add(a.arg, "arg", a)
+            elif isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
+                add(n.id, "assign" if id(n) in assign_targets else "store", n)
+            elif isinstance(n, (ast.Import, ast.ImportFrom)):
+                for al in n.names:
+                    add((al.asname or al.name).split(".")[0], "import", n)
     return out
 
 
-def _executable_calls(trees, defs, seen=()):
-    """Calls that run when the cells run top to bottom, as (cell, line, col, Call): not inside an
-    uncalled def, a dead branch or code after a raise, nor in print() arguments. A call to a function
-    defined in the notebook is expanded at its call site (position = the call site)."""
-    out = []
+def _direct_call(stmt: ast.stmt):
+    """The Call a simple statement evaluates directly (`x = f()`, `f()`, `x = sorted(set(f()))`)."""
+    v = stmt.value if isinstance(stmt, (ast.Expr, ast.Assign)) else None
+    while (isinstance(v, ast.Call) and isinstance(v.func, ast.Name) and v.func.id in ("sorted", "set", "list")
+           and len(v.args) == 1 and isinstance(v.args[0], ast.Call)):
+        v = v.args[0]
+    return v if isinstance(v, ast.Call) else None
 
-    def block(stmts, cell, anchor, stack):
+
+def _check_code(trees, problems):
+    """The allowlist rules over all parsed code cells ((cell index, tree) in cell order)."""
+    calls_all = [(i, n) for i, t in trees for n in ast.walk(t) if isinstance(n, ast.Call)]
+    for i, tree in trees:
+        for n in ast.walk(tree):
+            if isinstance(n, ast.stmt) and not isinstance(n, ALLOWED_STMTS):
+                problems.append(f"cell {i}: {type(n).__name__} statement is not allowed (line {n.lineno})")
+            elif isinstance(n, ast.expr) and not isinstance(n, ALLOWED_EXPRS):
+                problems.append(f"cell {i}: {type(n).__name__} expression is not allowed (line {n.lineno})")
+            if isinstance(n, ast.Name) and n.id in BANNED_NAMES:
+                problems.append(f"cell {i}: use of {n.id} is not allowed (line {n.lineno})")
+            if isinstance(n, ast.Attribute) and n.attr in BANNED_ATTRS:
+                problems.append(f"cell {i}: use of .{n.attr} is not allowed (line {n.lineno})")
+            if isinstance(n, ast.Import):
+                for al in n.names:
+                    if al.name not in IMPORTS or al.asname:
+                        problems.append(f"cell {i}: import {al.name} is not allowed")
+            if isinstance(n, ast.ImportFrom):
+                if n.module not in FROM_IMPORTS or (
+                        any(al.asname for al in n.names)
+                        and not (n.module == "scripts" and [al.name for al in n.names] == ["colab_backfill_checks"])):
+                    problems.append(f"cell {i}: from {n.module} import ... is not allowed")
+        for st in tree.body:
+            if isinstance(st, (ast.Raise, ast.Return, ast.Break)):
+                problems.append(f"cell {i}: unconditional top-level {type(st).__name__.lower()} (line {st.lineno})")
+
+    # callables
+    for i, c in calls_all:
+        f = c.func
+        if isinstance(f, ast.Name):
+            ok = f.id in CALL_NAMES
+            name = f.id
+        elif isinstance(f, ast.Attribute):
+            dotted = _dotted(f)
+            name = dotted or f".{f.attr}"
+            ok = (dotted in CALL_DOTTED) if dotted and dotted.split(".")[0] in MODULES else f.attr in METHODS
+        else:
+            ok, name = False, ast.dump(f)[:30]
+        if not ok:
+            problems.append(f"cell {i}: call to {name} is not allowed (line {c.lineno})")
+
+    # helper / module names
+    binds = _bindings(trees)
+    for h in HELPERS:
+        found = binds.get(h, [])
+        if len(found) != 1 or found[0][0] != "def" or not found[0][2]:
+            problems.append(f"{h} must be defined exactly once, as a top-level def (found {[b[0] for b in found]})")
+    chk_b = binds.get("chk", [])
+    if len(chk_b) != 1 or not (isinstance(chk_b[0][1], ast.ImportFrom) and chk_b[0][1].module == "scripts"
+                               and [(a.name, a.asname) for a in chk_b[0][1].names] == [("colab_backfill_checks", "chk")]):
+        problems.append("chk must be bound exactly once, by `from scripts import colab_backfill_checks as chk`")
+    for mod in ("subprocess", "sys", "os"):
+        if any(kind != "import" for kind, _, _ in binds.get(mod, [])):
+            problems.append(f"{mod} must only be bound by `import {mod}`")
+    for flag in FLAGS:
+        if any(kind != "assign" for kind, _, _ in binds.get(flag, [])):
+            problems.append(f"{flag} must only be bound by plain assignment")
+    for name in ("PROOF_SHA", "REMAINING"):
+        if any(kind not in ("assign",) for kind, _, _ in binds.get(name, [])):
+            problems.append(f"{name} must only be bound by plain assignment")
+
+    # helper bodies: no early return
+    defs = {n.name: n for _, t in trees for n in t.body if isinstance(n, ast.FunctionDef)}
+    for h in HELPERS:
+        if h in defs:
+            for r in (n for n in ast.walk(defs[h]) if isinstance(n, ast.Return)):
+                if r is not defs[h].body[-1]:
+                    problems.append(f"{h}: return only as the last statement (line {r.lineno})")
+    run_def = defs.get("run")
+    runner_ok = set()
+    if run_def is not None and run_def.args.args:
+        first = run_def.args.args[0].arg
+        inner = [n for n in ast.walk(run_def) if isinstance(n, ast.Call) and _dotted(n.func) == "subprocess.run"
+                 and n.args and isinstance(n.args[0], ast.Name) and n.args[0].id == first]
+        if not inner or not any(isinstance(n, ast.Raise) for n in ast.walk(run_def)):
+            problems.append("run must call subprocess.run(<its argv>) and raise on a nonzero exit")
+        runner_ok = {id(n) for n in inner}
+
+    # commands
+    for i, c in calls_all:
+        if not _is_runner(c) or id(c) in runner_ok:
+            continue
+        if _argv_prefix(c) is None:
+            argv = [_render(e) for e in c.args[0].elts] if c.args and isinstance(c.args[0], (ast.List, ast.Tuple)) else None
+            if argv and "publish" in argv:
+                problems.append(f"cell {i}: forbidden call scripts.hf_backfill publish: the notebook must not publish")
+            else:
+                problems.append(f"cell {i}: command is not allowlisted (line {c.lineno}): argv must be a literal "
+                                f"list starting with an allowed prefix, got {argv!r}")
+
+    # required steps: unconditional top-level statements, proof before the (guarded) stage() call
+    pos: dict[str, tuple[int, int]] = {}
+    for i, tree in trees:
+        for st in tree.body:
+            call = _direct_call(st)
+            if call is not None:
+                d = _dotted(call.func)
+                if d in ("chk.append_only_proof", "checkout_pinned", "dry_run"):
+                    pos.setdefault(d, (i, st.lineno))
+            if (isinstance(st, ast.If) and isinstance(st.test, ast.Name) and st.test.id == "CONFIRM_STAGE"
+                    and len(st.body) == 1 and isinstance(st.body[0], ast.Expr)
+                    and isinstance(st.body[0].value, ast.Call) and _dotted(st.body[0].value.func) == "stage"
+                    and not st.body[0].value.args):
+                pos.setdefault("stage", (i, st.lineno))
+    for name in ("checkout_pinned", "dry_run", "chk.append_only_proof", "stage"):
+        if name not in pos:
+            problems.append(f"call to {name} not found as an unconditional top-level statement"
+                            + (" (stage() must be the body of `if CONFIRM_STAGE:`)" if name == "stage" else ""))
+    if sum(1 for _, c in calls_all if _dotted(c.func) == "stage") != 1:
+        problems.append("stage() must be called exactly once, as the body of `if CONFIRM_STAGE:`")
+    if "stage" in pos and "chk.append_only_proof" in pos and pos["chk.append_only_proof"] >= pos["stage"]:
+        problems.append("append_only_proof must run before stage-upload")
+    if not _scan_split_complete(trees):
+        problems.append("call to chk.split_complete not found (outside any def, try or loop-free dead code)")
+    stage_def = defs.get("stage")
+    if stage_def is not None:
+        direct = [_direct_call(s) for s in stage_def.body]
+        if not any(c is not None and _dotted(c.func) == "run" and _argv_prefix(c) == STAGE_UPLOAD for c in direct):
+            problems.append("call to stage-upload not found as an unconditional top-level statement of stage()")
+    elif "stage" not in HELPERS:
+        problems.append("stage() is not defined")
+
+
+def _scan_split_complete(trees) -> bool:
+    """chk.split_complete reachable from top-level code through if/for only (not in a def)."""
+    def walk(stmts):
         for st in stmts:
-            if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                continue
-            if isinstance(st, ast.If):
-                t = _static_truth(st.test)
-                out.extend((cell, *pos(st.test, anchor), c) for c in _stmt_calls(ast.Expr(st.test)))
-                if t is not False:
-                    block(st.body, cell, anchor, stack)
-                if t is not True:
-                    block(st.orelse, cell, anchor, stack)
-                continue
-            if isinstance(st, ast.While) and _static_truth(st.test) is False:
-                block(st.orelse, cell, anchor, stack)
-                continue
-            if isinstance(st, (ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast.Try)):
-                head = [x for x in ast.iter_child_nodes(st) if isinstance(x, ast.expr) or isinstance(x, ast.withitem)]
-                for h in head:
-                    out.extend((cell, *pos(c, anchor), c) for c in _stmt_calls(ast.Expr(h if isinstance(h, ast.expr) else h.context_expr)))
-                for field in ("body", "handlers", "orelse", "finalbody"):
-                    for sub in getattr(st, field, []):
-                        block(sub.body if isinstance(sub, ast.ExceptHandler) else [sub], cell, anchor, stack)
-                continue
-            for c in _stmt_calls(st):
-                out.append((cell, *pos(c, anchor), c))
-                name = c.func.id if isinstance(c.func, ast.Name) else None
-                if name in defs and name not in stack:
-                    expand(name, cell, anchor or (c.lineno, c.col_offset), stack + (name,))
-            if isinstance(st, ast.Raise):
-                return
-
-    def pos(n, anchor):
-        return anchor if anchor else (n.lineno, n.col_offset)
-
-    def expand(name, cell, anchor, stack):
-        block(defs[name].body, cell, anchor, stack)
-
-    for cell, tree in trees:
-        block(tree.body, cell, None, seen)
-    return sorted(out, key=lambda t: t[:3])
-
-
-def _is_stage_upload(call: ast.Call) -> bool:
-    """The real invocation: a runner called with an argv list holding scripts.hf_backfill then stage-upload."""
-    if _callee(call) not in _RUNNERS or not call.args or not isinstance(call.args[0], (ast.List, ast.Tuple)):
+            if isinstance(st, (ast.If, ast.For)):
+                if walk(st.body) or walk(st.orelse):
+                    return True
+            else:
+                call = _direct_call(st)
+                if call is not None and _dotted(call.func) == "chk.split_complete":
+                    return True
         return False
-    argv = [e.value for e in call.args[0].elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
-    return ("scripts.hf_backfill" in argv and "stage-upload" in argv
-            and argv.index("scripts.hf_backfill") < argv.index("stage-upload"))
+    return any(walk(t.body) for _, t in trees)
 
 
 def check_notebook(path: Path) -> list[str]:
@@ -229,6 +385,12 @@ def check_notebook(path: Path) -> list[str]:
             problems.append(f"cell {i}: outputs not cleared")
         if cell.get("execution_count") is not None:
             problems.append(f"cell {i}: execution_count not cleared")
+        if any(line.lstrip().startswith(("!", "%")) for line in code.splitlines()):
+            problems.append(f"cell {i}: shell/cell magics are not allowed"
+                            + (" (forbidden call scripts.hf_backfill publish)" if PUBLISH_CMD_RE.search(code) else ""))
+        if any(line.lstrip().startswith(("!", "%")) and any(n in line for n in SECRET_NAMES[:3])
+               for line in code.splitlines()):
+            problems.append(f"cell {i}: shell magic references a secret")
         try:
             tree = ast.parse(_blank_magics(code))
         except SyntaxError as exc:
@@ -239,6 +401,14 @@ def check_notebook(path: Path) -> list[str]:
             if (isinstance(node, ast.Call) and getattr(node.func, "id", "") == "print"
                     and any(_reads_secret(n) for a in node.args for n in ast.walk(a))):
                 problems.append(f"cell {i}: print() references a secret variable")
+
+    if trees:
+        _check_code(trees, problems)
+    for _, tree in trees:
+        if _mentions_publish(tree):
+            problems.append("forbidden call scripts.hf_backfill publish: the notebook must not publish "
+                            "(only a print() of plain string constants may mention it)")
+            break
 
     joined = "\n".join(_source(c) for c in code_cells)
     for flag in FLAGS:
@@ -261,40 +431,13 @@ def check_notebook(path: Path) -> list[str]:
         problems.append("REPO_COMMIT literal not found (the checkout must be pinned to a commit)")
     elif c.group(1) and not re.fullmatch(r"[0-9a-f]{40}", c.group(1)):
         problems.append("REPO_COMMIT must be empty or a full 40-character lowercase sha")
-    # The required steps must be executed calls (top-level code, or a notebook function called from it),
-    # not marker text, uncalled defs, dead branches or print() arguments; and the proof comes first.
-    defs = {n.name: n for _, t in trees for n in t.body if isinstance(n, ast.FunctionDef)}
-    first_call: dict[str, tuple[int, int, int]] = {}
-    for cell, ln, col, call in _executable_calls(trees, defs):
-        names = [_callee(call)]
-        if _is_stage_upload(call):
-            names.append("stage-upload")
-        for name in names:
-            if name in REQUIRED_CALLS + ("stage-upload",) and name not in first_call:
-                first_call[name] = (cell, ln, col)  # list is position-sorted: the first is the earliest
-    for name in REQUIRED_CALLS + ("stage-upload",):
-        if name not in first_call:
-            problems.append(f"call to {name} not found (a marker string, an uncalled def or a dead branch does not count)")
-    if "stage-upload" in first_call and "append_only_proof" in first_call \
-            and first_call["append_only_proof"] >= first_call["stage-upload"]:
-        problems.append("append_only_proof must run before stage-upload")
-    publishes = any(_publishes(tree) for _, tree in trees) or any(
-        PUBLISH_CMD_RE.search(line) for c in code_cells for line in _source(c).splitlines()
-        if line.lstrip().startswith(("!", "%")))
     for name in FORBIDDEN_CALLS:
-        hit = publishes if " " in name else re.search(rf"\b{re.escape(name)}\b", joined)
-        if hit:
+        if " " not in name and re.search(rf"\b{re.escape(name)}\b", joined):
             problems.append(f"forbidden call {name}: the notebook must not publish")
     # Whole file, markdown cells and metadata included.
     raw = Path(path).read_text(encoding="utf-8")
     if TOKEN_RE.search(raw):
         problems.append("a token-shaped string is present")
-    for i, cell in enumerate(nb.get("cells", [])):
-        if cell.get("cell_type") != "code":
-            continue
-        for line in _source(cell).splitlines():
-            if line.lstrip().startswith(("!", "%")) and any(n in line for n in SECRET_NAMES[:3]):
-                problems.append(f"cell {i}: shell magic references a secret")
     return problems
 
 
