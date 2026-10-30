@@ -5,8 +5,11 @@ on:
   push:
     branches: [main]
     paths:
+      - .github/workflows/build-hf-gpu-image.yml
+      - .dockerignore
       - Dockerfile.hf-gpu
       - scripts/hf_backfill.py
+      - scripts/run_hf_backfill.sh
       - scripts/embed_additional.py
       - pyproject.toml
       - uv.lock
@@ -17,6 +20,7 @@ permissions:
 concurrency:
   group: build-hf-gpu-image-${{ github.ref }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   build-and-push:

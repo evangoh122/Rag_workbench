@@ -433,8 +433,9 @@ The HF Space has **no persistent volume**, so runtime state survives restarts th
 **The runner is a dry run by default**: it validates its inputs, prints the plan (tickers, forms, quarters, estimated filings) and exits 0 without downloading or embedding anything. It only executes with `BACKFILL_CONFIRM=yes` (or `--execute`). Caps are validated and any invalid value fails loudly (exit 2): `BACKFILL_TICKERS` (required, at most `BACKFILL_MAX_TICKERS`, default 10, allowed 1..50), `BACKFILL_QUARTERS` (integer 1..8, default 3, used for `10-Q`), `BACKFILL_FORMS` (`annual` or `10-Q`), and a hard deadline `BACKFILL_TIMEOUT_SECONDS` (60..21600, default 18000) enforced inside the script with `timeout`, independent of the `hf jobs --timeout` flag. `STAGING_REPO` is required to execute (not for a dry run): it must be an existing **private** dataset repo and must differ from `DATASET_REPO` both as a string and by canonical Hub repo id, so a renamed alias of production is refused too (before downloading anything and again before uploading). The run id is `BACKFILL_RUN_ID` or `<UTC time>-<dataset head>-<random>`; an explicit id is validated before any download or embedding, and staging refuses a run prefix that already exists instead of overwriting it. The final log line prints the repo and path. Python helpers run as modules from the repo root (`python -m scripts.hf_backfill ...`), because running the file directly cannot import `api`.
 
 The `build-hf-gpu-image.yml` workflow builds and pushes the image after relevant
-changes land on `main` (or when manually dispatched). Use the immutable commit-SHA
-tag for a backfill; `latest` is also published:
+changes land on `main`. After merging, manually run it via `workflow_dispatch`
+on `main` to ensure the image is published. Use the immutable commit-SHA tag for
+a backfill; `latest` is also published:
 
 ```bash
 IMAGE=ghcr.io/evangoh122/rag-workbench-hf-gpu:<git-sha>

@@ -100,8 +100,11 @@ def test_hf_gpu_image_workflow_publishes_expected_ghcr_tags():
     assert set(trigger) == {"workflow_dispatch", "push"}
     assert trigger["push"]["branches"] == ["main"]
     assert set(trigger["push"]["paths"]) == {
+        ".github/workflows/build-hf-gpu-image.yml",
+        ".dockerignore",
         "Dockerfile.hf-gpu",
         "scripts/hf_backfill.py",
+        "scripts/run_hf_backfill.sh",
         "scripts/embed_additional.py",
         "pyproject.toml",
         "uv.lock",
@@ -110,6 +113,7 @@ def test_hf_gpu_image_workflow_publishes_expected_ghcr_tags():
     assert workflow["concurrency"] == {
         "group": "build-hf-gpu-image-${{ github.ref }}",
         "cancel-in-progress": "false",
+        "queue": "max",
     }
 
     job = workflow["jobs"]["build-and-push"]
