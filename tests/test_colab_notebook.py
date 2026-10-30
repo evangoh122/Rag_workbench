@@ -44,9 +44,9 @@ CONFIRM_EXECUTE = False
 CONFIRM_STAGE = False
 STAGING_REPO = 'egoh33/rag-staging'
 REPO_COMMIT = ''
-PROOF_SHA = None
 REMAINING = None
 DB = '/content/rag.duckdb'
+ORIG_DB = '/content/orig/rag.duckdb'
 
 
 def run(cmd, cwd=None, env=None):
@@ -81,7 +81,9 @@ def stage():
 REPO_HEAD = checkout_pinned(REPO_COMMIT)
 PLANNED = dry_run()
 done, short = chk.split_complete(['AAA'], [])
-APPEND_ONLY_REPORT = chk.append_only_proof(DB, DB)
+PROOF_SHA = None
+APPEND_ONLY_REPORT = chk.append_only_proof(ORIG_DB, DB)
+PROOF_SHA = sha256_file(DB)
 if CONFIRM_STAGE:
     stage()
 else:
@@ -629,7 +631,8 @@ def test_lookup_failure_never_reaches_the_checkpoint(tmp_path):
 
 # ── round 3: allowlist design. Every probe below PASSED the round-2 blacklist checker. ──────────────
 
-PROOF = "APPEND_ONLY_REPORT = chk.append_only_proof(DB, DB)\n"
+PROOF = "APPEND_ONLY_REPORT = chk.append_only_proof(ORIG_DB, DB)\n"
+PROOF_SHA_LINE = "PROOF_SHA = sha256_file(DB)\n"
 UPLOAD_LINE = "    run([sys.executable, '-m', 'scripts.hf_backfill', 'stage-upload', DB, '--repo', STAGING_REPO])\n"
 
 
@@ -822,3 +825,133 @@ def test_failed_dry_run_leaves_remaining_unset_and_staging_refuses(tmp_path):
     with pytest.raises(RuntimeError, match="step 7"):
         ns["stage"]()
     assert [c for c in calls if "stage-upload" in c] == []
+
+
+# ── round 4: no direct staging/publish invocation, no fabricated proof hash, no stale proof ─────
+
+DIRECT_BYPASSES = {
+    # stage-upload outside stage() skips stage()'s proof/completeness/WAL gates entirely
+    "toplevel_stage_upload": "\nrun([sys.executable, '-m', 'scripts.hf_backfill', 'stage-upload', DB, '/b.json',\n"
+                             "     '--repo', STAGING_REPO, '--prod-repo', 'egoh33/Rag-workbench', '--run-id', 'r2'])\n",
+    "stage_upload_in_other_helper": None,  # filled in below (a replace, not an append)
+    # a `python -c` payload is arbitrary code the allowlist cannot parse
+    "c_payload_guarded_publish": "\nrun([sys.executable, '-c', 'from scripts.hf_backfill import guarded_publish; "
+                                 "guarded_publish(DB, \"/b.json\", \"egoh33/Rag-workbench\", True)'])\n",
+    "c_payload_subprocess_publish": "\nrun([sys.executable, '-c', 'import subprocess, sys; "
+                                   "subprocess.run([sys.executable, \"-m\", \"scripts.hf_backfill\", \"publish\", "
+                                   "\"--confirm\"])'])\n",
+    "c_payload_main_publish": "\nrun([sys.executable, '-c', 'import scripts.hf_backfill as h; "
+                              "h.main([\"publish\", \"d\", \"b\", \"--repo\", \"egoh33/Rag-workbench\", \"--confirm\"])'])\n",
+    "c_payload_stage_upload": "\nrun([sys.executable, '-c', 'import scripts.hf_backfill as h; "
+                             "h.main([\"stage-upload\", \"d\", \"b\", \"--repo\", \"r/s\", \"--run-id\", \"x\"])'])\n",
+    "c_payload_from_a_variable": "\npayload = 'print(1)'\nrun([sys.executable, '-c', payload])\n",
+    "c_payload_fstring": "\nrun([sys.executable, '-c', f'print({\"1\"})'])\n",
+}
+
+
+@pytest.mark.parametrize("name", sorted(DIRECT_BYPASSES))
+def test_direct_staging_or_publish_invocation_is_rejected(tmp_path, name):
+    """Round-4 review: the round-3 allowlist checker ACCEPTED all of these. stage-upload may only run
+    from stage(), and a -c payload (arbitrary code) may not name staging/publish at all — and must be
+    a plain string literal, so it can always be scanned."""
+    if name == "stage_upload_in_other_helper":
+        src = GOOD.replace("def save_checkpoint(meta):\n    return meta",
+                           "def save_checkpoint(meta):\n"
+                           "    run([sys.executable, '-m', 'scripts.hf_backfill', 'stage-upload', DB, "
+                           "'--repo', STAGING_REPO])\n"
+                           "    return meta")
+    else:
+        src = GOOD + DIRECT_BYPASSES[name]
+    assert src != GOOD
+    problems = _problems(tmp_path, src)
+    assert problems, "the checker accepted a direct staging/publish invocation"
+    assert any("stage-upload may only be invoked by stage()" in p or "-c payload" in p for p in problems), problems
+
+
+def test_c_payload_dependency_check_is_still_allowed(tmp_path):
+    """The one legitimate -c use (step 3's fresh-interpreter dependency check) still passes."""
+    src = GOOD + ("\nrun([sys.executable, '-c', 'import torch, duckdb; assert torch.cuda.is_available(); "
+                  "print(\"deps OK | torch\", torch.__version__)'])\n")
+    assert check_notebook(_write(tmp_path, src)) == []
+
+
+FABRICATED_PROOF_HASHES = {
+    "literal_hex": (PROOF_SHA_LINE, "PROOF_SHA = '" + "ab" * 32 + "'\n"),
+    "repeated_zero_literal": (PROOF_SHA_LINE, "PROOF_SHA = '0' * 64\n"),
+    "wrong_source": (PROOF_SHA_LINE, "PROOF_SHA = sha256_file(ORIG_DB)\n"),
+    "hash_of_a_call": (PROOF_SHA_LINE, "PROOF_SHA = sha256_file(sha256_file(DB))\n"),
+    "self_proof": ("chk.append_only_proof(ORIG_DB, DB)", "chk.append_only_proof(DB, DB)"),
+    "proof_arg_not_a_name": ("chk.append_only_proof(ORIG_DB, DB)", "chk.append_only_proof(ORIG_DB, DB + '.bak')"),
+    "reset_after_proof": ("PROOF_SHA = None\n" + PROOF + PROOF_SHA_LINE, PROOF + PROOF_SHA_LINE + "PROOF_SHA = None\n"),
+}
+
+
+@pytest.mark.parametrize("name", sorted(FABRICATED_PROOF_HASHES))
+def test_fabricated_proof_hash_is_rejected(tmp_path, name):
+    """Round-4 review: the checker accepted a pasted literal, a hash of the wrong file, a hash of a
+    call, and a self-proof; and did not notice the reset missing before the proof. PROOF_SHA is the
+    only thing stage() re-checks, so it may only be None or the real hasher over the proven DB."""
+    old, new = FABRICATED_PROOF_HASHES[name]
+    src = GOOD.replace(old, new)
+    assert src != GOOD
+    _expect(tmp_path, src)
+
+
+def test_proof_hash_rules_match_the_committed_pattern(tmp_path):
+    """The committed notebook's own shape (reset first, proof over ORIG_DB -> DB, hash of DB) passes."""
+    assert check_notebook(_write(tmp_path, GOOD)) == []
+
+
+def _proof_ns(tmp_path, proof_raises=False):
+    """A namespace for the real step-8 cell: real files, the real sha256_file, a recording proof double."""
+    import pathlib
+    from scripts.hf_backfill import sha256_file
+    orig, db = tmp_path / "orig.duckdb", tmp_path / "rag.duckdb"
+    orig.write_bytes(b"original-bytes")
+    db.write_bytes(b"working-bytes")
+    before = tmp_path / "before.json"
+    before.write_text(json.dumps({"sha256": sha256_file(str(orig))}))
+    seen = []
+
+    class Chk:
+        @staticmethod
+        def append_only_proof(a, b):
+            if proof_raises:
+                raise RuntimeError("proof failed: rows missing")
+            seen.append((a, b))
+            return {"edgar_embeddings": {"before": 1, "after": 2, "added": 1}}
+
+    ns = {"sha256_file": sha256_file, "pathlib": pathlib, "json": json, "chk": Chk,
+          "ORIG_DB": str(orig), "DB": str(db), "BEFORE_JSON": str(before)}
+    return ns, seen, before, db, sha256_file
+
+
+def test_failed_proof_recheck_leaves_no_stale_proof_and_staging_refuses(tmp_path):
+    """Round-4 review: step 8 reset PROOF_SHA only AFTER its before.json guard, so a failed re-check
+    kept the hash of the previous successful proof; the DB being unchanged, stage() then ran
+    stage-check/stage-upload on a proof that no longer held. The reset must come first."""
+    import sys as _sys
+    ns, seen, before, db, sha256_file = _proof_ns(tmp_path)
+    exec(compile(_steps()[8], "step8", "exec"), ns)  # noqa: S102
+    assert ns["PROOF_SHA"] == sha256_file(str(db)) and seen == [(ns["ORIG_DB"], ns["DB"])]
+    # the re-check fails: before.json no longer describes the pinned original (DB itself is unchanged)
+    before.write_text(json.dumps({"sha256": "0" * 64}))
+    with pytest.raises(RuntimeError, match="refusing to prove"):
+        exec(compile(_steps()[8], "step8", "exec"), ns)  # noqa: S102
+    assert ns["PROOF_SHA"] is None, "a failed re-check must not leave the earlier proof hash behind"
+    calls = []
+    ns.update({"os": __import__("os"), "sys": _sys, "REMAINING": [], "ACCEPT_INCOMPLETE": False,
+               "run": lambda cmd, **k: calls.append(cmd), "WORK": str(tmp_path),
+               "STAGING_REPO": "egoh33/rag-staging", "DATASET_REPO": "egoh33/Rag-workbench",
+               "meta": {"run_id": "colab-r1"}})
+    stage = _extract_func(9, "stage", ns)
+    with pytest.raises(RuntimeError, match="append-only proof"):
+        stage()
+    assert [c for c in calls if "stage-upload" in c] == []
+
+
+def test_failed_append_only_proof_leaves_proof_sha_unset(tmp_path):
+    ns, seen, before, db, _sha = _proof_ns(tmp_path, proof_raises=True)
+    with pytest.raises(RuntimeError, match="proof failed"):
+        exec(compile(_steps()[8], "step8", "exec"), ns)  # noqa: S102
+    assert ns["PROOF_SHA"] is None and seen == []

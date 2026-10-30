@@ -17,9 +17,17 @@ trick fails closed instead of needing another blacklist entry. The rules:
   import; the helpers have no early `return`;
 * every command goes through `run([...])` / `subprocess.run([...])` with a literal argv list whose first
   elements match an allowlisted prefix (so `scripts.hf_backfill publish`, built or not, is rejected);
-* the append-only proof (`chk.append_only_proof`) is an unconditional top-level statement, the
-  stage-upload `run([...])` is an unconditional top-level statement of `stage()`, `stage()` is called
-  once, only as the body of `if CONFIRM_STAGE:`, and strictly after the proof;
+  `stage-upload` may ONLY be invoked by the one unconditional stage-upload statement inside `stage()`
+  (a direct call anywhere else would skip stage()'s proof/completeness gates), and a `python -c` payload
+  must be a plain string literal free of staging/publish escape markers (it is code the checker cannot
+  parse, so any mention of publish/stage-upload/hf_backfill/subprocess/... fails closed);
+* the append-only proof (`chk.append_only_proof`) is an unconditional top-level statement comparing two
+  DIFFERENT databases named as plain names (a self-proof proves nothing), the stage-upload `run([...])`
+  is an unconditional top-level statement of `stage()`, `stage()` is called once, only as the body of
+  `if CONFIRM_STAGE:`, and strictly after the proof; `PROOF_SHA` (the proof hash stage() re-checks) may
+  only ever be `None` or `sha256_file(<the proven DB>)` — a literal or wrong-source hash is fabricated
+  and rejected — and `PROOF_SHA = None` must precede the proof in the same cell, so a failed re-check
+  leaves it unset instead of keeping a stale proof from an earlier run;
 * the LAST assignment of CONFIRM_EXECUTE / CONFIRM_STAGE, in cell order, is a literal False; the repo
   checkout is pinned; STAGING_REPO is not the production dataset.
 """
@@ -81,6 +89,14 @@ ARGV_PREFIXES = [
     (PY, "scripts/prepare_db_copy.py", "check"), (PY, "scripts/embed_additional.py"),
 ]
 STAGE_UPLOAD = (PY, "-m", "scripts.hf_backfill", "stage-upload")
+PY_C = (PY, "-c")
+# A `python -c` payload is arbitrary code the allowlist cannot see. It must be a plain string literal,
+# and that literal is then scanned: any staging/publish escape marker fails closed (the one legitimate
+# use, step 3's fresh-interpreter dependency check, mentions none of these).
+CODE_ESCAPE_RE = re.compile(
+    r"publish|stage[-_]upload|guarded_publish|hf_backfill|create_commit|upload_file|upload_folder|"
+    r"delete_repo|delete_file|restart_space|HfApi|subprocess|__import__|\beval\b|\bexec\b|"
+    r"os\.system|popen|shell\s*=", re.IGNORECASE)
 _NOT_LITERAL = object()
 
 
@@ -228,6 +244,25 @@ def _direct_call(stmt: ast.stmt):
     return v if isinstance(v, ast.Call) else None
 
 
+def _proof_sha_values(trees):
+    """(cell index, is_top_level, value node, lineno) for every assignment to PROOF_SHA.
+
+    AnnAssign with a value and AugAssign are reported too (with the statement itself as the
+    `value`), so every binding shape has to justify itself against the proof rules.
+    """
+    out = []
+    for i, tree in trees:
+        top = {id(s) for s in tree.body}
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "PROOF_SHA" for t in n.targets):
+                out.append((i, id(n) in top, n.value, n.lineno))
+            elif isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name) and n.target.id == "PROOF_SHA":
+                out.append((i, id(n) in top, n.value if n.value is not None else n, n.lineno))
+            elif isinstance(n, ast.AugAssign) and isinstance(n.target, ast.Name) and n.target.id == "PROOF_SHA":
+                out.append((i, id(n) in top, n, n.lineno))
+    return out
+
+
 def _check_code(trees, problems):
     """The allowlist rules over all parsed code cells ((cell index, tree) in cell order)."""
     calls_all = [(i, n) for i, t in trees for n in ast.walk(t) if isinstance(n, ast.Call)]
@@ -306,11 +341,33 @@ def _check_code(trees, problems):
             problems.append("run must call subprocess.run(<its argv>) and raise on a nonzero exit")
         runner_ok = {id(n) for n in inner}
 
-    # commands
+    # commands: literal allowlisted argv only; stage-upload solely through stage(); `-c` payloads scanned
+    stage_def = defs.get("stage")
+    ok_stage_uploads = set()
+    if stage_def is not None:
+        for s in stage_def.body:
+            c = _direct_call(s)
+            if c is not None and _dotted(c.func) == "run" and _argv_prefix(c) == STAGE_UPLOAD:
+                ok_stage_uploads.add(id(c))
     for i, c in calls_all:
         if not _is_runner(c) or id(c) in runner_ok:
             continue
-        if _argv_prefix(c) is None:
+        prefix = _argv_prefix(c)
+        if prefix == STAGE_UPLOAD and id(c) not in ok_stage_uploads:
+            problems.append(f"cell {i}: stage-upload may only be invoked by stage() (line {c.lineno}); a direct "
+                            "call skips stage()'s proof and completeness gates")
+            continue
+        if prefix == PY_C:
+            elts = c.args[0].elts if c.args and isinstance(c.args[0], (ast.List, ast.Tuple)) else []
+            payload = elts[2] if len(elts) > 2 else None
+            if not (isinstance(payload, ast.Constant) and isinstance(payload.value, str)):
+                problems.append(f"cell {i}: a -c payload must be a plain string literal (line {c.lineno}); "
+                                "it is arbitrary code the allowlist cannot see")
+            elif CODE_ESCAPE_RE.search(payload.value):
+                problems.append(f"cell {i}: -c payload may not reference staging or publish (line {c.lineno}): "
+                                f"{payload.value[:60]!r}")
+            continue
+        if prefix is None:
             argv = [_render(e) for e in c.args[0].elts] if c.args and isinstance(c.args[0], (ast.List, ast.Tuple)) else None
             if argv and "publish" in argv:
                 problems.append(f"cell {i}: forbidden call scripts.hf_backfill publish: the notebook must not publish")
@@ -320,12 +377,16 @@ def _check_code(trees, problems):
 
     # required steps: unconditional top-level statements, proof before the (guarded) stage() call
     pos: dict[str, tuple[int, int]] = {}
+    proof_call: ast.Call | None = None
     for i, tree in trees:
         for st in tree.body:
             call = _direct_call(st)
             if call is not None:
                 d = _dotted(call.func)
-                if d in ("chk.append_only_proof", "checkout_pinned", "dry_run"):
+                if d == "chk.append_only_proof" and proof_call is None:
+                    proof_call = call
+                    pos.setdefault(d, (i, st.lineno))
+                elif d in ("checkout_pinned", "dry_run"):
                     pos.setdefault(d, (i, st.lineno))
             if (isinstance(st, ast.If) and isinstance(st.test, ast.Name) and st.test.id == "CONFIRM_STAGE"
                     and len(st.body) == 1 and isinstance(st.body[0], ast.Expr)
@@ -342,13 +403,35 @@ def _check_code(trees, problems):
         problems.append("append_only_proof must run before stage-upload")
     if not _scan_split_complete(trees):
         problems.append("call to chk.split_complete not found (outside any def, try or loop-free dead code)")
-    stage_def = defs.get("stage")
-    if stage_def is not None:
-        direct = [_direct_call(s) for s in stage_def.body]
-        if not any(c is not None and _dotted(c.func) == "run" and _argv_prefix(c) == STAGE_UPLOAD for c in direct):
-            problems.append("call to stage-upload not found as an unconditional top-level statement of stage()")
-    elif "stage" not in HELPERS:
-        problems.append("stage() is not defined")
+    if not ok_stage_uploads:
+        problems.append("call to stage-upload not found as an unconditional top-level statement of stage()")
+
+    # the proof may not be self-referential, and the proof hash may not be fabricated
+    proven_db: str | None = None
+    if proof_call is not None:
+        args = proof_call.args
+        if len(args) == 2 and all(isinstance(a, ast.Name) for a in args) and args[0].id != args[1].id:
+            proven_db = args[1].id
+        else:
+            problems.append("append_only_proof must compare two different databases, as plain names "
+                            "(a self-proof or computed argument proves nothing)")
+    reset_before_proof = False
+    proof_pos = pos.get("chk.append_only_proof")
+    for i, top, value, lineno in _proof_sha_values(trees):
+        if isinstance(value, ast.Constant) and value.value is None:
+            if proof_pos is not None and top and i == proof_pos[0] and lineno < proof_pos[1]:
+                reset_before_proof = True
+            continue
+        if (proven_db is not None and isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+                and value.func.id == "sha256_file" and len(value.args) == 1
+                and isinstance(value.args[0], ast.Name) and value.args[0].id == proven_db
+                and not value.keywords):
+            continue
+        problems.append(f"PROOF_SHA must only be None or sha256_file(<the proven DB>) (cell {i}, line {lineno}); "
+                        "any other value is a fabricated proof hash")
+    if proof_call is not None and not reset_before_proof:
+        problems.append("PROOF_SHA = None must run before append_only_proof in the same cell, so a failed "
+                        "re-check cannot leave a stale proof from an earlier run")
 
 
 def _scan_split_complete(trees) -> bool:
