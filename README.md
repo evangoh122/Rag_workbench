@@ -543,7 +543,7 @@ The project is not a legal compliance certification. It is a working architectur
 
 ## How this is built — multi-agent workflow
 
-This project is built by a team of specialist AI agents, each on its own branch, with mandatory cross-review before anything reaches `main`. The roles and ownership are defined in [`AGENTS.md`](AGENTS.md); each agent's mandate lives in `.<agent>/ROLE.md`.
+This project is built by a team of specialist AI agents, each on its own branch, with mandatory cross-review before anything reaches `main`. The roles and ownership are defined in [`AGENTS.md`](AGENTS.md); role files are tracked for Claude, DeepSeek, Gemini and MiMo in their respective `.<agent>/ROLE.md` files.
 
 | Agent | Branch | Focus | Owns |
 |---|---|---|---|
@@ -555,7 +555,7 @@ This project is built by a team of specialist AI agents, each on its own branch,
 
 1. **Branch per specialist.** Commits go to the named branch only — never directly to `main`.
 2. **Peer review is required.** Before a branch merges, another specialist reviews it. No self-review.
-3. **Round-robin reviewers:** `claude` → reviewed by **MiMo**; `mimo` → reviewed by **Gemini**; `gemini` → reviewed by **Claude**. Reviews are recorded as `.<agent>/REVIEW-*.md`.
+3. **Round-robin reviewers:** `claude` → reviewed by **MiMo**; `mimo` → reviewed by **Gemini**; `gemini` → reviewed by **Claude**. Review verdicts are working files kept outside the repo (`.<agent>/REVIEW-*.md` / `VERDICT-*.md` are gitignored); the outcome is recorded on the PR.
 4. **Verdict:** reviewer returns `APPROVED` or `CHANGES NEEDED`; the author fixes on-branch and requests re-review.
 5. **Integration:** only approved branches merge to `main`. Conflicts are resolved by domain — architecture (Claude), security/perf (Gemini), optimization (MiMo).
 6. **Worktree isolation:** agents dispatched with `isolation: "worktree"` must branch from `main` (not a stale specialist branch) — verified with `git log --oneline <branch> | head -3` before review.
@@ -590,6 +590,18 @@ This project is built by a team of specialist AI agents, each on its own branch,
 The portfolio + RAG Workbench UI lives in the separate `evangoh-frontend`
 repo, which serves it directly in production. This repo is
 backend/API-only (no frontend build stage, no nginx, no supervisord).
+
+### Repo layout / cleanup
+
+The repo tracks product code (`api/`, `scripts/`, `evals/`, `tests/`), CI
+(`.github/workflows/`), the two Dockerfiles, `pyproject.toml` + `uv.lock`, and
+the docs under `docs/`. The cleanup removed and gitignored selected agent review
+and verdict notes, `.deepseek/coordination/`, `.codex/`, planning files other
+than `.planning/SECURITY_AUDIT.md`, session logs and handoffs, the old
+`ISSUES.md` tracker, and `skills-lock.json`. Some tracked verdicts remain, as
+do the Claude, DeepSeek, Gemini and MiMo role files. Git history retains the
+removed files. The UI/UX framework document and landing-page `mockups/` remain
+tracked pending an owner decision.
 
 ---
 
