@@ -35,7 +35,6 @@ load_dotenv(ROOT / ".env")
 os.environ["EMBEDDING_PROVIDER"] = "sentence-transformers"
 os.environ["ST_EMBEDDING_MODEL"] = "Qwen/Qwen3-Embedding-0.6B"
 os.environ["EMBEDDING_DIM"] = "1024"
-os.environ.setdefault("EDGAR_USER_AGENT", "Evan Goh evangohsg@gmail.com")
 
 # ── performance: saturate CPU cores for local embedding ───────────────────────
 # The Space caps batch=4 / few threads for its 16Gi limit; this box has 8 physical
@@ -78,6 +77,15 @@ DB_PATH = Config.DB_PATH  # singleton instance attr (mirrors scripts/embed_edgar
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
+def _require_edgar_user_agent() -> None:
+    """SEC requires a real identity; refuse to run anonymously (no built-in default)."""
+    if not os.getenv("EDGAR_USER_AGENT", "").strip():
+        sys.exit(
+            "EDGAR_USER_AGENT is not set. Export it (e.g. EDGAR_USER_AGENT='Your Name you@example.com'), "
+            "put it in .env, or pass it as a CI/job secret; the SEC rejects anonymous requests."
+        )
+
 
 def _normalize_filings(fresult):
     """Return a list of Filing objects from the result of latest(n).
@@ -158,6 +166,8 @@ def main():
     )
     args = parser.parse_args()
 
+    _require_edgar_user_agent()
+
     if args.log:
         logger.add(args.log, rotation="10 MB", level="DEBUG")
 
@@ -207,6 +217,7 @@ def main():
             return
 
         summary: dict[str, dict] = {}  # ticker -> {"added", "skipped", "total_chunks"}
+        lookup_failures: list[tuple[str, str]] = []  # (ticker, form) whose EDGAR lookup raised
 
         for ticker in tickers:
             summary.setdefault(ticker, {"added": 0, "skipped": 0, "total_chunks": 0})
@@ -246,6 +257,7 @@ def main():
                     window = _normalize_filings(filings.latest(max(n_latest + 6, 8)))
                 except Exception as exc:
                     logger.error(f"[{ticker}] Failed to get {form_code} filings: {exc}")
+                    lookup_failures.append((ticker, form_code))
                     continue
 
                 filing_list = [
@@ -261,6 +273,7 @@ def main():
                         form_type = fl.form
                     except Exception as exc:
                         logger.error(f"[{ticker}/{form_code}] Cannot read filing metadata: {exc}")
+                        lookup_failures.append((ticker, form_code))
                         continue
 
                     # Dedup check
@@ -420,6 +433,12 @@ def main():
     logger.info(
         f"TOTAL: added={tot_added}, skipped={tot_skipped}, chunks_stored={tot_chunks}"
     )
+    # A dry run is a completeness probe: a failed lookup means "unknown", never "nothing to fetch".
+    # Fail it loudly so callers (the Colab notebook) cannot record the ticker as complete.
+    if args.dry_run and lookup_failures:
+        for ticker, form_code in sorted(set(lookup_failures)):
+            logger.error(f"DRY-RUN lookup FAILED: {ticker} {form_code}")
+        sys.exit(2)
 
 
 if __name__ == "__main__":
