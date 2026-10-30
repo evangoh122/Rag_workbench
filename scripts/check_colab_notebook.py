@@ -94,11 +94,20 @@ def _flag_assignments(tree: ast.AST, flag: str):
 _NOT_LITERAL = object()
 
 
+def _is_info_print(node: ast.AST) -> bool:
+    """A print() whose arguments are plain strings (constants or call-free f-strings): purely informational."""
+    if not (isinstance(node, ast.Call) and _callee(node) == "print"):
+        return False
+    parts = list(node.args) + [k.value for k in node.keywords]
+    return not any(isinstance(x, ast.Call) for p in parts for x in ast.walk(p))
+
+
 def _publishes(tree: ast.AST) -> bool:
-    """True when executable code (anything outside a print() call) holds a `hf_backfill publish` command."""
+    """True when code holds a `hf_backfill publish` command. Only an informational print() is exempt;
+    print(subprocess.run([... 'publish'])) is still executable and is inspected."""
     skip: set[int] = set()
     for n in ast.walk(tree):
-        if isinstance(n, ast.Call) and _callee(n) == "print":
+        if _is_info_print(n):
             skip.update(id(x) for x in ast.walk(n))
     for n in ast.walk(tree):
         if id(n) in skip:
@@ -112,6 +121,93 @@ def _publishes(tree: ast.AST) -> bool:
         if PUBLISH_CMD_RE.search(text):
             return True
     return False
+
+
+_RUNNERS = ("run", "check_call", "check_output", "call", "Popen")
+
+
+def _static_truth(test: ast.AST):
+    """True/False for a literal condition, None when it is only known at run time."""
+    try:
+        return bool(ast.literal_eval(test))
+    except (ValueError, TypeError, SyntaxError):
+        pass
+    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+        inner = _static_truth(test.operand)
+        return None if inner is None else not inner
+    return None
+
+
+def _stmt_calls(stmt: ast.stmt):
+    """Calls evaluated by one simple statement (not inside a lambda or a print())."""
+    out = []
+
+    def visit(n):
+        if isinstance(n, ast.Lambda) or (isinstance(n, ast.Call) and _callee(n) == "print"):
+            return
+        if isinstance(n, ast.Call):
+            out.append(n)
+        for c in ast.iter_child_nodes(n):
+            visit(c)
+    visit(stmt)
+    return out
+
+
+def _executable_calls(trees, defs, seen=()):
+    """Calls that run when the cells run top to bottom, as (cell, line, col, Call): not inside an
+    uncalled def, a dead branch or code after a raise, nor in print() arguments. A call to a function
+    defined in the notebook is expanded at its call site (position = the call site)."""
+    out = []
+
+    def block(stmts, cell, anchor, stack):
+        for st in stmts:
+            if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                continue
+            if isinstance(st, ast.If):
+                t = _static_truth(st.test)
+                out.extend((cell, *pos(st.test, anchor), c) for c in _stmt_calls(ast.Expr(st.test)))
+                if t is not False:
+                    block(st.body, cell, anchor, stack)
+                if t is not True:
+                    block(st.orelse, cell, anchor, stack)
+                continue
+            if isinstance(st, ast.While) and _static_truth(st.test) is False:
+                block(st.orelse, cell, anchor, stack)
+                continue
+            if isinstance(st, (ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast.Try)):
+                head = [x for x in ast.iter_child_nodes(st) if isinstance(x, ast.expr) or isinstance(x, ast.withitem)]
+                for h in head:
+                    out.extend((cell, *pos(c, anchor), c) for c in _stmt_calls(ast.Expr(h if isinstance(h, ast.expr) else h.context_expr)))
+                for field in ("body", "handlers", "orelse", "finalbody"):
+                    for sub in getattr(st, field, []):
+                        block(sub.body if isinstance(sub, ast.ExceptHandler) else [sub], cell, anchor, stack)
+                continue
+            for c in _stmt_calls(st):
+                out.append((cell, *pos(c, anchor), c))
+                name = c.func.id if isinstance(c.func, ast.Name) else None
+                if name in defs and name not in stack:
+                    expand(name, cell, anchor or (c.lineno, c.col_offset), stack + (name,))
+            if isinstance(st, ast.Raise):
+                return
+
+    def pos(n, anchor):
+        return anchor if anchor else (n.lineno, n.col_offset)
+
+    def expand(name, cell, anchor, stack):
+        block(defs[name].body, cell, anchor, stack)
+
+    for cell, tree in trees:
+        block(tree.body, cell, None, seen)
+    return sorted(out, key=lambda t: t[:3])
+
+
+def _is_stage_upload(call: ast.Call) -> bool:
+    """The real invocation: a runner called with an argv list holding scripts.hf_backfill then stage-upload."""
+    if _callee(call) not in _RUNNERS or not call.args or not isinstance(call.args[0], (ast.List, ast.Tuple)):
+        return False
+    argv = [e.value for e in call.args[0].elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+    return ("scripts.hf_backfill" in argv and "stage-upload" in argv
+            and argv.index("scripts.hf_backfill") < argv.index("stage-upload"))
 
 
 def check_notebook(path: Path) -> list[str]:
@@ -165,22 +261,20 @@ def check_notebook(path: Path) -> list[str]:
         problems.append("REPO_COMMIT literal not found (the checkout must be pinned to a commit)")
     elif c.group(1) and not re.fullmatch(r"[0-9a-f]{40}", c.group(1)):
         problems.append("REPO_COMMIT must be empty or a full 40-character lowercase sha")
-    # The required steps must be executable calls, not marker text, and the proof must come first.
+    # The required steps must be executed calls (top-level code, or a notebook function called from it),
+    # not marker text, uncalled defs, dead branches or print() arguments; and the proof comes first.
+    defs = {n.name: n for _, t in trees for n in t.body if isinstance(n, ast.FunctionDef)}
     first_call: dict[str, tuple[int, int, int]] = {}
-    for i, tree in trees:
-        for n in ast.walk(tree):
-            if not isinstance(n, ast.Call):
-                continue
-            pos = (i, n.lineno, n.col_offset)
-            names = [_callee(n)]
-            if any(isinstance(x, ast.Constant) and x.value == "stage-upload" for x in ast.walk(n)):
-                names.append("stage-upload")
-            for name in names:
-                if name in REQUIRED_CALLS + ("stage-upload",) and (name not in first_call or pos < first_call[name]):
-                    first_call[name] = pos
+    for cell, ln, col, call in _executable_calls(trees, defs):
+        names = [_callee(call)]
+        if _is_stage_upload(call):
+            names.append("stage-upload")
+        for name in names:
+            if name in REQUIRED_CALLS + ("stage-upload",) and name not in first_call:
+                first_call[name] = (cell, ln, col)  # list is position-sorted: the first is the earliest
     for name in REQUIRED_CALLS + ("stage-upload",):
         if name not in first_call:
-            problems.append(f"call to {name} not found (a marker string does not count)")
+            problems.append(f"call to {name} not found (a marker string, an uncalled def or a dead branch does not count)")
     if "stage-upload" in first_call and "append_only_proof" in first_call \
             and first_call["append_only_proof"] >= first_call["stage-upload"]:
         problems.append("append_only_proof must run before stage-upload")

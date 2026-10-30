@@ -595,3 +595,97 @@ def test_lookup_failure_never_reaches_the_checkpoint(tmp_path):
     with pytest.raises(RuntimeError, match="EDGAR lookup failed"):
         exec(compile(_steps()[6], "step6", "exec"), ns)  # noqa: S102
     assert saved == [] and ns["meta"]["completed"] == []
+
+
+# ── round 2: the checker must see the REAL, executed calls ───────────────────────────────────────
+
+UPLOAD = "run(['python', '-m', 'scripts.hf_backfill', 'stage-upload', DB])"
+
+
+@pytest.mark.parametrize("replacement", [
+    "print('stage-upload')",                                        # string in an arbitrary call
+    "x = ['python', '-m', 'scripts.hf_backfill', 'stage-upload']",  # argv built but never run
+    "def never_called():\n    " + UPLOAD,                           # in an uncalled def
+    "if False:\n    " + UPLOAD,                                     # dead branch
+    "if 0:\n    " + UPLOAD,
+    "while False:\n    " + UPLOAD,
+    "print(" + UPLOAD + ")",                                        # only inside print() arguments
+    "raise SystemExit\n" + UPLOAD,                                  # unreachable
+    "log('stage-upload', DB)",
+])
+def test_stage_upload_must_be_the_real_executed_invocation(tmp_path, replacement):
+    src = GOOD.replace(UPLOAD, replacement)
+    assert any("call to stage-upload not found" in p for p in check_notebook(_write(tmp_path, src)))
+
+
+def test_stage_upload_inside_a_called_function_counts_and_is_ordered_at_the_call(tmp_path):
+    src = GOOD.replace(UPLOAD, "def stage():\n    " + UPLOAD + "\nstage()")
+    assert check_notebook(_write(tmp_path, src)) == []
+    # the proof only runs AFTER the function that uploads is called: ordering uses the call site
+    late = src.replace("chk.append_only_proof(a, b)\n", "") + "\nchk.append_only_proof(a, b)\n"
+    assert any("must run before stage-upload" in p for p in check_notebook(_write(tmp_path, late)))
+    # defining the uploader after the proof but calling it before does not satisfy the order either
+    defined_late = (GOOD.replace(UPLOAD, "stage()").replace("chk.append_only_proof(a, b)\n", "")
+                    + "\nchk.append_only_proof(a, b)\ndef stage():\n    " + UPLOAD + "\n")
+    assert any(("stage-upload" in p) for p in check_notebook(_write(tmp_path, defined_late)))
+
+
+@pytest.mark.parametrize("call", ["checkout_pinned", "dry_run", "split_complete", "append_only_proof"])
+@pytest.mark.parametrize("hide", ["def never_called():\n    {c}", "if False:\n    {c}", "print({c})"])
+def test_other_required_calls_must_also_be_executed(tmp_path, call, hide):
+    line = next(ln for ln in GOOD.splitlines() if call in ln)
+    src = GOOD.replace(line, hide.format(c=line))
+    assert any(f"call to {call} not found" in p for p in check_notebook(_write(tmp_path, src)))
+
+
+def test_append_only_proof_marker_text_alone_fails(tmp_path):
+    """Earlier M5 gap: replace the real proof call with marker text; the old substring check passed."""
+    src = GOOD.replace("chk.append_only_proof(a, b)", "note = 'append_only_proof'")
+    assert any("call to append_only_proof not found" in p for p in check_notebook(_write(tmp_path, src)))
+
+
+def test_stage_upload_marker_text_alone_fails(tmp_path):
+    src = GOOD.replace(UPLOAD, "note = 'stage-upload'")
+    assert any("call to stage-upload not found" in p for p in check_notebook(_write(tmp_path, src)))
+
+
+@pytest.mark.parametrize("cmd", [
+    "print(subprocess.run([sys.executable, '-m', 'scripts.hf_backfill', 'publish', '--confirm']))",
+    "print(run(['python', '-m', 'scripts.hf_backfill', 'publish']))",
+    "print('ok', run(['python', '-m', 'scripts.hf_backfill', 'publish']))",
+    "print(f'x {run([\"python\", \"-m\", \"scripts.hf_backfill\", \"publish\"])}')",
+    "print(subprocess.run('python -m scripts.hf_backfill publish', shell=True))",
+])
+def test_publish_hidden_inside_a_print_argument_is_still_rejected(tmp_path, cmd):
+    problems = check_notebook(_write(tmp_path, GOOD + "\n" + cmd))
+    assert any("forbidden call scripts.hf_backfill publish" in p for p in problems)
+
+
+def test_informational_f_string_print_of_the_publish_command_is_allowed(tmp_path):
+    src = GOOD + "\nprint(f'  uv run python -m scripts.hf_backfill publish --run-id {meta[\"run_id\"]} --confirm')\n"
+    assert check_notebook(_write(tmp_path, src)) == []
+
+
+# ── round 2: a failed completeness check must not leave a stale REMAINING behind ────────────────
+
+def test_failed_dry_run_leaves_remaining_unset_and_staging_refuses(tmp_path):
+    """One shared kernel namespace: step 7 passes (REMAINING == []), a later step 7 raises on a lookup failure,
+    and the stage attempt after that must be refused (not accept the stale empty list)."""
+    state = {"fail": False}
+
+    def dry_run(*_a, **_k):
+        if state["fail"]:
+            raise RuntimeError("EDGAR lookup failed")
+        return []
+
+    stage, ns, calls = _stage_ns(tmp_path, dry_run=dry_run, GUARD_JSON="/g.json")
+    ns.pop("REMAINING")
+    exec(compile(_steps()[7], "step7", "exec"), ns)  # noqa: S102
+    assert ns["REMAINING"] == []
+    state["fail"] = True
+    with pytest.raises(RuntimeError, match="EDGAR lookup failed"):
+        exec(compile(_steps()[7], "step7", "exec"), ns)  # noqa: S102
+    assert "REMAINING" not in ns
+    with pytest.raises(RuntimeError, match="step 7"):
+        ns["stage"]()
+    assert [c for c in calls if "stage-upload" in c] == []
