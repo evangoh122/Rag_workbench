@@ -9,6 +9,7 @@
 #
 # Env:
 #   DATASET_REPO      source dataset (read only), e.g. <user>/Rag-workbench
+#   EDGAR_USER_AGENT  required when executing: SEC identity, e.g. 'Your Name you@example.com' (a job secret)
 #   HF_TOKEN          read token for DATASET_REPO plus write access to STAGING_REPO
 #   STAGING_REPO      required when executing: an existing PRIVATE dataset repo, never
 #                     DATASET_REPO. A job container is ephemeral, so the result
@@ -95,6 +96,7 @@ fi
 
 # Executing needs somewhere outside the ephemeral container to keep the result.
 : "${STAGING_REPO:?STAGING_REPO required to execute (private dataset repo that receives the result)}"
+: "${EDGAR_USER_AGENT:?EDGAR_USER_AGENT required to execute (SEC identity, pass it as a job secret)}"
 
 # ── hard deadline: re-exec the whole run under `timeout` ────────────────────
 # The outer run always re-execs. The inner run is recognised only by `--inner=DIR`
@@ -159,6 +161,27 @@ if [ "$FORMS" = "10-Q" ]; then EXTRA=(--quarters "$QUARTERS"); fi
 
 "${PY[@]}" -m scripts.hf_backfill verify "$WORK_DB" "$BEFORE"
 "${PY[@]}" scripts/etl_guardrail.py verify "$WORK_DB" "$STAGING_DIR/guardrail_before.json"
+
+# Completeness gate: embed_additional.py exits 0 for a confirmed run even when an
+# EDGAR lookup or metadata read failed and a filing was skipped, so `verify` alone
+# cannot prove the run is complete. Re-probe with a dry run and refuse to stage
+# while any filing is still missing or a lookup failed. The dry run exits nonzero
+# (2) on a lookup failure, so that path fails closed too. An accession row is not
+# proof of complete indexing: the probe reports a filing as present only when its
+# stored chunks are all embedded, and the embed step rejects the whole filing if
+# any section fails to chunk. The probe's log sink has catch=False and must be
+# non-empty, so a failed or silent log write also fails the gate.
+COMPLETENESS_LOG="$STAGING_DIR/completeness.log"
+rm -f "$COMPLETENESS_LOG"
+if ! "${PY[@]}" scripts/embed_additional.py --forms "$FORMS" "${EXTRA[@]}" --tickers "$TICKERS" \
+     --dry-run --log "$COMPLETENESS_LOG"; then
+  die "completeness gate failed: EDGAR lookup did not complete (see $COMPLETENESS_LOG); refusing to stage"
+fi
+[ -s "$COMPLETENESS_LOG" ] \
+  || die "completeness gate failed: the dry run wrote no log ($COMPLETENESS_LOG); refusing to stage"
+if grep -E 'DRY-RUN would fetch:|DRY-RUN lookup FAILED:' "$COMPLETENESS_LOG" >&2; then
+  die "completeness gate failed: filings are still missing or a lookup failed; refusing to stage"
+fi
 
 # The random suffix keeps concurrent runs with the same dataset head apart; an
 # explicit BACKFILL_RUN_ID is validated up front and must be unique in staging.

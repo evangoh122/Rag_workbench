@@ -4,8 +4,18 @@
 Authored via MiMo, reviewed by DeepSeek, validated/edited by Claude.
 For companies already present in `edgar_embeddings`, fetch the 2 most recent annual
 filings (10-K, or 20-F for foreign filers) or the 1 most recent 10-Q, and embed any
-filing whose accession is not yet stored. Dedup is by (ticker, accession); a
-DELETE-before-INSERT makes re-runs idempotent.
+filing whose accession is not yet stored. Dedup is by (ticker, accession).
+
+Each filing is stored atomically: its DELETE and all its INSERTs run in ONE
+DuckDB transaction, so an INSERT that fails part-way through a filing rolls back
+to nothing stored instead of leaving the earlier chunks behind with embeddings
+(which the completeness probe would then count as a complete filing). DuckDB
+commits every statement in autocommit mode, so the explicit transaction is what
+makes this safe.
+
+A filing with a section that always fails to chunk is rejected whole and never
+stored; it therefore blocks staging on every run (fail safe) and costs one EDGAR
+fetch per retry until the chunker handles that section.
 
 Conventions preserved to match existing rows:
   - accession kept WITH dashes (e.g. 0000006281-25-000153)
@@ -35,7 +45,6 @@ load_dotenv(ROOT / ".env")
 os.environ["EMBEDDING_PROVIDER"] = "sentence-transformers"
 os.environ["ST_EMBEDDING_MODEL"] = "Qwen/Qwen3-Embedding-0.6B"
 os.environ["EMBEDDING_DIM"] = "1024"
-os.environ.setdefault("EDGAR_USER_AGENT", "Evan Goh evangohsg@gmail.com")
 
 # ── performance: saturate CPU cores for local embedding ───────────────────────
 # The Space caps batch=4 / few threads for its 16Gi limit; this box has 8 physical
@@ -79,6 +88,15 @@ DB_PATH = Config.DB_PATH  # singleton instance attr (mirrors scripts/embed_edgar
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+def _require_edgar_user_agent() -> None:
+    """SEC requires a real identity; refuse to run anonymously (no built-in default)."""
+    if not os.getenv("EDGAR_USER_AGENT", "").strip():
+        sys.exit(
+            "EDGAR_USER_AGENT is not set. Export it (e.g. EDGAR_USER_AGENT='Your Name you@example.com'), "
+            "put it in .env, or pass it as a CI/job secret; the SEC rejects anonymous requests."
+        )
+
+
 def _normalize_filings(fresult):
     """Return a list of Filing objects from the result of latest(n).
 
@@ -111,11 +129,20 @@ def _period_from_accession(accession: str) -> str:
 
 
 def _is_present(conn, ticker: str, accession: str) -> bool:
-    row = conn.execute(
-        "SELECT 1 FROM edgar_embeddings WHERE ticker=? AND accession=? LIMIT 1",
+    """True only when the filing's chunks are stored AND every one is embedded.
+
+    An accession row on its own is not proof of a complete filing: a partial or
+    interrupted ingest can leave rows behind (older versions stored chunks from
+    the sections that chunked successfully). Require at least one row and no row
+    with a NULL embedding, so an incomplete accession is re-fetched instead of
+    being reported as complete by the dry-run gate.
+    """
+    rows, embedded = conn.execute(
+        "SELECT COUNT(*), COUNT(embedding) FROM edgar_embeddings "
+        "WHERE ticker=? AND accession=?",
         [ticker.upper(), accession],
     ).fetchone()
-    return row is not None
+    return rows > 0 and embedded == rows
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -158,8 +185,12 @@ def main():
     )
     args = parser.parse_args()
 
+    _require_edgar_user_agent()
+
     if args.log:
-        logger.add(args.log, rotation="10 MB", level="DEBUG")
+        # catch=False: a write failure (e.g. a full disk) must raise so the
+        # caller fails closed instead of silently dropping the gate markers.
+        logger.add(args.log, rotation="10 MB", level="DEBUG", catch=False)
 
     ensure_edgar_identity()
 
@@ -206,10 +237,16 @@ def main():
             logger.warning("No tickers found to process.")
             return
 
-        summary: dict[str, dict] = {}  # ticker -> {"added", "skipped", "total_chunks"}
+        # ticker -> per-outcome counters. skipped = already present; rejected = chunking
+        # incomplete; failed_embedding = embedding incomplete; all three are retried later.
+        summary: dict[str, dict] = {}
+        lookup_failures: list[tuple[str, str]] = []  # (ticker, form) whose EDGAR lookup raised
 
         for ticker in tickers:
-            summary.setdefault(ticker, {"added": 0, "skipped": 0, "total_chunks": 0})
+            summary.setdefault(
+                ticker,
+                {"added": 0, "skipped": 0, "rejected": 0, "failed_embedding": 0, "total_chunks": 0},
+            )
             logger.info(f"=== Processing {ticker} ===")
 
             # Only extend the annual form this ticker ALREADY files, so a former
@@ -246,6 +283,7 @@ def main():
                     window = _normalize_filings(filings.latest(max(n_latest + 6, 8)))
                 except Exception as exc:
                     logger.error(f"[{ticker}] Failed to get {form_code} filings: {exc}")
+                    lookup_failures.append((ticker, form_code))
                     continue
 
                 filing_list = [
@@ -261,6 +299,7 @@ def main():
                         form_type = fl.form
                     except Exception as exc:
                         logger.error(f"[{ticker}/{form_code}] Cannot read filing metadata: {exc}")
+                        lookup_failures.append((ticker, form_code))
                         continue
 
                     # Dedup check
@@ -302,6 +341,7 @@ def main():
                     # Extract sections and chunk (20-F falls back to full_text)
                     sections = _extract_sections_with_labels(text)
                     all_chunks = []
+                    chunk_failed = False
                     for section_label, section_text in sections:
                         if not section_text or not section_text.strip():
                             continue
@@ -323,18 +363,25 @@ def main():
                                 f"[{ticker}] Chunking failed for section '{section_label}' "
                                 f"in {accession}: {exc}"
                             )
+                            chunk_failed = True
                             continue
                         all_chunks.extend(chunks)
+
+                    # Never store a PARTIAL filing. If any section failed to chunk,
+                    # reject the entire filing: storing only the surviving sections
+                    # would make the accession look "present" to the completeness
+                    # probe even though indexing is incomplete.
+                    if chunk_failed:
+                        logger.warning(
+                            f"[{ticker}] REJECTING {form_type} {accession} — chunking "
+                            f"incomplete; not stored (will retry on a future run)."
+                        )
+                        summary[ticker]["rejected"] += 1
+                        continue
 
                     if not all_chunks:
                         logger.warning(f"[{ticker}] No chunks produced for {accession}.")
                         continue
-
-                    # Idempotent: clear any existing rows for this filing first
-                    conn.execute(
-                        "DELETE FROM edgar_embeddings WHERE ticker=? AND accession=?",
-                        [ticker.upper(), accession],
-                    )
 
                     # Embed in batches, keeping vector order aligned with all_chunks
                     batch_texts = [c.text for c in all_chunks]
@@ -362,36 +409,50 @@ def main():
                             f"[{ticker}] SKIPPING {form_type} {accession} — embedding "
                             f"incomplete; not stored (will retry on a future run)."
                         )
-                        summary[ticker]["skipped"] += 1
+                        summary[ticker]["failed_embedding"] += 1
                         continue
 
+                    # Idempotent AND atomic: the DELETE and every INSERT for this filing
+                    # run in ONE transaction. DuckDB autocommits each statement otherwise,
+                    # so an INSERT that failed part-way would leave the earlier chunks
+                    # stored with their embeddings and _is_present would call this filing
+                    # complete. Any failure rolls the whole filing back to nothing stored.
                     rows_inserted = 0
-                    for j, chunk in enumerate(all_chunks):
-                        vec = all_vecs[j]
+                    try:
+                        conn.begin()
                         conn.execute(
-                            """INSERT INTO edgar_embeddings
-                               (ticker, accession, text, embedding, updated_at, cik,
-                                section_id, form_type, period_of_report, chunk_index,
-                                section_type, content_type)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                            [
-                                ticker.upper(),
-                                accession,
-                                chunk.text,
-                                vec,
-                                ts,
-                                cik,
-                                chunk.metadata.section_label,
-                                form_type,
-                                period_of_report,
-                                chunk.metadata.chunk_index,
-                                chunk.metadata.section_type,
-                                chunk.metadata.content_type,
-                            ],
+                            "DELETE FROM edgar_embeddings WHERE ticker=? AND accession=?",
+                            [ticker.upper(), accession],
                         )
-                        rows_inserted += 1
+                        for j, chunk in enumerate(all_chunks):
+                            vec = all_vecs[j]
+                            conn.execute(
+                                """INSERT INTO edgar_embeddings
+                                   (ticker, accession, text, embedding, updated_at, cik,
+                                    section_id, form_type, period_of_report, chunk_index,
+                                    section_type, content_type)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                [
+                                    ticker.upper(),
+                                    accession,
+                                    chunk.text,
+                                    vec,
+                                    ts,
+                                    cik,
+                                    chunk.metadata.section_label,
+                                    form_type,
+                                    period_of_report,
+                                    chunk.metadata.chunk_index,
+                                    chunk.metadata.section_type,
+                                    chunk.metadata.content_type,
+                                ],
+                            )
+                            rows_inserted += 1
+                        conn.commit()
+                    except BaseException:
+                        conn.rollback()
+                        raise
 
-                    conn.commit()
                     summary[ticker]["added"] += 1
                     summary[ticker]["total_chunks"] += rows_inserted
                     logger.info(
@@ -408,18 +469,28 @@ def main():
     logger.info("=" * 60)
     logger.info("SUMMARY")
     logger.info("=" * 60)
-    tot_added = tot_skipped = tot_chunks = 0
+    tot_added = tot_skipped = tot_rejected = tot_failed_embedding = tot_chunks = 0
     for ticker, stats in summary.items():
         tot_added += stats["added"]
         tot_skipped += stats["skipped"]
+        tot_rejected += stats["rejected"]
+        tot_failed_embedding += stats["failed_embedding"]
         tot_chunks += stats["total_chunks"]
         logger.info(
             f"  {ticker}: added={stats['added']}, skipped={stats['skipped']}, "
+            f"rejected={stats['rejected']}, failed_embedding={stats['failed_embedding']}, "
             f"total_chunks_stored={stats['total_chunks']}"
         )
     logger.info(
-        f"TOTAL: added={tot_added}, skipped={tot_skipped}, chunks_stored={tot_chunks}"
+        f"TOTAL: added={tot_added}, skipped={tot_skipped}, rejected={tot_rejected}, "
+        f"failed_embedding={tot_failed_embedding}, chunks_stored={tot_chunks}"
     )
+    # A dry run is a completeness probe: a failed lookup means "unknown", never "nothing to fetch".
+    # Fail it loudly so callers (the Colab notebook) cannot record the ticker as complete.
+    if args.dry_run and lookup_failures:
+        for ticker, form_code in sorted(set(lookup_failures)):
+            logger.error(f"DRY-RUN lookup FAILED: {ticker} {form_code}")
+        sys.exit(2)
 
 
 if __name__ == "__main__":
