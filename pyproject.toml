@@ -39,7 +39,7 @@ dependencies = [
     "requests>=2.34.2,<3.0.0",
     "huggingface_hub>=1.19.0,<2.0.0",
     "cachetools>=6.2.6,<7.0.0",
-    "pypdf>=6.13.3,<7.0.0",
+    "pypdf>=6.21.4,<7.0.0",
 ]
 
 [dependency-groups]
