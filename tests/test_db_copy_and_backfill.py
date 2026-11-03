@@ -333,7 +333,11 @@ STUB = """#!/usr/bin/env bash
 echo "$*" >> "$STUB_LOG"
 if [ "$1" = "-" ]; then cat >/dev/null; echo deadbeef; fi
 if [ "${1:-}" = "scripts/embed_additional.py" ] && [[ " $* " == *" --dry-run "* ]]; then
-  echo "${STUB_DRY_LOG:-[AAPL] skip (already present): 10-K 0000000001-26-000001}" > "${@: -1}"
+  if [ "${STUB_DRY_EMPTY:-}" = "1" ]; then
+    : > "${@: -1}"
+  else
+    echo "${STUB_DRY_LOG:-[AAPL] skip (already present): 10-K 0000000001-26-000001}" > "${@: -1}"
+  fi
   exit "${STUB_DRY_RC:-0}"
 fi
 exit 0
@@ -712,6 +716,14 @@ def test_runner_completeness_gate_fails_closed_on_a_lookup_failure(tmp_path):
     assert "stage-upload" not in calls
 
 
+def test_runner_completeness_gate_fails_closed_on_empty_log(tmp_path):
+    """A zero-byte completeness log means the probe proved nothing; the gate must refuse."""
+    r, calls = _run_runner(tmp_path, {"BACKFILL_CONFIRM": "yes", "STUB_DRY_EMPTY": "1"})
+    assert r.returncode != 0, r.stdout
+    assert "wrote no log" in r.stderr
+    assert "stage-upload" not in calls
+
+
 def test_runner_completeness_gate_allows_a_complete_run(tmp_path):
     r, calls = _run_runner(tmp_path, {"BACKFILL_CONFIRM": "yes"})
     assert r.returncode == 0, r.stderr
@@ -795,6 +807,51 @@ def test_embed_additional_rejects_whole_filing_when_a_section_fails_to_chunk(tmp
     con.close()
     assert stored == 0
     model.embed_documents.assert_not_called()
+
+
+def test_embed_additional_insert_failure_mid_filing_stores_nothing(tmp_path, monkeypatch):
+    """DuckDB autocommits per statement: an INSERT that fails part-way through a filing must
+    not leave the earlier chunks stored with embeddings, or _is_present calls it complete."""
+    import scripts.embed_additional as module
+
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test User test@example.com")
+    db = _seed_embed_db(tmp_path, [("AAPL", "0001-25-000001", "baseline", [0.0], "10-K")])
+
+    class Chunker:
+        def chunk(self, text, *, section_label, **kwargs):
+            # Two sections, one chunk each. The second chunk's text is None, so its INSERT
+            # violates NOT NULL after the first chunk's INSERT already succeeded.
+            return [SimpleNamespace(
+                text=None if section_label == "risk_factors" else "chunk",
+                metadata=SimpleNamespace(
+                    section_label=section_label, chunk_index=0,
+                    section_type="narrative", content_type="narrative"))]
+
+    model = MagicMock()
+    model.embed_documents.side_effect = lambda batch: [[0.1, 0.2] for _ in batch]
+    filing = _embed_filing("0002-26-000002")
+    monkeypatch.setattr(module, "DB_PATH", str(db))
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch.object(module, "get_embeddings", return_value=model))
+        for patcher in _patch_embed_run(module, tmp_path, "AAPL", filing, chunker=Chunker()):
+            stack.enter_context(patcher)
+        # The failure is re-raised after the rollback.
+        with pytest.raises(Exception):
+            module.main()
+
+    con = duckdb.connect(str(db), read_only=True)
+    try:
+        stored = con.execute(
+            "SELECT COUNT(*) FROM edgar_embeddings WHERE ticker='AAPL' AND accession='0002-26-000002'"
+        ).fetchone()[0]
+        assert stored == 0
+        assert module._is_present(con, "AAPL", "0002-26-000002") is False
+    finally:
+        con.close()
+    # The unrelated baseline row is untouched.
+    con = duckdb.connect(str(db), read_only=True)
+    assert con.execute("SELECT COUNT(*) FROM edgar_embeddings").fetchone()[0] == 1
+    con.close()
 
 
 def test_embed_additional_dry_run_refetches_accession_without_embedded_chunks(tmp_path, monkeypatch):
