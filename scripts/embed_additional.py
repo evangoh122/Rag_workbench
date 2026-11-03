@@ -119,11 +119,20 @@ def _period_from_accession(accession: str) -> str:
 
 
 def _is_present(conn, ticker: str, accession: str) -> bool:
-    row = conn.execute(
-        "SELECT 1 FROM edgar_embeddings WHERE ticker=? AND accession=? LIMIT 1",
+    """True only when the filing's chunks are stored AND every one is embedded.
+
+    An accession row on its own is not proof of a complete filing: a partial or
+    interrupted ingest can leave rows behind (older versions stored chunks from
+    the sections that chunked successfully). Require at least one row and no row
+    with a NULL embedding, so an incomplete accession is re-fetched instead of
+    being reported as complete by the dry-run gate.
+    """
+    rows, embedded = conn.execute(
+        "SELECT COUNT(*), COUNT(embedding) FROM edgar_embeddings "
+        "WHERE ticker=? AND accession=?",
         [ticker.upper(), accession],
     ).fetchone()
-    return row is not None
+    return rows > 0 and embedded == rows
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -169,7 +178,9 @@ def main():
     _require_edgar_user_agent()
 
     if args.log:
-        logger.add(args.log, rotation="10 MB", level="DEBUG")
+        # catch=False: a write failure (e.g. a full disk) must raise so the
+        # caller fails closed instead of silently dropping the gate markers.
+        logger.add(args.log, rotation="10 MB", level="DEBUG", catch=False)
 
     ensure_edgar_identity()
 
@@ -315,6 +326,7 @@ def main():
                     # Extract sections and chunk (20-F falls back to full_text)
                     sections = _extract_sections_with_labels(text)
                     all_chunks = []
+                    chunk_failed = False
                     for section_label, section_text in sections:
                         if not section_text or not section_text.strip():
                             continue
@@ -336,8 +348,21 @@ def main():
                                 f"[{ticker}] Chunking failed for section '{section_label}' "
                                 f"in {accession}: {exc}"
                             )
+                            chunk_failed = True
                             continue
                         all_chunks.extend(chunks)
+
+                    # Never store a PARTIAL filing. If any section failed to chunk,
+                    # reject the entire filing: storing only the surviving sections
+                    # would make the accession look "present" to the completeness
+                    # probe even though indexing is incomplete.
+                    if chunk_failed:
+                        logger.warning(
+                            f"[{ticker}] SKIPPING {form_type} {accession} — chunking "
+                            f"incomplete; not stored (will retry on a future run)."
+                        )
+                        summary[ticker]["skipped"] += 1
+                        continue
 
                     if not all_chunks:
                         logger.warning(f"[{ticker}] No chunks produced for {accession}.")

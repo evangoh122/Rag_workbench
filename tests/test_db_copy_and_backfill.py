@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import re
@@ -6,7 +7,8 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import duckdb
 import pytest
@@ -714,6 +716,143 @@ def test_runner_completeness_gate_allows_a_complete_run(tmp_path):
     r, calls = _run_runner(tmp_path, {"BACKFILL_CONFIRM": "yes"})
     assert r.returncode == 0, r.stderr
     assert calls.index("--dry-run") < calls.index("stage-upload")
+
+
+def _seed_embed_db(tmp_path, rows):
+    """Create a real on-disk edgar_embeddings DB for the real embed_additional script."""
+    import scripts.embed_additional as module
+
+    db = tmp_path / "rag.duckdb"
+    con = duckdb.connect(str(db))
+    module._ensure_schema(con)
+    for row in rows:
+        con.execute(
+            "INSERT INTO edgar_embeddings (ticker, accession, text, embedding, form_type) "
+            "VALUES (?, ?, ?, ?, ?)",
+            list(row),
+        )
+    con.close()
+    return db
+
+
+def _embed_filing(accession, form="10-K", text="<html>filing</html>"):
+    filing = MagicMock(form=form, accession_number=accession)
+    filing.text.return_value = text
+    return filing
+
+
+def _patch_embed_run(module, tmp_path, tickers, filing, dry_run=False, chunker=None):
+    filings = MagicMock(empty=False)
+    filings.latest.return_value = [filing]
+    company = MagicMock()
+    company.get_filings.return_value = filings
+    argv = ["embed_additional", "--tickers", tickers]
+    if dry_run:
+        argv.append("--dry-run")
+    path = tmp_path / "filing.html"
+    path.write_text("x")
+    return (
+        patch.object(sys, "argv", argv),
+        patch.object(module, "ensure_edgar_identity"),
+        patch.object(module, "StructureChunker", return_value=chunker or MagicMock()),
+        patch.object(module, "Company", return_value=company),
+        patch.object(module, "parse_html_file", return_value=("body text", {})),
+        patch.object(module, "_extract_sections_with_labels",
+                     return_value=[("business", "A" * 300), ("risk_factors", "B" * 300)]),
+        patch.object(module, "_filing_path", return_value=path),
+    )
+
+
+def test_embed_additional_rejects_whole_filing_when_a_section_fails_to_chunk(tmp_path, monkeypatch):
+    """A partial chunk set must not be stored: accession presence then means a complete filing."""
+    import scripts.embed_additional as module
+
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test User test@example.com")
+    db = _seed_embed_db(tmp_path, [("AAPL", "0001-25-000001", "baseline", [0.0], "10-K")])
+
+    class Chunker:
+        def chunk(self, text, *, section_label, **kwargs):
+            if section_label == "risk_factors":
+                raise RuntimeError("section exploded")
+            return [SimpleNamespace(text="chunk", metadata=SimpleNamespace(
+                section_label=section_label, chunk_index=0,
+                section_type="narrative", content_type="narrative"))]
+
+    model = MagicMock()
+    model.embed_documents.return_value = [[0.1, 0.2]]
+    filing = _embed_filing("0002-26-000002")
+    monkeypatch.setattr(module, "DB_PATH", str(db))
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch.object(module, "get_embeddings", return_value=model))
+        for patcher in _patch_embed_run(module, tmp_path, "AAPL", filing, chunker=Chunker()):
+            stack.enter_context(patcher)
+        module.main()
+
+    con = duckdb.connect(str(db), read_only=True)
+    stored = con.execute(
+        "SELECT COUNT(*) FROM edgar_embeddings WHERE ticker='AAPL' AND accession='0002-26-000002'"
+    ).fetchone()[0]
+    con.close()
+    assert stored == 0
+    model.embed_documents.assert_not_called()
+
+
+def test_embed_additional_dry_run_refetches_accession_without_embedded_chunks(tmp_path, monkeypatch):
+    """An accession row with NULL embeddings is not proof of indexing: the probe must re-fetch it."""
+    import scripts.embed_additional as module
+
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test User test@example.com")
+    db = _seed_embed_db(tmp_path, [("AAPL", "0003-26-000003", "partial", None, "10-K")])
+    filing = _embed_filing("0003-26-000003")
+    monkeypatch.setattr(module, "DB_PATH", str(db))
+
+    messages = []
+    sink = module.logger.add(messages.append, level="INFO")
+    try:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(module, "get_embeddings", return_value=MagicMock()))
+            for patcher in _patch_embed_run(module, tmp_path, "AAPL", filing, dry_run=True):
+                stack.enter_context(patcher)
+            module.main()
+    finally:
+        module.logger.remove(sink)
+
+    assert any("DRY-RUN would fetch: 10-K 0003-26-000003" in str(m) for m in messages)
+
+
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+def test_embed_additional_log_write_failure_is_fatal(tmp_path, monkeypatch):
+    """A completeness-log write error must raise, so the runner's gate fails closed."""
+    import scripts.embed_additional as module
+
+    if not Path("/dev/full").exists():
+        pytest.skip("/dev/full is required to force a log write failure")
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test User test@example.com")
+    db = _seed_embed_db(tmp_path, [])
+    monkeypatch.setattr(module, "DB_PATH", str(db))
+
+    handler_ids = []
+    real_add = module.logger.add
+
+    def add(*args, **kwargs):
+        handler_id = real_add(*args, **kwargs)
+        handler_ids.append(handler_id)
+        return handler_id
+
+    try:
+        with (
+            patch.object(module.logger, "add", new=add),
+            patch.object(module, "get_embeddings", return_value=MagicMock()),
+            patch.object(sys, "argv", [
+                "embed_additional", "--dry-run", "--tickers", "AAPL", "--log", "/dev/full",
+            ]),
+        ):
+            with pytest.raises(OSError):
+                module.main()
+    finally:
+        for handler_id in handler_ids:
+            with contextlib.suppress(Exception):
+                module.logger.remove(handler_id)
 
 
 def test_runner_rejects_bad_run_id(tmp_path):

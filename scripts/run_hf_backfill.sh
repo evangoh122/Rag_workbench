@@ -166,14 +166,18 @@ if [ "$FORMS" = "10-Q" ]; then EXTRA=(--quarters "$QUARTERS"); fi
 # EDGAR lookup or metadata read failed and a filing was skipped, so `verify` alone
 # cannot prove the run is complete. Re-probe with a dry run and refuse to stage
 # while any filing is still missing or a lookup failed. The dry run exits nonzero
-# (2) on a lookup failure, so that path fails closed too.
+# (2) on a lookup failure, so that path fails closed too. An accession row is not
+# proof of complete indexing: the probe reports a filing as present only when its
+# stored chunks are all embedded, and the embed step rejects the whole filing if
+# any section fails to chunk. The probe's log sink has catch=False and must be
+# non-empty, so a failed or silent log write also fails the gate.
 COMPLETENESS_LOG="$STAGING_DIR/completeness.log"
 rm -f "$COMPLETENESS_LOG"
 if ! "${PY[@]}" scripts/embed_additional.py --forms "$FORMS" "${EXTRA[@]}" --tickers "$TICKERS" \
      --dry-run --log "$COMPLETENESS_LOG"; then
   die "completeness gate failed: EDGAR lookup did not complete (see $COMPLETENESS_LOG); refusing to stage"
 fi
-[ -f "$COMPLETENESS_LOG" ] \
+[ -s "$COMPLETENESS_LOG" ] \
   || die "completeness gate failed: the dry run wrote no log ($COMPLETENESS_LOG); refusing to stage"
 if grep -E 'DRY-RUN would fetch:|DRY-RUN lookup FAILED:' "$COMPLETENESS_LOG" >&2; then
   die "completeness gate failed: filings are still missing or a lookup failed; refusing to stage"
