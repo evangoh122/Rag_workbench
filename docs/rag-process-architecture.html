@@ -202,7 +202,7 @@
             <button type="button" id="export-svg">SVG</button>
             <button type="button" id="export-png">PNG</button>
           </div>
-          <button class="toolbar-toggle" type="button" id="export-toggle" aria-expanded="false" aria-haspopup="true" aria-controls="export-menu" title="Export options" aria-label="Export options">⋯</button>
+          <button class="toolbar-toggle" type="button" id="export-toggle" aria-expanded="false" aria-controls="export-menu" title="Export options" aria-label="Export options">⋯</button>
         </div>
       </div>
       <p class="subtitle">System architecture · data, retrieval, services and governance</p>
@@ -212,7 +212,7 @@
     <div class="diagram-container">
 <svg id="diagram-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="diagram-title diagram-desc" viewBox="0 0 1764 936" width="1764" height="936">
 <title id="diagram-title">RAG Workbench process architecture</title>
-<desc id="diagram-desc">Flow: financial analysts send questions through FastAPI, which passes them to LangGraph orchestration. The planner routes numeric questions to a Polars calculator and qualitative questions into the six-step retrieval process: user query, dense vector search, best-match 25, reranking, knowledge graph and source citations, reading DuckDB structured and vector data. Responses pass guardrails, audit and traceability, golden-set evaluation, drift detection, human review and calibration. GitHub Actions and Hugging Face build Docker containers; extraction loads SEC EDGAR/XBRL filings and third-party market checks into chunking and Qwen3 embeddings. The project is not affiliated with the SEC.</desc>
+<desc id="diagram-desc">Flow: financial analysts send questions through FastAPI, which passes them to LangGraph orchestration. In the main LangGraph workflow, retrieval runs first: BM25 and vector search over DuckDB embeddings are fused with reciprocal rank fusion, then reranked by a cross-encoder and filtered for relevance. Only after retrieval does the classifier route numeric questions to XBRL extraction, Polars math and verification, and qualitative questions to an LLM answer over the retrieved chunks; source citations come from the retrieved chunks. Graph RAG is a separate workflow of entity extraction, graph-triple lookup and LLM synthesis, not a step in the main retrieval pipeline. Responses pass guardrails, audit and traceability, golden-set evaluation, drift detection, human review and calibration. GitHub Actions and Hugging Face build Docker containers; extraction loads SEC EDGAR/XBRL filings and third-party market checks into chunking and Qwen3 embeddings. The project is not affiliated with the SEC.</desc>
 <style>
       text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
       .section-title { fill: #d6b65a; font-weight: 600; font-size: 12px; letter-spacing: 1px; }
@@ -350,7 +350,8 @@
 </g>
 <g class="boundary"><rect x="442" y="593" width="351" height="291" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="458" y="619" class="section-title">DATA STORAGE</text>
 </g>
-<g class="boundary"><rect x="902" y="293" width="380" height="231" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="918" y="319" class="section-title">6 STEP RETRIEVAL PROCESS</text>
+<g class="boundary"><rect x="902" y="293" width="380" height="231" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="918" y="319" class="section-title">RETRIEVAL PIPELINE</text>
+<text x="918" y="338" class="small">BM25 + vector → RRF → rerank</text>
 </g>
 <g class="boundary"><rect x="842" y="623" width="371" height="252" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="858" y="649" class="section-title">AI MODEL SERVICE</text>
 </g>
@@ -368,16 +369,17 @@
 <path data-from="extraction" data-to="storage-checks" d="M367 469H414" marker-end="none"/>
 <path data-from="ingestion" data-to="vector" d="M290 784V864H695V783"/>
 <path data-from="orchestration" data-to="storage" d="M618 563V593"/>
-<path data-from="orchestration" data-to="retrieval" d="M799 408H902"/>
-<path data-from="retrieval" data-to="orchestration" d="M902 422H754"/>
-<path data-from="orchestration" data-to="model" d="M799 563V592H1028V623"/>
+<path data-from="api" data-to="retrieval" d="M1297 430H1282"/>
+<path data-from="retrieval" data-to="classifier" d="M902 410H820V352H595"/>
+<path data-from="orchestration" data-to="model" d="M799 563V610H1028V623"/>
 <path data-from="model" data-to="api" d="M1213 748H1254V459H1297"/>
 <path data-from="api" data-to="governance" d="M1477 600V653"/>
+<path data-from="api" data-to="graph-rag" d="M1297 565H1282"/>
 <path data-from="governance" data-to="storage" d="M1477 906V922H770V884"/>
 </g>
 <use href="#logo-huggingface" x="99" y="76" width="26" height="26" class="logo" aria-hidden="true"/><text x="115" y="119" text-anchor="middle" class="brand">Hugging Face</text>
 <use href="#logo-githubactions" x="278" y="76" width="26" height="26" class="logo" aria-hidden="true"/><text x="292" y="118" text-anchor="middle" class="brand">GitHub Actions</text>
-<use href="#logo-docker" x="537" y="89" width="30" height="30" class="logo" aria-hidden="true"/><text x="613" y="112" text-anchor="middle" class="large">DOCKER</text>
+<use href="#logo-docker" x="515" y="89" width="30" height="30" class="logo" aria-hidden="true"/><text x="613" y="112" text-anchor="middle" class="large">DOCKER</text>
 <text x="613" y="139" text-anchor="middle" class="small">Containers</text>
 <text x="1420" y="64" text-anchor="start" class="node-text">Financial analysts ask questions about</text>
 <text x="1420" y="85" text-anchor="start" class="node-text">filings, metrics, risks, peers, and trends.</text>
@@ -399,29 +401,44 @@
 <g><rect x="214" y="719" width="120" height="38" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
 <use href="#icon-embedding" x="218" y="730" width="14" height="14" class="logo" aria-hidden="true"/><text x="274.0" y="742.0" text-anchor="middle" class="node-text">Embedding</text>
 </g>
-<use href="#logo-langgraph" x="680" y="343" width="19" height="19" class="logo" aria-hidden="true"/><use href="#logo-langchain" x="680" y="367" width="19" height="19" class="logo" aria-hidden="true"/><text x="742" y="365" text-anchor="middle" class="brand">LangGraph</text>
-<g><rect x="562" y="338" width="100" height="40" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#icon-planner" x="567" y="351" width="14" height="14" class="logo" aria-hidden="true"/><text x="620.0" y="354.0" text-anchor="middle" class="node-text compact">Planner /</text>
-<text x="620.0" y="370.0" text-anchor="middle" class="node-text compact">Classifier</text>
+<use href="#logo-langgraph" x="640" y="318" width="16" height="16" class="logo" aria-hidden="true"/><use href="#logo-langchain" x="662" y="318" width="16" height="16" class="logo" aria-hidden="true"/><text x="684" y="331" text-anchor="start" class="brand">LangGraph</text>
+<g><rect x="445" y="330" width="150" height="44" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<use href="#icon-planner" x="450" y="345" width="14" height="14" class="logo" aria-hidden="true"/><text x="520" y="348" text-anchor="middle" class="node-text compact">Classifier</text>
+<text x="520" y="364" text-anchor="middle" class="node-text compact">numeric vs text</text>
 </g>
-<g><rect x="468" y="406" width="100" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#icon-numeric" x="473" y="419.5" width="14" height="14" class="logo" aria-hidden="true"/><text x="526.0" y="430.5" text-anchor="middle" class="node-text compact">Numeric</text>
+<g><rect x="445" y="396" width="150" height="36" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<use href="#icon-numeric" x="450" y="407" width="14" height="14" class="logo" aria-hidden="true"/><text x="520" y="418" text-anchor="middle" class="node-text compact">Numeric</text>
 </g>
-<g><rect x="653" y="401" width="101" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#icon-qualitative" x="658" y="414.5" width="14" height="14" class="logo" aria-hidden="true"/><text x="711.5" y="425.5" text-anchor="middle" class="node-text compact">Qualitative</text>
+<g><rect x="610" y="396" width="160" height="36" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<use href="#icon-qualitative" x="615" y="407" width="14" height="14" class="logo" aria-hidden="true"/><text x="690" y="418" text-anchor="middle" class="node-text compact">Qualitative</text>
 </g>
-<g><rect x="468" y="458" width="100" height="34" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#logo-polars" x="474" y="460" width="13" height="13" class="logo" aria-hidden="true"/><text x="525" y="471.0" text-anchor="middle" class="node-text">Polars</text>
-<text x="525" y="487.0" text-anchor="middle" class="node-text">Calculator</text>
+<g><rect x="445" y="444" width="150" height="34" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<use href="#icon-structured" x="450" y="455" width="14" height="14" class="logo" aria-hidden="true"/><text x="520" y="455" text-anchor="middle" class="node-text compact">XBRL facts</text>
+<text x="520" y="471" text-anchor="middle" class="node-text compact">Polars</text>
 </g>
-<g><rect x="468" y="501" width="100" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#logo-react" x="473" y="514" width="13" height="13" class="logo" aria-hidden="true"/><text x="525" y="525.5" text-anchor="middle" class="node-text">React Flow</text>
+<g><rect x="445" y="484" width="150" height="34" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<use href="#logo-polars" x="450" y="495" width="13" height="13" class="logo" aria-hidden="true"/><text x="520" y="495" text-anchor="middle" class="node-text compact">Eval + math</text>
+<text x="520" y="511" text-anchor="middle" class="node-text compact">financial_calc</text>
+</g>
+<g><rect x="445" y="524" width="150" height="30" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<use href="#icon-evaluation" x="450" y="532" width="13" height="13" class="logo" aria-hidden="true"/><text x="520" y="543" text-anchor="middle" class="node-text compact">Verify / output</text>
+</g>
+<g><rect x="610" y="444" width="160" height="34" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<use href="#icon-qualitative" x="615" y="455" width="14" height="14" class="logo" aria-hidden="true"/><text x="690" y="455" text-anchor="middle" class="node-text compact">LLM answer</text>
+<text x="690" y="471" text-anchor="middle" class="node-text compact">over chunks</text>
+</g>
+<g><rect x="610" y="484" width="160" height="34" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<use href="#icon-citation" x="615" y="495" width="14" height="14" class="logo" aria-hidden="true"/><text x="690" y="495" text-anchor="middle" class="node-text compact">Lineage +</text>
+<text x="690" y="511" text-anchor="middle" class="node-text compact">citations</text>
 </g>
 <g class="connections">
-<path d="M590 378V391H518V406" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
-<path d="M635 378V389H703V401" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
-<path d="M518 447V458" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
-<path d="M518 492V501" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M520 374V396" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M580 374V384H690V396" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M520 432V444" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M520 478V484" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M520 518V524" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M690 432V444" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M690 478V484" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
 </g>
 <use href="#logo-duckdb" x="535" y="666" width="26" height="26" class="logo" aria-hidden="true"/><text x="617" y="688" text-anchor="middle" class="large">DuckDB</text>
 <g><rect x="475" y="724" width="120" height="60" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
@@ -431,27 +448,36 @@
 <g><rect x="635" y="724" width="120" height="60" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
 <use href="#icon-vector" x="640" y="747" width="14" height="14" class="logo" aria-hidden="true"/><text x="703.0" y="758.0" text-anchor="middle" class="node-text compact">Vector Data</text>
 </g>
-<g><rect x="922" y="390" width="112" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#icon-query" x="927" y="403.5" width="14" height="14" class="logo" aria-hidden="true"/><text x="980.5" y="414.5" text-anchor="middle" class="node-text compact">User Query</text>
+<g><rect x="922" y="390" width="104" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="974" y="414.5" text-anchor="middle" class="node-text compact">User Query</text>
 </g>
-<g><rect x="1040" y="390" width="112" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#icon-dense" x="1045" y="403.5" width="14" height="14" class="logo" aria-hidden="true"/><text x="1101" y="406.5" text-anchor="middle" class="node-text compact">Dense Vector</text>
-<text x="1101" y="422.5" text-anchor="middle" class="node-text compact">Search</text>
+<g><rect x="1046" y="390" width="104" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1098" y="406.5" text-anchor="middle" class="node-text compact">BM25 + Vector</text>
+<text x="1098" y="422.5" text-anchor="middle" class="node-text compact">Search</text>
 </g>
-<g><rect x="1158" y="390" width="112" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#icon-match" x="1163" y="403.5" width="14" height="14" class="logo" aria-hidden="true"/><text x="1214" y="406.5" text-anchor="middle" class="node-text compact">Best</text>
-<text x="1214" y="422.5" text-anchor="middle" class="node-text compact">Match 25</text>
+<g><rect x="1170" y="390" width="104" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1222" y="414.5" text-anchor="middle" class="node-text compact">RRF Fusion</text>
 </g>
-<g><rect x="922" y="464" width="112" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#icon-rerank" x="927" y="477.5" width="14" height="14" class="logo" aria-hidden="true"/><text x="980.5" y="488.5" text-anchor="middle" class="node-text compact">Reranking</text>
+<g><rect x="922" y="464" width="104" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="974" y="480.5" text-anchor="middle" class="node-text compact">Cross-encoder</text>
+<text x="974" y="496.5" text-anchor="middle" class="node-text compact">Rerank</text>
 </g>
-<g><rect x="1040" y="464" width="112" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#icon-graph" x="1045" y="477.5" width="14" height="14" class="logo" aria-hidden="true"/><text x="1096" y="480.5" text-anchor="middle" class="node-text compact">Knowledge</text>
-<text x="1096" y="496.5" text-anchor="middle" class="node-text compact">graph</text>
+<g><rect x="1046" y="464" width="104" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1098" y="480.5" text-anchor="middle" class="node-text compact">Top-k Chunks</text>
+<text x="1098" y="496.5" text-anchor="middle" class="node-text compact">by intent</text>
 </g>
-<g><rect x="1158" y="464" width="112" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
-<use href="#icon-citation" x="1163" y="477.5" width="14" height="14" class="logo" aria-hidden="true"/><text x="1214" y="480.5" text-anchor="middle" class="node-text compact">Source</text>
-<text x="1214" y="496.5" text-anchor="middle" class="node-text compact">citations</text>
+<g><rect x="1170" y="464" width="104" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1222" y="480.5" text-anchor="middle" class="node-text compact">Source</text>
+<text x="1222" y="496.5" text-anchor="middle" class="node-text compact">Citations</text>
+</g>
+<g class="connections">
+<path d="M1026 410.5H1046" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M1150 410.5H1170" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M1222 431V447H974V464" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M1026 484.5H1046" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M1150 484.5H1170" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+</g>
+<g class="boundary"><rect x="902" y="537" width="380" height="56" rx="12" fill="#111317" stroke="#8d949e" stroke-width="1.5" stroke-dasharray="6 4"/><text x="918" y="558" class="section-title">GRAPH RAG · SEPARATE WORKFLOW</text><text x="918" y="577" class="small">entities → graph triples → LLM answer</text>
 </g>
 <use href="#logo-deepseek" x="865" y="733" width="20" height="20" class="logo" aria-hidden="true"/><text x="924" y="750" text-anchor="middle" class="brand">deepseek</text>
 <use href="#logo-xiaomi" x="1027" y="733" width="20" height="20" class="logo" aria-hidden="true"/><text x="1098" y="750" text-anchor="middle" class="brand">Xiaomi MiMo</text>
@@ -492,7 +518,7 @@
 
     <div class="cards">
       <div class="card"><div class="card-header"><div class="card-dot gold"></div><h3>01 / Data</h3></div><ul><li>SEC filings and external checks feed extraction and ingestion.</li><li>DuckDB holds structured and vector data.</li></ul></div>
-      <div class="card"><div class="card-header"><div class="card-dot gold"></div><h3>02 / Orchestration</h3></div><ul><li>LangGraph routes numeric and qualitative workflows.</li><li>Retrieval and model services support the application.</li></ul></div>
+      <div class="card"><div class="card-header"><div class="card-dot gold"></div><h3>02 / Orchestration</h3></div><ul><li>LangGraph retrieves and reranks first, then classifies numeric vs qualitative.</li><li>Numeric runs XBRL math and verification; qualitative answers over retrieved chunks.</li></ul></div>
       <div class="card"><div class="card-header"><div class="card-dot gold"></div><h3>03 / Governance</h3></div><ul><li>FastAPI provides security and guardrails.</li><li>Monitoring covers traceability, evaluation and human review.</li></ul></div>
     </div>
     <p class="notice">This project is not affiliated with or endorsed by the U.S. Securities and Exchange Commission (SEC).</p>
