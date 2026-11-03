@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG Workbench process architecture</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI Variable", "Segoe UI", sans-serif;
+      background: #090a0c;
+      min-height: 100vh;
+      padding: 2rem;
+      color: #f3f1ea;
+    }
+
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+    }
+
+    .header {
+      margin-bottom: 2rem;
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .pulse-dot {
+      width: 12px;
+      height: 12px;
+      background: #d6b65a;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+
+    .subtitle {
+      color: #b8bdc5;
+      font-size: 0.875rem;
+      margin-left: 1.75rem;
+    }
+
+    .diagram-container {
+      background: #111317;
+      border-radius: 1rem;
+      border: 1px solid #32363d;
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+
+    svg {
+      width: 100%;
+      height: auto;
+      min-width: 900px;
+      display: block;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    .card {
+      background: #111317;
+      border-radius: 0.75rem;
+      border: 1px solid #32363d;
+      padding: 1.25rem;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .card-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .card-dot.gold { background: #d6b65a; }
+    .card-dot.green { background: #43d19e; }
+    .card-dot.rose { background: #ff727f; }
+    .card-dot.silver { background: #c7cbd1; }
+
+    .card h3 {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .card ul {
+      list-style: none;
+      color: #b8bdc5;
+      font-size: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .card li {
+      margin-bottom: 0.375rem;
+    }
+
+    .notice {
+      margin-top: 1.5rem;
+      text-align: center;
+      color: #b8bdc5;
+      font-size: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      color: #818791;
+      font-size: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 0.5rem;
+      margin-left: auto;
+      flex-shrink: 0;
+      align-items: center;
+    }
+    .toolbar-toggle {
+      background: transparent;
+      border: none;
+      color: #818791;
+      cursor: pointer;
+      font-size: 1.25rem;
+      line-height: 1;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.375rem;
+      transition: color 0.2s, background 0.2s;
+    }
+    .toolbar-toggle:hover { color: #b8bdc5; background: #181b20; }
+    .toolbar-actions {
+      display: none;
+      gap: 0.5rem;
+    }
+    .toolbar.expanded .toolbar-actions { display: flex; }
+    .toolbar-actions button {
+      background: #181b20;
+      border: 1px solid #32363d;
+      color: #b8bdc5;
+      padding: 0.375rem 0.75rem;
+      border-radius: 0.375rem;
+      font-family: inherit;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .toolbar-actions button:hover {
+      background: #32363d;
+      color: #f3f1ea;
+      border-color: #818791;
+    }
+
+    .connections path { stroke-dasharray: 8 7; animation: flow 1.5s linear infinite; }
+    @keyframes flow { to { stroke-dashoffset: -15; } }
+    @media (prefers-reduced-motion: reduce) {
+      .connections path, .pulse-dot { animation: none; }
+    }
+
+    @media print {
+      .connections path, .pulse-dot { animation: none; }
+      body {
+        background: #090a0c;
+        padding: 1rem;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .toolbar { display: none !important; }
+      .diagram-container { border-color: #32363d; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="report-container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>RAG Workbench process architecture</h1>
+        <div class="toolbar">
+          <div class="toolbar-actions" id="export-menu" aria-label="Export options">
+            <button type="button" id="export-copy">Copy</button>
+            <button type="button" id="export-svg">SVG</button>
+            <button type="button" id="export-png">PNG</button>
+          </div>
+          <button class="toolbar-toggle" type="button" id="export-toggle" aria-expanded="false" aria-controls="export-menu" title="Export options" aria-label="Export options">⋯</button>
+        </div>
+      </div>
+      <p class="subtitle">Retrieval-first LangGraph workflow · data, models and governance</p>
+    </div>
+
+    <div class="diagram-container">
+<svg id="diagram-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="diagram-title diagram-desc" viewBox="0 0 1720 1260" width="1720" height="1260">
+<title id="diagram-title">RAG Workbench process architecture</title>
+<desc id="diagram-desc">An analyst asks a question through FastAPI, which enters the main LangGraph workflow at the retrieval node. Retrieval runs before the classifier: BM25 and vector search over edgar_embeddings chunk vectors (the embedding column) are fused with reciprocal rank fusion, on the hybrid path the retriever receives a candidate top-k of three because query intent is still general and a cross-encoder reranks to at most five, so the hybrid path returns at most the smaller of the candidate top-k and five chunks; if hybrid retrieval fails or returns nothing, a keyword fallback takes up to five filing-section chunks, reranks and relevance-filters them without applying the intent top-k; a relevance filter then drops irrelevant chunks. A separate Polygon DuckDB read returns polygon_tickers company metadata and polygon_bars daily close and volume; neither is chunked or embedded. The classifier routes numeric questions to Extraction, which reads XBRL facts from xbrl_facts, then eval, Polars math, verification and either output or abstention; abstention is triggered by verification FAIL or ERROR with a fixed message. Qualitative questions go to an LLM answer over the retrieved chunks with tool calling. Numeric output, qualitative output and abstention all pass through build_lineage, which writes an audit trail and, on sampled or escalated routes, a review-queue entry for human review and calibration; audit_runs and the review queue live in a separate review_queue.duckdb file (REVIEW_DB_PATH). Graph RAG is a separate /api/chat/graph-rag workflow of entity extraction, graph_triples lookup and LLM synthesis, not a step in the main pipeline. DeepSeek and MiMo provide LLM answers, Qwen3-Embedding produces chunk embeddings, and a cross-encoder reranks. SEC EDGAR filing text is parsed, structure-chunked and embedded into edgar_embeddings; SEC companyfacts XBRL facts are extracted into xbrl_facts. ticker_embeddings holds ticker-profile vectors used only by the legacy /api/chat/rag route. Neither embeddings table has a vector index. React Flow is a frontend view component, not an orchestration step. The project is not affiliated with the SEC.</desc>
+<!-- Palette source: frontend/src/index.css @theme.
+     background #090A0C · surface #111317 · surface-elevated #181B20 · border #32363D · border-subtle #22262C
+     text #F3F1EA / #B8BDC5 / #818791 · accent #D6B65A · accent-bright #F1D77A · accent-fill #C9A227
+     silver #C7CBD1 · silver-dim #8D949E · bullish #43D19E · bearish #FF727F · neutral #A8B0BC
+     Type mapping: entry silver, orchestration gold, retrieval bright gold, data bullish green,
+     governance bearish rose, providers neutral silver, separate workflow silver-dim dashed. -->
+<style>
+      text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+      .section-title { fill: #d6b65a; font-weight: 600; font-size: 12px; letter-spacing: 1px; }
+      .section-title-sep { fill: #8d949e; font-weight: 600; font-size: 12px; letter-spacing: 1px; }
+      .t-title { fill: #f3f1ea; font-weight: 600; font-size: 13.5px; }
+      .t-sub { fill: #b8bdc5; font-size: 12px; }
+      .t-note { fill: #818791; font-size: 12px; }
+      .t-legend { fill: #b8bdc5; font-size: 12px; }
+      .t-accent { fill: #f1d77a; font-weight: 600; font-size: 13.5px; }
+      .box { stroke-width: 1.5; }
+      .box-entry { fill: rgba(199, 203, 209, 0.12); stroke: #c7cbd1; }
+      .box-orch { fill: rgba(214, 182, 90, 0.12); stroke: #d6b65a; }
+      .box-retrieval { fill: rgba(241, 215, 122, 0.10); stroke: #f1d77a; }
+      .box-data { fill: rgba(67, 209, 158, 0.10); stroke: #43d19e; }
+      .box-gov { fill: rgba(255, 114, 127, 0.10); stroke: #ff727f; }
+      .box-ext { fill: rgba(168, 176, 188, 0.10); stroke: #a8b0bc; }
+      .box-sep { fill: rgba(141, 148, 158, 0.06); stroke: #8d949e; stroke-dasharray: 6 4; }
+      .boundary { fill: #111317; stroke: #d6b65a; stroke-width: 1.5; }
+      .boundary-sep { fill: #111317; stroke: #8d949e; stroke-width: 1.5; stroke-dasharray: 8 5; }
+      .boundary-inner { fill: rgba(24, 27, 32, 0.72); stroke: #32363d; stroke-width: 1.2; }
+    </style>
+<defs>
+      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M40 0H0V40" fill="none" stroke="#22262c" stroke-width="0.7"/>
+      </pattern>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10Z" fill="#8d949e"/>
+      </marker>
+      <symbol id="icon-user" viewBox="0 0 24 24" fill="none" stroke="#d6b65a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>
+      </symbol>
+      <symbol id="icon-api" viewBox="0 0 24 24" fill="none" stroke="#d6b65a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 8h.01M7 17h.01"/>
+      </symbol>
+      <symbol id="icon-graph" viewBox="0 0 24 24" fill="none" stroke="#8d949e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 6h7M7.2 8.2 10.8 16M16.8 8.2 13.2 16"/>
+      </symbol>
+      <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="#d6b65a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+      </symbol>
+      <symbol id="icon-cpu" viewBox="0 0 24 24" fill="none" stroke="#d6b65a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
+      </symbol>
+      <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="#ff727f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>
+      </symbol>
+      <symbol id="icon-db" viewBox="0 0 24 24" fill="none" stroke="#43d19e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>
+      </symbol>
+      <symbol id="icon-branch" viewBox="0 0 24 24" fill="none" stroke="#d6b65a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 3v6a3 3 0 0 0 3 3h6"/><path d="M6 21v-6a3 3 0 0 1 3-3h6"/><path d="m15 9 3 3-3 3"/>
+      </symbol>
+    </defs>
+<rect width="1720" height="1260" fill="#090a0c"/>
+<rect width="1720" height="1260" fill="url(#grid)"/>
+
+
+
+<!-- Entry -->
+<g class="boundary"><rect x="24" y="16" width="820" height="176" rx="16"/>
+<use href="#icon-user" x="40" y="30" width="16" height="16" aria-hidden="true"/>
+<text x="64" y="44" class="section-title">REQUEST ENTRY</text></g>
+<g><rect x="48" y="64" width="190" height="90" rx="8" class="box box-entry"/>
+<text x="143" y="94" text-anchor="middle" class="t-title">Financial analyst</text>
+<text x="143" y="114" text-anchor="middle" class="t-sub">filing question</text>
+<text x="143" y="132" text-anchor="middle" class="t-sub">numeric or text</text></g>
+<g><rect x="282" y="64" width="280" height="90" rx="8" class="box box-entry"/>
+<text x="422" y="94" text-anchor="middle" class="t-title">FastAPI</text>
+<text x="422" y="114" text-anchor="middle" class="t-sub">/api/chat/auditable-rag</text>
+<text x="422" y="132" text-anchor="middle" class="t-sub">input + output rails</text></g>
+<g><rect x="610" y="64" width="214" height="90" rx="8" class="box box-sep"/>
+<text x="717" y="94" text-anchor="middle" class="t-title">React Flow</text>
+<text x="717" y="114" text-anchor="middle" class="t-sub">frontend view only</text>
+<text x="717" y="132" text-anchor="middle" class="t-sub">not orchestration</text></g>
+
+<!-- Separate Graph RAG workflow -->
+<g class="boundary-sep"><rect x="860" y="16" width="836" height="176" rx="16"/>
+<use href="#icon-graph" x="876" y="30" width="16" height="16" aria-hidden="true"/>
+<text x="900" y="44" class="section-title-sep">SEPARATE WORKFLOW · GRAPH RAG</text></g>
+<g><rect x="884" y="64" width="200" height="90" rx="8" class="box box-sep"/>
+<text x="984" y="94" text-anchor="middle" class="t-title">Graph RAG route</text>
+<text x="984" y="114" text-anchor="middle" class="t-sub">/api/chat/graph-rag</text>
+<text x="984" y="132" text-anchor="middle" class="t-sub">separate endpoint</text></g>
+<g><rect x="1120" y="64" width="190" height="90" rx="8" class="box box-sep"/>
+<text x="1215" y="94" text-anchor="middle" class="t-title">Extract entities</text>
+<text x="1215" y="114" text-anchor="middle" class="t-sub">LLM entity strings</text>
+<text x="1215" y="132" text-anchor="middle" class="t-sub">no graph lookup</text></g>
+<g><rect x="1346" y="64" width="170" height="90" rx="8" class="box box-sep"/>
+<text x="1431" y="94" text-anchor="middle" class="t-title">Query graph</text>
+<text x="1431" y="114" text-anchor="middle" class="t-sub">graph_triples lookup</text>
+<text x="1431" y="132" text-anchor="middle" class="t-sub">graph context</text></g>
+<g><rect x="1552" y="64" width="124" height="90" rx="8" class="box box-sep"/>
+<text x="1614" y="94" text-anchor="middle" class="t-title">LLM answer</text>
+<text x="1614" y="114" text-anchor="middle" class="t-sub">synthesis</text></g>
+<text x="884" y="178" class="t-note">Not part of the main retrieval pipeline.</text>
+
+<!-- Main LangGraph workflow -->
+<g class="boundary"><rect x="24" y="200" width="1672" height="680" rx="16"/>
+<use href="#icon-branch" x="40" y="214" width="16" height="16" aria-hidden="true"/>
+<text x="64" y="228" class="section-title">MAIN LANGGRAPH WORKFLOW · RETRIEVAL RUNS FIRST</text></g>
+
+<!-- Retrieval -->
+<g class="boundary-inner"><rect x="44" y="246" width="1120" height="280" rx="12"/>
+<use href="#icon-search" x="60" y="260" width="16" height="16" aria-hidden="true"/>
+<text x="84" y="274" class="section-title">RETRIEVAL · LANGGRAPH ENTRY NODE</text></g>
+<g><rect x="64" y="296" width="180" height="70" rx="8" class="box box-retrieval"/>
+<text x="154" y="318" text-anchor="middle" class="t-title">BM25 + vector</text>
+<text x="154" y="336" text-anchor="middle" class="t-sub">search</text>
+<text x="154" y="354" text-anchor="middle" class="t-sub">edgar_embeddings</text></g>
+<g><rect x="274" y="296" width="130" height="70" rx="8" class="box box-retrieval"/>
+<text x="339" y="318" text-anchor="middle" class="t-title">RRF fusion</text>
+<text x="339" y="336" text-anchor="middle" class="t-sub">reciprocal rank</text>
+<text x="339" y="354" text-anchor="middle" class="t-sub">k = 60</text></g>
+<g><rect x="434" y="296" width="160" height="70" rx="8" class="box box-retrieval"/>
+<text x="514" y="318" text-anchor="middle" class="t-title">Candidate top-k</text>
+<text x="514" y="336" text-anchor="middle" class="t-sub">hybrid · pre-rerank</text>
+<text x="514" y="354" text-anchor="middle" class="t-sub">= 3 (general)</text></g>
+<g><rect x="624" y="296" width="190" height="70" rx="8" class="box box-retrieval"/>
+<text x="719" y="318" text-anchor="middle" class="t-title">Cross-encoder</text>
+<text x="719" y="336" text-anchor="middle" class="t-sub">rerank · up to 5</text>
+<text x="719" y="354" text-anchor="middle" class="t-sub">hybrid: capped by top-k</text></g>
+<g><rect x="844" y="296" width="160" height="70" rx="8" class="box box-retrieval"/>
+<text x="924" y="318" text-anchor="middle" class="t-title">Relevance filter</text>
+<text x="924" y="336" text-anchor="middle" class="t-sub">retrieval rail</text>
+<text x="924" y="354" text-anchor="middle" class="t-sub">drops irrelevant</text></g>
+<g><rect x="64" y="400" width="270" height="86" rx="8" class="box box-retrieval"/>
+<text x="199" y="422" text-anchor="middle" class="t-title">Retrieved chunks</text>
+<text x="199" y="440" text-anchor="middle" class="t-sub">hybrid: ≤ min(top-k, 5)</text>
+<text x="199" y="458" text-anchor="middle" class="t-sub">fallback: up to 5 post-rerank</text></g>
+<g><rect x="370" y="400" width="320" height="86" rx="8" class="box box-sep"/>
+<text x="530" y="422" text-anchor="middle" class="t-title">Polygon DuckDB read</text>
+<text x="530" y="440" text-anchor="middle" class="t-sub">polygon_tickers + polygon_bars</text>
+<text x="530" y="458" text-anchor="middle" class="t-sub">metadata + latest close/volume</text></g>
+<text x="730" y="424" class="t-note">hybrid: top-k goes to the</text>
+<text x="730" y="442" class="t-note">retriever before rerank;</text>
+<text x="730" y="460" class="t-note">keyword fallback skips</text>
+<text x="730" y="478" class="t-note">the top-k (up to 5).</text>
+
+<!-- Model providers -->
+<g class="boundary-inner"><rect x="1190" y="246" width="490" height="250" rx="12"/>
+<use href="#icon-cpu" x="1206" y="260" width="16" height="16" aria-hidden="true"/>
+<text x="1230" y="274" class="section-title">MODEL PROVIDERS</text></g>
+<g><rect x="1210" y="290" width="210" height="64" rx="8" class="box box-ext"/>
+<text x="1315" y="312" text-anchor="middle" class="t-title">DeepSeek</text>
+<text x="1315" y="330" text-anchor="middle" class="t-sub">LLM (deepseek-chat)</text></g>
+<g><rect x="1444" y="290" width="210" height="64" rx="8" class="box box-ext"/>
+<text x="1549" y="312" text-anchor="middle" class="t-title">MiMo</text>
+<text x="1549" y="330" text-anchor="middle" class="t-sub">LLM (mimo-v2.5-pro)</text></g>
+<g><rect x="1210" y="374" width="210" height="64" rx="8" class="box box-ext"/>
+<text x="1315" y="396" text-anchor="middle" class="t-title">Qwen3-Embedding</text>
+<text x="1315" y="414" text-anchor="middle" class="t-sub">8B · 4096-d</text></g>
+<g><rect x="1444" y="374" width="210" height="64" rx="8" class="box box-ext"/>
+<text x="1549" y="396" text-anchor="middle" class="t-title">Cross-encoder</text>
+<text x="1549" y="414" text-anchor="middle" class="t-sub">ms-marco-MiniLM</text></g>
+<text x="1210" y="462" class="t-note">embeddings + reranking + answers</text>
+
+<!-- Classifier -->
+<g><rect x="480" y="560" width="200" height="84" rx="8" class="box box-orch"/>
+<text x="580" y="584" text-anchor="middle" class="t-title">Classifier</text>
+<text x="580" y="602" text-anchor="middle" class="t-sub">numeric vs qualitative</text>
+<text x="580" y="620" text-anchor="middle" class="t-sub">detect intent</text></g>
+
+<!-- Numeric path -->
+<text x="80" y="656" class="section-title">NUMERIC PATH</text>
+<g><rect x="80" y="690" width="150" height="74" rx="8" class="box box-orch"/>
+<text x="155" y="712" text-anchor="middle" class="t-title">Extraction</text>
+<text x="155" y="730" text-anchor="middle" class="t-sub">XBRL facts</text>
+<text x="155" y="748" text-anchor="middle" class="t-sub">Polars read</text></g>
+<g><rect x="270" y="690" width="120" height="74" rx="8" class="box box-orch"/>
+<text x="330" y="712" text-anchor="middle" class="t-title">Eval</text>
+<text x="330" y="730" text-anchor="middle" class="t-sub">route +</text>
+<text x="330" y="748" text-anchor="middle" class="t-sub">confidence</text></g>
+<g><rect x="430" y="690" width="130" height="74" rx="8" class="box box-orch"/>
+<text x="495" y="712" text-anchor="middle" class="t-title">Math</text>
+<text x="495" y="730" text-anchor="middle" class="t-sub">Polars</text>
+<text x="495" y="748" text-anchor="middle" class="t-sub">financial_calc</text></g>
+<g><rect x="600" y="690" width="140" height="74" rx="8" class="box box-orch"/>
+<text x="670" y="712" text-anchor="middle" class="t-title">Verification</text>
+<text x="670" y="730" text-anchor="middle" class="t-sub">cross-checks</text>
+<text x="670" y="748" text-anchor="middle" class="t-sub">consistency</text></g>
+<g><rect x="780" y="690" width="130" height="74" rx="8" class="box box-orch"/>
+<text x="845" y="712" text-anchor="middle" class="t-title">Output</text>
+<text x="845" y="730" text-anchor="middle" class="t-sub">numeric answer</text>
+<text x="845" y="748" text-anchor="middle" class="t-sub">cited facts</text></g>
+<g><rect x="780" y="790" width="130" height="70" rx="8" class="box box-gov"/>
+<text x="845" y="812" text-anchor="middle" class="t-title">Abstention</text>
+<text x="845" y="830" text-anchor="middle" class="t-sub">verify FAIL/ERROR</text>
+<text x="845" y="848" text-anchor="middle" class="t-sub">fixed message</text></g>
+
+<!-- Qualitative path -->
+<g><rect x="960" y="690" width="200" height="90" rx="8" class="box box-orch"/>
+<text x="1060" y="714" text-anchor="middle" class="t-title">LLM answer</text>
+<text x="1060" y="734" text-anchor="middle" class="t-sub">over retrieved chunks</text>
+<text x="1060" y="752" text-anchor="middle" class="t-sub">tool calling enabled</text></g>
+
+<!-- Lineage -->
+<g><rect x="1170" y="680" width="200" height="100" rx="8" class="box box-orch"/>
+<text x="1270" y="704" text-anchor="middle" class="t-title">Build lineage</text>
+<text x="1270" y="724" text-anchor="middle" class="t-sub">audit trail / answer</text>
+<text x="1270" y="742" text-anchor="middle" class="t-sub">review queue on</text>
+<text x="1270" y="760" text-anchor="middle" class="t-sub">sampled / escalated</text></g>
+
+<!-- Governance -->
+<g class="boundary-inner"><rect x="1390" y="560" width="286" height="300" rx="12"/>
+<use href="#icon-shield" x="1406" y="574" width="16" height="16" aria-hidden="true"/>
+<text x="1430" y="588" class="section-title">GOVERNANCE</text></g>
+<g><rect x="1410" y="610" width="246" height="60" rx="8" class="box box-gov"/>
+<text x="1533" y="632" text-anchor="middle" class="t-title">Audit trail</text>
+<text x="1533" y="650" text-anchor="middle" class="t-sub">every answer run</text></g>
+<g><rect x="1410" y="690" width="246" height="60" rx="8" class="box box-gov"/>
+<text x="1533" y="712" text-anchor="middle" class="t-title">Review queue</text>
+<text x="1533" y="730" text-anchor="middle" class="t-sub">sampled / escalated</text></g>
+<g><rect x="1410" y="770" width="246" height="70" rx="8" class="box box-gov"/>
+<text x="1533" y="794" text-anchor="middle" class="t-title">Human review</text>
+<text x="1533" y="812" text-anchor="middle" class="t-sub">and calibration</text></g>
+
+<!-- Data plane -->
+<g class="boundary"><rect x="24" y="920" width="1672" height="230" rx="16"/>
+<use href="#icon-db" x="40" y="934" width="16" height="16" aria-hidden="true"/>
+<text x="64" y="948" class="section-title">INGESTION &amp; DATA PLANE</text></g>
+<g><rect x="48" y="974" width="190" height="50" rx="8" class="box box-data"/>
+<text x="143" y="992" text-anchor="middle" class="t-title">SEC XBRL API</text>
+<text x="143" y="1008" text-anchor="middle" class="t-sub">companyfacts JSON</text></g>
+<g><rect x="278" y="974" width="220" height="50" rx="8" class="box box-data"/>
+<text x="388" y="992" text-anchor="middle" class="t-title">XBRL fact extraction</text>
+<text x="388" y="1008" text-anchor="middle" class="t-sub">concept / value / period</text></g>
+<g><rect x="48" y="1032" width="190" height="50" rx="8" class="box box-data"/>
+<text x="143" y="1050" text-anchor="middle" class="t-title">SEC EDGAR filings</text>
+<text x="143" y="1066" text-anchor="middle" class="t-sub">10-K / 10-Q / 20-F</text></g>
+<g><rect x="278" y="1032" width="220" height="50" rx="8" class="box box-data"/>
+<text x="388" y="1050" text-anchor="middle" class="t-title">Parse + structure chunk</text>
+<text x="388" y="1066" text-anchor="middle" class="t-sub">sections / tables</text></g>
+<g><rect x="528" y="1032" width="180" height="50" rx="8" class="box box-data"/>
+<text x="618" y="1050" text-anchor="middle" class="t-title">Qwen3-Embedding</text>
+<text x="618" y="1066" text-anchor="middle" class="t-sub">chunk vectors</text></g>
+<g><rect x="48" y="1090" width="190" height="50" rx="8" class="box box-data"/>
+<text x="143" y="1108" text-anchor="middle" class="t-title">Polygon.io</text>
+<text x="143" y="1124" text-anchor="middle" class="t-sub">tickers + daily bars</text></g>
+<text x="278" y="1096" class="t-note">read directly at query time</text>
+<text x="278" y="1110" class="t-note">not chunked or embedded</text>
+<g class="boundary-inner"><rect x="820" y="945" width="840" height="200" rx="12"/>
+<use href="#icon-db" x="836" y="959" width="16" height="16" aria-hidden="true"/>
+<text x="860" y="973" class="section-title">DUCKDB STORE</text></g>
+<g><rect x="840" y="982" width="390" height="48" rx="6" class="box box-ext"/>
+<text x="1035" y="997" text-anchor="middle" class="t-title">xbrl_facts</text>
+<text x="1035" y="1011" text-anchor="middle" class="t-sub">SEC companyfacts:</text>
+<text x="1035" y="1025" text-anchor="middle" class="t-sub">concept / value / period</text></g>
+<g><rect x="1246" y="982" width="394" height="48" rx="6" class="box box-ext"/>
+<text x="1443" y="997" text-anchor="middle" class="t-title">graph_triples</text>
+<text x="1443" y="1011" text-anchor="middle" class="t-sub">subject &#8594; predicate &#8594; object</text>
+<text x="1443" y="1025" text-anchor="middle" class="t-sub">read by Query graph step</text></g>
+<g><rect x="840" y="1038" width="390" height="48" rx="6" class="box box-ext"/>
+<text x="1035" y="1053" text-anchor="middle" class="t-title">edgar_embeddings</text>
+<text x="1035" y="1067" text-anchor="middle" class="t-sub">chunk text + metadata</text>
+<text x="1035" y="1081" text-anchor="middle" class="t-sub">+ embedding column</text></g>
+<g><rect x="1246" y="1038" width="394" height="48" rx="6" class="box box-ext"/>
+<text x="1443" y="1053" text-anchor="middle" class="t-title">ticker_embeddings</text>
+<text x="1443" y="1067" text-anchor="middle" class="t-sub">ticker-profile vectors</text>
+<text x="1443" y="1081" text-anchor="middle" class="t-sub">(legacy /api/chat/rag)</text></g>
+<g><rect x="840" y="1094" width="390" height="48" rx="6" class="box box-ext"/>
+<text x="1035" y="1109" text-anchor="middle" class="t-title">Polygon tables</text>
+<text x="1035" y="1123" text-anchor="middle" class="t-sub">polygon_tickers: company metadata</text>
+<text x="1035" y="1137" text-anchor="middle" class="t-sub">polygon_bars: close + volume</text></g>
+<g><rect x="1246" y="1094" width="394" height="48" rx="6" class="box box-ext"/>
+<text x="1443" y="1109" text-anchor="middle" class="t-title">audit_runs / review</text>
+<text x="1443" y="1123" text-anchor="middle" class="t-sub">separate DuckDB file</text>
+<text x="1443" y="1137" text-anchor="middle" class="t-sub">REVIEW_DB_PATH (review_queue.duckdb)</text></g>
+
+<!-- Connectors are drawn above the region fills and below the legend. -->
+<g class="connections" fill="none" stroke="#8d949e" stroke-width="1.5" stroke-dasharray="8 7" marker-end="url(#arrow)">
+  <path d="M238 109H282"/>
+  <path d="M422 154V200"/>
+  <path d="M1084 109H1120"/>
+  <path d="M1310 109H1346"/>
+  <path d="M1516 109H1552"/>
+  <path d="M244 331H274"/>
+  <path d="M404 331H434"/>
+  <path d="M594 331H624"/>
+  <path d="M814 331H844"/>
+  <path d="M924 366V388H199V400"/>
+  <path d="M199 486V516H580V560"/>
+  <path d="M530 486V516" marker-end="none"/>
+  <path d="M490 644V665H155V690"/>
+  <path d="M680 600H1040V690"/>
+  <path d="M230 727H270"/>
+  <path d="M390 727H430"/>
+  <path d="M560 727H600"/>
+  <path d="M740 727H780"/>
+  <path d="M670 764V825H780"/>
+  <path d="M1160 735H1170"/>
+  <path d="M910 740H935V800H1240V780"/>
+  <path d="M910 825H1310V780"/>
+  <path d="M1270 680V640H1410"/>
+  <path d="M1370 720H1410"/>
+  <path d="M1533 750V770"/>
+  <path d="M238 999H278"/>
+  <path d="M498 999H780V1006H840"/>
+  <path d="M1100 982V868H36V727H80"/>
+  <path d="M238 1057H278"/>
+  <path d="M498 1057H528"/>
+  <path d="M708 1057H780V1062H840"/>
+  <path d="M238 1115H780V1118H840"/>
+</g>
+
+<!-- Legend -->
+<g>
+<rect x="24" y="1170" width="1672" height="66" rx="12" fill="#111317" stroke="#32363d" stroke-width="1.2"/>
+<text x="44" y="1206" class="section-title">LEGEND</text>
+<rect x="140" y="1192" width="16" height="16" rx="3" class="box box-entry"/><text x="164" y="1206" class="t-legend">Entry / UI</text>
+<rect x="300" y="1192" width="16" height="16" rx="3" class="box box-orch"/><text x="324" y="1206" class="t-legend">Orchestration</text>
+<rect x="480" y="1192" width="16" height="16" rx="3" class="box box-retrieval"/><text x="504" y="1206" class="t-legend">Retrieval</text>
+<rect x="640" y="1192" width="16" height="16" rx="3" class="box box-data"/><text x="664" y="1206" class="t-legend">Data / ingestion</text>
+<rect x="840" y="1192" width="16" height="16" rx="3" class="box box-gov"/><text x="864" y="1206" class="t-legend">Governance / abstention</text>
+<rect x="1120" y="1192" width="16" height="16" rx="3" class="box box-ext"/><text x="1144" y="1206" class="t-legend">Providers / stores</text>
+<rect x="1360" y="1192" width="16" height="16" rx="3" class="box box-sep"/><text x="1384" y="1206" class="t-legend">Separate workflow</text>
+</g>
+</svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><div class="card-dot green"></div><h3>01 / Data</h3></div>
+        <ul>
+          <li>SEC EDGAR filing text is parsed, structure-chunked and embedded with Qwen3-Embedding into edgar_embeddings (chunk text, metadata and embedding column).</li>
+          <li>SEC companyfacts XBRL facts are extracted into xbrl_facts and read by the numeric Extraction step.</li>
+          <li>polygon_tickers company metadata and polygon_bars daily close and volume are read directly, not chunked or embedded.</li>
+          <li>ticker_embeddings holds ticker-profile vectors used only by the legacy /api/chat/rag route; neither embeddings table has a vector index.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot gold"></div><h3>02 / Retrieval and branching</h3></div>
+        <ul>
+          <li>Retrieval is the LangGraph entry node: BM25 + vector search over edgar_embeddings, RRF fusion, then on the hybrid path a candidate top-k (3 general, 2 latest, 8 comparison) and a cross-encoder rerank to at most 5, so at most min(top-k, 5) chunks survive; a relevance filter then drops irrelevant ones. If hybrid retrieval fails or returns nothing, a keyword fallback takes up to 5 filing-section chunks, reranks and relevance-filters them without applying the intent top-k.</li>
+          <li>The classifier then routes numeric questions through XBRL eval, Polars math and verification to output or abstention, and qualitative questions to an LLM answer with tool calling.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot rose"></div><h3>03 / Governance</h3></div>
+        <ul>
+          <li>Output, abstention and qualitative answers all pass through build_lineage: audit trail for every run, review queue on sampled or escalated routes, then human review and calibration. audit_runs and the review queue live in a separate review_queue.duckdb file (REVIEW_DB_PATH).</li>
+          <li>Abstention fires when verification returns FAIL or ERROR and returns a fixed message. Graph RAG is a separate /api/chat/graph-rag workflow whose Query graph step reads graph_triples. DeepSeek and MiMo answer; Qwen3-Embedding and the cross-encoder support retrieval.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="notice">This project is not affiliated with or endorsed by the U.S. Securities and Exchange Commission (SEC).</p>
+    <p class="footer">Reference: README Architecture · docs/images/rag-workbench-architecture.gif · Palette: frontend/src/index.css<br>Diagram template: Cocoon AI architecture-diagram-generator · © 2025 Cocoon AI · MIT License · github.com/Cocoon-AI/architecture-diagram-generator</p>
+  </div>
+
+  <script>
+    (function () {
+      const PNG_SCALE = 2;
+      const SVG_WIDTH = 1720;
+      const SVG_HEIGHT = 1260;
+      const XLINK = 'http://www.w3.org/1999/xlink';
+
+      function setExportMenu(open) {
+        const toolbar = document.querySelector('.toolbar');
+        const toggle = document.getElementById('export-toggle');
+        if (!toolbar || !toggle) return;
+        toolbar.classList.toggle('expanded', open);
+        toggle.setAttribute('aria-expanded', String(open));
+      }
+
+      function buildExportSVG() {
+        const source = document.getElementById('diagram-svg');
+        if (!source) throw new Error('Diagram not found');
+
+        const clone = source.cloneNode(true);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        clone.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xlink', XLINK);
+        clone.setAttribute('width', String(SVG_WIDTH));
+        clone.setAttribute('height', String(SVG_HEIGHT));
+
+        clone.querySelectorAll('use').forEach(function (use) {
+          const href = use.getAttribute('href');
+          if (href) use.setAttributeNS(XLINK, 'xlink:href', href);
+        });
+
+        return new XMLSerializer().serializeToString(clone);
+      }
+
+      function svgToPngBlob(scale) {
+        const markup = buildExportSVG();
+        const svgBlob = new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+
+        return new Promise(function (resolve, reject) {
+          const img = new Image();
+          img.onload = function () {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = SVG_WIDTH * (scale || PNG_SCALE);
+              canvas.height = SVG_HEIGHT * (scale || PNG_SCALE);
+              const ctx = canvas.getContext('2d');
+              if (!ctx) throw new Error('Canvas unavailable');
+              ctx.fillStyle = '#090a0c';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              URL.revokeObjectURL(url);
+              canvas.toBlob(function (blob) {
+                if (blob) resolve(blob);
+                else reject(new Error('PNG encoding failed'));
+              }, 'image/png');
+            } catch (err) {
+              URL.revokeObjectURL(url);
+              reject(err);
+            }
+          };
+          img.onerror = function () {
+            URL.revokeObjectURL(url);
+            reject(new Error('SVG rendering failed'));
+          };
+          img.src = url;
+        });
+      }
+
+      function defaultLabel(button) {
+        if (!button.dataset.label) button.dataset.label = button.textContent;
+        return button.dataset.label;
+      }
+
+      function flash(button, message) {
+        const original = defaultLabel(button);
+        button.textContent = message;
+        clearTimeout(button._resetTimer);
+        button._resetTimer = setTimeout(function () {
+          button.textContent = original;
+        }, 2200);
+      }
+
+      function saveBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      }
+
+      async function copyAsImage(button) {
+        try {
+          if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === 'undefined') {
+            flash(button, 'Copy not supported');
+            return;
+          }
+          const blob = await svgToPngBlob(PNG_SCALE);
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          flash(button, 'Copied');
+        } catch (err) {
+          flash(button, 'Copy failed - use PNG');
+        }
+      }
+
+      async function downloadPNG(button) {
+        try {
+          button.textContent = 'Rendering...';
+          const blob = await svgToPngBlob(PNG_SCALE);
+          saveBlob(blob, 'rag-process-architecture.png');
+          flash(button, 'PNG saved');
+        } catch (err) {
+          flash(button, 'PNG failed');
+        }
+      }
+
+      function downloadSVG(button) {
+        try {
+          const markup = buildExportSVG();
+          saveBlob(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }), 'rag-process-architecture.svg');
+          flash(button, 'SVG saved');
+        } catch (err) {
+          flash(button, 'SVG failed');
+        }
+      }
+
+      function initExportControls() {
+        const toggle = document.getElementById('export-toggle');
+        if (!toggle) return;
+
+        document.querySelectorAll('#export-menu button').forEach(function (button) {
+          button.dataset.label = button.textContent.trim();
+        });
+        toggle.addEventListener('click', function () {
+          setExportMenu(toggle.getAttribute('aria-expanded') !== 'true');
+        });
+        document.getElementById('export-copy').addEventListener('click', function () { copyAsImage(this); });
+        document.getElementById('export-svg').addEventListener('click', function () { downloadSVG(this); });
+        document.getElementById('export-png').addEventListener('click', function () { downloadPNG(this); });
+
+        document.addEventListener('click', function (event) {
+          if (!event.target.closest('.toolbar')) setExportMenu(false);
+        });
+        document.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape') setExportMenu(false);
+        });
+      }
+
+      window.buildExportSVG = buildExportSVG;
+      window.svgToPngBlob = svgToPngBlob;
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initExportControls);
+      } else {
+        initExportControls();
+      }
+    })();
+  </script>
+</body>
+</html>
