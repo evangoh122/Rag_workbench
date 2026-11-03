@@ -1,29 +1,8 @@
-# Stage 1: Build React frontend
-FROM node:22-alpine AS frontend-builder
-
-WORKDIR /app/frontend
-
-ARG VITE_API_BASE="/api"
-ARG VITE_DRIFT_AGREEMENT_FLOOR=0.95
-ARG VITE_DRIFT_CONCEPT_SPIKE_THRESHOLD=50
-# PostHog product analytics — baked in at build time (Vite inlines VITE_* vars).
-# Empty by default → analytics stays disabled (the app guards on this being set).
-ARG VITE_POSTHOG_KEY=""
-ARG VITE_POSTHOG_HOST="https://us.i.posthog.com"
-ENV VITE_API_BASE=$VITE_API_BASE
-ENV VITE_DRIFT_AGREEMENT_FLOOR=$VITE_DRIFT_AGREEMENT_FLOOR
-ENV VITE_DRIFT_CONCEPT_SPIKE_THRESHOLD=$VITE_DRIFT_CONCEPT_SPIKE_THRESHOLD
-ENV VITE_POSTHOG_KEY=$VITE_POSTHOG_KEY
-ENV VITE_POSTHOG_HOST=$VITE_POSTHOG_HOST
-
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm install
-
-COPY frontend/ ./
-RUN npm run build
-
-# Stage 2: Install Python dependencies
+# Stage 1: Install Python dependencies with uv
 FROM python:3.11-slim AS python-builder
+
+# Official uv binary — pinned so image builds are reproducible.
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -35,12 +14,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    -r requirements.txt
+# Install into a dedicated venv, byte-compiled and copied (no hardlinks) so the
+# venv can be copied into the final stage. UV_PYTHON_DOWNLOADS=never keeps uv on
+# the image interpreter instead of fetching its own Python.
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PYTHON=/usr/local/bin/python3.11
 
-# Stage 3: Final runtime image
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project
+
+# Stage 2: Final runtime image
 FROM python:3.11-slim AS runtime
 
 WORKDIR /app
@@ -48,33 +34,22 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2 \
     libxslt1.1 \
-    nginx \
-    supervisor \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Add non-root user (UID 1000 for HF Spaces)
 RUN useradd -m -u 1000 user
-RUN chown -R user:user /app /var/log/nginx /var/lib/nginx /run
+RUN chown -R user:user /app
 
-# Copy Python packages from builder
-COPY --from=python-builder /install /usr/local
+# Copy the uv-managed virtualenv from the builder
+COPY --from=python-builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application code
 COPY api/ ./api/
 COPY scripts/ ./scripts/
 COPY data/sentiment_dict/ ./data/sentiment_dict/
 COPY main.py run.py ./
-
-# Copy React build from Stage 1
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
-
-# Copy configuration files
-COPY nginx.conf /etc/nginx/nginx.conf
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Remove Debian default site that conflicts on port 80
-RUN rm -f /etc/nginx/sites-enabled/default
 
 RUN mkdir -p /app/data && chown -R user:user /app/data
 
@@ -88,5 +63,16 @@ USER user
 # Then restore the runtime/review DB (audit log, HITL decisions, eval results)
 # from its Parquet snapshots in the same dataset — the Space has no persistent
 # volume, so this is how that data survives restarts.
-CMD ["sh", "-c", "cd /app && PYTHONPATH=/app python -m scripts.fetch_db_from_dataset || true; PYTHONPATH=/app python -m scripts.restore_review_db || true; exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"]
-# build: v6 — also restore runtime/review DB from dataset Parquet snapshots before boot
+#
+# seed_on_startup.py backgrounds itself (&) — it polls /api/health on 127.0.0.1
+# and does its real work (XBRL refresh / embedding) only once uvicorn is up,
+# same as when supervisord ran it alongside uvicorn. uvicorn itself is the
+# foreground process now (exec, no supervisord) and binds the Space's public
+# port directly — there's no nginx in front of it anymore (the frontend moved
+# to evangoh-frontend, which serves the portfolio + RAG Workbench UI directly).
+#
+# The CMD runs bare `python`/`uvicorn` on purpose: PATH points at the copied
+# /opt/venv created by `uv sync`, so it is the locked environment, not a
+# system interpreter.
+CMD ["sh", "-c", "cd /app && PYTHONPATH=/app python -m scripts.fetch_db_from_dataset || true; PYTHONPATH=/app python -m scripts.restore_review_db || true; python scripts/seed_on_startup.py & exec uvicorn api.main:app --host 0.0.0.0 --port 7860"]
+# build: v7 — backend-only (frontend moved to evangoh-frontend); uv (pyproject.toml + uv.lock)

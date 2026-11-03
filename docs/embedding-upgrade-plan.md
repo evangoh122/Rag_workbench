@@ -82,9 +82,9 @@ HF_EMBEDDING_MODEL=<fin-e5-model-id>
 EMBEDDING_DIM=768                      # match Fin-E5 actual output dim
 ```
 
-### Step 3 — Remove Ollama code path (embeddings.py + requirements.txt)
+### Step 3 — Remove Ollama code path (embeddings.py + pyproject.toml)
 
-**3a. `requirements.txt`**
+**3a. `pyproject.toml`**
 ```diff
 - langchain-ollama>=0.2.0,<0.3.0
 - ollama>=0.4.0,<0.5.0
@@ -150,8 +150,8 @@ DROP TABLE ticker_embeddings;
 Then re-run **in order** (ticker_embeddings holds both metadata AND vectors):
 ```
 POST /api/admin/refresh-data          # restores xbrl_facts + ticker_embeddings metadata
-python scripts/embed_edgar.py         # restores edgar_embeddings with Fin-E5 vectors
-python scripts/embed_tickers.py       # restores ticker_embeddings vectors (metadata already present)
+uv run python scripts/embed_edgar.py         # restores edgar_embeddings with Fin-E5 vectors
+uv run python scripts/embed_tickers.py       # restores ticker_embeddings vectors (metadata already present)
 ```
 
 **Important:** DROP TABLE ticker_embeddings also destroys ticker metadata (descriptions, sectors, industries) inserted by `refresh-data`. The re-run order above restores metadata first via refresh-data, then vectors via embed_tickers. The `ON CONFLICT DO UPDATE` in embed_tickers.py ensures vectors are upserted into existing metadata rows without clobbering description/sector/industry.
@@ -173,7 +173,7 @@ except Exception as e:
 
 ### Step 8 — Verify tests pass
 ```bash
-pytest tests/test_hybrid_retriever.py tests/test_rag_engine.py
+uv run pytest tests/test_hybrid_retriever.py tests/test_rag_engine.py
 ```
 The public interface (`embed_query`, `embed_documents`) does not change, so all existing tests should pass.
 
@@ -197,7 +197,7 @@ The public interface (`embed_query`, `embed_documents`) does not change, so all 
 | File | Change |
 |---|---|
 | `.env` | `EMBEDDING_PROVIDER`, `HF_EMBEDDING_MODEL`, `EMBEDDING_DIM` |
-| `requirements.txt` | Remove `langchain-ollama`, `ollama` |
+| `pyproject.toml` | Remove `langchain-ollama`, `ollama` |
 | `api/services/embeddings.py` | Remove `PrefixedOllamaEmbeddings`, `is_ollama_available()`, Ollama branch in `get_embeddings()` |
 | `scripts/embed_edgar.py` | Skip `content_type="table"` chunks before calling `embed_documents()` |
 | `api/services/hybrid_retriever.py` | Widen `top_k * 2` → `top_k * 5` for cascade recall |

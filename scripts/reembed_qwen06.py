@@ -11,7 +11,7 @@ progress is committed every COMMIT_EVERY batches, so re-running continues where
 it stopped. graph_triples / xbrl_facts are untouched (dimension-independent).
 
 Usage:
-    python scripts/reembed_qwen06.py [--db-path ./data/rag.duckdb] [--batch 32]
+    uv run python scripts/reembed_qwen06.py [--db-path ./data/rag.duckdb] [--batch 32]
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ _NCPU = str(os.cpu_count() or 4)
 os.environ.setdefault("OMP_NUM_THREADS", _NCPU)
 os.environ.setdefault("MKL_NUM_THREADS", _NCPU)
 
-import duckdb
+import duckdb  # noqa: E402
 
 MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
 TARGET_DIM = 1024

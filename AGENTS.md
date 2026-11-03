@@ -43,7 +43,20 @@ This document defines the roles, responsibilities, and ownership model for the A
 | Ingestion Scripts | Gemini | `scripts/embed_*.py` |
 | Data Pipelines | MiMo | `data/` |
 | Startup Logic | MiMo | `run.py` |
-| Integration & UI | Main | `frontend/`, `main.py` |
+| Integration | Main | `main.py` |
+
+## Dependency Management
+
+- **Python:** deps live in `pyproject.toml`; exact versions are pinned in
+  `uv.lock`. Use `uv sync` to create/refresh `.venv`, `uv run <cmd>` to execute
+  in it, and `uv lock` after changing dependencies. CI and Docker must use
+  `uv sync --locked` (never `pip install`) so a stale lock fails the build;
+  `uv lock --check` verifies the lock matches `pyproject.toml` locally.
+  Dev-only tools (pytest, pytest-asyncio, httpx, ruff) are in the `dev`
+  dependency group.
+- **Frontend:** lives in the separate `evangoh-frontend` repository; this repo
+  is backend/API-only.
+- The former `requirements.txt` and `requirements-dev.txt` files are retired.
 
 ## Merge Workflow
 
@@ -60,9 +73,9 @@ This document defines the roles, responsibilities, and ownership model for the A
 ## Known Issues & Operational Gotchas
 
 ### DuckDB Version Mismatch (RESOLVED 2026-06-18)
-- **Issue:** Local DuckDB (1.5.3) created database files incompatible with the Hugging Face Docker image (which initially capped DuckDB at `<1.1.0` in `requirements.txt`).
+- **Issue:** Local DuckDB (1.5.3) created database files incompatible with the Hugging Face Docker image (which initially capped DuckDB at `<1.1.0` in `requirements.txt`; now `pyproject.toml`).
 - **Symptom:** `Serialization Error: Failed to deserialize: expected end of object, but found field id: 103` on the space side when loading the database.
-- **Fix:** Removed the `<1.1.0` upper cap constraint on `duckdb` in `requirements.txt` to align the Hugging Face Docker environment with the local database generation version (1.5.3). This permanently resolves the cross-platform serialization mismatch.
+- **Fix:** Removed the `<1.1.0` upper cap constraint on `duckdb` in `pyproject.toml` to align the Hugging Face Docker environment with the local database generation version (1.5.3). This permanently resolves the cross-platform serialization mismatch.
 - **Venv Status:** The `.venv_duck10` virtual environment (previously used for backwards compatibility) is now obsolete. Development and deployment tasks utilize the main `.venv` (running DuckDB 1.5.3+) going forward.
 
 ### Section Extraction TOC Bug (FIXED 2026-06-18)

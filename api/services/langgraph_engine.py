@@ -36,6 +36,14 @@ from api.services.financial_calc import (
     yoy_growth, cagr,
 )
 from api.services.xbrl_relevance import get_relevant_facts, format_fact_for_display, _DISPLAY_NAMES
+from api.services.ticker_canon import (
+    AMBIGUOUS_ENGLISH_TICKERS,
+    QUERY_TICKER_ALIASES,
+    canonicalize_user_fields,
+    canonicalize_user_text,
+    display_ticker,
+    normalize_selected_ticker,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -946,7 +954,7 @@ def output_node(state: GraphState) -> Dict[str, Any]:
         logger.warning(f"output_node chart build failed (non-fatal): {e}")
 
     return {
-        "final_answer": answer,
+        "final_answer": canonicalize_user_text(answer),
         "status": {**state.get('status', {}), "output": "success"},
         "relevant_xbrl": relevant_display,
         "xbrl_badge": badge,
@@ -998,7 +1006,7 @@ def lineage_node(state: GraphState) -> Dict[str, Any]:
     import json
     import uuid
     from api.db.database import db_manager
-    from api.db.review_queue import init_review_tables, insert_decision
+    from api.db.review_queue import init_review_tables, insert_decision  # noqa: F401
 
     chunk_ids: List[str] = []
     source_docs: List[str] = []
@@ -1207,9 +1215,9 @@ _xbrl_ticker_cache: dict[str, bool] = {}
 def _ticker_has_xbrl(ticker: str) -> bool:
     """True if this ticker has any structured XBRL facts in the DB.
 
-    Tickers ingested only from an S-1/424B4 IPO prospectus (e.g. SPCX) carry
-    rich filing text but no XBRL facts, so deterministic numeric verification
-    can't run. Callers use this to allow text-grounded (clearly unverified)
+    Companies ingested only from an S-1/424B4 IPO prospectus (e.g. SPCX and
+    ANTH) carry rich filing text but no XBRL facts, so deterministic numeric
+    verification can't run. Callers use this to allow text-grounded (clearly unverified)
     numeric answers for such tickers instead of abstaining outright. Cached
     per-ticker for the process lifetime. On any error, assumes XBRL is present
     so we fall back to the safe deterministic-verify path.
@@ -1374,9 +1382,9 @@ def classifier_node(state: GraphState) -> Dict[str, Any]:
     intent = _detect_intent(query)
     text_grounded = False
     # A numeric question about a ticker with no XBRL facts (e.g. an S-1
-    # prospectus filer like SPCX) can't be deterministically verified. Rather
-    # than abstain at the verification gate, route it through the LLM/text path
-    # and flag the answer as quoted-from-text / not XBRL-verified.
+    # prospectus filer like SPCX or ANTH) can't be deterministically verified.
+    # Rather than abstain at the verification gate, route it through the LLM/text
+    # path and flag the answer as quoted-from-text / not XBRL-verified.
     if qtype == "numeric" and not _ticker_has_xbrl(state.get("ticker", "")):
         logger.info(
             "--- CLASSIFIER: numeric query for {} but no XBRL facts — "
@@ -1423,7 +1431,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
             ticker = meta.get("ticker", state.get("ticker", ""))
             header = f"[Source {i+1}: {src}"
             if ticker:
-                header += f" | {ticker}"
+                header += f" | {display_ticker(ticker)}"
             header += "]"
             context_parts.append(f"{header}\n{text}")
         context = "\n\n---\n\n".join(context_parts)
@@ -1665,7 +1673,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
 
             deco = _text_grounded_decorations(state, answer)
             return {
-                "final_answer": answer + deco["note"],
+                "final_answer": canonicalize_user_text(answer + deco["note"]),
                 "verification_status": "SKIPPED",
                 "verification_reasoning": deco["reasoning"] or "Qualitative query with tool-assisted calculation.",
                 "math_steps": math_steps,
@@ -1690,7 +1698,7 @@ def qualitative_output_node(state: GraphState) -> Dict[str, Any]:
 
         deco = _text_grounded_decorations(state, answer)
         return {
-            "final_answer": answer + deco["note"],
+            "final_answer": canonicalize_user_text(answer + deco["note"]),
             "verification_status": "SKIPPED",
             "verification_reasoning": deco["reasoning"] or "Qualitative query — numeric verification not applicable.",
             "math_steps": ["Qualitative query — no computation needed."],
@@ -1839,14 +1847,30 @@ def _resolve_query_ticker(query: str, fallback: str) -> str:
             return by_name
     except Exception:
         pass
-    # 2. Explicit ticker symbol in the query ("NVDA", "AVGO"). Length >= 3 with a
-    #    word boundary avoids prose false-matches on short/ambiguous symbols.
+    # 2. Explicit stored ticker symbol in the query ("NVDA", "ANTH"). Length >= 3
+    #    with a word boundary avoids prose false-matches on short/ambiguous
+    #    symbols. Stored symbols that are also English words (FORM, ONTO, TER)
+    #    must appear as upper-case tickers, so "in its form S-1" cannot win over
+    #    the explicit display alias resolved in step 3.
     try:
         from api.config import TICKER_TO_CIK
         for sym in TICKER_TO_CIK:
-            if len(sym) >= 3 and re.search(r"\b" + re.escape(sym) + r"\b", query, re.IGNORECASE):
-                logger.info(f"Resolved ticker {sym!r} from explicit symbol in query")
-                return sym
+            if len(sym) >= 3:
+                flags = 0 if sym in AMBIGUOUS_ENGLISH_TICKERS else re.IGNORECASE
+                if re.search(r"\b" + re.escape(sym) + r"\b", query, flags):
+                    logger.info(f"Resolved ticker {sym!r} from explicit symbol in query")
+                    return sym
+    except Exception:
+        pass
+    # 3. Explicit user-facing display symbol ("ANT") -> stored corpus key
+    #    ("ANTH"). Display symbols are upper-case tickers, so this match is
+    #    case-sensitive: ordinary lowercase prose ("an ant colony") is not a
+    #    ticker, while substrings (ANTA, ANTHROPIC) never satisfy the boundary.
+    try:
+        for display, stored in QUERY_TICKER_ALIASES.items():
+            if len(display) >= 3 and re.search(r"\b" + re.escape(display) + r"\b", query):
+                logger.info(f"Resolved display ticker {display!r} to stored {stored!r}")
+                return stored
     except Exception:
         pass
     return fallback
@@ -1861,7 +1885,7 @@ _OUT_OF_UNIVERSE = {
     "facebook", "netflix", "oracle", "salesforce", "adobe", "walmart", "costco",
     "jpmorgan", "goldman sachs", "berkshire", "coca cola", "pepsi", "disney",
     "boeing", "ford", "general motors", "exxon", "chevron", "pfizer", "moderna",
-    "palantir", "uber", "airbnb", "spotify", "openai", "anthropic", "stripe",
+    "palantir", "uber", "airbnb", "spotify", "openai", "stripe",
     "blue origin", "rivian", "lucid", "snowflake",
 }
 
@@ -1875,11 +1899,29 @@ def _named_uncovered_company(query: str) -> Optional[str]:
     return None
 
 
+def _other_covered_named(query: str) -> str:
+    """Covered ticker named in the query besides Anthropic/ANTH, else ""."""
+    stripped = re.sub(r"\b(anthropic(\s+pbc)?|anth)\b", " ", query or "", flags=re.IGNORECASE)
+    try:
+        from api.services.hybrid_retriever import resolve_ticker_from_query
+        by_name = resolve_ticker_from_query(stripped, "")
+        if by_name and by_name != "ANTH":
+            return by_name
+    except Exception:
+        pass
+    # Same alias set comparison routing uses; symbols must be written as symbols
+    # so words like "form"/"onto" are not read as covered companies.
+    from api.services.peer_comparison import _tickers_named_in_query
+    others = [t for t in _tickers_named_in_query(stripped, strict_symbols=True) if t != "ANTH"]
+    return others[0] if others else ""
+
+
 def _abstain_response(company: str) -> Dict[str, Any]:
     """A grounded 'I don't have data on that' answer (shaped like graph output)."""
     msg = (
         f"I don't have SEC filing data for **{company.title()}**, so I can't answer "
-        f"that. I currently cover **SpaceX (SPCX)** and major semiconductor companies "
+        f"that. I currently cover **Anthropic (ANT)**, **SpaceX (SPCX)**, and "
+        f"major semiconductor companies "
         f"(e.g. NVDA, AMD, MU, AVGO, QCOM, TXN, AMAT, LRCX, KLAC). "
         f"Ask about one of those and I'll pull it from their filings."
     )
@@ -2180,12 +2222,17 @@ def run_auditable_rag(query: str, ticker: str,
     # If the query names a company we DON'T cover, abstain rather than answering
     # with the default ticker's data ("SpaceX revenue" must not return Micron's).
     by_name = _resolve_query_ticker(query, "")  # covered ticker, or "" if none recognised
+    uncovered = _named_uncovered_company(query)
+    # Normally only abstain when NO covered company is named. Narrow exception:
+    # ANTH is a pre-ticker issuer, so "OpenAI vs Anthropic" must not answer from
+    # ANTH alone. Real tickers (QCOM, NVDA...) naming a big customer still answer.
+    if uncovered and (not by_name or (by_name == "ANTH" and not _other_covered_named(query))):
+        logger.info(f"Abstaining — query names uncovered company {uncovered!r}")
+        return _abstain_response(uncovered)
     if not by_name:
-        uncovered = _named_uncovered_company(query)
-        if uncovered:
-            logger.info(f"Abstaining — query names uncovered company {uncovered!r}")
-            return _abstain_response(uncovered)
-        by_name = ticker  # no company named -> honour the UI's selected ticker
+        # No company named -> honour the UI selection using its corpus key.
+        # Normalize first: the API accepts "ant"/" ANT " as well as stored ANTH.
+        by_name = normalize_selected_ticker(ticker)
     if by_name != ticker:
         logger.info(f"Ticker override: query resolved to {by_name!r} (caller passed {ticker!r})")
     ticker = by_name
@@ -2201,7 +2248,7 @@ def run_auditable_rag(query: str, ticker: str,
             logger.info(f"--- PEER COMPARISON: {decision} ---")
             result = run_peer_comparison(query, decision)
             result["resolved_ticker"] = decision["subject"]
-            return result
+            return canonicalize_user_fields(result)
     except Exception as e:
         logger.warning(f"Peer comparison path failed, falling back to single-company: {e}")
 
@@ -2239,6 +2286,7 @@ def run_auditable_rag(query: str, ticker: str,
     }
 
     result = app.invoke(inputs)
+    result["final_answer"] = canonicalize_user_text(result.get("final_answer") or "")
 
     # Surface the ticker the query actually resolved to so the caller (and the
     # UI) can persist the active company across turns. Without this a follow-up

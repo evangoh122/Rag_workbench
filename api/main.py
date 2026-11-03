@@ -1,11 +1,7 @@
 import asyncio
-import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from starlette.responses import Response as StarletteResponse
+from fastapi import FastAPI
 from loguru import logger
 
 from api.routes import chat
@@ -120,28 +116,6 @@ async def health_full():
             "recent_errors": llm["recent_errors"],
         },
     }
-
-frontend_path = os.path.join(os.getcwd(), "frontend", "dist")
-if os.path.exists(frontend_path):
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
-
-    async def _not_found(req: Request, exc: Exception):
-        if not req.url.path.startswith("/api"):
-            return FileResponse(os.path.join(frontend_path, "index.html"))
-        return StarletteResponse(content='{"detail":"Not Found"}', status_code=404, media_type="application/json")
-
-    app.add_exception_handler(404, _not_found)
-
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str, request: Request):
-        from pathlib import Path
-        file_path = os.path.join(frontend_path, full_path)
-        resolved = Path(file_path).resolve()
-        if not str(resolved).startswith(str(Path(frontend_path).resolve())):
-            return FileResponse(os.path.join(frontend_path, "index.html"))
-        if resolved.is_file():
-            return FileResponse(str(resolved))
-        return FileResponse(os.path.join(frontend_path, "index.html"))
 
 if __name__ == "__main__":
     import uvicorn

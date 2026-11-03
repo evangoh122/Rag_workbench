@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from loguru import logger
 
 from api.db.database import db_manager
+from api.services.ticker_canon import query_tickers
 
 router = APIRouter(prefix="/api/graph", tags=["graph"])
 
@@ -126,8 +127,12 @@ def triples(ticker: str | None = None, limit: int = 300):
     )
     params: list = []
     if ticker:
-        sql += " AND ticker = ?"
-        params.append(ticker)
+        symbols = sorted(query_tickers(ticker))
+        if not symbols:
+            return {"triples": [], "count": 0}
+        placeholders = ", ".join("?" for _ in symbols)
+        sql += f" AND ticker IN ({placeholders})"
+        params.extend(symbols)
     sql += " ORDER BY confidence DESC NULLS LAST LIMIT ?"
     params.append(limit)
 

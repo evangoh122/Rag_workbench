@@ -8,12 +8,12 @@ Scores the /api/chat/auditable-rag endpoint on four axes:
   4. abstention    ? model correctly refused when expected == ABSTAIN*
 
 Usage:
-    python evals/run_eval.py                          # runs against localhost:8000
-    python evals/run_eval.py --api-url http://...     # custom API URL
-    python evals/run_eval.py --dry-run                # validate golden set, no API calls
-    python evals/run_eval.py --id 5                   # run a single question by ID
-    python evals/run_eval.py --mode gaap_vs_nongaap   # filter by failure mode
-    EVAL_API_URL=http://... python evals/run_eval.py  # via env var
+    uv run python evals/run_eval.py                          # runs against localhost:8000
+    uv run python evals/run_eval.py --api-url http://...     # custom API URL
+    uv run python evals/run_eval.py --dry-run                # validate golden set, no API calls
+    uv run python evals/run_eval.py --id 5                   # run a single question by ID
+    uv run python evals/run_eval.py --mode gaap_vs_nongaap   # filter by failure mode
+    EVAL_API_URL=http://... uv run python evals/run_eval.py  # via env var
 """
 
 import argparse

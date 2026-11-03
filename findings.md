@@ -51,7 +51,7 @@ Local retrieval works; the Space does not — the gap is the empty Space index.
 
 ## Verify in One Call
 ```bash
-curl -s "$SPACE_URL/api/stats" | python -m json.tool
+curl -s "$SPACE_URL/api/stats" | uv run python -m json.tool
 ```
 - `data.edgar_embeddings: 0` → confirms empty-index root cause.
 - `config.embedding_dim: 4096` → confirms `EMBEDDING_DIM` is unset/defaulted.
@@ -75,5 +75,5 @@ Swap to an embedding model run **locally in-process** via `sentence-transformers
 - Model: `Qwen/Qwen3-Embedding-0.6B` (1024-dim) — runs in-process on the Space without OOM (the 8B variant OOMs; HF serverless is unreliable for large models), no external inference call. Uses a query-side instruction prefix; documents embedded as-is.
 - `config.py`: add a `sentence-transformers` local provider; `EMBEDDING_DIM` defaults per provider (local=1024); add `ACTIVE_EMBEDDING_MODEL` for truthful telemetry.
 - `embeddings.py`: add a `LocalSTEmbeddings` backend.
-- `requirements.txt`: pin `transformers>=4.51.0` (Qwen3 architecture support).
+- `pyproject.toml` (locked in `uv.lock`): pin `transformers>=5.12.1` (Qwen3 architecture support).
 - `deploy.yml`: sync `EMBEDDING_PROVIDER` / `ST_EMBEDDING_MODEL` / `EMBEDDING_DIM` / `EMBEDDING_QUERY_PREFIX` consistently.

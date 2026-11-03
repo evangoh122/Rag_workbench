@@ -20,27 +20,27 @@ os.environ["ST_EMBEDDING_MODEL"] = "Qwen/Qwen3-Embedding-0.6B"
 os.environ["EMBEDDING_DIM"] = "1024"
 os.environ.setdefault("EDGAR_USER_AGENT", "Evan Goh evangohsg@gmail.com")
 
-import warnings
-from bs4 import XMLParsedAsHTMLWarning
+import warnings  # noqa: E402
+from bs4 import XMLParsedAsHTMLWarning  # noqa: E402
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 # ── imports ───────────────────────────────────────────────────────────────────
-from datetime import datetime, timezone
-from loguru import logger
+from datetime import datetime, timezone  # noqa: E402
+from loguru import logger  # noqa: E402
 
-from api.config import Config
-from api.services.embeddings import get_embeddings
-from api.services.structure_chunker import StructureChunker
-from api.services._edgar_identity import ensure_edgar_identity
-from scripts.embed_edgar import (
+from api.config import Config  # noqa: E402
+from api.services.embeddings import get_embeddings  # noqa: E402
+from api.services.structure_chunker import StructureChunker  # noqa: E402
+from api.services._edgar_identity import ensure_edgar_identity  # noqa: E402
+from scripts.embed_edgar import (  # noqa: E402
     parse_html_file,
     _extract_sections_with_labels,
     _ensure_schema,
     _TICKER_CIK,
 )
 
-from edgar import Company
-import duckdb
+from edgar import Company  # noqa: E402
+import duckdb  # noqa: E402
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

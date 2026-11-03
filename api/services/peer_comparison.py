@@ -22,6 +22,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
 
+from api.services.ticker_canon import (
+    AMBIGUOUS_ENGLISH_TICKERS,
+    QUERY_TICKER_ALIASES,
+    canonicalize_user_fields,
+    canonicalize_user_text,
+)
+
 # Covered companies → the names/aliases that appear in queries and filings.
 _TICKER_TO_NAMES: Dict[str, List[str]] = {
     "NVDA": ["nvidia"],
@@ -38,6 +45,7 @@ _TICKER_TO_NAMES: Dict[str, List[str]] = {
     "MCHP": ["microchip"],
     "ADI":  ["analog devices"],
     "SPCX": ["spacex", "space exploration"],
+    "ANTH": ["anthropic", "anthropic pbc"],
     "RKLB": ["rocket lab", "rocket labs", "rocketlab", "rocket lab usa", "rklb"],
     "ON":   ["on semi", "on semiconductor", "onsemi", "on"],
     "STM":  ["stmicroelectronics", "stmicro", "stm"],
@@ -81,7 +89,12 @@ _PEER_GROUPS: Dict[str, List[str]] = {
     "LRCX": ["AMAT", "KLAC"],
     "KLAC": ["AMAT", "LRCX"],
     "SPCX": [],
+    "ANTH": [],
 }
+
+# Covered tickers that are also ordinary English words. In strict mode they only
+# count as companies when written in upper case ("ON" is always upper-case-only).
+_ENGLISH_WORD_TICKERS = AMBIGUOUS_ENGLISH_TICKERS
 
 _MAX_PEERS = 4  # subject + up to 4 peers keeps the table readable
 
@@ -135,11 +148,16 @@ def _name_to_ticker(text: str) -> Optional[str]:
     return None
 
 
-def _tickers_named_in_query(query: str) -> List[str]:
+def _tickers_named_in_query(query: str, strict_symbols: bool = False) -> List[str]:
     """Return covered tickers explicitly named in the query, in first-seen order.
 
     Matches both company names ("Intel") and ticker symbols length >= 3
     ("INTC") on a word boundary, mirroring the single-ticker resolver.
+
+    ``strict_symbols`` makes the symbols in ``_ENGLISH_WORD_TICKERS`` (FORM,
+    ONTO, TER) case-sensitive so the English words "form", "onto" or "ter" are
+    not read as companies. Other symbols/aliases (amd, tsm, stm...) stay
+    case-insensitive. Default is unchanged.
     """
     q = (query or "")
     found: List[str] = []
@@ -165,12 +183,23 @@ def _tickers_named_in_query(query: str) -> List[str]:
             if m:
                 name_hits.append((m.start(), ticker))
                 break
-    # Explicit symbols (>=3 chars, word boundary)
+    # Explicit stored symbols (>=3 chars, word boundary)
     for ticker in covered:
         if len(ticker) >= 3:
-            m = re.search(r"\b" + re.escape(ticker) + r"\b", q, re.IGNORECASE)
+            case_sensitive = strict_symbols and ticker in _ENGLISH_WORD_TICKERS
+            m = re.search(r"\b" + re.escape(ticker) + r"\b", q, 0 if case_sensitive else re.IGNORECASE)
             if m:
                 name_hits.append((m.start(), ticker))
+    # User-facing display symbols ("ANT") resolve to their stored corpus key
+    # ("ANTH") so comparison routing counts Anthropic as a named company. These
+    # are upper-case tickers and are matched case-sensitively, so lowercase
+    # prose ("an ant colony") and substrings (ANTA, ANTHROPIC) never match.
+    for display, stored in QUERY_TICKER_ALIASES.items():
+        if stored not in covered or len(display) < 3:
+            continue
+        m = re.search(r"\b" + re.escape(display) + r"\b", q)
+        if m:
+            name_hits.append((m.start(), stored))
 
     for _, ticker in sorted(name_hits, key=lambda x: x[0]):
         if ticker not in found:
@@ -187,7 +216,7 @@ def detect_comparison(query: str, subject_ticker: str) -> Optional[Dict[str, Any
     if not query:
         return None
     q = query.lower()
-    named = _tickers_named_in_query(query)
+    named = _tickers_named_in_query(query, strict_symbols=True)
     has_peer_signal = any(s in q for s in _PEER_SIGNALS)
 
     # Explicit: 2+ covered companies named → compare exactly those.
@@ -195,7 +224,7 @@ def detect_comparison(query: str, subject_ticker: str) -> Optional[Dict[str, Any
         return {"mode": "explicit", "subject": named[0], "explicit": named}
 
     # Peer: a single subject + an explicit "competitors / industry" ask.
-    subject = named[0] if named else (subject_ticker or "")
+    subject = named[0] if named else QUERY_TICKER_ALIASES.get(subject_ticker, subject_ticker or "")
     if has_peer_signal and subject:
         return {"mode": "peer", "subject": subject, "explicit": [subject]}
 
@@ -486,7 +515,7 @@ def compute_metric(ticker: str, metric: str) -> Dict[str, Any]:
     from api.services.metric_router import route_metric
     from api.services.sec_client import get_latest_10k_facts
 
-    import polars as pl
+    import polars as pl  # noqa: F401
 
     out = {"value": None, "period": "", "ok": False}
     try:
@@ -556,19 +585,19 @@ def _shaped_response(
     done["output"] = "success"
     if retrieved_docs:
         done["retrieval"] = "success"
-    return {
+    return canonicalize_user_fields({
         "final_answer": answer,
         "xbrl_facts": [], "relevant_xbrl": [],
         "retrieved_docs": retrieved_docs or [],
         "polygon_data": [], "math_result": None, "math_steps": [],
         "verification_status": "SKIPPED",
-        "verification_reasoning": reasoning,
+        "verification_reasoning": canonicalize_user_text(reasoning),
         "chart": chart,
         "what_it_means": what_it_means,
         "how_to_interpret": how_to_interpret,
         "follow_ups": follow_ups or [],
         "status": done,
-    }
+    })
 
 
 def run_peer_comparison(query: str, decision: Dict[str, Any]) -> Dict[str, Any]:

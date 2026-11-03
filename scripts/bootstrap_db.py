@@ -7,7 +7,7 @@ This script:
 3. Stores the facts in DuckDB for use by the RAG pipeline
 
 Usage:
-    python3 scripts/bootstrap_db.py [--tickers NVDA,AMD,QCOM] [--db-path ./data/rag.duckdb]
+    uv run python scripts/bootstrap_db.py [--tickers NVDA,AMD,QCOM] [--db-path ./data/rag.duckdb]
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ EDGAR_USER_AGENT = os.getenv("EDGAR_USER_AGENT", "RAGWorkbench/1.0 (research@exa
 SEC_RATE_LIMIT_DELAY = 0.15  # 10 req/s max -> 100ms + margin
 
 # CIK lookup for covered tickers
-from api.config import TICKER_TO_CIK
+from api.config import TICKER_TO_CIK  # noqa: E402
 
 # Key financial concepts to extract
 KEY_CONCEPTS = [

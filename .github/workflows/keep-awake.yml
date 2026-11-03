@@ -14,6 +14,9 @@ on:
     - cron: "0 0 * * *" # daily at 00:00 UTC
   workflow_dispatch: {} # allow manual runs from the Actions tab
 
+permissions:
+  contents: read
+
 # Allow only one keep-awake run at a time.
 concurrency:
   group: keep-awake

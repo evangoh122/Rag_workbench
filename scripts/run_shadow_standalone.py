@@ -6,9 +6,9 @@ scoring) without importing the full api.services chain (which triggers model dow
 """
 import json
 import os
-import sys
+import sys  # noqa: F401
 from dataclasses import dataclass, field, asdict
-from pathlib import Path
+from pathlib import Path  # noqa: F401
 from typing import Optional
 
 import duckdb
@@ -168,10 +168,10 @@ class CalibrationReport:
     recommendations: dict = field(default_factory=dict)
 
 def confidence_bucket(conf: float) -> str:
-    if conf >= 0.95: return "0.95-1.00"
-    if conf >= 0.85: return "0.85-0.94"
-    if conf >= 0.70: return "0.70-0.84"
-    if conf >= 0.55: return "0.55-0.69"
+    if conf >= 0.95: return "0.95-1.00"  # noqa: E701
+    if conf >= 0.85: return "0.85-0.94"  # noqa: E701
+    if conf >= 0.70: return "0.70-0.84"  # noqa: E701
+    if conf >= 0.55: return "0.55-0.69"  # noqa: E701
     return "0.00-0.54"
 
 def load_extractions(conn, tickers: list[str]) -> list[tuple[str, ExtractionResult]]:
@@ -287,14 +287,14 @@ def main():
     print(f"AUTO:             {report.auto_count}")
     print(f"SAMPLED_REVIEW:   {report.sampled_review_count}")
     print(f"ESCALATE:         {report.escalation_count}")
-    print(f"\nConfidence histogram:")
+    print(f"\nConfidence histogram:")  # noqa: F541
     for bucket, count in sorted(report.confidence_histogram.items()):
         print(f"  {bucket}: {count}")
     if report.trigger_counts:
-        print(f"\nTrigger counts:")
+        print(f"\nTrigger counts:")  # noqa: F541
         for trigger, count in sorted(report.trigger_counts.items(), key=lambda x: -x[1]):
             print(f"  {trigger}: {count}")
-    print(f"\nRecommendations:")
+    print(f"\nRecommendations:")  # noqa: F541
     for k, v in report.recommendations.items():
         print(f"  {k}: {v}")
     print(f"\nReport saved to: {args.output}")

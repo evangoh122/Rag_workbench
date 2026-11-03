@@ -143,10 +143,24 @@ def posthog_summary():
             "SELECT event, count() c FROM events WHERE timestamp > now() - INTERVAL 7 DAY "
             "GROUP BY event ORDER BY c DESC LIMIT 10",
         )
+        # Breaks down by the first path segment (e.g. /haze-watch, /rag) rather
+        # than $host: $host leaks raw infrastructure hostnames (HF Space names,
+        # hosting-provider subdomains) on this public page, where a path
+        # segment doesn't. This also naturally covers every site sharing this
+        # PostHog project without listing hosts to include or exclude.
+        by_site = _hogql(
+            host, project, key,
+            "SELECT if(splitByChar('/', coalesce(properties.$pathname, '/'))[2] = '', "
+            "'/ (home)', concat('/', splitByChar('/', coalesce(properties.$pathname, '/'))[2])) AS site, "
+            "count() c FROM events "
+            "WHERE timestamp > now() - INTERVAL 7 DAY AND properties.$pathname IS NOT NULL "
+            "GROUP BY site ORDER BY c DESC LIMIT 10",
+        )
         return {
             "configured": True,
             "events_7d": (total[0][0] if total and total[0] else 0),
             "top_events": [{"event": row[0], "count": row[1]} for row in top],
+            "by_site": [{"site": row[0], "count": row[1]} for row in by_site],
         }
     except Exception as e:
         logger.warning("PostHog query failed: {}", e)

@@ -12,8 +12,8 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain_core")
 warnings.filterwarnings("ignore", message=".*urllib3.*match a supported version")
 
-from dotenv import load_dotenv
-from loguru import logger
+from dotenv import load_dotenv  # noqa: E402
+from loguru import logger  # noqa: E402
 
 load_dotenv()
 

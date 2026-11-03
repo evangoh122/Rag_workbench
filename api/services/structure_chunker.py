@@ -113,12 +113,12 @@ _MIN_TABLE_LINES = 3
 
 def _is_table_block(text: str) -> bool:
     """Check if a text block is tabular data."""
-    lines = [l for l in text.strip().split("\n") if l.strip()]
+    lines = [l for l in text.strip().split("\n") if l.strip()]  # noqa: E741
     if len(lines) < _MIN_TABLE_LINES:
         return False
 
     # Check pipe-delimited
-    pipe_lines = sum(1 for l in lines if "|" in l)
+    pipe_lines = sum(1 for l in lines if "|" in l)  # noqa: E741
     if pipe_lines >= len(lines) * 0.6:
         return True
 
@@ -132,7 +132,7 @@ def _is_table_block(text: str) -> bool:
         return True
 
     # Check for consistent column alignment
-    column_counts = [len(re.findall(r"\s{3,}", l)) for l in lines]
+    column_counts = [len(re.findall(r"\s{3,}", l)) for l in lines]  # noqa: E741
     if len(set(column_counts)) == 1 and column_counts[0] >= 2:
         return True
 

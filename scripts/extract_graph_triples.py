@@ -14,8 +14,8 @@ hash of ``(ticker, subject, predicate, object, chunk_id)`` and inserts use
 ``INSERT OR IGNORE``, so re-running over the same chunks is a no-op.
 
 Usage:
-    python -m scripts.extract_graph_triples --tickers NVDA,MU
-    EXTRACT_TICKERS="NVDA,MU" python -m scripts.extract_graph_triples
+    uv run python -m scripts.extract_graph_triples --tickers NVDA,MU
+    EXTRACT_TICKERS="NVDA,MU" uv run python -m scripts.extract_graph_triples
 
 Design notes:
     * Single-writer DuckDB — do NOT run this while the embed ETL holds a write

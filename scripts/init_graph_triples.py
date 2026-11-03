@@ -5,7 +5,7 @@ Creates the graph_triples table (if absent) and populates it from all
 .graphify_chunk_*.json files in the graphify-out/ directory.
 
 Usage:
-    python3 scripts/init_graph_triples.py [--db-path ./data/rag.duckdb]
+    uv run python scripts/init_graph_triples.py [--db-path ./data/rag.duckdb]
 
 This script is idempotent: it uses INSERT OR IGNORE semantics so it is safe
 to re-run without creating duplicates.

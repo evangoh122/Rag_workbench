@@ -28,3 +28,7 @@ data/edgar_downloads
 # OS Metadata
 .DS_Store
 Thumbs.db
+
+# Python virtualenv (uv)
+.venv
+venv

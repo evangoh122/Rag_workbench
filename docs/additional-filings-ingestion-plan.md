@@ -56,7 +56,7 @@ up later).
 ## Current local inventory (verified 2026-06-22)
 
 - DB: `./data/rag.duckdb`, written in **DuckDB 1.5.x** storage format.
-  - Readable/writable only by `.venv` (duckdb 1.5.3). `.venv_duck10` (1.0.0)
+  - Readable/writable only by the uv-managed `.venv` (duckdb 1.5.3). `.venv_duck10` (1.0.0)
     **cannot** read it (`SerializationException`).
 - `edgar_embeddings`: 34 distinct tickers, all vectors **1024-dim**.
   - `10-K`: 31 tickers · `20-F`: 2 (STM, TSM) · `424B4`: 1 (SPCX) · `10-Q`: 1 (MU)
@@ -74,7 +74,7 @@ up later).
 
 | Item | Value |
 |---|---|
-| Python / DB write env | `.venv` → `D:\New folder (2)\Rag_workbench\.venv\Scripts\python.exe` (duckdb 1.5.3) |
+| Python / DB write env | `uv run python` (uv-managed `.venv`, duckdb 1.5.3 per `uv.lock`) |
 | Embedding model | `Qwen/Qwen3-Embedding-0.6B` via local `sentence-transformers` (in-process, CPU) |
 | Embedding dim | **1024** (matches existing corpus) |
 | Model cache | Present at `~/.cache/huggingface/hub/models--Qwen--Qwen3-Embedding-0.6B` (no download) |
@@ -140,20 +140,20 @@ Driver as described above. Flags:
 - `--tickers A,B,C` → optional subset (default = the 34 existing tickers)
 
 ### Step 2 — Dry run (annual)
-`python scripts/embed_additional.py --forms annual --dry-run`
+`uv run python scripts/embed_additional.py --forms annual --dry-run`
 Review: each ticker → which accession(s) would be fetched vs skipped (already
 present). Expect no-ops for ADI/AMD/AVGO/INTC/MU/NVDA/QCOM/TXN; skip SPCX.
 
 ### Step 3 — Execute annual pass (10-K / 20-F)
-`python scripts/embed_additional.py --forms annual`
-Run with `.venv` python. Log to `embed_additional_annual.log`.
+`uv run python scripts/embed_additional.py --forms annual`
+Run with `uv run`. Log to `embed_additional_annual.log`.
 
 ### Step 4 — Verify annual
 Per ticker: confirm 2 annual accessions now present; chunk counts sane (>50,
 flag <10 like KLAC). Confirm all new vectors are 1024-dim.
 
 ### Step 5 — Execute 10-Q pass
-`python scripts/embed_additional.py --forms 10-Q`
+`uv run python scripts/embed_additional.py --forms 10-Q`
 Log to `embed_additional_10q.log`. (20-F filers + SPCX expected to no-op.)
 
 ### Step 6 — Verify 10-Q + full corpus sanity

@@ -14,6 +14,25 @@ def _count(conn, sql: str) -> int | None:
         return None
 
 
+def _coverage_updates(conn) -> dict:
+    """Read corpus ingestion timestamps; unknown schemas remain usable."""
+    try:
+        rows = conn.execute(
+            """SELECT ticker, timezone('UTC', MAX(TRY_CAST(updated_at AS TIMESTAMPTZ)))
+               FROM edgar_embeddings GROUP BY ticker ORDER BY ticker"""
+        ).fetchall()
+        from datetime import timezone
+
+        updates = {
+            ticker: stamp.replace(tzinfo=timezone.utc).isoformat() if stamp else None
+            for ticker, stamp in rows
+        }
+        newest = max((stamp for stamp in updates.values() if stamp), default=None)
+        return {"last_updated": newest, "ticker_last_updated": updates}
+    except Exception:
+        return {"last_updated": None, "ticker_last_updated": {}}
+
+
 @router.get("/stats")
 async def get_stats():
     llm = get_llm_tracker().snapshot()
@@ -69,6 +88,7 @@ async def get_stats():
             data["tickers_embedded"] = [r[0] for r in rows]
         except Exception:
             data["tickers_embedded"] = []
+        data.update(_coverage_updates(conn))
     except Exception as exc:
         data["error"] = str(exc)
 

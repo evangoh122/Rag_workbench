@@ -3,9 +3,9 @@
 Single source of truth for "never destroy the vector DB". Used by the GitHub
 Actions embed/refresh workflows around the embedding step:
 
-    python scripts/etl_guardrail.py snapshot data/rag.duckdb /tmp/before.json
+    uv run python scripts/etl_guardrail.py snapshot data/rag.duckdb /tmp/before.json
     # ... run the embedding ...
-    python scripts/etl_guardrail.py verify   data/rag.duckdb /tmp/before.json
+    uv run python scripts/etl_guardrail.py verify   data/rag.duckdb /tmp/before.json
 
 `verify` exits non-zero (so the workflow fails BEFORE uploading) on any
 destructive change, leaving the published dataset untouched. It blocks:

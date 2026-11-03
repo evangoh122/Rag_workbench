@@ -108,7 +108,7 @@ COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 
 | Item | Recommendation |
 |------|---------------|
-| Dependency pinning | `requirements.txt` uses `>=` minimum versions. Pin exact versions for reproducibility. |
+| Dependency pinning | `pyproject.toml` uses `>=` ranges; exact versions are pinned in `uv.lock` for reproducibility. |
 | No CSP headers | Add Content-Security-Policy headers in Nginx config for the frontend. |
 | No request body size limit | FastAPI default is unlimited. Add `app.add_middleware(TrustedHostMiddleware)` and body size limits. |
 | Eval scripts print API URLs | `evals/ragas_eval.py` and `evals/run_eval.py` print API base URLs. Not a secret leak but could expose internal infra. |

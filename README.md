@@ -124,7 +124,7 @@ Every request additionally passes through **guardrails** — input rails (inject
 Alternative answer paths share the same retrieval and audit layer:
 - **`/api/chat/graph-rag`** — knowledge-graph retrieval over extracted filing triples.
 - **`/api/chat/rag`** — plain hybrid RAG (no math/verify spine).
-- **`/api/chat/sql`** — natural language → DuckDB query.
+- **`/api/chat/sql`** — natural language → read-only DuckDB query. Markdown SQL fences and a single trailing semicolon from model output are normalized before validation; multiple statements remain rejected. As a fail-closed safeguard, semicolons inside SQL string literals are also rejected.
 
 ---
 
@@ -226,18 +226,10 @@ Every run also passes through five operational checkpoints:
 | `routes/stats.py` | `GET /api/stats` |
 | `main.py` | `GET /api/health`, `/api/health/full` (DB + drift + LLM telemetry) |
 
-### Frontend — `frontend/src/`
+### Frontend
 
-React + TypeScript + Vite + Tailwind. Routed shell: `/` portfolio home, `/rag-overview`, `/rag/*` workbench.
-
-| Area | Files |
-|---|---|
-| Views | `views/ChatView.tsx` (SQL / RAG / auditable / graph chat), `views/TraceabilityView.tsx` |
-| Audit & pipeline | `components/AuditTrail.tsx` (sources + XBRL facts table + verification badge), `components/PipelineFlow.tsx` (live step viz), `components/DriftAlert.tsx` |
-| Knowledge graph | `components/KnowledgeGraph.tsx`, `GraphExplorer.tsx`, `GraphAnalytics.tsx` |
-| Charts & tone | `components/FinancialChart.tsx`, `ChartView.tsx`, `ToneAnalysis.tsx` |
-| Pages | `pages/ReviewQueue.tsx`, `MetricsDashboard.tsx`, `SystemDashboard.tsx`, `AuditLog.tsx`, `Methodology.tsx`, `ProductAnalytics.tsx`, `PortfolioHome.tsx`, `RagOverview.tsx`, `StocksList.tsx` |
-| API clients | `api/{client,chat,review,graph,analytics}.ts` |
+Moved to the separate [`evangoh-frontend`](https://github.com/evangoh122/evangoh-frontend)
+repo, which serves it directly in production. This repo is backend/API-only.
 
 ### Evaluation — `evals/`
 
@@ -254,16 +246,18 @@ React + TypeScript + Vite + Tailwind. Routed shell: `/` portfolio home, `/rag-ov
 ### Prerequisites
 
 - Python 3.11+ (the Docker image pins 3.11)
-- Node 22+
+- [uv](https://docs.astral.sh/uv/) for Python dependencies (replaces pip/venv)
 - Docker (for the container build)
 
 ### Local development
 
 ```bash
-# 1. Clone and install
+# 1. Clone and install (Python deps come from pyproject.toml + uv.lock)
 git clone https://github.com/evangoh122/Rag_workbench.git
 cd Rag_workbench
-pip install -r requirements.txt
+uv sync                 # creates .venv and installs the locked dependencies
+# Dev tools (pytest, pytest-asyncio, httpx, ruff) are in the `dev` group and are
+# installed by default; use `uv sync --no-dev` for a runtime-only environment.
 
 # 2. Configure environment
 cp .env.example .env
@@ -276,14 +270,30 @@ cp .env.example .env
 # needed). Override with EMBEDDING_PROVIDER / ST_EMBEDDING_MODEL if desired.
 
 # 3. Start the backend
-uvicorn api.main:app --reload --port 8000
+uv run uvicorn api.main:app --reload --port 8000
 
-# 4. Start the frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
-# → http://localhost:5173
+# 4. Tests (from the repo root)
+uv run pytest -m "not spark and not lakebase and not databricks" -q
 ```
+
+The frontend lives in the separate `evangoh-frontend` repo — see its own
+README for local dev setup.
+
+### Scheduled filings refresh (`refresh-filings.yml`)
+
+Every Monday 07:00 UTC the `Refresh Filings` workflow looks for newly filed 10-K / 20-F / 10-Q, embeds them and (guardrail permitting) updates the HF dataset and restarts the Space. Scheduled runs are limited to a fixed window **from 2026-10-27 through 2026-12-26 inclusive (UTC, 61 calendar dates)**; outside it the `window` job reports `run=false` and the refresh job is skipped (not failed). Manual `workflow_dispatch` runs are never gated.
+
+- **Extend:** edit `REFRESH_WINDOW_END` (and `REFRESH_WINDOW_START` if needed) in the workflow's top-level `env`. Check the logic with `bash tests/test_ci_window_check.sh`.
+- GitHub auto-disables scheduled workflows after 60 days of repository inactivity; re-enable from the Actions tab (or push a commit) if that happens.
+- For runs to actually finish, PR #25's permission fix and the GPU runner are required.
+
+### Dependency management
+
+- **Python:** dependencies are declared in `pyproject.toml` and pinned in
+  `uv.lock`. Run `uv lock` after editing dependencies, and commit both files.
+  CI and Docker use `uv sync --locked`, which fails if `uv.lock` is out of date
+  (run `uv lock --check` locally to verify the lock matches `pyproject.toml`).
+  `requirements.txt` / `requirements-dev.txt` are retired; nothing needs them.
 
 ### Docker (single container)
 
@@ -331,13 +341,16 @@ Retrieval is reranked by a CrossEncoder (`RERANKER_MODEL`, default `cross-encode
 
 ```bash
 # Ingest the semiconductor ticker universe (10-K, latest available)
-python -m scripts.embed_edgar
+uv run python -m scripts.embed_edgar
 
 # Or specific tickers
-EMBED_TICKERS=NVDA,AMD python -m scripts.embed_edgar
+EMBED_TICKERS=NVDA,AMD uv run python -m scripts.embed_edgar
 ```
 
-Each chunk is stored with `ticker`, `accession`, `cik`, `section_id`, `form_type`, `period_of_report`, `chunk_index`. The retriever uses this metadata to build the audit trail. The ticker universe (see `api/config.py` `TICKER_TO_CIK`) covers ~33 semiconductor names — chip designers (NVDA, AMD, QCOM, AVGO, INTC, MU, TXN, …) and equipment/materials (AMAT, LRCX, KLAC, ENTG, …).
+Each chunk is stored with `ticker`, `accession`, `cik`, `section_id`, `form_type`, `period_of_report`, `chunk_index`. The retriever uses this metadata to build the audit trail. The coverage universe (see `api/config.py` `TICKER_TO_CIK`) includes major semiconductor names, SpaceX prospectus filings under `SPCX`, and Anthropic's public S-1 under the internal key `ANTH`. Anthropic has no public ticker; `ANTH` must be renamed and its stored data migrated when one is assigned. The weekly `refresh-filings` / `scripts/embed_additional.py` workflow cannot ingest S-1-only companies, so prospectus-only coverage must be loaded through `scripts/embed_edgar.py`; `embed_additional.py` resolves internal keys such as `ANTH` to their CIK via the same `_filing_lookup_key` helper as `embed_edgar` rather than looking them up as stock tickers.
+Questions that name two covered companies currently enter explicit comparison mode even without comparison wording (the same known tradeoff applies to the `SPCX` alias). The Anthropic-only abstain exception treats `ON`, `FORM`, `ONTO` and `TER` as companies only when upper-case, so an all-caps question such as `ANTHROPIC VS OPENAI ON REVENUE` still counts `ON` as covered and does not abstain (accepted).
+
+**Prospectus extraction (S-1 / 424B4).** Prospectuses have titled sections rather than "Item N" headings, so `scripts/embed_edgar.py` handles them separately: the HTML is flattened with a layout-aware pass (`parse_prospectus_file`, which joins the inline `<font>` fragments of one visual line so headings such as "Use of Proceeds" form a line), and `_extract_prospectus_sections` matches each main heading only as a whole line and picks one ordered chain through them (Summary, Risk Factors, Use of Proceeds, Capitalization, Dilution, MD&A, Business). Delimiter headings (Dividend Policy, Management, Underwriting, ...) end the preceding section. This stops Risk Factors being cut short by a body line that begins "business, financial condition" and stops Business running to end of file. Accessions are stored in dashed form (`0001628280-26-067168`) whichever fetch path produced them, and re-ingest deletes by dash-insensitive match so older undashed rows are replaced, not duplicated. 10-K / 10-Q / 20-F extraction is unchanged. `embed_edgar` is append-only for data it does not target: it no longer runs a global dimension reset, and only the targeted ticker's matching accession rows are replaced. Vector search casts the variable-length `FLOAT[]` `embedding` column to `FLOAT[EMBEDDING_DIM]` before `array_distance`; without that cast DuckDB raised a Binder Error that was swallowed and vector search silently returned nothing.
 
 Related scripts: `extract_xbrl_facts.py`, `extract_graph_triples.py`, `backfill_xbrl_coverage.py`, `reembed_qwen06.py`.
 
@@ -349,17 +362,17 @@ Related scripts: `extract_xbrl_facts.py`, `extract_graph_triples.py`, `backfill_
 # Start the API first, then:
 
 # 1. Deterministic scoring (fast, free)
-python evals/run_eval.py
+uv run python evals/run_eval.py
 
 # 2. LLM-judge scoring (uses your configured provider)
-python evals/ragas_eval.py
+uv run python evals/ragas_eval.py
 
 # Debug a single question
-python evals/run_eval.py --id 5
-python evals/ragas_eval.py --id 5 --metrics faithfulness,answer_relevancy
+uv run python evals/run_eval.py --id 5
+uv run python evals/ragas_eval.py --id 5 --metrics faithfulness,answer_relevancy
 
 # Filter by failure mode
-python evals/run_eval.py --mode gaap_vs_nongaap
+uv run python evals/run_eval.py --mode gaap_vs_nongaap
 ```
 
 ### Golden set failure modes
@@ -414,9 +427,56 @@ See `docs/FINANCIAL_CALC_INSTRUCTIONS.md` for the full instruction set used by t
 
 The HF Space has **no persistent volume**, so runtime state survives restarts through a daily Parquet snapshot (`runtime_snapshot.py`, driven by `.github/workflows/snapshot.yml` → `POST /api/admin/snapshot`) to a private HF dataset, restored on boot by `scripts/restore_review_db.py`. The main corpus DB is fetched by `scripts/fetch_db_from_dataset.py` before Uvicorn opens its connection. `DB_PATH` is validated against an allowlist to prevent path traversal.
 
+### Refresh runbook (filings ETL)
+
+- **DB copy in CI:** `refresh-filings.yml` and `embed-annuals.yml` copy the HF-cached `rag.duckdb` with `scripts/prepare_db_copy.py` (`copyfile` + `chmod u+w`). The HF cache blob is read-only and `shutil.copy` kept that, so the embed step failed with `Permission denied` (run 2026-09-21). A fail-fast step (`prepare_db_copy.py check`) opens the copy read-write and does a rolled-back write before any embedding.
+- **GPU backfill on HF Jobs (staging only):** `Dockerfile.hf-gpu` (CUDA runtime, uv; CUDA torch installed on top of the locked env, so `pyproject.toml`/`uv.lock` stay CPU-only) runs `scripts/run_hf_backfill.sh`. It fails unless `torch.cuda.is_available()`, pins and downloads the dataset head, records sha256 + row/filing counts, runs `embed_additional.py` for a bounded `BACKFILL_TICKERS` list, then verifies counts, duplicate `(ticker, accession, section_id, chunk_index)` keys (`chunk_index` restarts at 0 in every section, so section identity is part of the key) and `etl_guardrail.py`. The result is built in `$STAGING_DIR/rag.duckdb` (default `data/hf_backfill_staging/`, which must be under the repo root or `PERSIST_DIR` because `api/config.py` silently replaces any other `DB_PATH`; the runner aborts if the effective path differs). An HF Job container is ephemeral and `hf jobs run` mounts no volume by default, so once every check passes the runner uploads `rag.duckdb`, `before.json` (the pre-embedding snapshot) and `after.json` (the post-backfill DB sha256) to a **private staging dataset repo** (`STAGING_REPO`) under `runs/<run id>/`, in one commit. The runner never uploads to the production dataset or restarts the Space.
+
+**The runner is a dry run by default**: it validates its inputs, prints the plan (tickers, forms, quarters, estimated filings) and exits 0 without downloading or embedding anything. It only executes with `BACKFILL_CONFIRM=yes` (or `--execute`). Caps are validated and any invalid value fails loudly (exit 2): `BACKFILL_TICKERS` (required, at most `BACKFILL_MAX_TICKERS`, default 10, allowed 1..50), `BACKFILL_QUARTERS` (integer 1..8, default 3, used for `10-Q`), `BACKFILL_FORMS` (`annual` or `10-Q`), and a hard deadline `BACKFILL_TIMEOUT_SECONDS` (60..21600, default 18000) enforced inside the script with `timeout`, independent of the `hf jobs --timeout` flag. `STAGING_REPO` is required to execute (not for a dry run): it must be an existing **private** dataset repo and must differ from `DATASET_REPO` both as a string and by canonical Hub repo id, so a renamed alias of production is refused too (before downloading anything and again before uploading). The run id is `BACKFILL_RUN_ID` or `<UTC time>-<dataset head>-<random>`; an explicit id is validated before any download or embedding, and staging refuses a run prefix that already exists instead of overwriting it. The final log line prints the repo and path. Python helpers run as modules from the repo root (`python -m scripts.hf_backfill ...`), because running the file directly cannot import `api`.
+
+Build the image and run the job (nothing here has been executed by CI or the PR):
+
+```bash
+docker build -f Dockerfile.hf-gpu -t <registry>/rag-workbench-hf-gpu:<tag> . && docker push <registry>/rag-workbench-hf-gpu:<tag>
+
+# Drop BACKFILL_CONFIRM=yes for a dry run that only prints the plan.
+hf jobs run --flavor l4x1 --timeout 6h \
+  --secrets HF_TOKEN \
+  -e DATASET_REPO=<user>/Rag-workbench -e BACKFILL_TICKERS=AAPL,MSFT -e BACKFILL_FORMS=annual \
+  -e BACKFILL_CONFIRM=yes \
+  -e STAGING_REPO=<user>/Rag-workbench-staging \
+  <registry>/rag-workbench-hf-gpu:<tag> \
+  bash scripts/run_hf_backfill.sh
+```
+
+Create the staging repo first (private, so the checks pass): `hf repos create <user>/Rag-workbench-staging --repo-type dataset --private`. Token scopes (names only): the job's `HF_TOKEN` needs read access to the production dataset and write access to the staging dataset; the publish step's token needs read access to the staging dataset and write access to the production dataset. Use separate fine-grained tokens where possible.
+
+**Alternative: persistent volume.** The installed `hf` CLI (huggingface_hub 1.33.0) supports `hf jobs run -v hf://buckets/<user>/<bucket>:/mnt:rw` (buckets are read-write; datasets, models and spaces mount read-only). To keep the result on a bucket as well, add that flag plus `-e STAGING_DIR=/mnt/stage -e PERSIST_DIR=/mnt` (`api/config.py` only accepts a DB path under the repo or `PERSIST_DIR`). `STAGING_REPO` is still required, so the dataset upload remains the documented source for publishing; the bucket copy is a second copy, and publishing from it uses the local-path form below with the bucket mounted or downloaded.
+
+**Rollback target:** dataset commit `7640a4bd`. Resolve and confirm the full hash before relying on it (the short hash alone is not verified here):
+
+```bash
+python -c "from huggingface_hub import HfApi; [print(c.commit_id, c.title) for c in HfApi().list_repo_commits('<user>/Rag-workbench', repo_type='dataset') if c.commit_id.startswith('7640a4bd')]"
+```
+
+**Guarded publish (documented, not executed by the runner).** Use the run id from the job log, from a machine with a write token (`HF_TOKEN` in the environment):
+
+```bash
+uv run python -m scripts.hf_backfill publish \
+  --staging-repo <user>/Rag-workbench-staging --run-id <run id> --repo <user>/Rag-workbench --confirm
+# From local files instead (e.g. a mounted bucket or an already-downloaded copy):
+uv run python -m scripts.hf_backfill publish <dir>/rag.duckdb <dir>/before.json --repo <user>/Rag-workbench --confirm
+```
+
+With `--staging-repo` it downloads `runs/<run id>/rag.duckdb`, `before.json` and `after.json` into a private temp dir, refuses if any is missing, if the staging repo is the production repo, or if the DB's sha256 differs from the post-backfill hash in `after.json` (a backfill changes the DB, so its pre-embedding `before.json` hash no longer matches), and then runs the guards below.
+
+It exits non-zero without `--confirm`, and aborts if the dataset head differs from the `dataset_head` recorded in `before.json` (the upload is also pinned with `parent_commit`). Immediately before uploading it copies the staged file to a private temp snapshot, runs the DB integrity, shrink and duplicate checks on that snapshot, re-hashes it, and uploads that same snapshot, so a staged path swapped after verification is never uploaded; it refuses on any failure. Restarting the Space is a separate manual step.
+
+**Scope of the GPU runner:** it is a manually launched, staging-only job. Neither this PR nor #30 routes the scheduled `refresh-filings.yml` embedding onto the GPU, so scheduled refresh runs still use the CPU runner and its 300-minute timeout is unchanged; this runner does not make them finish. `Dockerfile.hf-gpu` runs as a non-root `app` user (writable `HOME`, HF cache, uv cache and `data/`); the image has not been built in CI or by this PR.
+
 ### Operational notes
 
-- **DuckDB version alignment:** the old Hugging Face image cap of `duckdb<1.1.0` caused serialization failures with locally generated DuckDB 1.5.3 files. `requirements.txt` now requires DuckDB 1.5.3+, and `.venv_duck10` is obsolete.
+- **DuckDB version alignment:** the old Hugging Face image cap of `duckdb<1.1.0` caused serialization failures with locally generated DuckDB 1.5.3 files. `pyproject.toml` (locked in `uv.lock`) requires DuckDB 1.5.3+, and `.venv_duck10` is obsolete.
 - **Section extraction:** `_extract_sections_with_labels()` now uses `re.finditer()` plus longest-match selection so TOC entries do not steal section labels. Existing data was corrected with `scripts/retag_sections.py`.
 - **Review queue behavior:** an empty `review_decisions` table is expected when queries route to `AUTO` at high confidence. Use narrative-heavy questions to exercise `SAMPLED_REVIEW` and `ESCALATE`.
 - **Feedback caveat:** `/api/chat/feedback` can create `reviewer_verdicts` rows that are not linked to formal review-queue decisions because it uses the message timestamp as the decision ID.
@@ -522,18 +582,14 @@ This project is built by a team of specialist AI agents, each on its own branch,
 │   ├── golden_set.csv   # 50-question labelled eval set
 │   ├── run_eval.py      # Deterministic 4-axis scorer
 │   └── ragas_eval.py    # LLM-judge metrics
-├── frontend/
-│   └── src/
-│       ├── api/         # Typed API clients
-│       ├── components/  # AuditTrail, PipelineFlow, KnowledgeGraph, charts, tone
-│       ├── pages/       # ReviewQueue, dashboards, audit log, methodology
-│       └── views/       # ChatView, TraceabilityView
 ├── scripts/             # Ingestion, XBRL/graph extraction, DB fetch/restore, shadow runs
 ├── tests/               # Unit tests
-├── Dockerfile           # 3-stage: Node build → Python deps → Nginx + Supervisor runtime
-├── nginx.conf           # Port 7860, /api/ proxied to FastAPI
-└── supervisord.conf     # Process manager: nginx + uvicorn
+└── Dockerfile           # 2-stage: Python deps → runtime; uvicorn serves 7860 directly
 ```
+
+The portfolio + RAG Workbench UI lives in the separate `evangoh-frontend`
+repo, which serves it directly in production. This repo is
+backend/API-only (no frontend build stage, no nginx, no supervisord).
 
 ---
 

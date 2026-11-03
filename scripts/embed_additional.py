@@ -12,10 +12,10 @@ Conventions preserved to match existing rows:
   - period_of_report = 20{YY}-12-31 from the accession's middle segment (matches the
     existing fallback convention used for both 10-K and 10-Q rows in this corpus)
 
-Run with the duckdb-1.5.x venv (the on-disk DB is 1.5.x format):
-  .venv\\Scripts\\python.exe scripts/embed_additional.py --forms annual --dry-run
-  .venv\\Scripts\\python.exe scripts/embed_additional.py --forms annual
-  .venv\\Scripts\\python.exe scripts/embed_additional.py --forms 10-Q
+Run with uv (the on-disk DB is duckdb 1.5.x format; uv.lock pins it):
+  uv run python scripts/embed_additional.py --forms annual --dry-run
+  uv run python scripts/embed_additional.py --forms annual
+  uv run python scripts/embed_additional.py --forms 10-Q
 """
 
 import sys
@@ -51,27 +51,28 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "true")
 # sentence-transformers' internal encode batch (LocalSTEmbeddings reads this).
 os.environ.setdefault("EMBEDDING_BATCH_SIZE", os.getenv("EMBED_DOC_BATCH", "64"))
 
-import warnings
-from bs4 import XMLParsedAsHTMLWarning
+import warnings  # noqa: E402
+from bs4 import XMLParsedAsHTMLWarning  # noqa: E402
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 # ── imports ───────────────────────────────────────────────────────────────────
-from datetime import datetime, timezone
-from loguru import logger
+from datetime import datetime, timezone  # noqa: E402
+from loguru import logger  # noqa: E402
 
-from api.config import Config
-from api.services.embeddings import get_embeddings
-from api.services.structure_chunker import StructureChunker
-from api.services._edgar_identity import ensure_edgar_identity
-from scripts.embed_edgar import (
+from api.config import Config  # noqa: E402
+from api.services.embeddings import get_embeddings  # noqa: E402
+from api.services.structure_chunker import StructureChunker  # noqa: E402
+from api.services._edgar_identity import ensure_edgar_identity  # noqa: E402
+from scripts.embed_edgar import (  # noqa: E402
     parse_html_file,
     _extract_sections_with_labels,
     _ensure_schema,
     _TICKER_CIK,
+    _filing_lookup_key,
 )
 
-from edgar import Company
-import duckdb
+from edgar import Company  # noqa: E402
+import duckdb  # noqa: E402
 
 DB_PATH = Config.DB_PATH  # singleton instance attr (mirrors scripts/embed_edgar.py)
 
@@ -238,7 +239,7 @@ def main():
                 # Pull a wider window, then keep only EXACT-form filings (drop
                 # amendments like 10-K/A) and take the n most recent.
                 try:
-                    filings = Company(ticker).get_filings(form=form_code)
+                    filings = Company(_filing_lookup_key(ticker)).get_filings(form=form_code)
                     if filings is None or getattr(filings, "empty", False):
                         logger.info(f"[{ticker}] No {form_code} filings found.")
                         continue
