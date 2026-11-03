@@ -221,7 +221,7 @@
     <div class="diagram-container">
 <svg id="diagram-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="diagram-title diagram-desc" viewBox="0 0 1720 1260" width="1720" height="1260">
 <title id="diagram-title">RAG Workbench process architecture</title>
-<desc id="diagram-desc">An analyst asks a question through FastAPI, which enters the main LangGraph workflow at the retrieval node. Retrieval runs before the classifier: BM25 and vector search over edgar_embeddings chunk vectors (the embedding column) are fused with reciprocal rank fusion, the retriever receives a candidate top-k of three because query intent is still general, a cross-encoder reranks up to five chunks but is limited by the candidate top-k, and a relevance filter drops irrelevant chunks. A separate Polygon DuckDB read returns polygon_tickers company metadata and polygon_bars daily close and volume; neither is chunked or embedded. The classifier routes numeric questions to Extraction, which reads XBRL facts from xbrl_facts, then eval, Polars math, verification and either output or abstention; abstention is triggered by verification FAIL or ERROR with a fixed message. Qualitative questions go to an LLM answer over the retrieved chunks with tool calling. Numeric output, qualitative output and abstention all pass through build_lineage, which writes an audit trail and, on sampled or escalated routes, a review-queue entry for human review and calibration; audit_runs and the review queue live in a separate review_queue.duckdb file (REVIEW_DB_PATH). Graph RAG is a separate /api/chat/graph-rag workflow of entity extraction, graph_triples lookup and LLM synthesis, not a step in the main pipeline. DeepSeek and MiMo provide LLM answers, Qwen3-Embedding produces chunk embeddings, and a cross-encoder reranks. SEC EDGAR filing text is parsed, structure-chunked and embedded into edgar_embeddings; SEC companyfacts XBRL facts are extracted into xbrl_facts. ticker_embeddings holds ticker-profile vectors used only by the legacy /api/chat/rag route. Neither embeddings table has a vector index. React Flow is a frontend view component, not an orchestration step. The project is not affiliated with the SEC.</desc>
+<desc id="diagram-desc">An analyst asks a question through FastAPI, which enters the main LangGraph workflow at the retrieval node. Retrieval runs before the classifier: BM25 and vector search over edgar_embeddings chunk vectors (the embedding column) are fused with reciprocal rank fusion, on the hybrid path the retriever receives a candidate top-k of three because query intent is still general and a cross-encoder reranks to at most five, so the hybrid path returns at most the smaller of the candidate top-k and five chunks; if hybrid retrieval fails or returns nothing, a keyword fallback takes up to five filing-section chunks, reranks and relevance-filters them without applying the intent top-k; a relevance filter then drops irrelevant chunks. A separate Polygon DuckDB read returns polygon_tickers company metadata and polygon_bars daily close and volume; neither is chunked or embedded. The classifier routes numeric questions to Extraction, which reads XBRL facts from xbrl_facts, then eval, Polars math, verification and either output or abstention; abstention is triggered by verification FAIL or ERROR with a fixed message. Qualitative questions go to an LLM answer over the retrieved chunks with tool calling. Numeric output, qualitative output and abstention all pass through build_lineage, which writes an audit trail and, on sampled or escalated routes, a review-queue entry for human review and calibration; audit_runs and the review queue live in a separate review_queue.duckdb file (REVIEW_DB_PATH). Graph RAG is a separate /api/chat/graph-rag workflow of entity extraction, graph_triples lookup and LLM synthesis, not a step in the main pipeline. DeepSeek and MiMo provide LLM answers, Qwen3-Embedding produces chunk embeddings, and a cross-encoder reranks. SEC EDGAR filing text is parsed, structure-chunked and embedded into edgar_embeddings; SEC companyfacts XBRL facts are extracted into xbrl_facts. ticker_embeddings holds ticker-profile vectors used only by the legacy /api/chat/rag route. Neither embeddings table has a vector index. React Flow is a frontend view component, not an orchestration step. The project is not affiliated with the SEC.</desc>
 <!-- Palette source: frontend/src/index.css @theme.
      background #090A0C · surface #111317 · surface-elevated #181B20 · border #32363D · border-subtle #22262C
      text #F3F1EA / #B8BDC5 / #818791 · accent #D6B65A · accent-bright #F1D77A · accent-fill #C9A227
@@ -343,28 +343,28 @@
 <text x="339" y="354" text-anchor="middle" class="t-sub">k = 60</text></g>
 <g><rect x="434" y="296" width="160" height="70" rx="8" class="box box-retrieval"/>
 <text x="514" y="318" text-anchor="middle" class="t-title">Candidate top-k</text>
-<text x="514" y="336" text-anchor="middle" class="t-sub">passed pre-rerank</text>
+<text x="514" y="336" text-anchor="middle" class="t-sub">hybrid · pre-rerank</text>
 <text x="514" y="354" text-anchor="middle" class="t-sub">= 3 (general)</text></g>
 <g><rect x="624" y="296" width="190" height="70" rx="8" class="box box-retrieval"/>
 <text x="719" y="318" text-anchor="middle" class="t-title">Cross-encoder</text>
 <text x="719" y="336" text-anchor="middle" class="t-sub">rerank · up to 5</text>
-<text x="719" y="354" text-anchor="middle" class="t-sub">capped by top-k</text></g>
+<text x="719" y="354" text-anchor="middle" class="t-sub">hybrid: capped by top-k</text></g>
 <g><rect x="844" y="296" width="160" height="70" rx="8" class="box box-retrieval"/>
 <text x="924" y="318" text-anchor="middle" class="t-title">Relevance filter</text>
 <text x="924" y="336" text-anchor="middle" class="t-sub">retrieval rail</text>
 <text x="924" y="354" text-anchor="middle" class="t-sub">drops irrelevant</text></g>
 <g><rect x="64" y="400" width="270" height="86" rx="8" class="box box-retrieval"/>
 <text x="199" y="422" text-anchor="middle" class="t-title">Retrieved chunks</text>
-<text x="199" y="440" text-anchor="middle" class="t-sub">≤ candidate top-k</text>
-<text x="199" y="458" text-anchor="middle" class="t-sub">after rerank + filter</text></g>
+<text x="199" y="440" text-anchor="middle" class="t-sub">hybrid: ≤ min(top-k, 5)</text>
+<text x="199" y="458" text-anchor="middle" class="t-sub">fallback: up to 5 post-rerank</text></g>
 <g><rect x="370" y="400" width="320" height="86" rx="8" class="box box-sep"/>
 <text x="530" y="422" text-anchor="middle" class="t-title">Polygon DuckDB read</text>
 <text x="530" y="440" text-anchor="middle" class="t-sub">polygon_tickers + polygon_bars</text>
 <text x="530" y="458" text-anchor="middle" class="t-sub">metadata + latest close/volume</text></g>
-<text x="730" y="424" class="t-note">candidate top-k is passed</text>
-<text x="730" y="442" class="t-note">to the retriever before</text>
-<text x="730" y="460" class="t-note">rerank; query intent is</text>
-<text x="730" y="478" class="t-note">still "general" here.</text>
+<text x="730" y="424" class="t-note">hybrid: top-k goes to the</text>
+<text x="730" y="442" class="t-note">retriever before rerank;</text>
+<text x="730" y="460" class="t-note">keyword fallback skips</text>
+<text x="730" y="478" class="t-note">the top-k (up to 5).</text>
 
 <!-- Model providers -->
 <g class="boundary-inner"><rect x="1190" y="246" width="490" height="250" rx="12"/>
@@ -560,7 +560,7 @@
       <div class="card">
         <div class="card-header"><div class="card-dot gold"></div><h3>02 / Retrieval and branching</h3></div>
         <ul>
-          <li>Retrieval is the LangGraph entry node: BM25 + vector search over edgar_embeddings, RRF fusion, candidate top-k 3, cross-encoder rerank up to 5 (limited by the candidate top-k), relevance filter.</li>
+          <li>Retrieval is the LangGraph entry node: BM25 + vector search over edgar_embeddings, RRF fusion, then on the hybrid path a candidate top-k (3 general, 2 latest, 8 comparison) and a cross-encoder rerank to at most 5, so at most min(top-k, 5) chunks survive; a relevance filter then drops irrelevant ones. If hybrid retrieval fails or returns nothing, a keyword fallback takes up to 5 filing-section chunks, reranks and relevance-filters them without applying the intent top-k.</li>
           <li>The classifier then routes numeric questions through XBRL eval, Polars math and verification to output or abstention, and qualitative questions to an LLM answer with tool calling.</li>
         </ul>
       </div>
