@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG Workbench process architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" integrity="sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/" crossorigin="anonymous"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #020617;
+      min-height: 100vh;
+      padding: 2rem;
+      color: white;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      margin-bottom: 2rem;
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .pulse-dot {
+      width: 12px;
+      height: 12px;
+      background: #22d3ee;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 0.875rem;
+      margin-left: 1.75rem;
+    }
+
+    .diagram-container {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 1rem;
+      border: 1px solid #1e293b;
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+
+    svg {
+      width: 100%;
+      min-width: 900px;
+      display: block;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    .card {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 0.75rem;
+      border: 1px solid #1e293b;
+      padding: 1.25rem;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .card-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .card-dot.cyan { background: #22d3ee; }
+    .card-dot.emerald { background: #34d399; }
+    .card-dot.violet { background: #a78bfa; }
+    .card-dot.amber { background: #fbbf24; }
+    .card-dot.rose { background: #fb7185; }
+
+    .card h3 {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .card ul {
+      list-style: none;
+      color: #94a3b8;
+      font-size: 0.75rem;
+    }
+
+    .card li {
+      margin-bottom: 0.375rem;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      color: #475569;
+      font-size: 0.75rem;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 0.5rem;
+      margin-left: auto;
+      flex-shrink: 0;
+      align-items: center;
+    }
+    .toolbar-toggle {
+      background: transparent;
+      border: none;
+      color: #475569;
+      cursor: pointer;
+      font-size: 1.25rem;
+      line-height: 1;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.375rem;
+      transition: color 0.2s, background 0.2s;
+    }
+    .toolbar-toggle:hover { color: #94a3b8; background: rgba(30, 41, 59, 0.5); }
+    .toolbar-actions {
+      display: none;
+      gap: 0.5rem;
+    }
+    .toolbar.expanded .toolbar-actions { display: flex; }
+    .toolbar-actions button {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid #334155;
+      color: #94a3b8;
+      padding: 0.375rem 0.75rem;
+      border-radius: 0.375rem;
+      font-family: inherit;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .toolbar-actions button:hover {
+      background: rgba(51, 65, 85, 0.8);
+      color: white;
+      border-color: #475569;
+    }
+
+    @media print {
+      body { background: #020617; padding: 1rem; }
+      .toolbar { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="report-container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>RAG Workbench process architecture</h1>
+        <div class="toolbar">
+          <div class="toolbar-actions">
+            <button onclick="copyAsImage(this)">📋 Copy</button>
+            <button onclick="downloadPNG(this)">🖼️ PNG</button>
+            <button onclick="downloadPDF(this)">📄 PDF</button>
+          </div>
+          <button class="toolbar-toggle" onclick="this.parentElement.classList.toggle('expanded')" title="Export options" aria-label="Export options">⋯</button>
+        </div>
+      </div>
+      <p class="subtitle">Documented ingestion, auditable answer flow and governance</p>
+    </div>
+
+    <!-- Main Diagram -->
+    <div class="diagram-container">
+<svg role="img" aria-label="RAG Workbench process architecture"
+ viewBox="0.00 0.00 957.80 1322.80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(32.4 1290.4)">
+<title>RAG</title>
+<polygon fill="#020617" stroke="transparent" points="-32.4,32.4 -32.4,-1290.4 925.4,-1290.4 925.4,32.4 -32.4,32.4"/>
+<text text-anchor="middle" x="446.5" y="-1236.4" font-family="DejaVu Sans" font-size="22.00" fill="#e2e8f0">RAG WORKBENCH &#160;/ &#160;PROCESS ARCHITECTURE</text>
+<text text-anchor="middle" x="446.5" y="-1212.4" font-family="DejaVu Sans" font-size="22.00" fill="#e2e8f0">SEC filing analysis · ingestion, auditable answers and governance</text>
+<g id="clust1" class="cluster">
+<title>cluster_ingest</title>
+<path fill="#020617" stroke="#31514d" d="M20,-837C20,-837 277,-837 277,-837 283,-837 289,-843 289,-849 289,-849 289,-1175.5 289,-1175.5 289,-1181.5 283,-1187.5 277,-1187.5 277,-1187.5 20,-1187.5 20,-1187.5 14,-1187.5 8,-1181.5 8,-1175.5 8,-1175.5 8,-849 8,-849 8,-843 14,-837 20,-837"/>
+<text text-anchor="middle" x="148.5" y="-1165.9" font-family="DejaVu Sans" font-size="22.00" fill="#6ee7b7">01 &#160;OFFLINE INGESTION</text>
+</g>
+<g id="clust2" class="cluster">
+<title>cluster_query</title>
+<path fill="#020617" stroke="#31514d" d="M309,-8C309,-8 873,-8 873,-8 879,-8 885,-14 885,-20 885,-20 885,-1045 885,-1045 885,-1051 879,-1057 873,-1057 873,-1057 309,-1057 309,-1057 303,-1057 297,-1051 297,-1045 297,-1045 297,-20 297,-20 297,-14 303,-8 309,-8"/>
+<text text-anchor="middle" x="591" y="-1035.4" font-family="DejaVu Sans" font-size="22.00" fill="#6ee7b7">02 &#160;AUDITABLE RAG &#160;· &#160;POST /api/chat/auditable&#45;rag</text>
+</g>
+<g id="clust3" class="cluster">
+<title>cluster_support</title>
+<path fill="#020617" stroke="#38445a" d="M378,-1065C378,-1065 803,-1065 803,-1065 809,-1065 815,-1071 815,-1077 815,-1077 815,-1182 815,-1182 815,-1188 809,-1194 803,-1194 803,-1194 378,-1194 378,-1194 372,-1194 366,-1188 366,-1182 366,-1182 366,-1077 366,-1077 366,-1071 372,-1065 378,-1065"/>
+<text text-anchor="middle" x="590.5" y="-1172.4" font-family="DejaVu Sans" font-size="22.00" fill="#a5b4c9">03 &#160;OTHER PATHS &amp; OVERSIGHT</text>
+</g>
+<!-- edgar -->
+<g id="node1" class="node">
+<title>edgar</title>
+<path fill="#1e293b" stroke="#94a3b8" stroke-width="1.4" d="M232,-1135.5C232,-1135.5 124,-1135.5 124,-1135.5 118,-1135.5 112,-1129.5 112,-1123.5 112,-1123.5 112,-1103.5 112,-1103.5 112,-1097.5 118,-1091.5 124,-1091.5 124,-1091.5 232,-1091.5 232,-1091.5 238,-1091.5 244,-1097.5 244,-1103.5 244,-1103.5 244,-1123.5 244,-1123.5 244,-1129.5 238,-1135.5 232,-1135.5"/>
+<text text-anchor="middle" x="178" y="-1116.9" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">SEC EDGAR filings</text>
+<text text-anchor="middle" x="178" y="-1103.9" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">10&#45;K documents</text>
+</g>
+<!-- ingest -->
+<g id="node2" class="node">
+<title>ingest</title>
+<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M250,-1003C250,-1003 106,-1003 106,-1003 100,-1003 94,-997 94,-991 94,-991 94,-971 94,-971 94,-965 100,-959 106,-959 106,-959 250,-959 250,-959 256,-959 262,-965 262,-971 262,-971 262,-991 262,-991 262,-997 256,-1003 250,-1003"/>
+<text text-anchor="middle" x="178" y="-984.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Ingest &amp; prepare</text>
+<text text-anchor="middle" x="178" y="-971.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">extract · chunk · embed</text>
+</g>
+<!-- edgar&#45;&gt;ingest -->
+<g id="edge1" class="edge">
+<title>edgar&#45;&gt;ingest</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M178,-1091.32C178,-1091.32 178,-1010.75 178,-1010.75"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="180.63,-1010.75 178,-1003.25 175.38,-1010.75 180.63,-1010.75"/>
+</g>
+<!-- corpus -->
+<g id="node3" class="node">
+<title>corpus</title>
+<path fill="#302551" stroke="#a78bfa" stroke-width="1.4" d="M257,-914C257,-914 99,-914 99,-914 93,-914 87,-908 87,-902 87,-902 87,-869 87,-869 87,-863 93,-857 99,-857 99,-857 257,-857 257,-857 263,-857 269,-863 269,-869 269,-869 269,-902 269,-902 269,-908 263,-914 257,-914"/>
+<text text-anchor="middle" x="178" y="-895.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">DuckDB corpus</text>
+<text text-anchor="middle" x="178" y="-882.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">chunks + embeddings</text>
+<text text-anchor="middle" x="178" y="-869.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">XBRL facts + graph triples</text>
+</g>
+<!-- ingest&#45;&gt;corpus -->
+<g id="edge2" class="edge">
+<title>ingest&#45;&gt;corpus</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M178,-958.85C178,-958.85 178,-921.56 178,-921.56"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="180.63,-921.56 178,-914.06 175.38,-921.56 180.63,-921.56"/>
+</g>
+<!-- retrieve -->
+<g id="node6" class="node">
+<title>retrieve</title>
+<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M477,-812C477,-812 331,-812 331,-812 325,-812 319,-806 319,-800 319,-800 319,-767 319,-767 319,-761 325,-755 331,-755 331,-755 477,-755 477,-755 483,-755 489,-761 489,-767 489,-767 489,-800 489,-800 489,-806 483,-812 477,-812"/>
+<text text-anchor="middle" x="404" y="-793.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Hybrid retrieval</text>
+<text text-anchor="middle" x="404" y="-780.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">dense + BM25 → RRF</text>
+<text text-anchor="middle" x="404" y="-767.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">cross&#45;encoder reranking</text>
+</g>
+<!-- corpus&#45;&gt;retrieve -->
+<g id="edge15" class="edge">
+<title>corpus&#45;&gt;retrieve</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M178,-856.95C178,-826.62 178,-783 178,-783 178,-783 311.38,-783 311.38,-783"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="311.38,-785.63 318.88,-783 311.38,-780.38 311.38,-785.63"/>
+<text text-anchor="middle" x="171.72" y="-786" font-family="DejaVu Sans" font-size="10.00" fill="#cbd5e1">filing evidence</text>
+</g>
+<!-- user -->
+<g id="node4" class="node">
+<title>user</title>
+<path fill="#0b3644" stroke="#22d3ee" stroke-width="1.4" d="M456.5,-1003C456.5,-1003 353.5,-1003 353.5,-1003 347.5,-1003 341.5,-997 341.5,-991 341.5,-991 341.5,-971 341.5,-971 341.5,-965 347.5,-959 353.5,-959 353.5,-959 456.5,-959 456.5,-959 462.5,-959 468.5,-965 468.5,-971 468.5,-971 468.5,-991 468.5,-991 468.5,-997 462.5,-1003 456.5,-1003"/>
+<text text-anchor="middle" x="405" y="-984.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Analyst / browser</text>
+<text text-anchor="middle" x="405" y="-971.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">question</text>
+</g>
+<!-- api -->
+<g id="node5" class="node">
+<title>api</title>
+<path fill="#4a2030" stroke="#fb7185" stroke-width="1.4" d="M478.5,-907.5C478.5,-907.5 331.5,-907.5 331.5,-907.5 325.5,-907.5 319.5,-901.5 319.5,-895.5 319.5,-895.5 319.5,-875.5 319.5,-875.5 319.5,-869.5 325.5,-863.5 331.5,-863.5 331.5,-863.5 478.5,-863.5 478.5,-863.5 484.5,-863.5 490.5,-869.5 490.5,-875.5 490.5,-875.5 490.5,-895.5 490.5,-895.5 490.5,-901.5 484.5,-907.5 478.5,-907.5"/>
+<text text-anchor="middle" x="405" y="-888.9" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Nginx → FastAPI</text>
+<text text-anchor="middle" x="405" y="-875.9" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">input + dialog guardrails</text>
+</g>
+<!-- user&#45;&gt;api -->
+<g id="edge3" class="edge">
+<title>user&#45;&gt;api</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M405,-958.85C405,-958.85 405,-915.03 405,-915.03"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="407.63,-915.03 405,-907.53 402.38,-915.03 407.63,-915.03"/>
+</g>
+<!-- api&#45;&gt;retrieve -->
+<g id="edge4" class="edge">
+<title>api&#45;&gt;retrieve</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M404.25,-863.37C404.25,-863.37 404.25,-819.68 404.25,-819.68"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="406.88,-819.68 404.25,-812.18 401.63,-819.68 406.88,-819.68"/>
+</g>
+<!-- alternatives -->
+<g id="node16" class="node">
+<title>alternatives</title>
+<path fill="#302551" stroke="#a78bfa" stroke-width="1.4" d="M782.5,-1142C782.5,-1142 607.5,-1142 607.5,-1142 601.5,-1142 595.5,-1136 595.5,-1130 595.5,-1130 595.5,-1097 595.5,-1097 595.5,-1091 601.5,-1085 607.5,-1085 607.5,-1085 782.5,-1085 782.5,-1085 788.5,-1085 794.5,-1091 794.5,-1097 794.5,-1097 794.5,-1130 794.5,-1130 794.5,-1136 788.5,-1142 782.5,-1142"/>
+<text text-anchor="middle" x="695" y="-1123.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Alternative answer paths</text>
+<text text-anchor="middle" x="695" y="-1110.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Graph RAG · plain hybrid RAG</text>
+<text text-anchor="middle" x="695" y="-1097.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">NL → DuckDB SQL</text>
+</g>
+<!-- api&#45;&gt;alternatives -->
+<g id="edge16" class="edge">
+<title>api&#45;&gt;alternatives</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" stroke-dasharray="5,2" d="M490.62,-885C549.46,-885 617,-885 617,-885 617,-885 617,-1077.06 617,-1077.06"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="614.38,-1077.06 617,-1084.56 619.63,-1077.06 614.38,-1077.06"/>
+</g>
+<!-- classify -->
+<g id="node7" class="node">
+<title>classify</title>
+<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M473.5,-710C473.5,-710 334.5,-710 334.5,-710 328.5,-710 322.5,-704 322.5,-698 322.5,-698 322.5,-678 322.5,-678 322.5,-672 328.5,-666 334.5,-666 334.5,-666 473.5,-666 473.5,-666 479.5,-666 485.5,-672 485.5,-678 485.5,-678 485.5,-698 485.5,-698 485.5,-704 479.5,-710 473.5,-710"/>
+<text text-anchor="middle" x="404" y="-691.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Classifier</text>
+<text text-anchor="middle" x="404" y="-678.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">numeric or qualitative?</text>
+</g>
+<!-- retrieve&#45;&gt;classify -->
+<g id="edge5" class="edge">
+<title>retrieve&#45;&gt;classify</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M404,-754.85C404,-754.85 404,-717.76 404,-717.76"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="406.63,-717.76 404,-710.26 401.38,-717.76 406.63,-717.76"/>
+</g>
+<!-- extract -->
+<g id="node8" class="node">
+<title>extract</title>
+<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M451,-621C451,-621 339,-621 339,-621 333,-621 327,-615 327,-609 327,-609 327,-589 327,-589 327,-583 333,-577 339,-577 339,-577 451,-577 451,-577 457,-577 463,-583 463,-589 463,-589 463,-609 463,-609 463,-615 457,-621 451,-621"/>
+<text text-anchor="middle" x="395" y="-602.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Extract XBRL facts</text>
+<text text-anchor="middle" x="395" y="-589.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">SEC companyfacts</text>
+</g>
+<!-- classify&#45;&gt;extract -->
+<g id="edge6" class="edge">
+<title>classify&#45;&gt;extract</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M395,-666C395,-666 395,-628.56 395,-628.56"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="397.63,-628.56 395,-621.06 392.38,-628.56 397.63,-628.56"/>
+<text text-anchor="middle" x="375" y="-650.28" font-family="DejaVu Sans" font-size="10.00" fill="#cbd5e1">numeric</text>
+</g>
+<!-- qual -->
+<g id="node13" class="node">
+<title>qual</title>
+<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M626.5,-532C626.5,-532 481.5,-532 481.5,-532 475.5,-532 469.5,-526 469.5,-520 469.5,-520 469.5,-500 469.5,-500 469.5,-494 475.5,-488 481.5,-488 481.5,-488 626.5,-488 626.5,-488 632.5,-488 638.5,-494 638.5,-500 638.5,-500 638.5,-520 638.5,-520 638.5,-526 632.5,-532 626.5,-532"/>
+<text text-anchor="middle" x="554" y="-513.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Qualitative output</text>
+<text text-anchor="middle" x="554" y="-500.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">LLM over retrieved docs</text>
+</g>
+<!-- classify&#45;&gt;qual -->
+<g id="edge12" class="edge">
+<title>classify&#45;&gt;qual</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M477.5,-665.82C477.5,-665.82 477.5,-539.68 477.5,-539.68"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="480.13,-539.68 477.5,-532.18 474.88,-539.68 480.13,-539.68"/>
+<text text-anchor="middle" x="504" y="-605.75" font-family="DejaVu Sans" font-size="10.00" fill="#cbd5e1">qualitative</text>
+</g>
+<!-- eval -->
+<g id="node9" class="node">
+<title>eval</title>
+<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M432.5,-532C432.5,-532 339.5,-532 339.5,-532 333.5,-532 327.5,-526 327.5,-520 327.5,-520 327.5,-500 327.5,-500 327.5,-494 333.5,-488 339.5,-488 339.5,-488 432.5,-488 432.5,-488 438.5,-488 444.5,-494 444.5,-500 444.5,-500 444.5,-520 444.5,-520 444.5,-526 438.5,-532 432.5,-532"/>
+<text text-anchor="middle" x="386" y="-513.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Validation layer</text>
+<text text-anchor="middle" x="386" y="-500.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">eval</text>
+</g>
+<!-- extract&#45;&gt;eval -->
+<g id="edge7" class="edge">
+<title>extract&#45;&gt;eval</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M386,-577C386,-577 386,-539.56 386,-539.56"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="388.63,-539.56 386,-532.06 383.38,-539.56 388.63,-539.56"/>
+</g>
+<!-- math -->
+<g id="node10" class="node">
+<title>math</title>
+<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M463.5,-443C463.5,-443 338.5,-443 338.5,-443 332.5,-443 326.5,-437 326.5,-431 326.5,-431 326.5,-411 326.5,-411 326.5,-405 332.5,-399 338.5,-399 338.5,-399 463.5,-399 463.5,-399 469.5,-399 475.5,-405 475.5,-411 475.5,-411 475.5,-431 475.5,-431 475.5,-437 469.5,-443 463.5,-443"/>
+<text text-anchor="middle" x="401" y="-424.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Deterministic math</text>
+<text text-anchor="middle" x="401" y="-411.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">financial calculations</text>
+</g>
+<!-- eval&#45;&gt;math -->
+<g id="edge8" class="edge">
+<title>eval&#45;&gt;math</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M386,-488C386,-488 386,-450.56 386,-450.56"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="388.63,-450.56 386,-443.06 383.38,-450.56 388.63,-450.56"/>
+</g>
+<!-- verify -->
+<g id="node11" class="node">
+<title>verify</title>
+<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M469,-354C469,-354 347,-354 347,-354 341,-354 335,-348 335,-342 335,-342 335,-322 335,-322 335,-316 341,-310 347,-310 347,-310 469,-310 469,-310 475,-310 481,-316 481,-322 481,-322 481,-342 481,-342 481,-348 475,-354 469,-354"/>
+<text text-anchor="middle" x="408" y="-335.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Verification</text>
+<text text-anchor="middle" x="408" y="-322.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">numeric XBRL + NLI</text>
+</g>
+<!-- math&#45;&gt;verify -->
+<g id="edge9" class="edge">
+<title>math&#45;&gt;verify</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M405.25,-399C405.25,-399 405.25,-361.56 405.25,-361.56"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="407.88,-361.56 405.25,-354.06 402.63,-361.56 407.88,-361.56"/>
+</g>
+<!-- output -->
+<g id="node12" class="node">
+<title>output</title>
+<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M471,-265C471,-265 345,-265 345,-265 339,-265 333,-259 333,-253 333,-253 333,-233 333,-233 333,-227 339,-221 345,-221 345,-221 471,-221 471,-221 477,-221 483,-227 483,-233 483,-233 483,-253 483,-253 483,-259 477,-265 471,-265"/>
+<text text-anchor="middle" x="408" y="-246.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Output or abstain</text>
+<text text-anchor="middle" x="408" y="-233.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">based on verification</text>
+</g>
+<!-- verify&#45;&gt;output -->
+<g id="edge10" class="edge">
+<title>verify&#45;&gt;output</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M408,-310C408,-310 408,-272.56 408,-272.56"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="410.63,-272.56 408,-265.06 405.38,-272.56 410.63,-272.56"/>
+</g>
+<!-- lineage -->
+<g id="node14" class="node">
+<title>lineage</title>
+<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M563,-176C563,-176 379,-176 379,-176 373,-176 367,-170 367,-164 367,-164 367,-144 367,-144 367,-138 373,-132 379,-132 379,-132 563,-132 563,-132 569,-132 575,-138 575,-144 575,-144 575,-164 575,-164 575,-170 569,-176 563,-176"/>
+<text text-anchor="middle" x="471" y="-157.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Build lineage</text>
+<text text-anchor="middle" x="471" y="-144.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">sources · versions · confidence</text>
+</g>
+<!-- output&#45;&gt;lineage -->
+<g id="edge11" class="edge">
+<title>output&#45;&gt;lineage</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M425,-221C425,-221 425,-183.56 425,-183.56"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="427.63,-183.56 425,-176.06 422.38,-183.56 427.63,-183.56"/>
+</g>
+<!-- qual&#45;&gt;lineage -->
+<g id="edge13" class="edge">
+<title>qual&#45;&gt;lineage</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M529,-488C529,-488 529,-183.81 529,-183.81"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="531.63,-183.81 529,-176.31 526.38,-183.81 531.63,-183.81"/>
+</g>
+<!-- response -->
+<g id="node15" class="node">
+<title>response</title>
+<path fill="#0b3644" stroke="#22d3ee" stroke-width="1.4" d="M556.5,-87C556.5,-87 385.5,-87 385.5,-87 379.5,-87 373.5,-81 373.5,-75 373.5,-75 373.5,-42 373.5,-42 373.5,-36 379.5,-30 385.5,-30 385.5,-30 556.5,-30 556.5,-30 562.5,-30 568.5,-36 568.5,-42 568.5,-42 568.5,-75 568.5,-75 568.5,-81 562.5,-87 556.5,-87"/>
+<text text-anchor="middle" x="471" y="-68.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Response + output rails</text>
+<text text-anchor="middle" x="471" y="-55.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">answer · citations · evidence</text>
+<text text-anchor="middle" x="471" y="-42.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">verification · math · lineage</text>
+</g>
+<!-- lineage&#45;&gt;response -->
+<g id="edge14" class="edge">
+<title>lineage&#45;&gt;response</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M471,-131.85C471,-131.85 471,-94.56 471,-94.56"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="473.63,-94.56 471,-87.06 468.38,-94.56 473.63,-94.56"/>
+</g>
+<!-- oversight -->
+<g id="node17" class="node">
+<title>oversight</title>
+<path fill="#302551" stroke="#a78bfa" stroke-width="1.4" d="M558,-1142C558,-1142 398,-1142 398,-1142 392,-1142 386,-1136 386,-1130 386,-1130 386,-1097 386,-1097 386,-1091 392,-1085 398,-1085 398,-1085 558,-1085 558,-1085 564,-1085 570,-1091 570,-1097 570,-1097 570,-1130 570,-1130 570,-1136 564,-1142 558,-1142"/>
+<text text-anchor="middle" x="478" y="-1123.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Governance surfaces</text>
+<text text-anchor="middle" x="478" y="-1110.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">audit · evaluation · drift</text>
+<text text-anchor="middle" x="478" y="-1097.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">human review · calibration</text>
+</g>
+<!-- lineage&#45;&gt;oversight -->
+<g id="edge17" class="edge">
+<title>lineage&#45;&gt;oversight</title>
+<path fill="none" stroke="#8293a9" stroke-width="1.3" stroke-dasharray="5,2" d="M366.76,-154C328.33,-154 294,-154 294,-154 294,-154 294,-1113 294,-1113 294,-1113 378.23,-1113 378.23,-1113"/>
+<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="378.23,-1115.63 385.73,-1113 378.23,-1110.38 378.23,-1115.63"/>
+</g>
+</g>
+</svg>
+
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="card-header"><div class="card-dot emerald"></div><h3>Ingest</h3></div><ul><li>SEC filings are extracted, chunked and embedded.</li><li>DuckDB holds corpus evidence, XBRL facts and graph triples.</li></ul></div>
+      <div class="card"><div class="card-header"><div class="card-dot cyan"></div><h3>Answer</h3></div><ul><li>Hybrid retrieval feeds the auditable LangGraph path.</li><li>Numeric and qualitative questions follow distinct branches.</li></ul></div>
+      <div class="card"><div class="card-header"><div class="card-dot violet"></div><h3>Review</h3></div><ul><li>Lineage and evidence support audit and review.</li><li>Dashed arrows show alternative paths or governance.</li></ul></div>
+    </div>
+    <p class="footer">Sources: project README and docs/architecture.drawio · Template: Cocoon AI architecture-diagram-generator (MIT)</p>
+  </div>
+
+  <script>
+    async function copyAsImage(btn) {
+      const orig = btn.textContent;
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        btn.textContent = '✓ Copied!';
+      } catch (e) {
+        btn.textContent = '✗ Failed';
+      }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+
+    async function downloadPNG(btn) {
+      const orig = btn.textContent;
+      btn.textContent = '⏳ ...';
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const link = document.createElement('a');
+        link.download = 'rag-process-architecture.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        btn.textContent = '✓ Done!';
+      } catch (e) {
+        btn.textContent = '✗ Failed';
+      }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+
+    async function downloadPDF(btn) {
+      const orig = btn.textContent;
+      btn.textContent = '⏳ ...';
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const orientation = canvas.width > canvas.height ? 'landscape' : 'portrait';
+        const pdf = new jsPDF({ orientation, unit: 'px', format: [canvas.width, canvas.height], hotfixes: ['px_scaling'] });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save('rag-process-architecture.pdf');
+        btn.textContent = '✓ Done!';
+      } catch (e) {
+        btn.textContent = '✗ Failed';
+      }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+  </script>
+</body>
+</html>
