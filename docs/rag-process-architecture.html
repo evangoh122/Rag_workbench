@@ -16,7 +16,7 @@
 
     body {
       font-family: 'JetBrains Mono', monospace;
-      background: #020617;
+      background: #090a0c;
       min-height: 100vh;
       padding: 2rem;
       color: white;
@@ -41,7 +41,7 @@
     .pulse-dot {
       width: 12px;
       height: 12px;
-      background: #22d3ee;
+      background: #d6b65a;
       border-radius: 50%;
       animation: pulse 2s infinite;
     }
@@ -58,15 +58,15 @@
     }
 
     .subtitle {
-      color: #94a3b8;
+      color: #b8bdc5;
       font-size: 0.875rem;
       margin-left: 1.75rem;
     }
 
     .diagram-container {
-      background: rgba(15, 23, 42, 0.5);
+      background: #111317;
       border-radius: 1rem;
-      border: 1px solid #1e293b;
+      border: 1px solid #32363d;
       padding: 1.5rem;
       overflow-x: auto;
     }
@@ -86,9 +86,9 @@
     }
 
     .card {
-      background: rgba(15, 23, 42, 0.5);
+      background: #111317;
       border-radius: 0.75rem;
-      border: 1px solid #1e293b;
+      border: 1px solid #32363d;
       padding: 1.25rem;
     }
 
@@ -105,7 +105,15 @@
       border-radius: 50%;
     }
 
-    .card-dot.cyan { background: #22d3ee; }
+    .card-dot.gold { background: #d6b65a; }
+    .section-title { fill: #d6b65a; font: 600 12px "JetBrains Mono", monospace; letter-spacing: 1px; }
+    .node-text { fill: #f3f1ea; font: 12px "JetBrains Mono", monospace; }
+    .brand { fill: #f1d77a; font: 600 15px "JetBrains Mono", monospace; }
+    .large { fill: #f1d77a; font: 700 26px "JetBrains Mono", monospace; }
+    .small { fill: #b8bdc5; font: 11px "JetBrains Mono", monospace; }
+    .nodes text { fill: #f3f1ea; font: 13px "JetBrains Mono", monospace; }
+    .edge-labels text { fill: #c7cbd1; font: 12px "JetBrains Mono", monospace; paint-order: stroke; stroke: #090a0c; stroke-width: 5px; stroke-linejoin: round; }
+    .card-dot.cyan { background: #d6b65a; }
     .card-dot.emerald { background: #34d399; }
     .card-dot.violet { background: #a78bfa; }
     .card-dot.amber { background: #fbbf24; }
@@ -118,7 +126,7 @@
 
     .card ul {
       list-style: none;
-      color: #94a3b8;
+      color: #b8bdc5;
       font-size: 0.75rem;
     }
 
@@ -129,7 +137,7 @@
     .footer {
       text-align: center;
       margin-top: 1.5rem;
-      color: #475569;
+      color: #818791;
       font-size: 0.75rem;
     }
 
@@ -143,7 +151,7 @@
     .toolbar-toggle {
       background: transparent;
       border: none;
-      color: #475569;
+      color: #818791;
       cursor: pointer;
       font-size: 1.25rem;
       line-height: 1;
@@ -151,16 +159,16 @@
       border-radius: 0.375rem;
       transition: color 0.2s, background 0.2s;
     }
-    .toolbar-toggle:hover { color: #94a3b8; background: rgba(30, 41, 59, 0.5); }
+    .toolbar-toggle:hover { color: #b8bdc5; background: #181b20; }
     .toolbar-actions {
       display: none;
       gap: 0.5rem;
     }
     .toolbar.expanded .toolbar-actions { display: flex; }
     .toolbar-actions button {
-      background: rgba(30, 41, 59, 0.8);
-      border: 1px solid #334155;
-      color: #94a3b8;
+      background: #181b20;
+      border: 1px solid #32363d;
+      color: #b8bdc5;
       padding: 0.375rem 0.75rem;
       border-radius: 0.375rem;
       font-family: inherit;
@@ -170,13 +178,13 @@
       white-space: nowrap;
     }
     .toolbar-actions button:hover {
-      background: rgba(51, 65, 85, 0.8);
+      background: #32363d;
       color: white;
-      border-color: #475569;
+      border-color: #818791;
     }
 
     @media print {
-      body { background: #020617; padding: 1rem; }
+      body { background: #090a0c; padding: 1rem; }
       .toolbar { display: none !important; }
     }
   </style>
@@ -197,274 +205,172 @@
           <button class="toolbar-toggle" onclick="this.parentElement.classList.toggle('expanded')" title="Export options" aria-label="Export options">⋯</button>
         </div>
       </div>
-      <p class="subtitle">Documented ingestion, auditable answer flow and governance</p>
+      <p class="subtitle">System architecture · data, retrieval, services and governance</p>
     </div>
 
     <!-- Main Diagram -->
     <div class="diagram-container">
-<svg role="img" aria-label="RAG Workbench process architecture"
- viewBox="0.00 0.00 957.80 1322.80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern></defs>
-<rect width="100%" height="100%" fill="#020617"/><rect width="100%" height="100%" fill="url(#grid)"/>
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(32.4 1290.4)">
-<title>RAG</title>
-<text text-anchor="middle" x="446.5" y="-1236.4" font-family="DejaVu Sans" font-size="22.00" fill="#e2e8f0">RAG WORKBENCH &#160;/ &#160;PROCESS ARCHITECTURE</text>
-<text text-anchor="middle" x="446.5" y="-1212.4" font-family="DejaVu Sans" font-size="22.00" fill="#e2e8f0">SEC filing analysis · ingestion, auditable answers and governance</text>
-<g id="clust1" class="cluster">
-<title>cluster_ingest</title>
-<path fill="none" stroke="#31514d" d="M20,-837C20,-837 277,-837 277,-837 283,-837 289,-843 289,-849 289,-849 289,-1175.5 289,-1175.5 289,-1181.5 283,-1187.5 277,-1187.5 277,-1187.5 20,-1187.5 20,-1187.5 14,-1187.5 8,-1181.5 8,-1175.5 8,-1175.5 8,-849 8,-849 8,-843 14,-837 20,-837"/>
-<text text-anchor="middle" x="148.5" y="-1165.9" font-family="DejaVu Sans" font-size="22.00" fill="#6ee7b7">01 &#160;OFFLINE INGESTION</text>
+<svg role="img" aria-labelledby="diagram-title diagram-desc" viewBox="0 0 1764 936" xmlns="http://www.w3.org/2000/svg">
+<title id="diagram-title">RAG Workbench architecture</title><desc id="diagram-desc">Architecture shown in the repository README, with deployment, application services, storage, model services and governance.</desc>
+<defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#22262c" stroke-width=".7"/></pattern><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#b8bdc5"/></marker></defs><rect width="1764" height="936" fill="#090a0c"/><rect width="1764" height="936" fill="url(#grid)"/>
+<g class="boundary"><rect x="2" y="230" width="1720" height="704" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="18" y="256" class="section-title">RAG WORKBENCH APPLICATION ENVIRONMENT</text>
 </g>
-<g id="clust2" class="cluster">
-<title>cluster_query</title>
-<path fill="none" stroke="#31514d" d="M309,-8C309,-8 873,-8 873,-8 879,-8 885,-14 885,-20 885,-20 885,-1045 885,-1045 885,-1051 879,-1057 873,-1057 873,-1057 309,-1057 309,-1057 303,-1057 297,-1051 297,-1045 297,-1045 297,-20 297,-20 297,-14 303,-8 309,-8"/>
-<text text-anchor="middle" x="591" y="-1035.4" font-family="DejaVu Sans" font-size="22.00" fill="#6ee7b7">02 &#160;AUDITABLE RAG &#160;· &#160;POST /api/chat/auditable&#45;rag</text>
+<g class="boundary"><rect x="31" y="34" width="342" height="162" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="47" y="60" class="section-title">DEVELOPMENT &amp; DEPLOYMENT</text>
 </g>
-<g id="clust3" class="cluster">
-<title>cluster_support</title>
-<path fill="none" stroke="#38445a" d="M378,-1065C378,-1065 803,-1065 803,-1065 809,-1065 815,-1071 815,-1077 815,-1077 815,-1182 815,-1182 815,-1188 809,-1194 803,-1194 803,-1194 378,-1194 378,-1194 372,-1194 366,-1188 366,-1182 366,-1182 366,-1077 366,-1077 366,-1071 372,-1065 378,-1065"/>
-<text text-anchor="middle" x="590.5" y="-1172.4" font-family="DejaVu Sans" font-size="22.00" fill="#a5b4c9">03 &#160;OTHER PATHS &amp; OVERSIGHT</text>
+<g class="boundary"><rect x="482" y="27" width="262" height="178" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="498" y="53" class="section-title">CONTAINERS</text>
 </g>
-<!-- edgar&#45;&gt;ingest -->
-<g id="edge1" class="edge">
-<title>edgar&#45;&gt;ingest</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M178,-1091.32C178,-1091.32 178,-1010.75 178,-1010.75"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="180.63,-1010.75 178,-1003.25 175.38,-1010.75 180.63,-1010.75"/>
+<g class="boundary"><rect x="1402" y="1" width="360" height="166" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="1418" y="27" class="section-title">USER QUERIES</text>
 </g>
-<!-- ingest&#45;&gt;corpus -->
-<g id="edge2" class="edge">
-<title>ingest&#45;&gt;corpus</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M178,-958.85C178,-958.85 178,-921.56 178,-921.56"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="180.63,-921.56 178,-914.06 175.38,-921.56 180.63,-921.56"/>
+<g class="boundary"><rect x="57" y="358" width="310" height="180" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="73" y="384" class="section-title">DATA EXTRACTION</text>
 </g>
-<!-- corpus&#45;&gt;retrieve -->
-<g id="edge15" class="edge">
-<title>corpus&#45;&gt;retrieve</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M178,-856.95C178,-826.62 178,-783 178,-783 178,-783 311.38,-783 311.38,-783"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="311.38,-785.63 318.88,-783 311.38,-780.38 311.38,-785.63"/>
-<text text-anchor="middle" x="171.72" y="-786" font-family="DejaVu Sans" font-size="10.00" fill="#cbd5e1">filing evidence</text>
+<g class="boundary"><rect x="57" y="613" width="310" height="171" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="73" y="639" class="section-title">DATA INGESTION</text>
 </g>
-<!-- user&#45;&gt;api -->
-<g id="edge3" class="edge">
-<title>user&#45;&gt;api</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M405,-958.85C405,-958.85 405,-915.03 405,-915.03"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="407.63,-915.03 405,-907.53 402.38,-915.03 407.63,-915.03"/>
+<g class="boundary"><rect x="427" y="276" width="372" height="287" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="443" y="302" class="section-title">MULTI-STEP RAG ORCHESTRATION</text>
 </g>
-<!-- api&#45;&gt;retrieve -->
-<g id="edge4" class="edge">
-<title>api&#45;&gt;retrieve</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M404.25,-863.37C404.25,-863.37 404.25,-819.68 404.25,-819.68"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="406.88,-819.68 404.25,-812.18 401.63,-819.68 406.88,-819.68"/>
+<g class="boundary"><rect x="442" y="593" width="351" height="291" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="458" y="619" class="section-title">DATA STORAGE</text>
 </g>
-<!-- api&#45;&gt;alternatives -->
-<g id="edge16" class="edge">
-<title>api&#45;&gt;alternatives</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" stroke-dasharray="5,2" d="M490.62,-885C549.46,-885 617,-885 617,-885 617,-885 617,-1077.06 617,-1077.06"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="614.38,-1077.06 617,-1084.56 619.63,-1077.06 614.38,-1077.06"/>
+<g class="boundary"><rect x="902" y="293" width="340" height="231" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="918" y="319" class="section-title">6 STEP RETRIEVAL PROCESS</text>
 </g>
-<!-- retrieve&#45;&gt;classify -->
-<g id="edge5" class="edge">
-<title>retrieve&#45;&gt;classify</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M404,-754.85C404,-754.85 404,-717.76 404,-717.76"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="406.63,-717.76 404,-710.26 401.38,-717.76 406.63,-717.76"/>
+<g class="boundary"><rect x="842" y="623" width="371" height="252" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="858" y="649" class="section-title">AI MODEL SERVICE</text>
 </g>
-<!-- classify&#45;&gt;extract -->
-<g id="edge6" class="edge">
-<title>classify&#45;&gt;extract</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M395,-666C395,-666 395,-628.56 395,-628.56"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="397.63,-628.56 395,-621.06 392.38,-628.56 397.63,-628.56"/>
-<text text-anchor="middle" x="375" y="-650.28" font-family="DejaVu Sans" font-size="10.00" fill="#cbd5e1">numeric</text>
+<g class="boundary"><rect x="1297" y="338" width="361" height="262" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="1313" y="364" class="section-title">API SERVICES</text>
 </g>
-<!-- classify&#45;&gt;qual -->
-<g id="edge12" class="edge">
-<title>classify&#45;&gt;qual</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M477.5,-665.82C477.5,-665.82 477.5,-539.68 477.5,-539.68"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="480.13,-539.68 477.5,-532.18 474.88,-539.68 480.13,-539.68"/>
-<text text-anchor="middle" x="504" y="-605.75" font-family="DejaVu Sans" font-size="10.00" fill="#cbd5e1">qualitative</text>
+<g class="boundary"><rect x="1297" y="653" width="361" height="253" rx="16" fill="#111317" stroke="#d6b65a" stroke-width="1.5"/><text x="1313" y="679" class="section-title">MONITORING, EVALUATION &amp; GOVERNANCE</text>
 </g>
-<!-- extract&#45;&gt;eval -->
-<g id="edge7" class="edge">
-<title>extract&#45;&gt;eval</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M386,-577C386,-577 386,-539.56 386,-539.56"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="388.63,-539.56 386,-532.06 383.38,-539.56 388.63,-539.56"/>
+<g class="connections" fill="none" stroke="#aeb4bd" stroke-width="1.5" stroke-dasharray="8 7" marker-end="url(#arrow)">
+<path data-from="deploy" data-to="containers" d="M373 115H482"/>
+<path data-from="containers" data-to="environment" d="M622 205V230"/>
+<path data-from="user" data-to="api" d="M1582 167V338"/>
+<path data-from="api" data-to="user" d="M1593 338V167"/>
+<path data-from="extraction" data-to="ingestion" d="M212 538V613"/>
+<path data-from="extraction" data-to="storage" d="M367 423H414V755H475"/>
+<path data-from="extraction" data-to="storage-checks" d="M367 469H414" marker-end="none"/>
+<path data-from="ingestion" data-to="vector" d="M290 784V864H695V783"/>
+<path data-from="orchestration" data-to="storage" d="M618 563V593"/>
+<path data-from="orchestration" data-to="retrieval" d="M799 408H902"/>
+<path data-from="retrieval" data-to="orchestration" d="M902 422H754"/>
+<path data-from="orchestration" data-to="model" d="M799 563V592H1028V623"/>
+<path data-from="model" data-to="api" d="M1213 748H1254V459H1297"/>
+<path data-from="api" data-to="governance" d="M1477 600V653"/>
+<path data-from="governance" data-to="storage" d="M1477 906V922H770V884"/>
 </g>
-<!-- eval&#45;&gt;math -->
-<g id="edge8" class="edge">
-<title>eval&#45;&gt;math</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M386,-488C386,-488 386,-450.56 386,-450.56"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="388.63,-450.56 386,-443.06 383.38,-450.56 388.63,-450.56"/>
+<text x="115" y="119" text-anchor="middle" class="brand">Hugging Face</text>
+<text x="292" y="118" text-anchor="middle" class="brand">GitHub Actions</text>
+<text x="613" y="112" text-anchor="middle" class="large">DOCKER</text>
+<text x="613" y="139" text-anchor="middle" class="small">Containers</text>
+<text x="1420" y="64" text-anchor="start" class="node-text">Financial analysts ask questions about</text>
+<text x="1420" y="85" text-anchor="start" class="node-text">filings, metrics, risks, peers, and trends.</text>
+<text x="1644" y="258" text-anchor="end" class="small">HTTPS requests</text>
+<g><rect x="71" y="409" width="281" height="31" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="211.5" y="428.5" text-anchor="middle" class="node-text">SEC.GOV   XBRL Company Facts</text>
 </g>
-<!-- math&#45;&gt;verify -->
-<g id="edge9" class="edge">
-<title>math&#45;&gt;verify</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M405.25,-399C405.25,-399 405.25,-361.56 405.25,-361.56"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="407.88,-361.56 405.25,-354.06 402.63,-361.56 407.88,-361.56"/>
+<g><rect x="71" y="450" width="281" height="37" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="211.5" y="472.5" text-anchor="middle" class="node-text">polygon.io   Third Party Data Checks</text>
 </g>
-<!-- verify&#45;&gt;output -->
-<g id="edge10" class="edge">
-<title>verify&#45;&gt;output</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M408,-310C408,-310 408,-272.56 408,-272.56"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="410.63,-272.56 408,-265.06 405.38,-272.56 410.63,-272.56"/>
+<g><rect x="71" y="493" width="281" height="36" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="211.5" y="515.0" text-anchor="middle" class="node-text">SEC.GOV   Edgar Filings</text>
 </g>
-<!-- output&#45;&gt;lineage -->
-<g id="edge11" class="edge">
-<title>output&#45;&gt;lineage</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M425,-221C425,-221 425,-183.56 425,-183.56"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="427.63,-183.56 425,-176.06 422.38,-183.56 427.63,-183.56"/>
+<text x="125" y="695" text-anchor="middle" class="small">CHUNKING</text>
+<text x="270" y="695" text-anchor="middle" class="brand">Qwen3-Embedding</text>
+<g><rect x="80" y="719" width="120" height="38" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="140.0" y="742.0" text-anchor="middle" class="node-text">Chunking</text>
 </g>
-<!-- qual&#45;&gt;lineage -->
-<g id="edge13" class="edge">
-<title>qual&#45;&gt;lineage</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M529,-488C529,-488 529,-183.81 529,-183.81"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="531.63,-183.81 529,-176.31 526.38,-183.81 531.63,-183.81"/>
+<g><rect x="214" y="719" width="120" height="38" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="274.0" y="742.0" text-anchor="middle" class="node-text">Embedding</text>
 </g>
-<!-- lineage&#45;&gt;response -->
-<g id="edge14" class="edge">
-<title>lineage&#45;&gt;response</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" d="M471,-131.85C471,-131.85 471,-94.56 471,-94.56"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="473.63,-94.56 471,-87.06 468.38,-94.56 473.63,-94.56"/>
+<text x="742" y="365" text-anchor="middle" class="brand">LangGraph</text>
+<g><rect x="562" y="338" width="100" height="40" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="612.0" y="354.0" text-anchor="middle" class="node-text">Planner /</text>
+<text x="612.0" y="370.0" text-anchor="middle" class="node-text">Classifier</text>
 </g>
-<!-- lineage&#45;&gt;oversight -->
-<g id="edge17" class="edge">
-<title>lineage&#45;&gt;oversight</title>
-<path fill="none" stroke="#8293a9" stroke-width="1.3" stroke-dasharray="5,2" d="M366.76,-154C328.33,-154 294,-154 294,-154 294,-154 294,-1113 294,-1113 294,-1113 378.23,-1113 378.23,-1113"/>
-<polygon fill="#8293a9" stroke="#8293a9" stroke-width="1.3" points="378.23,-1115.63 385.73,-1113 378.23,-1110.38 378.23,-1115.63"/>
+<g><rect x="468" y="406" width="100" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="518.0" y="430.5" text-anchor="middle" class="node-text">Numeric</text>
 </g>
-<!-- edgar -->
-<g id="node1" class="node">
-<title>edgar</title>
-<path fill="#1e293b" stroke="#94a3b8" stroke-width="1.4" d="M232,-1135.5C232,-1135.5 124,-1135.5 124,-1135.5 118,-1135.5 112,-1129.5 112,-1123.5 112,-1123.5 112,-1103.5 112,-1103.5 112,-1097.5 118,-1091.5 124,-1091.5 124,-1091.5 232,-1091.5 232,-1091.5 238,-1091.5 244,-1097.5 244,-1103.5 244,-1103.5 244,-1123.5 244,-1123.5 244,-1129.5 238,-1135.5 232,-1135.5"/>
-<text text-anchor="middle" x="178" y="-1116.9" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">SEC EDGAR filings</text>
-<text text-anchor="middle" x="178" y="-1103.9" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">10&#45;K documents</text>
+<g><rect x="653" y="401" width="101" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="703.5" y="425.5" text-anchor="middle" class="node-text">Qualitative</text>
 </g>
-<!-- ingest -->
-<g id="node2" class="node">
-<title>ingest</title>
-<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M250,-1003C250,-1003 106,-1003 106,-1003 100,-1003 94,-997 94,-991 94,-991 94,-971 94,-971 94,-965 100,-959 106,-959 106,-959 250,-959 250,-959 256,-959 262,-965 262,-971 262,-971 262,-991 262,-991 262,-997 256,-1003 250,-1003"/>
-<text text-anchor="middle" x="178" y="-984.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Ingest &amp; prepare</text>
-<text text-anchor="middle" x="178" y="-971.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">extract · chunk · embed</text>
+<g><rect x="468" y="458" width="100" height="34" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="518.0" y="471.0" text-anchor="middle" class="node-text">Polars</text>
+<text x="518.0" y="487.0" text-anchor="middle" class="node-text">Calculator</text>
 </g>
-<!-- corpus -->
-<g id="node3" class="node">
-<title>corpus</title>
-<path fill="#302551" stroke="#a78bfa" stroke-width="1.4" d="M257,-914C257,-914 99,-914 99,-914 93,-914 87,-908 87,-902 87,-902 87,-869 87,-869 87,-863 93,-857 99,-857 99,-857 257,-857 257,-857 263,-857 269,-863 269,-869 269,-869 269,-902 269,-902 269,-908 263,-914 257,-914"/>
-<text text-anchor="middle" x="178" y="-895.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">DuckDB corpus</text>
-<text text-anchor="middle" x="178" y="-882.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">chunks + embeddings</text>
-<text text-anchor="middle" x="178" y="-869.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">XBRL facts + graph triples</text>
+<g><rect x="468" y="501" width="100" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="518.0" y="525.5" text-anchor="middle" class="node-text">React Flow</text>
 </g>
-<!-- retrieve -->
-<g id="node6" class="node">
-<title>retrieve</title>
-<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M477,-812C477,-812 331,-812 331,-812 325,-812 319,-806 319,-800 319,-800 319,-767 319,-767 319,-761 325,-755 331,-755 331,-755 477,-755 477,-755 483,-755 489,-761 489,-767 489,-767 489,-800 489,-800 489,-806 483,-812 477,-812"/>
-<text text-anchor="middle" x="404" y="-793.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Hybrid retrieval</text>
-<text text-anchor="middle" x="404" y="-780.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">dense + BM25 → RRF</text>
-<text text-anchor="middle" x="404" y="-767.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">cross&#45;encoder reranking</text>
+<path d="M590 378V391H518V406" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M635 378V389H703V401" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M518 447V458" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<path d="M518 492V501" fill="none" stroke="#b8bdc5" stroke-width="1.3" marker-end="url(#arrow)"/>
+<text x="617" y="688" text-anchor="middle" class="large">DuckDB</text>
+<g><rect x="475" y="724" width="120" height="60" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="535.0" y="758.0" text-anchor="middle" class="node-text">Structured Data</text>
 </g>
-<!-- user -->
-<g id="node4" class="node">
-<title>user</title>
-<path fill="#0b3644" stroke="#22d3ee" stroke-width="1.4" d="M456.5,-1003C456.5,-1003 353.5,-1003 353.5,-1003 347.5,-1003 341.5,-997 341.5,-991 341.5,-991 341.5,-971 341.5,-971 341.5,-965 347.5,-959 353.5,-959 353.5,-959 456.5,-959 456.5,-959 462.5,-959 468.5,-965 468.5,-971 468.5,-971 468.5,-991 468.5,-991 468.5,-997 462.5,-1003 456.5,-1003"/>
-<text text-anchor="middle" x="405" y="-984.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Analyst / browser</text>
-<text text-anchor="middle" x="405" y="-971.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">question</text>
+<g><rect x="635" y="724" width="120" height="60" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="695.0" y="758.0" text-anchor="middle" class="node-text">Vector Data</text>
 </g>
-<!-- api -->
-<g id="node5" class="node">
-<title>api</title>
-<path fill="#4a2030" stroke="#fb7185" stroke-width="1.4" d="M478.5,-907.5C478.5,-907.5 331.5,-907.5 331.5,-907.5 325.5,-907.5 319.5,-901.5 319.5,-895.5 319.5,-895.5 319.5,-875.5 319.5,-875.5 319.5,-869.5 325.5,-863.5 331.5,-863.5 331.5,-863.5 478.5,-863.5 478.5,-863.5 484.5,-863.5 490.5,-869.5 490.5,-875.5 490.5,-875.5 490.5,-895.5 490.5,-895.5 490.5,-901.5 484.5,-907.5 478.5,-907.5"/>
-<text text-anchor="middle" x="405" y="-888.9" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Nginx → FastAPI</text>
-<text text-anchor="middle" x="405" y="-875.9" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">input + dialog guardrails</text>
+<g><rect x="922" y="390" width="101" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="972.5" y="414.5" text-anchor="middle" class="node-text">User Query</text>
 </g>
-<!-- alternatives -->
-<g id="node16" class="node">
-<title>alternatives</title>
-<path fill="#302551" stroke="#a78bfa" stroke-width="1.4" d="M782.5,-1142C782.5,-1142 607.5,-1142 607.5,-1142 601.5,-1142 595.5,-1136 595.5,-1130 595.5,-1130 595.5,-1097 595.5,-1097 595.5,-1091 601.5,-1085 607.5,-1085 607.5,-1085 782.5,-1085 782.5,-1085 788.5,-1085 794.5,-1091 794.5,-1097 794.5,-1097 794.5,-1130 794.5,-1130 794.5,-1136 788.5,-1142 782.5,-1142"/>
-<text text-anchor="middle" x="695" y="-1123.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Alternative answer paths</text>
-<text text-anchor="middle" x="695" y="-1110.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Graph RAG · plain hybrid RAG</text>
-<text text-anchor="middle" x="695" y="-1097.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">NL → DuckDB SQL</text>
+<g><rect x="1027" y="390" width="101" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1077.5" y="406.5" text-anchor="middle" class="node-text">Dense Vector</text>
+<text x="1077.5" y="422.5" text-anchor="middle" class="node-text">Search</text>
 </g>
-<!-- classify -->
-<g id="node7" class="node">
-<title>classify</title>
-<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M473.5,-710C473.5,-710 334.5,-710 334.5,-710 328.5,-710 322.5,-704 322.5,-698 322.5,-698 322.5,-678 322.5,-678 322.5,-672 328.5,-666 334.5,-666 334.5,-666 473.5,-666 473.5,-666 479.5,-666 485.5,-672 485.5,-678 485.5,-678 485.5,-698 485.5,-698 485.5,-704 479.5,-710 473.5,-710"/>
-<text text-anchor="middle" x="404" y="-691.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Classifier</text>
-<text text-anchor="middle" x="404" y="-678.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">numeric or qualitative?</text>
+<g><rect x="1132" y="390" width="101" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1182.5" y="414.5" text-anchor="middle" class="node-text">Best Match 25</text>
 </g>
-<!-- extract -->
-<g id="node8" class="node">
-<title>extract</title>
-<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M451,-621C451,-621 339,-621 339,-621 333,-621 327,-615 327,-609 327,-609 327,-589 327,-589 327,-583 333,-577 339,-577 339,-577 451,-577 451,-577 457,-577 463,-583 463,-589 463,-589 463,-609 463,-609 463,-615 457,-621 451,-621"/>
-<text text-anchor="middle" x="395" y="-602.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Extract XBRL facts</text>
-<text text-anchor="middle" x="395" y="-589.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">SEC companyfacts</text>
+<g><rect x="922" y="464" width="101" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="972.5" y="488.5" text-anchor="middle" class="node-text">Reranking</text>
 </g>
-<!-- qual -->
-<g id="node13" class="node">
-<title>qual</title>
-<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M626.5,-532C626.5,-532 481.5,-532 481.5,-532 475.5,-532 469.5,-526 469.5,-520 469.5,-520 469.5,-500 469.5,-500 469.5,-494 475.5,-488 481.5,-488 481.5,-488 626.5,-488 626.5,-488 632.5,-488 638.5,-494 638.5,-500 638.5,-500 638.5,-520 638.5,-520 638.5,-526 632.5,-532 626.5,-532"/>
-<text text-anchor="middle" x="554" y="-513.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Qualitative output</text>
-<text text-anchor="middle" x="554" y="-500.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">LLM over retrieved docs</text>
+<g><rect x="1027" y="464" width="101" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1077.5" y="480.5" text-anchor="middle" class="node-text">Knowledge</text>
+<text x="1077.5" y="496.5" text-anchor="middle" class="node-text">graph</text>
 </g>
-<!-- eval -->
-<g id="node9" class="node">
-<title>eval</title>
-<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M432.5,-532C432.5,-532 339.5,-532 339.5,-532 333.5,-532 327.5,-526 327.5,-520 327.5,-520 327.5,-500 327.5,-500 327.5,-494 333.5,-488 339.5,-488 339.5,-488 432.5,-488 432.5,-488 438.5,-488 444.5,-494 444.5,-500 444.5,-500 444.5,-520 444.5,-520 444.5,-526 438.5,-532 432.5,-532"/>
-<text text-anchor="middle" x="386" y="-513.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Validation layer</text>
-<text text-anchor="middle" x="386" y="-500.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">eval</text>
+<g><rect x="1132" y="464" width="101" height="41" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1182.5" y="480.5" text-anchor="middle" class="node-text">Source</text>
+<text x="1182.5" y="496.5" text-anchor="middle" class="node-text">citations</text>
 </g>
-<!-- math -->
-<g id="node10" class="node">
-<title>math</title>
-<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M463.5,-443C463.5,-443 338.5,-443 338.5,-443 332.5,-443 326.5,-437 326.5,-431 326.5,-431 326.5,-411 326.5,-411 326.5,-405 332.5,-399 338.5,-399 338.5,-399 463.5,-399 463.5,-399 469.5,-399 475.5,-405 475.5,-411 475.5,-411 475.5,-431 475.5,-431 475.5,-437 469.5,-443 463.5,-443"/>
-<text text-anchor="middle" x="401" y="-424.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Deterministic math</text>
-<text text-anchor="middle" x="401" y="-411.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">financial calculations</text>
+<text x="924" y="750" text-anchor="middle" class="brand">deepseek</text>
+<text x="1098" y="750" text-anchor="middle" class="brand">Xiaomi MiMo</text>
+<text x="1028" y="832" text-anchor="middle" class="brand">SBERT.net</text>
+<text x="1028" y="850" text-anchor="middle" class="small">Sentence-Transformers</text>
+<text x="1477" y="438" text-anchor="middle" class="large">FastAPI</text>
+<g><rect x="1312" y="463" width="321" height="51" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1472.5" y="492.5" text-anchor="middle" class="node-text">Auth &amp; Security</text>
 </g>
-<!-- verify -->
-<g id="node11" class="node">
-<title>verify</title>
-<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M469,-354C469,-354 347,-354 347,-354 341,-354 335,-348 335,-342 335,-342 335,-322 335,-322 335,-316 341,-310 347,-310 347,-310 469,-310 469,-310 475,-310 481,-316 481,-322 481,-322 481,-342 481,-342 481,-348 475,-354 469,-354"/>
-<text text-anchor="middle" x="408" y="-335.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Verification</text>
-<text text-anchor="middle" x="408" y="-322.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">numeric XBRL + NLI</text>
+<g><rect x="1312" y="523" width="321" height="51" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1472.5" y="552.5" text-anchor="middle" class="node-text">Guardrails</text>
 </g>
-<!-- output -->
-<g id="node12" class="node">
-<title>output</title>
-<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M471,-265C471,-265 345,-265 345,-265 339,-265 333,-259 333,-253 333,-253 333,-233 333,-233 333,-227 339,-221 345,-221 345,-221 471,-221 471,-221 477,-221 483,-227 483,-233 483,-233 483,-253 483,-253 483,-259 477,-265 471,-265"/>
-<text text-anchor="middle" x="408" y="-246.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Output or abstain</text>
-<text text-anchor="middle" x="408" y="-233.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">based on verification</text>
+<text x="1500" y="636" text-anchor="middle" class="small">logs / review data</text>
+<g><rect x="1312" y="743" width="101" height="42" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1362.5" y="768.0" text-anchor="middle" class="node-text">Audit Trail</text>
 </g>
-<!-- lineage -->
-<g id="node14" class="node">
-<title>lineage</title>
-<path fill="#103b34" stroke="#34d399" stroke-width="1.4" d="M563,-176C563,-176 379,-176 379,-176 373,-176 367,-170 367,-164 367,-164 367,-144 367,-144 367,-138 373,-132 379,-132 379,-132 563,-132 563,-132 569,-132 575,-138 575,-144 575,-144 575,-164 575,-164 575,-170 569,-176 563,-176"/>
-<text text-anchor="middle" x="471" y="-157.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Build lineage</text>
-<text text-anchor="middle" x="471" y="-144.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">sources · versions · confidence</text>
+<g><rect x="1427" y="743" width="101" height="42" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1477.5" y="760.0" text-anchor="middle" class="node-text">Pipeline</text>
+<text x="1477.5" y="776.0" text-anchor="middle" class="node-text">Traceability</text>
 </g>
-<!-- response -->
-<g id="node15" class="node">
-<title>response</title>
-<path fill="#0b3644" stroke="#22d3ee" stroke-width="1.4" d="M556.5,-87C556.5,-87 385.5,-87 385.5,-87 379.5,-87 373.5,-81 373.5,-75 373.5,-75 373.5,-42 373.5,-42 373.5,-36 379.5,-30 385.5,-30 385.5,-30 556.5,-30 556.5,-30 562.5,-30 568.5,-36 568.5,-42 568.5,-42 568.5,-75 568.5,-75 568.5,-81 562.5,-87 556.5,-87"/>
-<text text-anchor="middle" x="471" y="-68.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Response + output rails</text>
-<text text-anchor="middle" x="471" y="-55.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">answer · citations · evidence</text>
-<text text-anchor="middle" x="471" y="-42.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">verification · math · lineage</text>
+<g><rect x="1544" y="743" width="101" height="42" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1594.5" y="760.0" text-anchor="middle" class="node-text">Golden Set</text>
+<text x="1594.5" y="776.0" text-anchor="middle" class="node-text">Evaluation</text>
 </g>
-<!-- oversight -->
-<g id="node17" class="node">
-<title>oversight</title>
-<path fill="#302551" stroke="#a78bfa" stroke-width="1.4" d="M558,-1142C558,-1142 398,-1142 398,-1142 392,-1142 386,-1136 386,-1130 386,-1130 386,-1097 386,-1097 386,-1091 392,-1085 398,-1085 398,-1085 558,-1085 558,-1085 564,-1085 570,-1091 570,-1097 570,-1097 570,-1130 570,-1130 570,-1136 564,-1142 558,-1142"/>
-<text text-anchor="middle" x="478" y="-1123.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">Governance surfaces</text>
-<text text-anchor="middle" x="478" y="-1110.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">audit · evaluation · drift</text>
-<text text-anchor="middle" x="478" y="-1097.4" font-family="DejaVu Sans" font-size="12.00" fill="#f1f5f9">human review · calibration</text>
+<g><rect x="1314" y="833" width="101" height="42" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1364.5" y="850.0" text-anchor="middle" class="node-text">Drift</text><text x="1364.5" y="866.0" text-anchor="middle" class="node-text">Detection</text>
 </g>
+<g><rect x="1424" y="833" width="101" height="42" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1474.5" y="858.0" text-anchor="middle" class="node-text">Human Review</text>
+</g>
+<g><rect x="1543" y="833" width="101" height="42" rx="6" fill="#181b20" stroke="#8d949e" stroke-width="1"/>
+<text x="1593.5" y="850.0" text-anchor="middle" class="node-text">Calibration</text>
+<text x="1593.5" y="866.0" text-anchor="middle" class="node-text">History</text>
 </g>
 </svg>
 
     </div>
 
     <div class="cards">
-      <div class="card"><div class="card-header"><div class="card-dot emerald"></div><h3>Ingest</h3></div><ul><li>SEC filings are extracted, chunked and embedded.</li><li>DuckDB holds corpus evidence, XBRL facts and graph triples.</li></ul></div>
-      <div class="card"><div class="card-header"><div class="card-dot cyan"></div><h3>Answer</h3></div><ul><li>Hybrid retrieval feeds the auditable LangGraph path.</li><li>Numeric and qualitative questions follow distinct branches.</li></ul></div>
-      <div class="card"><div class="card-header"><div class="card-dot violet"></div><h3>Review</h3></div><ul><li>Lineage and evidence support audit and review.</li><li>Dashed arrows show alternative paths or governance.</li></ul></div>
+      <div class="card"><div class="card-header"><div class="card-dot gold"></div><h3>01 / Data</h3></div><ul><li>SEC filings and external checks feed extraction and ingestion.</li><li>DuckDB holds structured and vector data.</li></ul></div>
+      <div class="card"><div class="card-header"><div class="card-dot gold"></div><h3>02 / Orchestration</h3></div><ul><li>LangGraph routes numeric and qualitative workflows.</li><li>Retrieval and model services support the application.</li></ul></div>
+      <div class="card"><div class="card-header"><div class="card-dot gold"></div><h3>03 / Governance</h3></div><ul><li>FastAPI provides security and guardrails.</li><li>Monitoring covers traceability, evaluation and human review.</li></ul></div>
     </div>
-    <p class="footer">Sources: project README and docs/architecture.drawio · Template: Cocoon AI architecture-diagram-generator (MIT)</p>
+    <p class="footer">Reference: README Architecture · docs/images/rag-workbench-architecture.gif · Template: Cocoon AI architecture-diagram-generator (MIT)</p>
   </div>
 
   <script>
@@ -474,7 +380,7 @@
         const el = document.getElementById('report-container');
         const r = el.getBoundingClientRect();
         const pad = 32;
-        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const canvas = await html2canvas(document.body, { backgroundColor: '#090a0c', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
         const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
         btn.textContent = '✓ Copied!';
@@ -491,7 +397,7 @@
         const el = document.getElementById('report-container');
         const r = el.getBoundingClientRect();
         const pad = 32;
-        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const canvas = await html2canvas(document.body, { backgroundColor: '#090a0c', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
         const link = document.createElement('a');
         link.download = 'rag-process-architecture.png';
         link.href = canvas.toDataURL('image/png');
@@ -510,7 +416,7 @@
         const el = document.getElementById('report-container');
         const r = el.getBoundingClientRect();
         const pad = 32;
-        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const canvas = await html2canvas(document.body, { backgroundColor: '#090a0c', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
         const imgData = canvas.toDataURL('image/png');
         const { jsPDF } = window.jspdf;
         const orientation = canvas.width > canvas.height ? 'landscape' : 'portrait';
